@@ -1,0 +1,4 @@
+[28-Nov-2025 17:05:51 America/Chicago] PHP Fatal error:  Uncaught Error: Call to undefined function base_url() in /home/pearlan/new.pearland411.com/application/views/header.php:11
+Stack trace:
+#0 {main}
+  thrown in /home/pearlan/new.pearland411.com/application/views/header.php on line 11
