@@ -53,7 +53,13 @@
  *
  * NOTE: If you change these, also change the error_reporting() code below
  */
-	define('ENVIRONMENT', isset($_SERVER['CI_ENV']) ? $_SERVER['CI_ENV'] : 'development');
+	// Load .env (if present) before defining ENVIRONMENT so CI_ENV can be set there.
+	require_once __DIR__ . '/application/config/env.php';
+	pearland411_load_env(__DIR__ . '/.env');
+
+	// Default to PRODUCTION. Set CI_ENV=development in .env (or in the webserver
+	// environment) on dev machines only. Never let an unset env expose errors.
+	define('ENVIRONMENT', isset($_SERVER['CI_ENV']) ? $_SERVER['CI_ENV'] : 'production');
 
 /*
  *---------------------------------------------------------------

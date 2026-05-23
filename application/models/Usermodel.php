@@ -693,14 +693,14 @@ class Usermodel extends CI_Model
 		$this->load->library('email');
 
 		$email_config = array(
-			'protocol' => 'smtp',
-			'smtp_host' => 'smtp.gmail.com', // Change to your SMTP
-			'smtp_port' => 587,
-			'smtp_user' => 'your-email@gmail.com', // Change to your email
-			'smtp_pass' => 'your-password', // Change to your password
-			'smtp_crypto' => 'tls',
-			'mailtype' => 'html',
-			'charset' => 'utf-8'
+			'protocol'    => 'smtp',
+			'smtp_host'   => env('SMTP_HOST', 'smtp.gmail.com'),
+			'smtp_port'   => (int) env('SMTP_PORT', 587),
+			'smtp_user'   => env('SMTP_USER', ''),
+			'smtp_pass'   => env('SMTP_PASS', ''),
+			'smtp_crypto' => env('SMTP_CRYPTO', 'tls'),
+			'mailtype'    => 'html',
+			'charset'     => 'utf-8',
 		);
 
 		$this->email->initialize($email_config);

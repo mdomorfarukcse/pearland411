@@ -73,27 +73,26 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 $active_group = 'default';
 $query_builder = TRUE;
 
+// Credentials must come from the environment (see .env.example).
+// Do NOT commit real credentials to this file.
 $db['default'] = array(
 	'dsn'	=> '',
-	'hostname' => 'localhost',
-	'username' => 'pearlan_new',
-	'password' => 'Yk7wZ~srrish',
-	'database' => 'pearlan_new',
-// 	'username' => 'root',
-// 	'password' => '',
-// 	'database' => 'pearlan_new',	
-	'dbdriver' => 'mysqli',
+	'hostname' => env('DB_HOST', 'localhost'),
+	'username' => env('DB_USER', ''),
+	'password' => env('DB_PASS', ''),
+	'database' => env('DB_NAME', ''),
+	'dbdriver' => env('DB_DRIVER', 'mysqli'),
 	'dbprefix' => '',
 	'pconnect' => FALSE,
 	'db_debug' => (ENVIRONMENT !== 'production'),
 	'cache_on' => FALSE,
 	'cachedir' => '',
-	'char_set' => 'utf8',
-	'dbcollat' => 'utf8_general_ci',
+	'char_set' => 'utf8mb4',
+	'dbcollat' => 'utf8mb4_unicode_ci',
 	'swap_pre' => '',
 	'encrypt' => FALSE,
 	'compress' => FALSE,
 	'stricton' => FALSE,
 	'failover' => array(),
-	'save_queries' => TRUE
+	'save_queries' => (ENVIRONMENT !== 'production')
 );

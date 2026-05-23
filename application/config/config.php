@@ -23,8 +23,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 | a PHP script and you can easily do that on your own.
 |
 */
-$config['base_url'] = 'https://new.pearland411.com/';
-// 	$config['base_url']= 'http://localhost:8081/pearland/';
+$config['base_url'] = env('BASE_URL', 'https://new.pearland411.com/');
 
 /*
 |--------------------------------------------------------------------------
@@ -325,7 +324,9 @@ $config['cache_query_string'] = FALSE;
 | https://codeigniter.com/user_guide/libraries/encryption.html
 |
 */
-$config['encryption_key'] = '';
+// 32-byte random key. MUST be set in .env. Generate with:
+//   php -r 'echo bin2hex(random_bytes(16)), "\n";'
+$config['encryption_key'] = env('ENCRYPTION_KEY', '');
 
 /*
 |--------------------------------------------------------------------------
@@ -404,8 +405,10 @@ $config['sess_regenerate_destroy'] = FALSE;
 $config['cookie_prefix']    = '';
 $config['cookie_domain']    = '';
 $config['cookie_path']        = '/';
-$config['cookie_secure']    = FALSE;
-$config['cookie_httponly']     = FALSE;
+// Cookies should only travel over HTTPS in production and never be
+// accessible to JavaScript. Override in dev via env if needed.
+$config['cookie_secure']    = (ENVIRONMENT === 'production');
+$config['cookie_httponly']  = TRUE;
 
 /*
 |--------------------------------------------------------------------------
