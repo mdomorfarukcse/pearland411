@@ -5628,19 +5628,14 @@ class User extends CI_Controller
 			$event_name = $_POST['event_name'];
 			$event_slug = strtolower(str_replace(' ', '-', $event_name)) . '-' . time();
 
-			// Handle image upload
+			// Handle image upload via the safe helper — MIME-sniffed,
+			// extension allow-listed, random filename, target dir
+			// gets an auto-written .htaccess blocking PHP execution.
 			$event_image = '';
 			if (!empty($_FILES['event_image']['name'])) {
-				$upload_path = './uploads/events/';
-				if (!is_dir($upload_path)) {
-					mkdir($upload_path, 0777, true);
-				}
-
-				$file_ext = pathinfo($_FILES['event_image']['name'], PATHINFO_EXTENSION);
-				$new_filename = 'event_' . time() . '.' . $file_ext;
-
-				if (move_uploaded_file($_FILES['event_image']['tmp_name'], $upload_path . $new_filename)) {
-					$event_image = 'uploads/events/' . $new_filename;
+				$saved = safe_upload_image($_FILES['event_image'], 'uploads/events/');
+				if ($saved !== false) {
+					$event_image = $saved;
 				}
 			}
 

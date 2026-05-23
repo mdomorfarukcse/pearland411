@@ -32,10 +32,12 @@ application/config/email.local.php
 .env
 .env.local
 
-# User uploads — content, not code
+# User uploads — content, not code (but track .htaccess + index.html
+# so the no-exec policy and directory-listing block are in git)
 uploads/*
 !uploads/index.html
 !uploads/.gitkeep
+!uploads/.htaccess
 
 # Composer (we don't ship vendor/)
 /vendor/

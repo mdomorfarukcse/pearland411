@@ -1,0 +1,19 @@
+# Block code execution anywhere under uploads/. Even if a malicious
+# upload slipped past safe_upload_image() (older code, future bugs),
+# the server will refuse to run it as PHP / CGI / etc.
+
+<FilesMatch "\.(php|phtml|phar|pl|py|jsp|asp|sh|cgi)$">
+    Require all denied
+</FilesMatch>
+
+# Don't try to execute anything as a CGI script.
+Options -ExecCGI -Indexes
+RemoveHandler .php .phtml .phar
+RemoveType .php .phtml .phar
+
+# Force common image MIME types so a "image.php.jpg" trick still
+# served as image/jpeg regardless of multi-dot filenames.
+AddType image/jpeg .jpg .jpeg
+AddType image/png .png
+AddType image/gif .gif
+AddType image/webp .webp

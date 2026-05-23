@@ -1982,19 +1982,24 @@ class Admin extends CI_Controller
 				$info['product_info_answer'] = json_encode($this->input->post('product_info_answer'));
 			}
 
-			// Robust image upload logic
+			// Robust image upload logic — validated via safe_upload_image()
+			// (random filename, MIME-sniffed, extension allow-listed, .htaccess
+			// auto-written to block PHP execution in the target dir).
 			$gallery_images = array();
 			if (isset($_FILES['gallery_image']) && $_FILES['gallery_image']['name'][0] != '') {
 				$files = $_FILES['gallery_image'];
 				$count = count($files['name']);
 				for ($i = 0; $i < $count; $i++) {
-					if ($files['error'][$i] == 0) {
-						$ext = pathinfo($files['name'][$i], PATHINFO_EXTENSION);
-						$filename = uniqid('prod_') . '.' . $ext;
-						$upload_path = 'uploads/products/' . $filename;
-						if (move_uploaded_file($files['tmp_name'][$i], $upload_path)) {
-							$gallery_images[] = $upload_path;
-						}
+					$single = array(
+						'name'     => $files['name'][$i],
+						'type'     => $files['type'][$i],
+						'tmp_name' => $files['tmp_name'][$i],
+						'error'    => $files['error'][$i],
+						'size'     => $files['size'][$i],
+					);
+					$saved = safe_upload_image($single, 'uploads/products/');
+					if ($saved !== false) {
+						$gallery_images[] = $saved;
 					}
 				}
 				// Only update if at least one image uploaded
