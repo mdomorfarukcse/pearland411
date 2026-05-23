@@ -18,24 +18,47 @@ class User extends CI_Controller
 		$this->load->library('form_validation');
 		$this->load->helper('url');
 
-		if (isset($_POST['logout'])) {
+		if ($this->input->post('logout')) {
 			$this->session->unset_userdata('logged_user');
 			$this->session->sess_destroy();
 			redirect(base_url());
-			die();
+			return;
 		}
 
-		/*Page Access Prevention*/
+		// Public methods reachable without a session. Anything not in
+		// this list requires a logged-in end-user (session key
+		// 'logged_user'). Admin sessions ('logged_admin') do NOT
+		// satisfy this — they're a different audience.
+		$public_actions = array(
+			// Auth pages
+			'register', 'login', 'forgot_password', 'forget_password',
+			'logout', 'subscribe_newsletter', 'newsletter_confirm',
+			// Home + static pages
+			'index', 'about_us', 'faq', 'contact_us', 'privacy_policy', 'terms_of_use',
+			// Public browsing — listings/categories
+			'all_category', 'all_listing', 'listing_preview',
+			'listing_details', 'listingdetails',
+			'pricing_plan', 'search', 'search_suggestions',
+			// Public content sections
+			'news', 'news_details', 'news_lists', 'news_preview',
+			'all_blog', 'blog_details',
+			'event', 'event_search', 'event_details',
+			'videos', 'video_details',
+			'classifieds', 'classifieds_details',
+			'all_products', 'product_details',
+			// Enquiry submission + checkout
+			'add_enquiry', 'checkout', 'checkout_success', 'process_checkout',
+		);
+
 		$page = $this->router->fetch_method();
 
-		if ($page != 'register' && $page != 'login' && $page != 'index' && $page != 'forget_password' && $page != 'all_category' && $page != 'all_listing' && $page != 'listing_preview' && $page != 'news_preview' && $page != 'all_blog' && $page != 'event' && $page != 'event_search' && $page != 'all_products' && $page != 'product_details' && $page != 'event_details' && $page != 'blog_details' && $page != 'news' && $page != 'news_details' && $page != 'news_lists' && $page != 'listing_details_n' && $page != 'listing_details' && $page != 'listingdetails' && $page != 'pricing_plan' && $page != 'listing_list_n' && $page != 'event_details_n' && $page != 'test_account' && $page != 'test_listing_urls' && $page != 'test_payment_gateway' && $page != 'search' && $page != 'search_suggestions' && $page != 'checkout' && $page != 'checkout_success' && $page != 'process_checkout' && $page != 'add_enquiry' && $page != 'about_us' && $page != 'faq' && $page != 'contact_us' && $page != 'privacy_policy' && $page != 'terms_of_use' && $page != 'videos' && $page != 'video_details' && $page != 'classifieds_details' && $page != 'classifieds' && $page != 'subscribe_newsletter' && $page != 'newsletter_confirm') {
-
+		if (!in_array($page, $public_actions, true)) {
 			if (!$this->session->userdata('logged_user')) {
-				redirect(base_url());
-				die();
+				$this->session->set_userdata('redirect_url', current_url());
+				redirect(base_url('login'));
+				return;
 			}
 		}
-		//if($this->session->userdata('logged_admin')){ redirect('dashboard'); die(); }
 	}
 
 	/**

@@ -324,23 +324,26 @@ class Admin extends CI_Controller
 		$this->load->model('usermodel');
 		$this->load->library('pagination');
 
-		if (isset($_POST['logout'])) {
-			$this->session->unset_userdata('logged_user');
+		if ($this->input->post('logout')) {
+			$this->session->unset_userdata('logged_admin');
 			$this->session->sess_destroy();
-			redirect(base_url());
-			die();
+			redirect(base_url('admin'));
+			return;
 		}
-		/*Page Access Prevention*/
+
+		// Admin pages reachable WITHOUT a session. Everything else
+		// requires a logged-in admin (session key 'logged_admin' —
+		// the end-user 'logged_user' key cannot satisfy this check).
+		$public_actions = array('index', 'login', 'forgot_password', 'forget_password');
 		$page = $this->router->fetch_method();
-		if ($page != 'register' && $page != 'login' && $page != 'index' && $page != 'forget_password') {
-			if (!$this->session->userdata('logged_user')) {
-				redirect(base_url());
-				die();
+
+		if (!in_array($page, $public_actions, true)) {
+			$admin = $this->session->userdata('logged_admin');
+			if (empty($admin) || empty($admin['logged_id'])) {
+				redirect(base_url('admin'));
+				return;
 			}
 		}
-		//if($this->session->userdata('logged_user')){ redirect('admin/dashboard'); die(); }
-
-
 	}
 
 	/*Home Page && Login Page*/
@@ -563,7 +566,7 @@ class Admin extends CI_Controller
 	/*Logout*/
 	public function logout()
 	{
-		$this->session->unset_userdata('logged_user');
+		$this->session->unset_userdata('logged_admin');
 		$this->session->sess_destroy();
 		redirect(base_url());
 		die();
@@ -2310,8 +2313,8 @@ class Admin extends CI_Controller
 
 		$data['logged_id'] = NULL;
 
-		if ($this->session->userdata('logged_user')) {
-			$session 		   = $this->session->userdata('logged_user');
+		if ($this->session->userdata('logged_admin')) {
+			$session 		   = $this->session->userdata('logged_admin');
 			$data['logged_id'] = $session['logged_id'];
 		}
 
@@ -3149,8 +3152,8 @@ class Admin extends CI_Controller
 
 		$data['logged_id'] = NULL;
 
-		if ($this->session->userdata('logged_user')) {
-			$session 		   = $this->session->userdata('logged_user');
+		if ($this->session->userdata('logged_admin')) {
+			$session 		   = $this->session->userdata('logged_admin');
 			$data['logged_id'] = $session['logged_id'];
 		}
 
@@ -3960,8 +3963,8 @@ class Admin extends CI_Controller
 
 		// Logged-in user id (used by enquiry form)
 		$data['logged_id'] = NULL;
-		if ($this->session->userdata('logged_user')) {
-			$session = $this->session->userdata('logged_user');
+		if ($this->session->userdata('logged_admin')) {
+			$session = $this->session->userdata('logged_admin');
 			$data['logged_id'] = isset($session['logged_id']) ? $session['logged_id'] : NULL;
 		}
 
@@ -4057,8 +4060,8 @@ class Admin extends CI_Controller
 
 		$data['logged_id'] = NULL;
 
-		if ($this->session->userdata('logged_user')) {
-			$session 		   = $this->session->userdata('logged_user');
+		if ($this->session->userdata('logged_admin')) {
+			$session 		   = $this->session->userdata('logged_admin');
 			$data['logged_id'] = $session['logged_id'];
 		}
 
@@ -4325,7 +4328,7 @@ class Admin extends CI_Controller
 	public function enquiries()
 	{
 		$data['logged_id'] = NULL;
-		$session 		   = $this->session->userdata('logged_user');
+		$session 		   = $this->session->userdata('logged_admin');
 		$data['logged_id'] = $session['logged_id'];
 
 		$data['enquiries'] = $this->adminmodel->getEnquiries();
@@ -4340,7 +4343,7 @@ class Admin extends CI_Controller
 	public function saved_enquiry()
 	{
 		$data['logged_id'] = NULL;
-		$session 		   = $this->session->userdata('logged_user');
+		$session 		   = $this->session->userdata('logged_admin');
 		$data['logged_id'] = $session['logged_id'];
 
 		$data['enquiries'] = $this->adminmodel->savedEnquiry();
@@ -4400,7 +4403,7 @@ class Admin extends CI_Controller
 	public function claimed_listings()
 	{
 		$data['logged_id'] = NULL;
-		$session 		   = $this->session->userdata('logged_user');
+		$session 		   = $this->session->userdata('logged_admin');
 		$data['logged_id'] = $session['logged_id'];
 
 		$data['listing_requests'] = $this->usermodel->getAllValues('claim_listings');
@@ -4459,7 +4462,7 @@ class Admin extends CI_Controller
 	public function current_ads()
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['ads'] 		= $this->adminmodel->getAllAds();
@@ -4472,7 +4475,7 @@ class Admin extends CI_Controller
 	public function create_ads()
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['users'] 		= $this->adminmodel->getAllValues('user');
@@ -4525,7 +4528,7 @@ class Admin extends CI_Controller
 	public function ads_edit($id)
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['users'] 		= $this->adminmodel->getAllValues('user');
@@ -4602,7 +4605,7 @@ class Admin extends CI_Controller
 	public function ads_price()
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['prices']		= $this->adminmodel->allAdsPrices();
@@ -4615,7 +4618,7 @@ class Admin extends CI_Controller
 	public function create_ads_price()
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$this->form_validation->set_rules('name', 'Name', 'trim|required');
@@ -4663,7 +4666,7 @@ class Admin extends CI_Controller
 	public function ads_price_edit($id)
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['price']		= $this->adminmodel->getAdsPrice($id);
@@ -4718,7 +4721,7 @@ class Admin extends CI_Controller
 	public function ads_request()
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['ads'] 		= $this->adminmodel->getAllInactiveAds();
@@ -4731,7 +4734,7 @@ class Admin extends CI_Controller
 	public function ads_history()
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['ads'] 		= $this->adminmodel->getAllAdsHistory();

@@ -183,11 +183,11 @@
 				return array('status' => FALSE, 'message' => 'Your account has been removed. Please contact Administrator.', 'url' => 'login');
 			}
 
-			// NOTE: still using 'logged_user' here. Session separation
-			// (logged_admin vs logged_user) is handled in a follow-up
-			// commit that updates every Admin controller reference.
-			$this->session->set_userdata('logged_user', array(
-				'logged_id' => $admin->admin_id,
+			// Dedicated admin session key so an end-user session can
+			// never satisfy an admin access check.
+			$this->session->set_userdata('logged_admin', array(
+				'logged_id'   => $admin->admin_id,
+				'admin_email' => $admin->admin_email,
 			));
 
 			return array('status' => TRUE, 'url' => 'admin/dashboard');
