@@ -308,7 +308,7 @@
                             <span class="date-text"><?= $publish_date; ?></span>
                         </div>
                     </div>
-                    <h1 class="pg_title"><?= $news->news_title; ?></h1>
+                    <h1 class="pg_title"><?= e($news->news_title); ?></h1>
                 </div>
                 <p><?= strip_tags(html_entity_decode($news->news_description)); ?></p>
 

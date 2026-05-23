@@ -333,15 +333,15 @@ function createSafeSlug($text)
 							<p>Something Went Wrong!!!</p>
 						</div>
 
-						<form method="post" action="<?= base_url('user/add-enquiry/event_details/' . $event->event_slug); ?>" name="detail_enquiry_form" id="detail_enquiry_form">
+						<form method="post" action="<?= base_url('user/add-enquiry/event_details/' . rawurlencode($event->event_slug)); ?>" name="detail_enquiry_form" id="detail_enquiry_form">
 							<!-- Hidden fields for enquiry data -->
 							<input type="hidden" name="listing_id" value="">
-							<input type="hidden" name="event_id" value="<?= $event->event_slug; ?>">
+							<input type="hidden" name="event_id" value="<?= e_attr($event->event_slug); ?>">
 							<input type="hidden" name="blog_id" value="">
 							<input type="hidden" name="product_id" value="">
-							<input type="hidden" name="receiving_user_id" value="<?= $event->user_id; ?>">
-							<input type="hidden" name="enquiry_sender_id" value="<?= $logged_id; ?>">
-							<input type="hidden" name="enquiry_source" value="<?= $event->event_name; ?>">
+							<input type="hidden" name="receiving_user_id" value="<?= (int) $event->user_id; ?>">
+							<input type="hidden" name="enquiry_sender_id" value="<?= (int) $logged_id; ?>">
+							<input type="hidden" name="enquiry_source" value="<?= e_attr($event->event_name); ?>">
 							<input type="hidden" name="enquiry_type" value="event">
 
 							<?php $disabled = $logged_id == NULL ? 'disabled' : ''; ?>
@@ -384,21 +384,21 @@ function createSafeSlug($text)
 		<div class="eve-deta-body-main">
 			<div class="lhs event-detail-modern">
 				<div class="head">
-					<h1><?= $event->event_name; ?></h1>
+					<h1><?= e($event->event_name); ?></h1>
 				</div>
-				<?= $event->event_description; ?>
+				<?= e_nl2br($event->event_description); ?>
 
 				<div class="sec-1">
 					<h4>Event information:</h4>
 					<ul>
-						<li><b>Name</b>: <?= $event->event_name; ?></li>
+						<li><b>Name</b>: <?= e($event->event_name); ?></li>
 						<li><b>Date</b>: <?= date('d, M Y', strtotime($event->event_start_date)); ?></li>
-						<li><b>Time</b>: <?= $event->event_time; ?></li>
-						<li><b>Address</b>: <?= $event->event_address; ?></li>
-						<li><b>Contact Person</b>: <?= $event->event_contact_name; ?></li>
-						<li><b>Phone</b>: <?= $event->event_mobile; ?></li>
-						<li><b>Email</b>: <?= $event->event_email; ?></li>
-						<li><b>Website</b>: <?= $event->event_website; ?></li>
+						<li><b>Time</b>: <?= e($event->event_time); ?></li>
+						<li><b>Address</b>: <?= e($event->event_address); ?></li>
+						<li><b>Contact Person</b>: <?= e($event->event_contact_name); ?></li>
+						<li><b>Phone</b>: <?= e($event->event_mobile); ?></li>
+						<li><b>Email</b>: <?= e($event->event_email); ?></li>
+						<li><b>Website</b>: <?= e($event->event_website); ?></li>
 					</ul>
 				</div>
 

@@ -8,9 +8,9 @@
 						<img src="<?= (empty($listing->listing_image)) ? 'https://new.pearland411.com/assets/images/pearland-logo.png' :  base_url($listing->listing_image); ?>" alt="">
 					</div>
 					<div class="list-fix-tit">
-						<h3><?= $listing->listing_name; ?></h3>
+						<h3><?= e($listing->listing_name); ?></h3>
 						<?php if ($listing->display_address == 1) { ?>
-							<p><b>Address:</b> <?= $listing->listing_address; ?></p>
+							<p><b>Address:</b> <?= e($listing->listing_address); ?></p>
 						<?php } ?>
 					</div>
 					<div class="list-fix-btn"> <span data-toggle="modal" data-target="#quote" class="pulse">Send an enquiry</span>
@@ -38,7 +38,7 @@
 					<img src="<?= (empty($listing->listing_image)) ? '/assets/images/fallback_profile.svg' :  base_url($listing->listing_image); ?>" alt=""> <span class="stat"><i class="material-icons">verified_user</i></span>
 				</div>
 				<div class="pg-list-1-left">
-					<h3><?= $listing->listing_name; ?></h3>
+					<h3><?= e($listing->listing_name); ?></h3>
 					<div class="list-rat-all" id="main-rating-display">
 						<?php
 						// Calculate actual review count and average rating as fallback
@@ -76,20 +76,20 @@
 						<span><?= $actual_total_reviews; ?> Review<?= ($actual_total_reviews != 1) ? 's' : ''; ?></span>
 					</div>
 					<?php if ($listing->display_address == 1) { ?>
-						<p><b>Address:</b> <?= $listing->listing_address; ?></p>
+						<p><b>Address:</b> <?= e($listing->listing_address); ?></p>
 					<?php } ?>
 					<div class="list-number pag-p1-phone">
 						<ul>
 							<?php if ($listing->display_phone == 1) { ?>
-								<a href="Tel:<?= $listing->listing_mobile; ?>">
-									<li class="ic-php"><?= $listing->listing_mobile; ?></li>
+								<a href="Tel:<?= e($listing->listing_mobile); ?>">
+									<li class="ic-php"><?= e($listing->listing_mobile); ?></li>
 								</a>
 							<?php } ?>
-							<a href="mailto:<?= $listing->listing_email; ?>">
-								<li class="ic-mai"><?= $listing->listing_email; ?></li>
+							<a href="mailto:<?= e($listing->listing_email); ?>">
+								<li class="ic-mai"><?= e($listing->listing_email); ?></li>
 							</a>
-							<a target="_blank" href="<?= $listing->listing_website; ?>">
-								<li class="ic-web"><?= $listing->listing_website; ?></li>
+							<a target="_blank" href="<?= e_url($listing->listing_website); ?>">
+								<li class="ic-web"><?= e($listing->listing_website); ?></li>
 							</a>
 						</ul>
 					</div>
@@ -97,14 +97,14 @@
 				<div class="list-ban-btn">
 					<ul>
 						<?php if ($listing->display_phone == '1') { ?>
-							<li> <a href="tel:<?= $listing->listing_mobile; ?>" class="cta cta-call">Call now</a>
+							<li> <a href="tel:<?= e($listing->listing_mobile); ?>" class="cta cta-call">Call now</a>
 							</li>
 						<?php } ?>
 						<!-- <li><span class="cta cta-like like-button " data-listing-id="5408" id="like-btn-5408">
 								<b class="like-count">0</b>
 								<span class="like-text">Like</span>
 							</span></li> -->
-						<li> <a href="https://wa.me/<?= $listing->display_phone ?>" class="cta cta-rev">WhatsApp</a>
+						<li> <a href="https://wa.me/<?= e_attr(preg_replace('/[^0-9+]/', '', $listing->display_phone)) ?>" class="cta cta-rev">WhatsApp</a>
 						</li>
 						<li> <span data-toggle="modal" data-target="#quote" class="pulse cta cta-get">Get quote</span>
 						</li>
@@ -126,7 +126,7 @@
 					<!--LISTING DETAILS: LEFT PART 1-->
 					<div class="pglist-bg pglist-p-com">
 						<div class="pglist-p-com-ti">
-							<h3><span>About</span> <?= $listing->listing_name; ?></h3>
+							<h3><span>About</span> <?= e($listing->listing_name); ?></h3>
 						</div>
 						<div class="list-pg-inn-sp list-pg-inn-abo">
 							<div class="share-btn">
@@ -185,7 +185,7 @@
 								</ul>
 							</div>
 							<p>
-								<?= $listing->listing_description; ?>
+								<?= e_nl2br($listing->listing_description); ?>
 							</p>
 						</div>
 					</div>
@@ -322,7 +322,7 @@
 											foreach ($all_images as $index => $image) {
 										?>
 												<div class="carousel-item <?= $index == 0 ? 'active' : '' ?>">
-													<img src="<?= base_url(trim($image)); ?>" alt="<?= $listing->listing_name; ?>">
+													<img src="<?= base_url(trim($image)); ?>" alt="<?= e($listing->listing_name); ?>">
 												</div>
 											<?php
 											}
@@ -433,7 +433,7 @@
 								<h3><span>360 </span> Degree View</h3>
 							</div>
 							<div class="list-pg-inn-sp list-360">
-								<iframe src="<?= $listing->virtual_tour_link; ?>" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
+								<iframe src="<?= e_url($listing->virtual_tour_link); ?>" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
 							</div>
 						</div>
 					<?php } ?>
@@ -581,10 +581,10 @@
 										<?php foreach ($listing_reviews as $review) { ?>
 											<li>
 												<div class="lr-user-wr-img">
-													<img src="<?= !empty($review->profile_image) ? base_url($review->profile_image) : 'https://new.pearland411.com/assets/images/pearland-logo.png'; ?>" alt="<?= $review->reviewer_name; ?>">
+													<img src="<?= !empty($review->profile_image) ? base_url($review->profile_image) : 'https://new.pearland411.com/assets/images/pearland-logo.png'; ?>" alt="<?= e($review->reviewer_name); ?>">
 												</div>
 												<div class="lr-user-wr-con">
-													<h6><?= $review->reviewer_name; ?></h6>
+													<h6><?= e($review->reviewer_name); ?></h6>
 													<label class="rat">
 														<?php for ($i = 1; $i <= 5; $i++) { ?>
 															<?php if ($i <= $review->rating) { ?>
@@ -599,7 +599,7 @@
 														<p><?= nl2br(htmlspecialchars($review->review_message)); ?></p>
 													<?php } ?>
 													<?php if (!empty($review->reviewer_city)) { ?>
-														<small style="color: #666; font-style: italic;">From: <?= $review->reviewer_city; ?></small>
+														<small style="color: #666; font-style: italic;">From: <?= e($review->reviewer_city); ?></small>
 													<?php } ?>
 												</div>
 											</li>
@@ -685,7 +685,7 @@
 								<input type="hidden" name="product_id" value="">
 								<input type="hidden" name="receiving_user_id" value="<?= $listing->user_id; ?>">
 								<input type="hidden" name="enquiry_sender_id" value="<?= isset($logged_id) ? $logged_id : ''; ?>">
-								<input type="hidden" name="enquiry_source" value="<?= $listing->listing_name; ?>">
+								<input type="hidden" name="enquiry_source" value="<?= e($listing->listing_name); ?>">
 								<input type="hidden" name="enquiry_type" value="listing">
 								<?php $disabled = empty($logged_id) ? 'disabled' : ''; ?>
 								<div class="form-group ic-user">
@@ -774,22 +774,22 @@
 							<div class="list-pg-map">
 								<?php if (!empty($listing->google_map)) { ?>
 									<!-- Render map from google_map field -->
-									<iframe src="<?= $listing->google_map ?>" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+									<iframe src="<?= e_url($listing->google_map); ?>" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
 
 									<!-- Additional map actions -->
 									<div class="map-actions" style="margin-top: 15px; text-align: center;">
 										<?php if (!empty($listing->listing_lat) && !empty($listing->listing_lng)) { ?>
-											<a href="https://www.google.com/maps?q=<?= $listing->listing_lat ?>,<?= $listing->listing_lng ?>" target="_blank" class="btn btn-primary btn-sm" style="margin-right: 10px; margin-bottom: 15px; width: 100%;">
+											<a href="https://www.google.com/maps?q=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>" target="_blank" class="btn btn-primary btn-sm" style="margin-right: 10px; margin-bottom: 15px; width: 100%;">
 												<i class="fa fa-external-link"></i> Open in Google Maps
 											</a>
-											<a href="https://www.google.com/maps/dir/?api=1&destination=<?= $listing->listing_lat ?>,<?= $listing->listing_lng ?>" target="_blank" class="btn btn-success btn-sm" style="width: 100%;">
+											<a href="https://www.google.com/maps/dir/?api=1&destination=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>" target="_blank" class="btn btn-success btn-sm" style="width: 100%;">
 												<i class="fa fa-location-arrow"></i> Get Directions
 											</a>
 										<?php } ?>
 									</div>
 								<?php } elseif (!empty($listing->listing_lat) && !empty($listing->listing_lng)) { ?>
 									<!-- Fallback: Generate map URL from lat/lng if google_map field is empty -->
-									<iframe src="https://maps.google.com/maps?q=<?= $listing->listing_lat ?>,<?= $listing->listing_lng ?>&output=embed" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
+									<iframe src="https://maps.google.com/maps?q=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>&output=embed" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
 								<?php } else { ?>
 									<!-- Default map if no location data -->
 									<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d100940.17087601054!2d-122.50781157529548!3d37.75767917396271!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x80859a6d00690021%3A0x4a501367f076adff!2sSan%20Francisco%2C%20CA%2C%20USA!5e0!3m2!1sen!2sin!4v1615094456570!5m2!1sen!2sin" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
@@ -809,19 +809,19 @@
 							<div class="list-pg-oth-info">
 								<ul>
 									<?php if (!empty($listing->listing_mobile)) { ?>
-										<li>Contact number <span><?= $listing->listing_mobile; ?></span></li>
+										<li>Contact number <span><?= e($listing->listing_mobile); ?></span></li>
 									<?php } ?>
 									<?php if (!empty($listing->listing_mobile)) { ?>
-										<li>WhatsApp <span><?= $listing->listing_mobile; ?></span></li>
+										<li>WhatsApp <span><?= e($listing->listing_mobile); ?></span></li>
 									<?php } ?>
 									<?php if (!empty($listing->listing_email)) { ?>
-										<li>Email id <span><?= $listing->listing_email; ?></span></li>
+										<li>Email id <span><?= e($listing->listing_email); ?></span></li>
 									<?php } ?>
 									<?php if (!empty($listing->contact_person)) { ?>
-										<li>Contact name <span><?= $listing->contact_person; ?></span></li>
+										<li>Contact name <span><?= e($listing->contact_person); ?></span></li>
 									<?php } ?>
 									<?php if (!empty($listing->listing_website)) { ?>
-										<li>Website <span><?= $listing->listing_website; ?></span></li>
+										<li>Website <span><?= e($listing->listing_website); ?></span></li>
 									<?php } ?>
 									<?php if (!empty($listing->business_hours)) { ?>
 										<li>Business Hours <span><?= $listing->business_hours; ?></span></li>
@@ -1507,7 +1507,7 @@
 							<input type="hidden" name="product_id" value="">
 							<input type="hidden" name="receiving_user_id" value="<?= $listing->user_id; ?>">
 							<input type="hidden" name="enquiry_sender_id" value="<?= isset($logged_id) ? $logged_id : ''; ?>">
-							<input type="hidden" name="enquiry_source" value="<?= $listing->listing_name; ?>">
+							<input type="hidden" name="enquiry_source" value="<?= e($listing->listing_name); ?>">
 							<input type="hidden" name="enquiry_type" value="listing">
 
 							<div class="form-group">

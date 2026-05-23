@@ -284,11 +284,11 @@
 							<!-- Hidden fields for enquiry data -->
 							<input type="hidden" name="listing_id" value="">
 							<input type="hidden" name="event_id" value="">
-							<input type="hidden" name="blog_id" value="<?= $blog->blog_id; ?>">
+							<input type="hidden" name="blog_id" value="<?= (int) $blog->blog_id; ?>">
 							<input type="hidden" name="product_id" value="">
-							<input type="hidden" name="receiving_user_id" value="<?= $blog->user_id; ?>">
-							<input type="hidden" name="enquiry_sender_id" value="<?= $logged_id; ?>">
-							<input type="hidden" name="enquiry_source" value="<?= $blog->blog_name; ?>">
+							<input type="hidden" name="receiving_user_id" value="<?= (int) $blog->user_id; ?>">
+							<input type="hidden" name="enquiry_sender_id" value="<?= (int) $logged_id; ?>">
+							<input type="hidden" name="enquiry_source" value="<?= e_attr($blog->blog_name); ?>">
 							<input type="hidden" name="enquiry_type" value="blog">
 
 
@@ -390,7 +390,7 @@
 							<span class="date-text"><?= date('M d', strtotime($blog->created_at)); ?></span>
 						</div>
 					</div>
-					<h1 class="pg_title"><?= $blog->blog_name; ?></h1>
+					<h1 class="pg_title"><?= e($blog->blog_name); ?></h1>
 
 				</div>
 				<?= strip_tags(html_entity_decode($blog->blog_description)); ?>
