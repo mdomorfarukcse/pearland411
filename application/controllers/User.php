@@ -1954,7 +1954,7 @@ class User extends CI_Controller
 
 		// Optional: handle password change if provided
 		if ($this->input->post('password') && trim($this->input->post('password')) !== '') {
-			$info['password'] = md5($this->input->post('password'));
+			$info['password'] = password_hash($this->input->post('password'), PASSWORD_DEFAULT);
 		}
 
 		// Handle profile image upload using project's upload helper function

@@ -139,41 +139,58 @@
 		// Login
 		function login()
 		{
-
 			$this->form_validation->set_rules('admin_email', 'Email Address', 'required|trim|valid_email');
-
 			$this->form_validation->set_rules('admin_password', 'Password', 'required');
 
-			if ($this->form_validation->run()) {
-
-				$admin_email = htmlentities($this->input->post('admin_email'), ENT_QUOTES);
-
-				$admin_password  = md5($this->input->post('admin_password'));
-
-				$query = $this->db->query("SELECT * FROM admin WHERE admin_email = '$admin_email' AND admin_password = '$admin_password'");
-
-				$result = $query->result();
-
-				if (sizeof($result) > 0) {
-
-					if ($result[0]->banned != 1) {
-
-						$sess_array = array('logged_id' => $result[0]->admin_id);
-
-						$this->session->set_userdata('logged_user', $sess_array);
-
-						return array('status' => TRUE, 'url' => 'admin/dashboard');
-					} else {
-
-						return array('status' => FALSE, 'message' => 'You account removed. Please Contact Administrator ', 'url' => 'login');
-					}
-				}
-			} else {
-
-				return array('status' => FALSE, 'referror' => '', 'message' => 'Email OR Password Worng');
+			if (!$this->form_validation->run()) {
+				return array('status' => FALSE, 'referror' => '', 'message' => 'Email or Password is incorrect.');
 			}
 
-			return array('status' => FALSE, 'message' => 'Email OR Password Worng', 'url' => '');
+			$admin_email = $this->input->post('admin_email');
+			$admin_password = (string) $this->input->post('admin_password');
+
+			$admin = $this->db
+				->where('admin_email', $admin_email)
+				->limit(1)
+				->get('admin')
+				->row();
+
+			if (!$admin) {
+				return array('status' => FALSE, 'message' => 'Email or Password is incorrect.', 'url' => '');
+			}
+
+			$stored = (string) $admin->admin_password;
+			$verified = false;
+
+			if (strlen($stored) > 0 && $stored[0] === '$') {
+				$verified = password_verify($admin_password, $stored);
+			} elseif (strlen($stored) === 32 && ctype_xdigit($stored)) {
+				if (hash_equals(strtolower($stored), md5($admin_password))) {
+					$verified = true;
+					$this->db
+						->where('admin_id', $admin->admin_id)
+						->update('admin', array(
+							'admin_password' => password_hash($admin_password, PASSWORD_DEFAULT),
+						));
+				}
+			}
+
+			if (!$verified) {
+				return array('status' => FALSE, 'message' => 'Email or Password is incorrect.', 'url' => '');
+			}
+
+			if ((int) $admin->banned === 1) {
+				return array('status' => FALSE, 'message' => 'Your account has been removed. Please contact Administrator.', 'url' => 'login');
+			}
+
+			// NOTE: still using 'logged_user' here. Session separation
+			// (logged_admin vs logged_user) is handled in a follow-up
+			// commit that updates every Admin controller reference.
+			$this->session->set_userdata('logged_user', array(
+				'logged_id' => $admin->admin_id,
+			));
+
+			return array('status' => TRUE, 'url' => 'admin/dashboard');
 		}
 
 		// Get Admin Information

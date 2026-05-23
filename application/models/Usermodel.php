@@ -119,14 +119,16 @@ class Usermodel extends CI_Model
 		$this->form_validation->set_rules('password', 'Password', 'trim|required|min_length[6]');
 
 		if ($this->form_validation->run()) {
-			$form_data 		= array(
-				'name'				=> htmlentities($this->input->post('name'), ENT_QUOTES),
-				'email_id'				=> htmlentities($this->input->post('email_id'), ENT_QUOTES),
-				'password'				=> md5($this->input->post('password')),
-				'mobile_number'			=> htmlentities($this->input->post('mobile_number'), ENT_QUOTES),
-				'hear_us'				=> htmlentities($this->input->post('hear_us'), ENT_QUOTES),
-				'sale_representative'	=> htmlentities($this->input->post('sale_representative'), ENT_QUOTES),
-				'user_zip_code'				=> htmlentities($this->input->post('zip_code'), ENT_QUOTES)
+			// Store raw values; escape on output via html_escape().
+			// htmlentities() at write-time corrupts data on round-trip.
+			$form_data = array(
+				'name'                => $this->input->post('name'),
+				'email_id'            => $this->input->post('email_id'),
+				'password'            => password_hash($this->input->post('password'), PASSWORD_DEFAULT),
+				'mobile_number'       => $this->input->post('mobile_number'),
+				'hear_us'             => $this->input->post('hear_us'),
+				'sale_representative' => $this->input->post('sale_representative'),
+				'user_zip_code'       => $this->input->post('zip_code'),
 			);
 
 			if ($this->db->insert('user', $form_data)) {
@@ -149,39 +151,61 @@ class Usermodel extends CI_Model
 
 		$this->form_validation->set_rules('password', 'Password', 'required');
 
-		if ($this->form_validation->run()) {
-			$email_id = htmlentities($this->input->post('email_id'), ENT_QUOTES);
-			$password  = md5($this->input->post('password'));
-			$query = $this->db->query("SELECT * FROM user WHERE email_id = '$email_id' AND password = '$password'");
-			$result = $query->result();
-
-			if (sizeof($result) > 0) {
-
-				if ($result[0]->banned != 1) {
-
-					$sess_array = array(
-						'logged_id' => $result[0]->user_id,
-						'name' => $result[0]->name,
-						'email_id' => $result[0]->email_id,
-						'profile_image' => $result[0]->profile_image,
-						'user_created' => $result[0]->user_created
-					);
-					$this->session->set_userdata('logged_user', $sess_array);
-
-					// Force redirect to dashboard regardless of lastpage
-					return array('status' => TRUE, 'url' => 'dashboard', 'redirect' => true);
-				} else {
-
-					return array('status' => FALSE, 'message' => 'Your account has been removed. Please contact Administrator.', 'url' => 'login');
-				}
-			} else {
-				// No user found with given credentials
-				return array('status' => FALSE, 'message' => 'Email or Password is incorrect.', 'url' => 'login');
-			}
-		} else {
-			// Form validation failed
+		if (!$this->form_validation->run()) {
 			return array('status' => FALSE, 'referror' => '', 'message' => 'Please enter valid email and password.');
 		}
+
+		$email_id = $this->input->post('email_id');
+		$password = (string) $this->input->post('password');
+
+		// Look up by email only — verify the password in PHP so timing
+		// attacks see uniform behaviour and so we never interpolate
+		// user input into SQL.
+		$user = $this->db
+			->where('email_id', $email_id)
+			->limit(1)
+			->get('user')
+			->row();
+
+		if (!$user) {
+			return array('status' => FALSE, 'message' => 'Email or Password is incorrect.', 'url' => 'login');
+		}
+
+		$stored = (string) $user->password;
+		$verified = false;
+
+		// Modern bcrypt/argon hashes start with $2y$ / $argon...
+		if (strlen($stored) > 0 && $stored[0] === '$') {
+			$verified = password_verify($password, $stored);
+		} elseif (strlen($stored) === 32 && ctype_xdigit($stored)) {
+			// Legacy MD5 — accept once, then transparently upgrade to bcrypt.
+			if (hash_equals(strtolower($stored), md5($password))) {
+				$verified = true;
+				$this->db
+					->where('user_id', $user->user_id)
+					->update('user', array(
+						'password' => password_hash($password, PASSWORD_DEFAULT),
+					));
+			}
+		}
+
+		if (!$verified) {
+			return array('status' => FALSE, 'message' => 'Email or Password is incorrect.', 'url' => 'login');
+		}
+
+		if ((int) $user->banned === 1) {
+			return array('status' => FALSE, 'message' => 'Your account has been removed. Please contact Administrator.', 'url' => 'login');
+		}
+
+		$this->session->set_userdata('logged_user', array(
+			'logged_id'     => $user->user_id,
+			'name'          => $user->name,
+			'email_id'      => $user->email_id,
+			'profile_image' => $user->profile_image,
+			'user_created'  => $user->user_created,
+		));
+
+		return array('status' => TRUE, 'url' => 'dashboard', 'redirect' => true);
 	}
 
 	/**
