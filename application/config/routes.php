@@ -58,6 +58,11 @@ $route['translate_uri_dashes'] = TRUE;
 $route['listing-details/(:any)'] = 'user/listing_details/$1';
 $route['all_listing/(:any)'] = 'user/all_listing/$1';
 
+// Auth flows
+$route['forgot-password']           = 'user/forgot_password';
+$route['reset-password/(:any)']     = 'user/reset_password/$1';
+$route['verify-email/(:any)']       = 'user/verify_email/$1';
+
 // News
 $route['news_details/(:any)'] = '/user/news_details/$1';
 // Videos

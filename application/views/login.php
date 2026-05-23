@@ -18,14 +18,18 @@
 
 						<h4>Member Login</h4>
 
-						<?php
+						<?php $reset_msg = $this->session->flashdata('login_message'); ?>
+						<?php if (!empty($reset_msg)): ?>
+							<div class="alert alert-success" role="alert">
+								<?= html_escape($reset_msg) ?>
+							</div>
+						<?php endif; ?>
 
-						if ($loginSucess && !empty($loginSucess['message'])) {
-
-							echo "<h5 class='alert alert-danger'>" . $loginSucess['message'] . "</h4>";
-						}
-
-						?>
+						<?php if ($loginSucess && !empty($loginSucess['message'])): ?>
+							<div class="alert alert-danger" role="alert">
+								<?= html_escape($loginSucess['message']) ?>
+							</div>
+						<?php endif; ?>
 
 						<form id="login_form" name="login_form" method="post">
 							<input type="hidden" name="lastpage" value="<?= $http_referer ?>">
@@ -87,7 +91,7 @@
 
 						</li>
 
-						<li><a href="<?= base_url() ?>forgot_password"> <span class="ll-3">Forgot password?</span></a>
+						<li><a href="<?= base_url('forgot-password') ?>"> <span class="ll-3">Forgot password?</span></a>
 
 						</li>
 

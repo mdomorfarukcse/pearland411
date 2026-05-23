@@ -119,26 +119,151 @@ class Usermodel extends CI_Model
 		$this->form_validation->set_rules('password', 'Password', 'trim|required|min_length[6]');
 
 		if ($this->form_validation->run()) {
+			// Generate a verification token (stored raw because we email
+			// it to the user; lookups are by indexed exact match).
+			$verification_token = bin2hex(random_bytes(32));
+
 			// Store raw values; escape on output via html_escape().
 			// htmlentities() at write-time corrupts data on round-trip.
 			$form_data = array(
-				'name'                => $this->input->post('name'),
-				'email_id'            => $this->input->post('email_id'),
-				'password'            => password_hash($this->input->post('password'), PASSWORD_DEFAULT),
-				'mobile_number'       => $this->input->post('mobile_number'),
-				'hear_us'             => $this->input->post('hear_us'),
-				'sale_representative' => $this->input->post('sale_representative'),
-				'user_zip_code'       => $this->input->post('zip_code'),
+				'name'                         => $this->input->post('name'),
+				'email_id'                     => $this->input->post('email_id'),
+				'password'                     => password_hash($this->input->post('password'), PASSWORD_DEFAULT),
+				'mobile_number'                => $this->input->post('mobile_number'),
+				'hear_us'                      => $this->input->post('hear_us'),
+				'sale_representative'          => $this->input->post('sale_representative'),
+				'user_zip_code'                => $this->input->post('zip_code'),
+				'email_verified'               => 0,
+				'email_verification_token'     => $verification_token,
+				'email_verification_sent_at'   => date('Y-m-d H:i:s'),
 			);
 
-			if ($this->db->insert('user', $form_data)) {
-				return array('status' => TRUE);
-			} else {
+			if (!$this->db->insert('user', $form_data)) {
 				return array('status' => FALSE, 'referror' => '', 'message' => 'Something Wrong please try again!');
 			}
+
+			// Fire off the verification email (best-effort — failures
+			// are logged but do not block account creation).
+			$this->load->library('mailer');
+			$verify_url = base_url('verify-email/' . $verification_token);
+			$body = '<p>Welcome to Pearland411.</p>'
+				. '<p>Please confirm your email by clicking the link below:</p>'
+				. '<p><a href="' . $verify_url . '">' . $verify_url . '</a></p>'
+				. '<p>If you did not create this account you can safely ignore this message.</p>';
+			$this->mailer->send($this->input->post('email_id'), 'Confirm your Pearland411 account', $body);
+
+			return array('status' => TRUE);
 		}
 
 		return array('status' => FALSE, 'referror' => '');
+	}
+
+	/*=========================
+		Email verification + password reset
+		==========================*/
+
+	/**
+	 * Look up a user by their email-verification token and, if found,
+	 * mark them verified. Returns true on success.
+	 */
+	public function verifyEmailByToken($token)
+	{
+		if (empty($token) || !ctype_xdigit($token)) {
+			return false;
+		}
+		$user = $this->db
+			->where('email_verification_token', $token)
+			->limit(1)
+			->get('user')
+			->row();
+		if (!$user) {
+			return false;
+		}
+		$this->db->where('user_id', $user->user_id)->update('user', array(
+			'email_verified'           => 1,
+			'email_verified_at'        => date('Y-m-d H:i:s'),
+			'email_verification_token' => null,
+		));
+		return true;
+	}
+
+	/**
+	 * Create a password-reset record + email the user a tokenized link.
+	 * Always returns the same shape so callers cannot enumerate which
+	 * emails exist in the system.
+	 */
+	public function requestPasswordReset($email, $ip = null)
+	{
+		$user = $this->db
+			->where('email_id', $email)
+			->limit(1)
+			->get('user')
+			->row();
+		if (!$user) {
+			// Silent success — do not leak which emails are registered.
+			return true;
+		}
+
+		$token = bin2hex(random_bytes(32));
+		$token_hash = hash('sha256', $token);
+
+		$this->db->insert('password_resets', array(
+			'user_id'    => $user->user_id,
+			'email'      => $user->email_id,
+			'token_hash' => $token_hash,
+			'created_at' => date('Y-m-d H:i:s'),
+			'expires_at' => date('Y-m-d H:i:s', time() + 3600), // 1 hour
+			'ip'         => $ip,
+		));
+
+		$this->load->library('mailer');
+		$reset_url = base_url('reset-password/' . $token);
+		$body = '<p>We received a request to reset the password on your Pearland411 account.</p>'
+			. '<p><a href="' . $reset_url . '">Click here to choose a new password</a></p>'
+			. '<p>This link expires in 1 hour. If you did not request a reset you can ignore this email — your password will not change.</p>';
+		$this->mailer->send($user->email_id, 'Reset your Pearland411 password', $body);
+
+		return true;
+	}
+
+	/**
+	 * Look up an unused, unexpired reset row by token. Returns the
+	 * password_resets row (object) or null.
+	 */
+	public function findActiveResetByToken($token)
+	{
+		if (empty($token) || !ctype_xdigit($token)) {
+			return null;
+		}
+		$token_hash = hash('sha256', $token);
+		$row = $this->db
+			->where('token_hash', $token_hash)
+			->where('used_at', null)
+			->where('expires_at >=', date('Y-m-d H:i:s'))
+			->limit(1)
+			->get('password_resets')
+			->row();
+		return $row ?: null;
+	}
+
+	/**
+	 * Apply a password reset: hash the new password, write it to user,
+	 * mark the reset row used. Returns true on success.
+	 */
+	public function completePasswordReset($reset_row, $new_password)
+	{
+		if (!$reset_row || empty($reset_row->user_id)) {
+			return false;
+		}
+		$this->db->trans_start();
+		$this->db->where('user_id', $reset_row->user_id)->update('user', array(
+			'password' => password_hash($new_password, PASSWORD_DEFAULT),
+		));
+		$this->db->where('id', $reset_row->id)->update('password_resets', array(
+			'used_at' => date('Y-m-d H:i:s'),
+		));
+		$this->db->trans_complete();
+		return $this->db->trans_status();
 	}
 
 	/*====================
@@ -195,6 +320,13 @@ class Usermodel extends CI_Model
 
 		if ((int) $user->banned === 1) {
 			return array('status' => FALSE, 'message' => 'Your account has been removed. Please contact Administrator.', 'url' => 'login');
+		}
+
+		// Block login until the email is verified. The email_verified
+		// column is added by migration 0001 and back-filled to 1 for
+		// existing rows, so this only affects NEW signups.
+		if (property_exists($user, 'email_verified') && (int) $user->email_verified === 0) {
+			return array('status' => FALSE, 'message' => 'Please confirm your email before signing in. Check your inbox for the verification link.', 'url' => 'login');
 		}
 
 		$this->session->set_userdata('logged_user', array(

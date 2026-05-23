@@ -32,6 +32,7 @@ class User extends CI_Controller
 		$public_actions = array(
 			// Auth pages
 			'register', 'login', 'forgot_password', 'forget_password',
+			'reset_password', 'verify_email',
 			'logout', 'subscribe_newsletter', 'newsletter_confirm',
 			// Home + static pages
 			'index', 'about_us', 'faq', 'contact_us', 'privacy_policy', 'terms_of_use',
@@ -1769,18 +1770,104 @@ class User extends CI_Controller
 
 
 
-	/*Forget Password*/
+	/*=========================
+		Password reset + email verification
+		==========================*/
 
+	/**
+	 * GET  -> render the forgot-password form.
+	 * POST -> accept an email address and (silently) email a reset link
+	 *         if it matches a registered user. We always show the same
+	 *         confirmation message so attackers can't enumerate emails.
+	 */
 	public function forgot_password()
 	{
-		// Load header categories using professional MVC approach
 		$data = array();
 		$this->loadHeaderCategories($data);
+		$data['title'] = 'Pearland | Forgot Password';
+
+		if ($this->input->method() === 'post') {
+			$this->form_validation->set_rules('email_id', 'Email', 'trim|required|valid_email');
+
+			if ($this->form_validation->run()) {
+				$email = $this->input->post('email_id');
+				$this->usermodel->requestPasswordReset(
+					$email,
+					$this->input->ip_address()
+				);
+				$this->session->set_flashdata(
+					'forgot_message',
+					'If an account exists for that email, we have sent a password reset link. ' .
+					'It will expire in 1 hour.'
+				);
+				redirect('forgot-password');
+				return;
+			}
+			$data['error'] = 'Please enter a valid email address.';
+		}
 
 		$this->load->view('header', $data);
+		$this->load->view('forgot_password', $data);
+		$this->load->view('footer');
+	}
 
-		$this->load->view('forgot_password');
+	/**
+	 * GET  /reset-password/<token> -> render the reset form.
+	 * POST same URL              -> verify token, write new password.
+	 */
+	public function reset_password($token = '')
+	{
+		$reset = $this->usermodel->findActiveResetByToken($token);
 
+		$data = array();
+		$this->loadHeaderCategories($data);
+		$data['title'] = 'Pearland | Reset Password';
+		$data['token'] = $token;
+
+		if (!$reset) {
+			$data['expired'] = true;
+			$this->load->view('header', $data);
+			$this->load->view('reset_password', $data);
+			$this->load->view('footer');
+			return;
+		}
+
+		if ($this->input->method() === 'post') {
+			$this->form_validation->set_rules('password', 'Password', 'trim|required|min_length[8]');
+			$this->form_validation->set_rules('password_confirm', 'Confirm Password', 'trim|required|matches[password]');
+
+			if ($this->form_validation->run()) {
+				$ok = $this->usermodel->completePasswordReset($reset, $this->input->post('password'));
+				if ($ok) {
+					$this->session->set_flashdata('login_message', 'Your password has been reset. Please sign in with your new password.');
+					redirect('login');
+					return;
+				}
+				$data['error'] = 'Something went wrong. Please request a new reset link.';
+			} else {
+				$data['error'] = strip_tags(validation_errors()) ?: 'Please correct the errors above.';
+			}
+		}
+
+		$this->load->view('header', $data);
+		$this->load->view('reset_password', $data);
+		$this->load->view('footer');
+	}
+
+	/**
+	 * GET /verify-email/<token> -> mark the user verified.
+	 */
+	public function verify_email($token = '')
+	{
+		$ok = $this->usermodel->verifyEmailByToken($token);
+
+		$data = array();
+		$this->loadHeaderCategories($data);
+		$data['title']    = 'Pearland | Email Verification';
+		$data['verified'] = $ok;
+
+		$this->load->view('header', $data);
+		$this->load->view('verify_email', $data);
 		$this->load->view('footer');
 	}
 
