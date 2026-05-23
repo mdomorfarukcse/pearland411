@@ -5271,4 +5271,136 @@ class Admin extends CI_Controller
 			redirect('admin/pricing');
 		}
 	}
+
+	/*=========================
+		IT / Web services catalog (admin side)
+		See database/migrations/0002_services.sql.
+		==========================*/
+
+	public function services_list()
+	{
+		$data = array();
+		$data['services'] = $this->adminmodel->getAllServices();
+		$this->load->view('admin/header');
+		$this->load->view('admin/services_list', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function add_service()
+	{
+		if ($this->input->method() === 'post') {
+			if ($this->_saveServiceFromPost(null)) {
+				$this->session->set_flashdata('message', 'Service added.');
+				redirect('admin/services');
+				return;
+			}
+		}
+		$data = array('service' => null);
+		$this->load->view('admin/header');
+		$this->load->view('admin/service_edit', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function edit_service($id = 0)
+	{
+		$service = $this->adminmodel->getServiceById($id);
+		if (!$service) { show_404(); return; }
+
+		if ($this->input->method() === 'post') {
+			if ($this->_saveServiceFromPost((int) $id)) {
+				$this->session->set_flashdata('message', 'Service updated.');
+				redirect('admin/services');
+				return;
+			}
+		}
+		$data = array('service' => $service);
+		$this->load->view('admin/header');
+		$this->load->view('admin/service_edit', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function delete_service($id = 0)
+	{
+		$this->adminmodel->deleteService((int) $id);
+		$this->session->set_flashdata('message', 'Service deleted.');
+		redirect('admin/services');
+	}
+
+	private function _saveServiceFromPost($id)
+	{
+		$this->form_validation->set_rules('name', 'Name', 'trim|required|min_length[2]|max_length[160]');
+		$this->form_validation->set_rules('slug', 'Slug', 'trim|required|alpha_dash|max_length[160]');
+		$this->form_validation->set_rules('short_description', 'Short description', 'trim|required|max_length[500]');
+		$this->form_validation->set_rules('price_unit', 'Price unit', 'trim|required');
+
+		if (!$this->form_validation->run()) {
+			$this->session->set_flashdata('error', strip_tags(validation_errors()));
+			return false;
+		}
+
+		$allowed_units = array('one_time','monthly','annual','project','hourly','custom');
+		$unit = $this->input->post('price_unit');
+		if (!in_array($unit, $allowed_units, true)) $unit = 'custom';
+
+		$base_price = $this->input->post('base_price');
+		$base_price = ($base_price === '' || $base_price === null) ? null : round((float) $base_price, 2);
+
+		$data = array(
+			'name'              => $this->input->post('name'),
+			'slug'              => $this->input->post('slug'),
+			'short_description' => $this->input->post('short_description'),
+			'body'              => $this->input->post('body'),
+			'icon'              => $this->input->post('icon'),
+			'category'          => $this->input->post('category'),
+			'base_price'        => $base_price,
+			'price_unit'        => $unit,
+			'sort_order'        => (int) $this->input->post('sort_order'),
+			'is_active'         => $this->input->post('is_active') ? 1 : 0,
+		);
+
+		if ($id === null) {
+			return (bool) $this->adminmodel->insertService($data);
+		}
+		return (bool) $this->adminmodel->updateService($id, $data);
+	}
+
+	public function service_requests_list()
+	{
+		$data = array();
+		$status = $this->input->get('status');
+		$data['selected_status'] = $status;
+		$data['requests'] = $this->adminmodel->getAllServiceRequests($status, 100);
+		$this->load->view('admin/header');
+		$this->load->view('admin/service_requests_list', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function service_request_view($id = 0)
+	{
+		$request = $this->adminmodel->getServiceRequestById($id);
+		if (!$request) { show_404(); return; }
+
+		if ($this->input->method() === 'post') {
+			$this->adminmodel->updateServiceRequestStatus(
+				(int) $id,
+				$this->input->post('status'),
+				$this->input->post('admin_notes')
+			);
+			$this->session->set_flashdata('message', 'Request updated.');
+			redirect('admin/service-requests/' . (int) $id);
+			return;
+		}
+
+		$data = array('request' => $request);
+		$this->load->view('admin/header');
+		$this->load->view('admin/service_request_view', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function service_request_delete($id = 0)
+	{
+		$this->adminmodel->deleteServiceRequest((int) $id);
+		$this->session->set_flashdata('message', 'Request deleted.');
+		redirect('admin/service-requests');
+	}
 }

@@ -2434,4 +2434,74 @@
 			$data = array('is_confirmed' => (int)$status, 'updated_at' => date('Y-m-d H:i:s'));
 			return $this->db->where('id', $id)->update('newsletter_subscriptions', $data);
 		}
+
+		/*=========================
+			IT / Web services catalog (admin-side)
+			==========================*/
+
+		public function getAllServices($limit = null, $offset = 0)
+		{
+			$this->db->from('services')->order_by('sort_order', 'ASC')->order_by('service_id', 'ASC');
+			if ($limit !== null) $this->db->limit((int)$limit, (int)$offset);
+			return $this->db->get()->result();
+		}
+
+		public function countServices() { return $this->db->count_all('services'); }
+
+		public function getServiceById($id)
+		{
+			return $this->db->where('service_id', (int)$id)->limit(1)->get('services')->row();
+		}
+
+		public function insertService($data)
+		{
+			$data['created_at'] = $data['updated_at'] = date('Y-m-d H:i:s');
+			return $this->db->insert('services', $data) ? $this->db->insert_id() : null;
+		}
+
+		public function updateService($id, $data)
+		{
+			$data['updated_at'] = date('Y-m-d H:i:s');
+			return $this->db->where('service_id', (int)$id)->update('services', $data);
+		}
+
+		public function deleteService($id)
+		{
+			return $this->db->where('service_id', (int)$id)->delete('services');
+		}
+
+		public function getAllServiceRequests($status = null, $limit = null, $offset = 0)
+		{
+			$this->db->select('sr.*, s.name AS service_name, s.slug AS service_slug')
+				->from('service_requests sr')
+				->join('services s', 's.service_id = sr.service_id', 'left')
+				->order_by('sr.created_at', 'DESC');
+			if ($status) $this->db->where('sr.status', $status);
+			if ($limit !== null) $this->db->limit((int)$limit, (int)$offset);
+			return $this->db->get()->result();
+		}
+
+		public function getServiceRequestById($id)
+		{
+			return $this->db->select('sr.*, s.name AS service_name, s.slug AS service_slug')
+				->from('service_requests sr')
+				->join('services s', 's.service_id = sr.service_id', 'left')
+				->where('sr.request_id', (int)$id)
+				->limit(1)
+				->get()->row();
+		}
+
+		public function updateServiceRequestStatus($id, $status, $admin_notes = null)
+		{
+			$allowed = array('new','in_review','quoted','won','lost','spam');
+			if (!in_array($status, $allowed, true)) return false;
+			$data = array('status' => $status, 'updated_at' => date('Y-m-d H:i:s'));
+			if ($admin_notes !== null) $data['admin_notes'] = $admin_notes;
+			return $this->db->where('request_id', (int)$id)->update('service_requests', $data);
+		}
+
+		public function deleteServiceRequest($id)
+		{
+			return $this->db->where('request_id', (int)$id)->delete('service_requests');
+		}
 	}

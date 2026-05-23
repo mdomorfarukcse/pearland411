@@ -63,6 +63,21 @@ $route['forgot-password']           = 'user/forgot_password';
 $route['reset-password/(:any)']     = 'user/reset_password/$1';
 $route['verify-email/(:any)']       = 'user/verify_email/$1';
 
+// IT / web services catalog (public side)
+$route['services']                    = 'user/services';
+$route['services/(:any)']             = 'user/service_details/$1';
+$route['request-service']             = 'user/request_service';
+$route['request-service/(:any)']      = 'user/request_service/$1';
+
+// IT / web services catalog (admin side)
+$route['admin/services']                       = 'admin/services_list';
+$route['admin/services/add']                   = 'admin/add_service';
+$route['admin/services/edit/(:num)']           = 'admin/edit_service/$1';
+$route['admin/services/delete/(:num)']         = 'admin/delete_service/$1';
+$route['admin/service-requests']               = 'admin/service_requests_list';
+$route['admin/service-requests/(:num)']        = 'admin/service_request_view/$1';
+$route['admin/service-requests/delete/(:num)'] = 'admin/service_request_delete/$1';
+
 // News
 $route['news_details/(:any)'] = '/user/news_details/$1';
 // Videos

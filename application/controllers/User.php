@@ -49,6 +49,8 @@ class User extends CI_Controller
 			'all_products', 'product_details',
 			// Enquiry submission + checkout
 			'add_enquiry', 'checkout', 'checkout_success', 'process_checkout',
+			// Services catalog + quote requests
+			'services', 'service_details', 'request_service',
 		);
 
 		$page = $this->router->fetch_method();
@@ -6577,5 +6579,132 @@ class User extends CI_Controller
 		} else {
 			echo '<!doctype html><html><body><p>Invalid or expired confirmation link.</p></body></html>';
 		}
+	}
+
+	/*=========================
+		IT / Web services catalog (public side)
+		See database/migrations/0002_services.sql.
+		==========================*/
+
+	public function services()
+	{
+		$data = array();
+		$category = $this->input->get('category');
+		$category = $category ? trim($category) : null;
+
+		$data['services']   = $this->usermodel->getActiveServices($category);
+		$data['categories'] = $this->usermodel->getServiceCategories();
+		$data['selected_category'] = $category;
+		$data['title']      = 'IT & Web Services for Local Businesses';
+		$this->loadHeaderCategories($data);
+
+		$this->load->view('header', $data);
+		$this->load->view('services_index', $data);
+		$this->load->view('footer');
+	}
+
+	public function service_details($slug = '')
+	{
+		$service = $this->usermodel->getServiceBySlug($slug);
+		if (!$service) {
+			show_404();
+			return;
+		}
+
+		$data = array();
+		$data['service'] = $service;
+		$data['title']   = $service->name . ' — Pearland411 Services';
+		$this->loadHeaderCategories($data);
+
+		// Pre-fill the request form with session data when available.
+		$data['prefill'] = array('name' => '', 'email' => '', 'phone' => '', 'company' => '');
+		if ($this->session->userdata('logged_user')) {
+			$session = $this->session->userdata('logged_user');
+			$data['prefill']['name']  = isset($session['name']) ? $session['name'] : '';
+			$data['prefill']['email'] = isset($session['email_id']) ? $session['email_id'] : '';
+		}
+
+		$this->load->view('header', $data);
+		$this->load->view('service_details', $data);
+		$this->load->view('footer');
+	}
+
+	/**
+	 * Handle quote-request submission. Slug is optional — a generic
+	 * "request quote" form (no service preselected) can post here
+	 * with service_slug empty.
+	 */
+	public function request_service($slug = '')
+	{
+		if ($this->input->method() !== 'post') {
+			redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+			return;
+		}
+
+		$this->form_validation->set_rules('name',  'Name',  'trim|required|min_length[2]');
+		$this->form_validation->set_rules('email', 'Email', 'trim|required|valid_email');
+		$this->form_validation->set_rules('message', 'Message', 'trim|required|min_length[5]');
+
+		$service = $slug ? $this->usermodel->getServiceBySlug($slug) : null;
+
+		if (!$this->form_validation->run()) {
+			$this->session->set_flashdata('service_request_error', strip_tags(validation_errors()) ?: 'Please complete the required fields.');
+			redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+			return;
+		}
+
+		$user_id = null;
+		if ($this->session->userdata('logged_user')) {
+			$session = $this->session->userdata('logged_user');
+			$user_id = isset($session['logged_id']) ? (int) $session['logged_id'] : null;
+		}
+
+		$payload = array(
+			'service_id'   => $service ? (int) $service->service_id : null,
+			'user_id'      => $user_id,
+			'name'         => $this->input->post('name'),
+			'email'        => $this->input->post('email'),
+			'phone'        => $this->input->post('phone'),
+			'company'      => $this->input->post('company'),
+			'budget_range' => $this->input->post('budget_range'),
+			'message'      => $this->input->post('message'),
+			'status'       => 'new',
+			'ip'           => $this->input->ip_address(),
+			'user_agent'   => substr((string) $this->input->user_agent(), 0, 255),
+		);
+
+		$request_id = $this->usermodel->createServiceRequest($payload);
+
+		if (!$request_id) {
+			$this->session->set_flashdata('service_request_error', 'Could not save your request. Please try again or call us.');
+			redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+			return;
+		}
+
+		// Best-effort notifications:
+		//   (a) acknowledge to the submitter
+		//   (b) alert MAIL_FROM_ADDRESS that a new request landed.
+		$this->load->library('mailer');
+		$svc_name = $service ? $service->name : 'general inquiry';
+		$ack_body = '<p>Thanks for your message — we received your request about <strong>' . html_escape($svc_name) . '</strong> and will be in touch shortly.</p>';
+		$this->mailer->send($this->input->post('email'), 'We received your Pearland411 services request', $ack_body);
+
+		$admin_to = env('MAIL_FROM_ADDRESS', '');
+		if ($admin_to) {
+			$alert_body = '<p>New service request #' . (int) $request_id . '</p>'
+				. '<ul>'
+				. '<li>Service: ' . html_escape($svc_name) . '</li>'
+				. '<li>Name: '    . html_escape($this->input->post('name')) . '</li>'
+				. '<li>Email: '   . html_escape($this->input->post('email')) . '</li>'
+				. '<li>Phone: '   . html_escape($this->input->post('phone')) . '</li>'
+				. '<li>Company: ' . html_escape($this->input->post('company')) . '</li>'
+				. '<li>Budget: '  . html_escape($this->input->post('budget_range')) . '</li>'
+				. '</ul>'
+				. '<p>Message:</p><blockquote>' . nl2br(html_escape($this->input->post('message'))) . '</blockquote>';
+			$this->mailer->send($admin_to, '[Pearland411] New service request — ' . $svc_name, $alert_body);
+		}
+
+		$this->session->set_flashdata('service_request_success', 'Thanks! We received your request and will be in touch shortly.');
+		redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
 	}
 }

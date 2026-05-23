@@ -1098,6 +1098,13 @@
 
 
 
+              <li class="ic-cat">
+                <a href="<?= base_url('admin/services') ?>">Services Catalog</a>
+              </li>
+              <li class="ic-cat">
+                <a href="<?= base_url('admin/service-requests') ?>">Service Requests</a>
+              </li>
+
             </ul>
 
 

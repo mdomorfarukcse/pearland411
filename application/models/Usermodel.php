@@ -4762,4 +4762,69 @@ class Usermodel extends CI_Model
 
 		return $results;
 	}
+
+	/*=========================
+		IT / Web services catalog (public-side)
+		==========================*/
+
+	/**
+	 * Returns active services ordered for display on /services.
+	 * @param string|null $category Optional category filter.
+	 * @return array of stdClass
+	 */
+	public function getActiveServices($category = null)
+	{
+		$this->db->from('services')->where('is_active', 1);
+		if ($category) {
+			$this->db->where('category', $category);
+		}
+		return $this->db
+			->order_by('sort_order', 'ASC')
+			->order_by('service_id', 'ASC')
+			->get()
+			->result();
+	}
+
+	/**
+	 * Distinct category list for the services index page.
+	 */
+	public function getServiceCategories()
+	{
+		return $this->db
+			->distinct()
+			->select('category')
+			->from('services')
+			->where('is_active', 1)
+			->where('category IS NOT NULL', null, false)
+			->order_by('category', 'ASC')
+			->get()
+			->result();
+	}
+
+	/**
+	 * Single service by slug. Returns null if missing or inactive.
+	 */
+	public function getServiceBySlug($slug)
+	{
+		if (empty($slug)) return null;
+		return $this->db
+			->where('slug', $slug)
+			->where('is_active', 1)
+			->limit(1)
+			->get('services')
+			->row();
+	}
+
+	/**
+	 * Create a service request (quote) row. Returns insert id or null.
+	 */
+	public function createServiceRequest($data)
+	{
+		$data['created_at'] = date('Y-m-d H:i:s');
+		$data['updated_at'] = date('Y-m-d H:i:s');
+		if (!$this->db->insert('service_requests', $data)) {
+			return null;
+		}
+		return $this->db->insert_id();
+	}
 }
