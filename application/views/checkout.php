@@ -431,68 +431,18 @@
                     </div>
 
                     <h3 style="margin-top: 30px;">Payment Information</h3>
-                    <p style="color: var(--text-light); font-size: 14px; margin-bottom: 20px;">
-                        Your payment is processed securely by Authorize.Net
-                    </p>
 
-                    <div class="form-group">
-                        <label for="card_number">Card Number *</label>
-                        <input type="text" id="card_number" name="card_number" placeholder="4111111111111111 (Test Card)" maxlength="19" required>
-                        <small style="color: #7bb73f; font-size: 12px;">Use 4111111111111111 for testing</small>
+                    <div style="background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+                        <strong>Online payments are temporarily unavailable.</strong>
+                        We are finalizing our payment processor integration.
+                        To activate this subscription, please
+                        <a href="<?= base_url('contact-us') ?>">contact support</a>
+                        and we will activate your plan manually.
                     </div>
 
-                    <div class="form-row-3">
-                        <div class="form-group">
-                            <label for="exp_month">Exp Month *</label>
-                            <select id="exp_month" name="exp_month" required>
-                                <option value="">MM</option>
-                                <?php
-                                $selected_month = isset($stored_payment_card) ? str_pad($stored_payment_card->exp_month, 2, '0', STR_PAD_LEFT) : '';
-                                for ($month = 1; $month <= 12; $month++):
-                                    $month_value = str_pad($month, 2, '0', STR_PAD_LEFT);
-                                ?>
-                                    <option value="<?= $month_value ?>" <?= ($month_value == $selected_month) ? 'selected' : '' ?>><?= $month_value ?></option>
-                                <?php endfor; ?>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="exp_year">Exp Year *</label>
-                            <select id="exp_year" name="exp_year" required>
-                                <option value="">YYYY</option>
-                                <?php
-                                $selected_year = isset($stored_payment_card) ? $stored_payment_card->exp_year : '';
-                                for ($year = date('Y'); $year <= date('Y') + 15; $year++):
-                                ?>
-                                    <option value="<?= $year ?>" <?= ($year == $selected_year) ? 'selected' : '' ?>><?= $year ?></option>
-                                <?php endfor; ?>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="cvv">CVV *</label>
-                            <input type="text" id="cvv" name="cvv" placeholder="123" maxlength="4" required>
-                            <small style="color: #7bb73f; font-size: 12px;">Use 123 for testing</small>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="card_name">Name on Card *</label>
-                        <input type="text" id="card_name" name="card_name"
-                            value="<?= isset($stored_payment_card) ? htmlspecialchars($stored_payment_card->card_holder_name) : (isset($billing_info['first_name']) ? htmlspecialchars($billing_info['first_name'] . ' ' . $billing_info['last_name']) : '') ?>" required>
-                    </div>
-
-                    <!-- Show stored card info for reference -->
-                    <?php if (isset($stored_payment_card) && $stored_payment_card): ?>
-                        <div style="background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                            <h4 style="margin: 0 0 10px 0; color: #495057;">Your Stored Card</h4>
-                            <p style="margin: 0; color: #6c757d;">
-                                <strong><?= $stored_payment_card->card_brand ?></strong> ending in <strong>****<?= $stored_payment_card->card_last4 ?></strong><br>
-                                <small>For security, please enter your new card details above for this purchase</small>
-                            </p>
-                        </div>
-                    <?php endif; ?>
-
-                    <button type="submit" class="checkout-btn" id="submit-btn">
-                        Complete Purchase
+                    <button type="submit" class="checkout-btn" id="submit-btn" disabled
+                            style="opacity: 0.6; cursor: not-allowed;">
+                        Online checkout coming soon
                     </button>
                 </form>
             </div>

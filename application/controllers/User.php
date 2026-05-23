@@ -6338,26 +6338,39 @@ class User extends CI_Controller
 	}
 
 	/**
-	 * Process Checkout - Handle form submission and payment processing
+	 * Process Checkout — handle form submission and payment processing.
+	 *
+	 * SECURITY NOTE
+	 * The previous implementation mocked the payment as successful
+	 * (`$payment_successful = true`) without calling Authorize.Net,
+	 * stored the full PAN + CVV (via json_encode($_POST)) into
+	 * `transactions.response_payload`, and recorded a "success" row
+	 * the admin dashboard counted as real revenue.
+	 *
+	 * Until Authorize.Net credentials are wired (see
+	 * application/libraries/Authorize_net_lib.php +
+	 * application/config/authorize_net.php), this endpoint refuses
+	 * to accept card data and returns the user to the pricing page
+	 * with a clear message. No card number, CVV, expiry, or
+	 * cardholder name is ever read from POST in this code path.
+	 *
 	 * URL: /process-checkout (POST)
 	 */
 	public function process_checkout()
 	{
-		// Check if POST request
-		if (!$_POST) {
+		if ($this->input->method() !== 'post') {
 			redirect('user/pricing_plan');
 			return;
 		}
 
-		// Get plan ID
+		// Sanity-check the plan (no money will move; we still validate
+		// so an attacker can't probe with junk).
 		$plan_id = $this->input->post('plan_id');
 		if (!$plan_id || !is_numeric($plan_id)) {
 			$this->session->set_flashdata('error', 'Invalid plan selected.');
 			redirect('user/pricing_plan');
 			return;
 		}
-
-		// Get plan details
 		$selected_plan = $this->usermodel->getPlanByIdForPricing($plan_id);
 		if (!$selected_plan) {
 			$this->session->set_flashdata('error', 'Selected plan not found.');
@@ -6365,189 +6378,18 @@ class User extends CI_Controller
 			return;
 		}
 
-		// Get selected duration (robust handling)
-		$duration_id = $this->input->post('duration_id');
-		$selected_duration = null;
-
-		// If a duration_id was posted and looks numeric, try to load it
-		if ($duration_id && is_numeric($duration_id)) {
-			$selected_duration = $this->usermodel->getDurationById($duration_id);
-		}
-
-		// If not found, try to pick a sensible fallback:
-		// 1) pick the first active plan duration with a valid numeric price
-		// 2) if no durations exist in DB for this plan, fallback to plan default price (30 days / 1 month)
-		if (!$selected_duration) {
-			$plan_durations = $this->usermodel->getPlanDurations($plan_id);
-			if (!empty($plan_durations)) {
-				// prefer first duration with numeric price > 0
-				foreach ($plan_durations as $d) {
-					if (isset($d->price) && is_numeric($d->price) && (float)$d->price > 0) {
-						$selected_duration = $d;
-						break;
-					}
-				}
-
-				// if none had a valid price, pick the first one anyway
-				if (!$selected_duration && !empty($plan_durations)) {
-					$selected_duration = $plan_durations[0];
-				}
-			} else {
-				// No durations configured for this plan — create a safe fallback
-				$selected_duration = (object) array(
-					'id' => null,
-					'price' => isset($selected_plan->price) ? $selected_plan->price : 0,
-					'duration_days' => 30,
-					'duration_months' => 1,
-					'currency' => isset($selected_plan->currency) && $selected_plan->currency ? $selected_plan->currency : 'USD'
-				);
-			}
-		}
-
-		// Final server-side price sanity check (do not allow zero/negative/non-numeric prices)
-		$price = isset($selected_duration->price) ? (float) $selected_duration->price : 0;
-		if ($price <= 0) {
-			$this->session->set_flashdata('error', 'Invalid price for the selected duration. Please contact support.');
-			redirect('checkout?plan_id=' . $plan_id);
-			return;
-		}
-
-		// Server-side tax calculation (10%) — keep in sync with client JS rate
-		$tax_rate = 0.10; // 10%
-		$tax_amount = round($price * $tax_rate, 2);
-		$total_amount = round($price + $tax_amount, 2);
-
-		// Basic form validation
-		$required_fields = array(
-			'first_name' => 'First Name',
-			'last_name' => 'Last Name',
-			'email' => 'Email',
-			'address' => 'Address',
-			'city' => 'City',
-			'state' => 'State',
-			'zip' => 'ZIP Code',
-			'country' => 'Country',
-			'card_number' => 'Card Number',
-			'exp_month' => 'Expiration Month',
-			'exp_year' => 'Expiration Year',
-			'cvv' => 'CVV',
-			'card_name' => 'Name on Card'
+		// HARD STOP. The Authorize.Net integration is not yet
+		// configured. We never read card_number / cvv / exp_* /
+		// card_name from POST — accepting them would store PCI data
+		// the application is not authorized to hold.
+		log_message('error', 'process_checkout called before live payments are wired; refusing.');
+		$this->session->set_flashdata(
+			'error',
+			'Online payments are temporarily unavailable while we finalize our payment processor. ' .
+			'Please contact support to activate your subscription.'
 		);
-
-		$validation_errors = array();
-		foreach ($required_fields as $field => $label) {
-			if (empty($_POST[$field])) {
-				$validation_errors[] = $label . ' is required';
-			}
-		}
-
-		if (!empty($validation_errors)) {
-			$this->session->set_flashdata('error', implode('. ', $validation_errors));
-			redirect('checkout?plan_id=' . $plan_id);
-			return;
-		}
-
-		// Get or create user ID
-		$user_id = null;
-		if ($this->session->userdata('logged_user')) {
-			$user_data = $this->session->userdata('logged_user');
-			$user_id = $user_data['logged_id'];
-		}
-
-		// Simulate payment processing (replace with actual Authorize.Net integration)
-		$payment_successful = true; // This would be actual payment result
-		$transaction_id = 'txn_' . time() . '_' . rand(1000, 9999); // Mock transaction ID
-
-		if ($payment_successful) {
-			// Create billing info string
-			$billing_info = $this->input->post('first_name') . ' ' . $this->input->post('last_name') .
-				' (' . $this->input->post('email') . ')';
-
-			// Store payment card information (if user is logged in)
-			if ($user_id) {
-				$card_data = array(
-					'user_id' => $user_id,
-					'card_holder_name' => $this->input->post('card_name'),
-					'card_last4' => substr($this->input->post('card_number'), -4),
-					'exp_month' => $this->input->post('exp_month'),
-					'exp_year' => $this->input->post('exp_year'),
-					'card_brand' => $this->getCardBrand($this->input->post('card_number')),
-					'is_default' => 1,
-					'created_at' => date('Y-m-d H:i:s')
-				);
-
-				$this->db->insert('payment_cards', $card_data);
-			}
-
-			// Create subscription record (use server-validated $price) — map to existing DB columns
-			// The current `subscriptions` table does not include duration_id/duration_days/duration_months/price columns
-			// so store the amount in `total_amount` and persist currency and billing_cycle instead.
-			$subscription_data = array(
-				'user_id' => $user_id,
-				'plan_id' => $plan_id,
-				'status' => 'active',
-				'start_date' => date('Y-m-d H:i:s'),
-				'end_date' => date('Y-m-d H:i:s', strtotime('+' . (isset($selected_duration->duration_days) ? $selected_duration->duration_days : 0) . ' days')),
-				'next_billing_date' => date('Y-m-d H:i:s', strtotime('+' . (isset($selected_duration->duration_days) ? $selected_duration->duration_days : 0) . ' days')),
-				'created_at' => date('Y-m-d H:i:s'),
-				'total_amount' => $total_amount,
-				'currency' => isset($selected_duration->currency) ? $selected_duration->currency : 'USD',
-				'billing_cycle' => isset($selected_plan->billing_interval) ? $selected_plan->billing_interval : 'monthly'
-			);
-
-			$subscription_id = $this->db->insert('subscriptions', $subscription_data) ? $this->db->insert_id() : null;
-
-			// Create transaction record (use server-validated $price and duration currency)
-			// Build a richer response payload that includes selected duration metadata
-			$payload = $_POST;
-			$payload['selected_duration'] = array(
-				'id' => isset($selected_duration->id) ? $selected_duration->id : null,
-				'duration_months' => isset($selected_duration->duration_months) ? $selected_duration->duration_months : null,
-				'duration_days' => isset($selected_duration->duration_days) ? $selected_duration->duration_days : null,
-				'price' => $price,
-				'currency' => isset($selected_duration->currency) ? $selected_duration->currency : 'USD'
-			);
-
-			$transaction_data = array(
-				'user_id' => $user_id,
-				'plan_id' => $plan_id,
-				'subscription_id' => $subscription_id,
-				'txn_ref' => $transaction_id,
-				// store subtotal/total in transaction as well
-				'amount' => $total_amount,
-				'currency' => isset($selected_duration->currency) ? $selected_duration->currency : 'USD',
-				'method' => 'card',
-				'status' => 'success',
-				'response_payload' => json_encode($payload), // Store form data + selected duration
-				'created_at' => date('Y-m-d H:i:s')
-			);
-
-			$this->db->insert('transactions', $transaction_data);
-
-			// Prepare success data
-			$success_data = array(
-				'subscription_id' => $subscription_id,
-				'transaction_id' => $transaction_id,
-				'plan_name' => $selected_plan->name,
-				'subtotal' => $price,
-				'tax' => $tax_amount,
-				'total' => $total_amount,
-				'currency' => isset($selected_duration->currency) ? $selected_duration->currency : 'USD',
-				'duration_months' => isset($selected_duration->duration_months) ? $selected_duration->duration_months : null,
-				'duration_days' => isset($selected_duration->duration_days) ? $selected_duration->duration_days : null,
-				'billing_info' => $billing_info,
-				'start_date' => date('Y-m-d H:i:s'),
-				'next_billing_date' => date('Y-m-d H:i:s', strtotime('+' . (isset($selected_duration->duration_days) ? $selected_duration->duration_days : 0) . ' days'))
-			);
-
-			// Store success data in session and redirect
-			$this->session->set_userdata('checkout_success_data', $success_data);
-			redirect('checkout-success');
-		} else {
-			// Payment failed
-			$this->session->set_flashdata('error', 'Payment processing failed. Please try again.');
-			redirect('checkout?plan_id=' . $plan_id);
-		}
+		redirect('checkout?plan_id=' . (int) $plan_id);
+		return;
 	}
 
 	/**
@@ -6581,26 +6423,6 @@ class User extends CI_Controller
 		$this->load->view('header', $data);
 		$this->load->view('checkout_success_view', $data);
 		$this->load->view('footer');
-	}
-
-	/**
-	 * Helper method to determine card brand from card number
-	 */
-	private function getCardBrand($card_number)
-	{
-		$card_number = preg_replace('/\D/', '', $card_number);
-
-		if (preg_match('/^4[0-9]{12}(?:[0-9]{3})?$/', $card_number)) {
-			return 'Visa';
-		} elseif (preg_match('/^5[1-5][0-9]{14}$/', $card_number)) {
-			return 'Mastercard';
-		} elseif (preg_match('/^3[47][0-9]{13}$/', $card_number)) {
-			return 'American Express';
-		} elseif (preg_match('/^6(?:011|5[0-9]{2})[0-9]{12}$/', $card_number)) {
-			return 'Discover';
-		}
-
-		return 'Unknown';
 	}
 
 	/**
