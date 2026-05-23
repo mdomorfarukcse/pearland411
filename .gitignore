@@ -1,0 +1,46 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+nbproject/
+
+# Backups / archives — never commit
+*.zip
+*.bak
+*.backup
+*-backup.*
+*.orig
+
+# Logs (keep the directory + index.html, ignore log contents)
+application/logs/*
+!application/logs/index.html
+
+# CodeIgniter cache (keep the directory + index.html)
+application/cache/*
+!application/cache/index.html
+
+# CI session files
+application/cache/ci_session_*
+
+# Local config overrides (never commit secrets)
+application/config/database.local.php
+application/config/authorize_net.local.php
+application/config/email.local.php
+.env
+.env.local
+
+# User uploads — content, not code
+uploads/*
+!uploads/index.html
+!uploads/.gitkeep
+
+# Composer (we don't ship vendor/)
+/vendor/
+composer.phar
+
+# Build output
+node_modules/
+dist/
