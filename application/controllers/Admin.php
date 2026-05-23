@@ -4375,28 +4375,71 @@ class Admin extends CI_Controller
 
 	/*==========================================
 		ACTIVE/INACTIVE STATUS UPDATE FUNCTION
+		==========================================
+
+		Toggles a single status column on a single resource row from
+		the admin's list pages.
+
+		SECURITY NOTE
+		Previously this method took tableName + fieldName + value
+		directly from POST and ran an arbitrary UPDATE. Any caller
+		could rewrite any column in any table (e.g.
+		admin.admin_password). The current implementation strictly
+		whitelists every (table, id-column, status-column) tuple the
+		admin UI legitimately needs to flip, and accepts only
+		integer 0/1 as the new value.
 		==========================================*/
 
 	public function update_status()
 	{
-		$id = $this->input->post('id');
-		$fieldName = $this->input->post('fieldName');
-		$selectedValue = $this->input->post('value');
-		$tableName = $this->input->post('tableName');
-		$tableID = $this->input->post('tableIdName');
+		// (table => [ id_column, status_column ])
+		$allowed = array(
+			'listings'       => array('listing_id',       'listing_status'),
+			'news'           => array('news_id',          'news_status'),
+			'blogs'          => array('blog_id',          'blog_status'),
+			'events'         => array('event_id',         'event_status'),
+			'video'          => array('video_id',         'video_status'),
+			'classifieds'    => array('classifieds_id',   'classifieds_status'),
+			'products'       => array('product_id',       'product_status'),
+			'marketplace'    => array('marketplace_id',   'marketplace_status'),
+			'house'          => array('house_id',         'house_status'),
+			'rental'         => array('rental_id',        'rental_status'),
+			'enquiries'      => array('enquiry_id',       'enquiry_save'),
+			'claim_listings' => array('claim_listing_id', 'claim_status'),
+		);
 
-		$data = $this->adminmodel->getSingleAjaxValue($id, $tableID, $tableName);
+		$tableName = (string) $this->input->post('tableName');
+		$tableID   = (string) $this->input->post('tableIdName');
+		$fieldName = (string) $this->input->post('fieldName');
+		$id        = $this->input->post('id');
+		$value     = $this->input->post('value');
 
-		$data[$fieldName] = $selectedValue;
-
-		if ($this->db->where($tableID, $id)->update($tableName, $data)) {
-			$update['message'] = 'success';
-			$this->session->set_flashdata('message', 'Status Updated Successfully!');
-		} else {
-			$update['message'] = 'error';
-			$this->session->set_flashdata('message', 'Status Update Unsuccessful!');
+		// Validate the (table, id-column, status-column) tuple.
+		if (!isset($allowed[$tableName])
+			|| $allowed[$tableName][0] !== $tableID
+			|| $allowed[$tableName][1] !== $fieldName) {
+			$this->output->set_status_header(400);
+			echo json_encode(array('message' => 'error', 'reason' => 'invalid target'));
+			return;
 		}
-		echo json_encode($update);
+
+		// Only allow integer 0 / 1 as the new status value.
+		if (!is_numeric($id) || !in_array((int) $value, array(0, 1), true)) {
+			$this->output->set_status_header(400);
+			echo json_encode(array('message' => 'error', 'reason' => 'invalid value'));
+			return;
+		}
+
+		$ok = $this->db
+			->where($tableID, (int) $id)
+			->update($tableName, array($fieldName => (int) $value));
+
+		if ($ok) {
+			$this->session->set_flashdata('message', 'Status Updated Successfully!');
+			echo json_encode(array('message' => 'success'));
+		} else {
+			echo json_encode(array('message' => 'error', 'reason' => 'db error'));
+		}
 	}
 
 
