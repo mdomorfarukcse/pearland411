@@ -15,6 +15,7 @@ mysql -u <user> -p <db_name> < database/migrations/0001_auth_flows.sql
 mysql -u <user> -p <db_name> < database/migrations/0002_services.sql
 mysql -u <user> -p <db_name> < database/migrations/0003_newsletter_campaigns.sql
 mysql -u <user> -p <db_name> < database/migrations/0004_rate_limits.sql
+mysql -u <user> -p <db_name> < database/migrations/0005_admin_roles.sql
 ```
 
 ## Why each migration exists
@@ -26,6 +27,7 @@ mysql -u <user> -p <db_name> < database/migrations/0004_rate_limits.sql
 | `0002_services.sql` | IT/web services catalog (`services`, `service_requests`). Seeds 10 placeholder services — edit in `/admin/services` to match the real Space Center Systems catalog. |
 | `0003_newsletter_campaigns.sql` | `newsletter_campaigns` + `newsletter_campaign_sends` so the admin can compose, queue, and batch-send emails to the existing subscriber list. |
 | `0004_rate_limits.sql` | `rate_limits` table backing the `Rate_limit` library. Protects login, register, password-reset, enquiry, review, newsletter signup, and service-request endpoints from brute-force / spam. |
+| `0005_admin_roles.sql` | Adds `admin.role` (`super_admin`/`editor`) + `admin.is_active`. Promotes the seeded admin (id=1) to `super_admin`. Sub-admin management, billing, and ad-sales screens are gated to super-admins; editors can manage content. |
 
 ## Outstanding follow-up
 

@@ -1098,6 +1098,16 @@
 
 
 
+              <?php
+                $__sidebar_admin = $this->session->userdata('logged_admin');
+                $__sidebar_role  = is_array($__sidebar_admin) ? ($__sidebar_admin['role'] ?? 'editor') : 'editor';
+              ?>
+              <?php if ($__sidebar_role === 'super_admin'): ?>
+                <li class="ic-cat">
+                  <a href="<?= base_url('admin/sub-admins') ?>">Sub-Admins</a>
+                </li>
+              <?php endif; ?>
+
               <li class="ic-cat">
                 <a href="<?= base_url('admin/services') ?>">Services Catalog</a>
               </li>

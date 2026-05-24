@@ -337,11 +337,34 @@ class Admin extends CI_Controller
 		$public_actions = array('index', 'login', 'forgot_password', 'forget_password');
 		$page = $this->router->fetch_method();
 
+		// Routes restricted to super_admin only — sub-admin management,
+		// billing/subscriptions, ad sales, pricing-plan editing. Anything
+		// not in this list is reachable by any logged-in admin.
+		$super_admin_only = array(
+			'sub_admin_all', 'sub_admin_create', 'sub_admin_edit', 'sub_admin_delete',
+			'pricing', 'pricing_plan', 'add_pricing_plan', 'edit_pricing_plan',
+			'delete_pricing_plan', 'all_subscriptions', 'subscription_view',
+			'cancel_subscription', 'delete_subscription', 'purchase_subscription',
+			'current_ads', 'create_ads', 'ads_edit', 'ads_delete',
+			'ads_price', 'create_ads_price', 'ads_price_edit',
+			'ads_request', 'ads_history', 'ads_history_delete', 'approveAdStatus',
+		);
+
 		if (!in_array($page, $public_actions, true)) {
 			$admin = $this->session->userdata('logged_admin');
 			if (empty($admin) || empty($admin['logged_id'])) {
 				redirect(base_url('admin'));
 				return;
+			}
+			// Sessions written before this commit will lack the role
+			// key — treat them as editor (safer default).
+			if (in_array($page, $super_admin_only, true)) {
+				$role = isset($admin['role']) ? $admin['role'] : 'editor';
+				if ($role !== 'super_admin') {
+					$this->session->set_flashdata('error', 'This area is restricted to super-admins.');
+					redirect(base_url('admin/dashboard'));
+					return;
+				}
 			}
 		}
 	}
@@ -5500,5 +5523,138 @@ class Admin extends CI_Controller
 		$this->adminmodel->deleteCampaign((int) $id);
 		$this->session->set_flashdata('message', 'Campaign deleted.');
 		redirect('admin/campaigns');
+	}
+
+	/*=========================
+		Sub-admin / role management (super_admin only).
+		Gated in the constructor via $super_admin_only.
+		See database/migrations/0005_admin_roles.sql.
+		==========================*/
+
+	public function sub_admin_all()
+	{
+		$data['admins']  = $this->adminmodel->getAllAdmins();
+		$data['current'] = $this->session->userdata('logged_admin');
+		$this->load->view('admin/header');
+		$this->load->view('admin/sub_admin_all', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function sub_admin_create()
+	{
+		if ($this->input->method() === 'post') {
+			$this->form_validation->set_rules('admin_name',  'Name',     'trim|required|min_length[2]|max_length[50]');
+			$this->form_validation->set_rules('admin_email', 'Email',    'trim|required|valid_email|max_length[50]');
+			$this->form_validation->set_rules('password',    'Password', 'required|min_length[8]');
+			$this->form_validation->set_rules('role',        'Role',     'trim|required');
+
+			if (!$this->form_validation->run()) {
+				$this->session->set_flashdata('error', strip_tags(validation_errors()));
+			} elseif ($this->adminmodel->adminEmailExists($this->input->post('admin_email'))) {
+				$this->session->set_flashdata('error', 'An admin with that email already exists.');
+			} else {
+				$role = $this->input->post('role');
+				if (!in_array($role, array('super_admin', 'editor'), true)) $role = 'editor';
+
+				$id = $this->adminmodel->createAdmin(array(
+					'admin_name'  => $this->input->post('admin_name'),
+					'admin_email' => $this->input->post('admin_email'),
+					'role'        => $role,
+					'is_active'   => $this->input->post('is_active') ? 1 : 0,
+				), (string) $this->input->post('password'));
+
+				if ($id) {
+					$this->session->set_flashdata('message', 'Sub-admin created.');
+					redirect('admin/sub-admins');
+					return;
+				}
+				$this->session->set_flashdata('error', 'Could not create the sub-admin.');
+			}
+		}
+
+		$data = array('admin_row' => null);
+		$this->load->view('admin/header');
+		$this->load->view('admin/sub_admin_edit', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function sub_admin_edit($id = 0)
+	{
+		$admin_row = $this->adminmodel->getAdminByIdRaw($id);
+		if (!$admin_row) { show_404(); return; }
+
+		if ($this->input->method() === 'post') {
+			$this->form_validation->set_rules('admin_name',  'Name',  'trim|required|min_length[2]|max_length[50]');
+			$this->form_validation->set_rules('admin_email', 'Email', 'trim|required|valid_email|max_length[50]');
+			$this->form_validation->set_rules('role',        'Role',  'trim|required');
+
+			if (!$this->form_validation->run()) {
+				$this->session->set_flashdata('error', strip_tags(validation_errors()));
+			} elseif ($this->adminmodel->adminEmailExists($this->input->post('admin_email'), (int) $id)) {
+				$this->session->set_flashdata('error', 'Another admin with that email already exists.');
+			} else {
+				$role = $this->input->post('role');
+				if (!in_array($role, array('super_admin', 'editor'), true)) $role = 'editor';
+
+				$current  = $this->session->userdata('logged_admin');
+				$self_id  = (int) ($current['logged_id'] ?? 0);
+
+				// Refuse to let the only active super-admin demote
+				// themselves or deactivate themselves.
+				if ((int) $admin_row->admin_id === $self_id
+					&& ($admin_row->role === 'super_admin')
+					&& ($role !== 'super_admin' || !$this->input->post('is_active'))) {
+					$other_super = 0;
+					foreach ($this->adminmodel->getAllAdmins() as $a) {
+						if ((int) $a->admin_id !== $self_id
+							&& ($a->role ?? '') === 'super_admin'
+							&& (int) ($a->is_active ?? 0) === 1) {
+							$other_super++;
+						}
+					}
+					if ($other_super === 0) {
+						$this->session->set_flashdata('error',
+							'You cannot demote or deactivate yourself while you are the only active super-admin.');
+						redirect('admin/sub-admins/edit/' . (int) $id);
+						return;
+					}
+				}
+
+				$ok = $this->adminmodel->updateAdminMeta((int) $id, array(
+					'admin_name'  => $this->input->post('admin_name'),
+					'admin_email' => $this->input->post('admin_email'),
+					'role'        => $role,
+					'is_active'   => $this->input->post('is_active') ? 1 : 0,
+				), $this->input->post('password') ?: null);
+
+				if ($ok) {
+					$this->session->set_flashdata('message', 'Sub-admin updated.');
+					redirect('admin/sub-admins');
+					return;
+				}
+				$this->session->set_flashdata('error', 'Could not save changes.');
+			}
+		}
+
+		$data = array('admin_row' => $admin_row);
+		$this->load->view('admin/header');
+		$this->load->view('admin/sub_admin_edit', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function sub_admin_delete($id = 0)
+	{
+		$current = $this->session->userdata('logged_admin');
+		if ((int) ($current['logged_id'] ?? 0) === (int) $id) {
+			$this->session->set_flashdata('error', 'You cannot delete the account you are signed in as.');
+			redirect('admin/sub-admins');
+			return;
+		}
+		if (!$this->adminmodel->deleteAdmin((int) $id)) {
+			$this->session->set_flashdata('error', 'Cannot delete — this is the last active super-admin.');
+		} else {
+			$this->session->set_flashdata('message', 'Sub-admin deleted.');
+		}
+		redirect('admin/sub-admins');
 	}
 }

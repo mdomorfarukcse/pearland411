@@ -184,10 +184,19 @@
 			}
 
 			// Dedicated admin session key so an end-user session can
-			// never satisfy an admin access check.
+			// never satisfy an admin access check. Role is read by
+			// Admin::requireRole() to gate sensitive screens.
+			$role = property_exists($admin, 'role') && $admin->role
+				? (string) $admin->role
+				: 'editor';
+			if (property_exists($admin, 'is_active') && (int) $admin->is_active === 0) {
+				return array('status' => FALSE, 'message' => 'This admin account is disabled.', 'url' => 'login');
+			}
 			$this->session->set_userdata('logged_admin', array(
 				'logged_id'   => $admin->admin_id,
 				'admin_email' => $admin->admin_email,
+				'admin_name'  => isset($admin->admin_name) ? $admin->admin_name : null,
+				'role'        => $role,
 			));
 
 			return array('status' => TRUE, 'url' => 'admin/dashboard');
@@ -2503,6 +2512,68 @@
 		public function deleteServiceRequest($id)
 		{
 			return $this->db->where('request_id', (int)$id)->delete('service_requests');
+		}
+
+		/*=========================
+			Sub-admin / role management
+			See database/migrations/0005_admin_roles.sql.
+			==========================*/
+
+		public function getAllAdmins()
+		{
+			return $this->db
+				->from('admin')
+				->order_by('admin_id', 'ASC')
+				->get()->result();
+		}
+
+		public function getAdminByIdRaw($id)
+		{
+			return $this->db
+				->where('admin_id', (int)$id)
+				->limit(1)
+				->get('admin')->row();
+		}
+
+		public function adminEmailExists($email, $exclude_id = 0)
+		{
+			$this->db->where('admin_email', $email);
+			if ($exclude_id) $this->db->where('admin_id !=', (int)$exclude_id);
+			return $this->db->count_all_results('admin') > 0;
+		}
+
+		public function createAdmin($data, $plain_password)
+		{
+			$data['admin_password'] = password_hash($plain_password, PASSWORD_DEFAULT);
+			$data['admin_created']  = date('Y-m-d H:i:s');
+			if (!isset($data['role']))      $data['role']      = 'editor';
+			if (!isset($data['is_active'])) $data['is_active'] = 1;
+			return $this->db->insert('admin', $data) ? $this->db->insert_id() : null;
+		}
+
+		public function updateAdminMeta($id, $data, $plain_password = null)
+		{
+			if ($plain_password !== null && $plain_password !== '') {
+				$data['admin_password'] = password_hash($plain_password, PASSWORD_DEFAULT);
+			}
+			return $this->db->where('admin_id', (int)$id)->update('admin', $data);
+		}
+
+		public function deleteAdmin($id)
+		{
+			// Refuse to delete the last super_admin so the system is
+			// never left without anyone who can manage roles.
+			$row = $this->getAdminByIdRaw($id);
+			if (!$row) return false;
+			if (($row->role ?? '') === 'super_admin') {
+				$other_super = $this->db
+					->where('role', 'super_admin')
+					->where('admin_id !=', (int)$id)
+					->where('is_active', 1)
+					->count_all_results('admin');
+				if ($other_super < 1) return false;
+			}
+			return $this->db->where('admin_id', (int)$id)->delete('admin');
 		}
 
 		/*=========================

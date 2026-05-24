@@ -80,6 +80,12 @@ $route['admin/service-requests']               = 'admin/service_requests_list';
 $route['admin/service-requests/(:num)']        = 'admin/service_request_view/$1';
 $route['admin/service-requests/delete/(:num)'] = 'admin/service_request_delete/$1';
 
+// Sub-admin / role management (super_admin only)
+$route['admin/sub-admins']                  = 'admin/sub_admin_all';
+$route['admin/sub-admins/new']              = 'admin/sub_admin_create';
+$route['admin/sub-admins/edit/(:num)']      = 'admin/sub_admin_edit/$1';
+$route['admin/sub-admins/delete/(:num)']    = 'admin/sub_admin_delete/$1';
+
 // Newsletter campaigns (admin side)
 $route['admin/campaigns']                       = 'admin/campaigns_list';
 $route['admin/campaigns/new']                   = 'admin/campaign_compose';
