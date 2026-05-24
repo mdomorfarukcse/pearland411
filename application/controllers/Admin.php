@@ -5403,4 +5403,102 @@ class Admin extends CI_Controller
 		$this->session->set_flashdata('message', 'Request deleted.');
 		redirect('admin/service-requests');
 	}
+
+	/*=========================
+		Newsletter campaigns (admin side)
+		See database/migrations/0003_newsletter_campaigns.sql.
+		==========================*/
+
+	public function campaigns_list()
+	{
+		$data = array();
+		$data['campaigns']   = $this->adminmodel->getAllCampaigns();
+		$data['subscribers'] = $this->adminmodel->countAllNewsletterSubscribers();
+		$this->load->view('admin/header');
+		$this->load->view('admin/campaigns_list', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function campaign_compose($id = 0)
+	{
+		$campaign = $id ? $this->adminmodel->getCampaignById($id) : null;
+		if ($id && !$campaign) { show_404(); return; }
+		if ($campaign && $campaign->status !== 'draft') {
+			$this->session->set_flashdata('error', 'This campaign has already been queued and can no longer be edited.');
+			redirect('admin/campaigns');
+			return;
+		}
+
+		if ($this->input->method() === 'post') {
+			$this->form_validation->set_rules('subject',   'Subject',  'trim|required|max_length[255]');
+			$this->form_validation->set_rules('body_html', 'Message',  'trim|required');
+
+			if (!$this->form_validation->run()) {
+				$this->session->set_flashdata('error', strip_tags(validation_errors()));
+			} else {
+				$session = $this->session->userdata('logged_admin');
+				$data_in = array(
+					'subject'      => $this->input->post('subject'),
+					'body_html'    => $this->input->post('body_html'),
+					'from_name'    => $this->input->post('from_name'),
+					'from_address' => $this->input->post('from_address'),
+					'created_by'   => $session ? (int) ($session['logged_id'] ?? 0) : null,
+					'status'       => 'draft',
+				);
+				if ($campaign) {
+					$this->adminmodel->updateCampaign($campaign->campaign_id, $data_in);
+					$cid = (int) $campaign->campaign_id;
+				} else {
+					$cid = (int) $this->adminmodel->createCampaign($data_in);
+				}
+				$this->session->set_flashdata('message', 'Draft saved.');
+				redirect('admin/campaigns/edit/' . $cid);
+				return;
+			}
+		}
+
+		$data = array('campaign' => $campaign);
+		$this->load->view('admin/header');
+		$this->load->view('admin/campaign_compose', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function campaign_queue($id = 0)
+	{
+		$count = $this->adminmodel->queueCampaign((int) $id);
+		if ($count === false) {
+			$this->session->set_flashdata('error', 'Campaign cannot be queued (already sent, or not found).');
+		} else {
+			$this->session->set_flashdata('message', "Queued — {$count} recipients ready to send.");
+		}
+		redirect('admin/campaigns/view/' . (int) $id);
+	}
+
+	public function campaign_send_batch($id = 0)
+	{
+		$batch = max(1, min(200, (int) $this->input->post('batch_size', true) ?: 25));
+		$result = $this->adminmodel->sendCampaignBatch((int) $id, $batch);
+		$this->session->set_flashdata(
+			'message',
+			"Sent batch: {$result['sent']} delivered, {$result['failed']} failed, {$result['remaining']} remaining."
+		);
+		redirect('admin/campaigns/view/' . (int) $id);
+	}
+
+	public function campaign_view($id = 0)
+	{
+		$campaign = $this->adminmodel->getCampaignById($id);
+		if (!$campaign) { show_404(); return; }
+		$data = array('campaign' => $campaign);
+		$this->load->view('admin/header');
+		$this->load->view('admin/campaign_view', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function campaign_delete($id = 0)
+	{
+		$this->adminmodel->deleteCampaign((int) $id);
+		$this->session->set_flashdata('message', 'Campaign deleted.');
+		redirect('admin/campaigns');
+	}
 }

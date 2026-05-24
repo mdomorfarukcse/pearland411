@@ -1104,6 +1104,9 @@
               <li class="ic-cat">
                 <a href="<?= base_url('admin/service-requests') ?>">Service Requests</a>
               </li>
+              <li class="ic-cat">
+                <a href="<?= base_url('admin/campaigns') ?>">Newsletter Campaigns</a>
+              </li>
 
             </ul>
 

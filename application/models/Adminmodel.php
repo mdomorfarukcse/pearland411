@@ -2504,4 +2504,151 @@
 		{
 			return $this->db->where('request_id', (int)$id)->delete('service_requests');
 		}
+
+		/*=========================
+			Newsletter campaigns (admin side)
+			See database/migrations/0003_newsletter_campaigns.sql.
+			==========================*/
+
+		public function getAllCampaigns($limit = null, $offset = 0)
+		{
+			$this->db->from('newsletter_campaigns')->order_by('created_at', 'DESC');
+			if ($limit !== null) $this->db->limit((int)$limit, (int)$offset);
+			return $this->db->get()->result();
+		}
+
+		public function getCampaignById($id)
+		{
+			return $this->db->where('campaign_id', (int)$id)->limit(1)->get('newsletter_campaigns')->row();
+		}
+
+		public function createCampaign($data)
+		{
+			$data['created_at'] = $data['updated_at'] = date('Y-m-d H:i:s');
+			if (empty($data['status'])) $data['status'] = 'draft';
+			return $this->db->insert('newsletter_campaigns', $data) ? $this->db->insert_id() : null;
+		}
+
+		public function updateCampaign($id, $data)
+		{
+			$data['updated_at'] = date('Y-m-d H:i:s');
+			return $this->db->where('campaign_id', (int)$id)->update('newsletter_campaigns', $data);
+		}
+
+		public function deleteCampaign($id)
+		{
+			$this->db->where('campaign_id', (int)$id)->delete('newsletter_campaign_sends');
+			return $this->db->where('campaign_id', (int)$id)->delete('newsletter_campaigns');
+		}
+
+		/**
+		 * Move a draft campaign to 'queued' and populate the per-recipient
+		 * send rows from confirmed newsletter subscribers. Returns the
+		 * number of recipients enqueued, or false on failure.
+		 */
+		public function queueCampaign($campaign_id)
+		{
+			$campaign = $this->getCampaignById($campaign_id);
+			if (!$campaign || $campaign->status !== 'draft') return false;
+
+			$subs = $this->db
+				->select('email')
+				->from('newsletter_subscriptions')
+				->where('is_confirmed', 1)
+				->get()->result();
+
+			$now = date('Y-m-d H:i:s');
+			$rows = array();
+			foreach ($subs as $s) {
+				$rows[] = array(
+					'campaign_id' => (int)$campaign_id,
+					'email'       => $s->email,
+					'status'      => 'pending',
+					'created_at'  => $now,
+				);
+			}
+			if (!empty($rows)) {
+				$this->db->insert_batch('newsletter_campaign_sends', $rows);
+			}
+
+			$this->db->where('campaign_id', (int)$campaign_id)->update('newsletter_campaigns', array(
+				'status'          => 'queued',
+				'total_recipients' => count($rows),
+				'updated_at'      => $now,
+			));
+			return count($rows);
+		}
+
+		/**
+		 * Pop up to $batch_size pending recipients of the given (queued
+		 * or sending) campaign, send each one via the Mailer library,
+		 * and update the per-send row. Returns array(sent, failed,
+		 * remaining).
+		 */
+		public function sendCampaignBatch($campaign_id, $batch_size = 25)
+		{
+			$campaign = $this->getCampaignById($campaign_id);
+			if (!$campaign || !in_array($campaign->status, array('queued', 'sending'), true)) {
+				return array('sent' => 0, 'failed' => 0, 'remaining' => 0);
+			}
+
+			if ($campaign->status === 'queued') {
+				$this->db->where('campaign_id', (int)$campaign_id)->update('newsletter_campaigns', array(
+					'status'     => 'sending',
+					'started_at' => date('Y-m-d H:i:s'),
+					'updated_at' => date('Y-m-d H:i:s'),
+				));
+			}
+
+			$pending = $this->db
+				->where('campaign_id', (int)$campaign_id)
+				->where('status', 'pending')
+				->order_by('send_id', 'ASC')
+				->limit((int)$batch_size)
+				->get('newsletter_campaign_sends')
+				->result();
+
+			$CI =& get_instance();
+			$CI->load->library('mailer');
+
+			$sent = 0; $failed = 0;
+			foreach ($pending as $row) {
+				$ok = $CI->mailer->send($row->email, $campaign->subject, $campaign->body_html);
+				if ($ok) {
+					$sent++;
+					$this->db->where('send_id', $row->send_id)->update('newsletter_campaign_sends', array(
+						'status' => 'sent',
+						'sent_at' => date('Y-m-d H:i:s'),
+					));
+				} else {
+					$failed++;
+					$this->db->where('send_id', $row->send_id)->update('newsletter_campaign_sends', array(
+						'status' => 'failed',
+						'error'  => 'send_failed',
+						'sent_at' => date('Y-m-d H:i:s'),
+					));
+				}
+			}
+
+			// Increment counters on the campaign and mark sent if done.
+			$totals = $this->db
+				->select("SUM(status='pending') AS pending, SUM(status='sent') AS sent_total, SUM(status='failed') AS failed_total", false)
+				->from('newsletter_campaign_sends')
+				->where('campaign_id', (int)$campaign_id)
+				->get()->row();
+
+			$remaining = (int) ($totals->pending ?? 0);
+			$update = array(
+				'sent_count'   => (int) ($totals->sent_total ?? 0),
+				'failed_count' => (int) ($totals->failed_total ?? 0),
+				'updated_at'   => date('Y-m-d H:i:s'),
+			);
+			if ($remaining === 0) {
+				$update['status']      = 'sent';
+				$update['finished_at'] = date('Y-m-d H:i:s');
+			}
+			$this->db->where('campaign_id', (int)$campaign_id)->update('newsletter_campaigns', $update);
+
+			return array('sent' => $sent, 'failed' => $failed, 'remaining' => $remaining);
+		}
 	}

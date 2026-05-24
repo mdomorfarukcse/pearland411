@@ -79,6 +79,15 @@ $route['admin/service-requests']               = 'admin/service_requests_list';
 $route['admin/service-requests/(:num)']        = 'admin/service_request_view/$1';
 $route['admin/service-requests/delete/(:num)'] = 'admin/service_request_delete/$1';
 
+// Newsletter campaigns (admin side)
+$route['admin/campaigns']                       = 'admin/campaigns_list';
+$route['admin/campaigns/new']                   = 'admin/campaign_compose';
+$route['admin/campaigns/edit/(:num)']           = 'admin/campaign_compose/$1';
+$route['admin/campaigns/view/(:num)']           = 'admin/campaign_view/$1';
+$route['admin/campaigns/queue/(:num)']          = 'admin/campaign_queue/$1';
+$route['admin/campaigns/send-batch/(:num)']     = 'admin/campaign_send_batch/$1';
+$route['admin/campaigns/delete/(:num)']         = 'admin/campaign_delete/$1';
+
 // News
 $route['news_details/(:any)'] = '/user/news_details/$1';
 // Videos
