@@ -52,8 +52,13 @@ $val = function ($field, $default = '') use ($service) {
 							<textarea name="short_description" maxlength="500" rows="2" class="form-control" required><?= e($val('short_description')) ?></textarea>
 						</div>
 						<div class="form-group">
-							<label>Body (HTML allowed: p, strong, em, ul/ol/li, a, h2-h4)</label>
-							<textarea name="body" rows="8" class="form-control"><?= e($val('body')) ?></textarea>
+							<label>Body</label>
+							<textarea name="body" rows="8" class="form-control js-ckeditor"><?= e($val('body')) ?></textarea>
+							<small style="color:#6b7280;">
+								Rich text. On render only a safe allow-list of tags
+								(p, strong/em, lists, links, h2–h4, blockquote) is kept;
+								scripts/iframes are stripped.
+							</small>
 						</div>
 						<div class="row">
 							<div class="col-md-4 form-group">

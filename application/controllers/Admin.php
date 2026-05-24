@@ -595,6 +595,66 @@ class Admin extends CI_Controller
 		die();
 	}
 
+	/**
+	 * Admin self-service password change (any logged-in admin).
+	 * Requires the current password as a confirmation step so a
+	 * left-unattended browser session can't be hijacked into a
+	 * password reset.
+	 */
+	public function change_password()
+	{
+		$session = $this->session->userdata('logged_admin');
+		$admin_id = (int) ($session['logged_id'] ?? 0);
+		$admin = $this->adminmodel->getAdminByIdRaw($admin_id);
+		if (!$admin) { show_404(); return; }
+
+		if ($this->input->method() === 'post') {
+			$this->form_validation->set_rules('current_password', 'Current Password', 'required');
+			$this->form_validation->set_rules('new_password',     'New Password',     'required|min_length[8]');
+			$this->form_validation->set_rules('new_password_confirm', 'Confirm New Password', 'required|matches[new_password]');
+
+			if (!$this->form_validation->run()) {
+				$this->session->set_flashdata('error', strip_tags(validation_errors()));
+				redirect('admin/change-password');
+				return;
+			}
+
+			// Verify the current password — accept either bcrypt or
+			// the legacy MD5 hash so this also works as a one-off
+			// upgrade for the seeded admin@gmail.com / 12345 account.
+			$current = (string) $this->input->post('current_password');
+			$stored  = (string) $admin->admin_password;
+			$ok = false;
+			if (strlen($stored) > 0 && $stored[0] === '$') {
+				$ok = password_verify($current, $stored);
+			} elseif (strlen($stored) === 32 && ctype_xdigit($stored)) {
+				$ok = hash_equals(strtolower($stored), md5($current));
+			}
+			if (!$ok) {
+				$this->session->set_flashdata('error', 'Current password is incorrect.');
+				redirect('admin/change-password');
+				return;
+			}
+
+			$this->adminmodel->updateAdminMeta(
+				$admin_id,
+				array(),
+				(string) $this->input->post('new_password')
+			);
+
+			$this->session->set_flashdata('message', 'Password updated. Please sign in again with your new password.');
+			$this->session->unset_userdata('logged_admin');
+			$this->session->sess_destroy();
+			redirect(base_url('admin'));
+			return;
+		}
+
+		$data = array('admin_row' => $admin);
+		$this->load->view('admin/header');
+		$this->load->view('admin/change_password', $data);
+		$this->load->view('admin/footer');
+	}
+
 
 	/*====================
 	Dashboard

@@ -44,11 +44,12 @@ $val = function ($f, $default = '') use ($campaign) {
 							</div>
 						</div>
 						<div class="form-group">
-							<label>Message HTML *</label>
-							<textarea name="body_html" rows="14" class="form-control" required><?= e($val('body_html')) ?></textarea>
+							<label>Message *</label>
+							<textarea name="body_html" rows="14" class="form-control js-ckeditor" required><?= e($val('body_html')) ?></textarea>
 							<small style="color:#6b7280;">
-								Plain HTML. The recipient list is the confirmed
-								newsletter subscribers (is_confirmed = 1).
+								Rich text — output as the email body. Recipient list
+								is the confirmed newsletter subscribers
+								(is_confirmed = 1).
 							</small>
 						</div>
 

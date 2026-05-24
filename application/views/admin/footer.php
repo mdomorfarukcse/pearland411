@@ -32,6 +32,21 @@
 	});
 </script>
 
+<!-- CKEditor 4 — only initialised on textareas with class="js-ckeditor" -->
+<script src="https://cdn.ckeditor.com/4.16.1/standard/ckeditor.js"></script>
+<script>
+	if (typeof CKEDITOR !== 'undefined') {
+		document.querySelectorAll('textarea.js-ckeditor').forEach(function (el) {
+			CKEDITOR.replace(el, {
+				removeButtons: 'Save,NewPage,Preview,Print,Templates,Form,Checkbox,Radio,TextField,Textarea,Select,Button,ImageButton,HiddenField,CreateDiv,Iframe,Flash,Smiley,PageBreak,About',
+				height: 320,
+				removePlugins: 'elementspath',
+				resize_enabled: true
+			});
+		});
+	}
+</script>
+
 
 </body>
 

@@ -96,7 +96,16 @@
 				</div>
 				<div class="list-ban-btn">
 					<ul>
-						<?php if ($listing->display_phone == '1') { ?>
+						<?php
+						// display_phone is a 0/1 toggle controlling whether
+						// contact details are exposed; listing_mobile and
+						// listing_whatsapp hold the actual numbers.
+						$__wa_number = !empty($listing->listing_whatsapp)
+							? $listing->listing_whatsapp
+							: $listing->listing_mobile;
+						$__wa_number = preg_replace('/[^0-9+]/', '', (string) $__wa_number);
+						?>
+						<?php if ($listing->display_phone == '1' && !empty($listing->listing_mobile)) { ?>
 							<li> <a href="tel:<?= e($listing->listing_mobile); ?>" class="cta cta-call">Call now</a>
 							</li>
 						<?php } ?>
@@ -104,8 +113,9 @@
 								<b class="like-count">0</b>
 								<span class="like-text">Like</span>
 							</span></li> -->
-						<li> <a href="https://wa.me/<?= e_attr(preg_replace('/[^0-9+]/', '', $listing->display_phone)) ?>" class="cta cta-rev">WhatsApp</a>
-						</li>
+						<?php if ($listing->display_phone == '1' && !empty($__wa_number)) { ?>
+						<li> <a href="https://wa.me/<?= e_attr($__wa_number) ?>" target="_blank" rel="noopener noreferrer" class="cta cta-rev">WhatsApp</a></li>
+						<?php } ?>
 						<li> <span data-toggle="modal" data-target="#quote" class="pulse cta cta-get">Get quote</span>
 						</li>
 					</ul>

@@ -1107,6 +1107,9 @@
                   <a href="<?= base_url('admin/sub-admins') ?>">Sub-Admins</a>
                 </li>
               <?php endif; ?>
+              <li class="ic-cat">
+                <a href="<?= base_url('admin/change-password') ?>">Change My Password</a>
+              </li>
 
               <li class="ic-cat">
                 <a href="<?= base_url('admin/services') ?>">Services Catalog</a>

@@ -80,6 +80,9 @@ $route['admin/service-requests']               = 'admin/service_requests_list';
 $route['admin/service-requests/(:num)']        = 'admin/service_request_view/$1';
 $route['admin/service-requests/delete/(:num)'] = 'admin/service_request_delete/$1';
 
+// Admin self-service
+$route['admin/change-password']             = 'admin/change_password';
+
 // Sub-admin / role management (super_admin only)
 $route['admin/sub-admins']                  = 'admin/sub_admin_all';
 $route['admin/sub-admins/new']              = 'admin/sub_admin_create';
