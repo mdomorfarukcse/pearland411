@@ -51,6 +51,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 */
 $route['default_controller'] = 'User';
 $route['admin'] = 'Admin/index';
+$route['sitemap\.xml'] = 'Sitemap/index';
 $route['(:any)'] = 'User/$1';
 $route['404_override'] = 'errors/page_missing';
 $route['translate_uri_dashes'] = TRUE;

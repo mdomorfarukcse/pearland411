@@ -68,3 +68,18 @@ if (!function_exists('e_attr')) {
         return e($value);
     }
 }
+
+if (!function_exists('json_ld')) {
+    /**
+     * Wrap a structured-data payload in a JSON-LD <script> tag.
+     * Returns the HTML to assign to $data['json_ld'] in a controller.
+     * The <script> JSON is encoded with the slash-escape so it can
+     * survive being embedded in HTML without breaking out.
+     */
+    function json_ld(array $payload)
+    {
+        return '<script type="application/ld+json">'
+            . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            . '</script>';
+    }
+}

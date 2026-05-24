@@ -2188,6 +2188,45 @@ class User extends CI_Controller
 		// Get review statistics for rating breakdown
 		$data['review_stats'] = $this->usermodel->getReviewStats($data['listing']->listing_id);
 
+		// SEO: per-page meta + LocalBusiness JSON-LD
+		$listing = $data['listing'];
+		$desc = trim(strip_tags((string) ($listing->listing_description ?? '')));
+		$desc = $desc !== '' ? mb_substr($desc, 0, 160) : ('Listing details for ' . $listing->listing_name . ' on Pearland411.');
+		$data['title']            = $listing->listing_name . ' — Pearland411';
+		$data['meta_description'] = $desc;
+		$data['canonical_url']    = base_url('listing-details/' . rawurlencode($listing->listing_slug));
+		if (!empty($listing->listing_image)) {
+			$data['og_image'] = base_url($listing->listing_image);
+		}
+
+		$ld = array(
+			'@context' => 'https://schema.org',
+			'@type'    => 'LocalBusiness',
+			'name'     => (string) $listing->listing_name,
+			'url'      => $data['canonical_url'],
+		);
+		if (!empty($listing->listing_address))  $ld['address']   = (string) $listing->listing_address;
+		if (!empty($listing->listing_mobile))   $ld['telephone'] = (string) $listing->listing_mobile;
+		if (!empty($listing->listing_email))    $ld['email']     = (string) $listing->listing_email;
+		if (!empty($listing->listing_website))  $ld['sameAs']    = array((string) $listing->listing_website);
+		if (!empty($listing->listing_image))    $ld['image']     = base_url($listing->listing_image);
+		if (!empty($listing->listing_lat) && !empty($listing->listing_lng)) {
+			$ld['geo'] = array(
+				'@type'     => 'GeoCoordinates',
+				'latitude'  => (float) $listing->listing_lat,
+				'longitude' => (float) $listing->listing_lng,
+			);
+		}
+		$rs = $data['review_stats'] ?? null;
+		if (is_object($rs) && !empty($rs->total_reviews) && (int) $rs->total_reviews > 0) {
+			$ld['aggregateRating'] = array(
+				'@type'       => 'AggregateRating',
+				'ratingValue' => (float) $rs->average_rating,
+				'reviewCount' => (int) $rs->total_reviews,
+			);
+		}
+		$data['json_ld'] = json_ld($ld);
+
 		// Load views
 		$this->load->view('header', $data);
 		$this->load->view('listing_details', $data);
@@ -2289,6 +2328,29 @@ class User extends CI_Controller
 
 		// Get 3 related news (excluding current)
 		$data['related_news'] = $this->usermodel->getRelatedNews($data['news']->news_id, 3);
+
+		// SEO: per-page meta + NewsArticle JSON-LD
+		$news = $data['news'];
+		$desc = trim(strip_tags((string) ($news->news_description ?? '')));
+		$desc = $desc !== '' ? mb_substr($desc, 0, 160) : ('News story: ' . $news->news_title);
+		$data['title']            = $news->news_title . ' — Pearland411';
+		$data['meta_description'] = $desc;
+		$data['canonical_url']    = $news_url;
+		if (!empty($news->news_image)) $data['og_image'] = $news_image;
+
+		$data['json_ld'] = json_ld(array(
+			'@context'      => 'https://schema.org',
+			'@type'         => 'NewsArticle',
+			'headline'      => (string) $news->news_title,
+			'datePublished' => !empty($news->created_at) ? date('c', strtotime($news->created_at)) : null,
+			'image'         => $news_image ?: null,
+			'mainEntityOfPage' => $news_url,
+			'publisher'     => array(
+				'@type' => 'Organization',
+				'name'  => 'Pearland411',
+				'logo'  => array('@type' => 'ImageObject', 'url' => base_url('assets/images/pearland-logo.png')),
+			),
+		));
 
 		// Load views
 		$this->load->view('header', $data);
@@ -5647,10 +5709,35 @@ class User extends CI_Controller
 		}
 
 		$data['event'] = $event;
-		$data['title'] = $event->event_name . " | Event Details";
+		$data['title'] = $event->event_name . ' — Pearland411 Events';
 
 		// Get related events excluding current event
 		$data['related_events'] = $this->usermodel->getRelatedEvents($event->event_id, 3);
+
+		// SEO: per-page meta + Event JSON-LD
+		$desc = trim(strip_tags((string) ($event->event_description ?? '')));
+		$desc = $desc !== '' ? mb_substr($desc, 0, 160) : ('Event details for ' . $event->event_name);
+		$data['meta_description'] = $desc;
+		$data['canonical_url']    = base_url('event-details/' . rawurlencode($event->event_slug));
+		if (!empty($event->event_image)) $data['og_image'] = base_url($event->event_image);
+
+		$ld = array(
+			'@context' => 'https://schema.org',
+			'@type'    => 'Event',
+			'name'     => (string) $event->event_name,
+			'url'      => $data['canonical_url'],
+		);
+		if (!empty($event->event_start_date)) $ld['startDate'] = date('c', strtotime($event->event_start_date));
+		if (!empty($event->event_end_date))   $ld['endDate']   = date('c', strtotime($event->event_end_date));
+		if (!empty($event->event_address)) {
+			$ld['location'] = array(
+				'@type'   => 'Place',
+				'name'    => (string) $event->event_address,
+				'address' => (string) $event->event_address,
+			);
+		}
+		if (!empty($event->event_image)) $ld['image'] = base_url($event->event_image);
+		$data['json_ld'] = json_ld($ld);
 
 		// Load header categories using professional MVC approach
 		$this->loadHeaderCategories($data);
@@ -6614,6 +6701,32 @@ class User extends CI_Controller
 		$data = array();
 		$data['service'] = $service;
 		$data['title']   = $service->name . ' — Pearland411 Services';
+		$data['meta_description'] = (string) $service->short_description;
+		$data['canonical_url']    = base_url('services/' . rawurlencode($service->slug));
+		if (!empty($service->image)) $data['og_image'] = base_url($service->image);
+
+		$ld = array(
+			'@context'    => 'https://schema.org',
+			'@type'       => 'Service',
+			'name'        => (string) $service->name,
+			'description' => (string) $service->short_description,
+			'url'         => $data['canonical_url'],
+			'provider'    => array(
+				'@type' => 'Organization',
+				'name'  => 'Pearland411',
+				'url'   => base_url(),
+			),
+		);
+		if (!empty($service->category)) $ld['serviceType'] = (string) $service->category;
+		if ($service->base_price !== null && $service->price_unit !== 'custom') {
+			$ld['offers'] = array(
+				'@type'         => 'Offer',
+				'price'         => number_format((float) $service->base_price, 2, '.', ''),
+				'priceCurrency' => 'USD',
+			);
+		}
+		$data['json_ld'] = json_ld($ld);
+
 		$this->loadHeaderCategories($data);
 
 		// Pre-fill the request form with session data when available.

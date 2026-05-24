@@ -2,15 +2,49 @@
 <html lang="en">
 
 <head>
-	<title>Pearland411</title>
+	<?php
+	// Per-page SEO data. Controllers can set:
+	//   $title, $meta_description, $meta_keywords,
+	//   $og_image (absolute URL), $canonical_url,
+	//   $json_ld (string of <script type="application/ld+json">...</script>
+	//             markup; multiple scripts can be concatenated).
+	$page_title       = isset($title) && $title !== '' ? $title : 'Pearland411 — Local Business Directory';
+	$page_description = isset($meta_description) && $meta_description !== ''
+		? $meta_description
+		: 'Local business directory, news, events, and classifieds for Pearland, Texas.';
+	$page_keywords    = isset($meta_keywords) && $meta_keywords !== ''
+		? $meta_keywords
+		: 'Pearland directory, Pearland businesses, Pearland events, Pearland news';
+	$page_og_image    = isset($og_image) && $og_image !== ''
+		? $og_image
+		: base_url('assets/images/pearland-logo.png');
+	$page_canonical   = isset($canonical_url) && $canonical_url !== ''
+		? $canonical_url
+		: current_url();
+	?>
+	<title><?= e($page_title) ?></title>
 	<!--== META TAGS ==-->
 	<meta charset="utf-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<meta name="theme-color" content="#76cef1" />
-	<meta property="og:image" content="<?= base_url() ?>assets/images/pearland-logo.png" />
-	<meta name="description" content="">
-	<meta name="keyword" content="">
+	<meta name="description" content="<?= e_attr($page_description) ?>">
+	<meta name="keywords" content="<?= e_attr($page_keywords) ?>">
+	<link rel="canonical" href="<?= e_attr($page_canonical) ?>">
+
+	<!--== Open Graph + Twitter ==-->
+	<meta property="og:type" content="website">
+	<meta property="og:title" content="<?= e_attr($page_title) ?>">
+	<meta property="og:description" content="<?= e_attr($page_description) ?>">
+	<meta property="og:url" content="<?= e_attr($page_canonical) ?>">
+	<meta property="og:image" content="<?= e_attr($page_og_image) ?>">
+	<meta property="og:site_name" content="Pearland411">
+	<meta name="twitter:card" content="summary_large_image">
+	<meta name="twitter:title" content="<?= e_attr($page_title) ?>">
+	<meta name="twitter:description" content="<?= e_attr($page_description) ?>">
+	<meta name="twitter:image" content="<?= e_attr($page_og_image) ?>">
+
+	<?php if (!empty($json_ld)) echo $json_ld; ?>
 
 	<!--== FAV ICON(BROWSER TAB ICON) ==-->
 	<link rel="shortcut icon" href="<?= base_url() ?>assets/images/fav.ico" type="image/x-icon">
