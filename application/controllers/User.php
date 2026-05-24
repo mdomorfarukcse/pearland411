@@ -902,6 +902,37 @@ class User extends CI_Controller
 		// Get 3 related blogs (excluding current)
 		$data['related_blogs'] = $this->usermodel->getRelatedBlogs($data['blog']->blog_id, 3);
 
+		// SEO: per-page meta + BlogPosting JSON-LD. Prefer admin-set
+		// seo_* columns; fall back to trimmed body.
+		$blog = $data['blog'];
+		$desc_auto = trim(strip_tags((string) ($blog->blog_description ?? '')));
+		$desc_auto = $desc_auto !== '' ? mb_substr($desc_auto, 0, 160) : ('Blog post: ' . $blog->blog_name);
+		$data['title']            = !empty($blog->seo_title)
+			? $blog->seo_title
+			: ($blog->blog_name . ' — Pearland411');
+		$data['meta_description'] = !empty($blog->seo_description)
+			? $blog->seo_description
+			: $desc_auto;
+		$data['meta_keywords']    = !empty($blog->seo_keywords)
+			? $blog->seo_keywords
+			: '';
+		$data['canonical_url']    = $blog_url;
+		if (!empty($blog->blog_image)) $data['og_image'] = $blog_image;
+
+		$data['json_ld'] = json_ld(array(
+			'@context'         => 'https://schema.org',
+			'@type'            => 'BlogPosting',
+			'headline'         => (string) $blog->blog_name,
+			'datePublished'    => !empty($blog->created_at) ? date('c', strtotime($blog->created_at)) : null,
+			'image'            => $blog_image ?: null,
+			'mainEntityOfPage' => $blog_url,
+			'publisher'        => array(
+				'@type' => 'Organization',
+				'name'  => 'Pearland411',
+				'logo'  => array('@type' => 'ImageObject', 'url' => base_url('assets/images/pearland-logo.png')),
+			),
+		));
+
 		// Load views
 		$this->load->view('header', $data);
 		$this->load->view('blog_details', $data);
@@ -2188,12 +2219,21 @@ class User extends CI_Controller
 		// Get review statistics for rating breakdown
 		$data['review_stats'] = $this->usermodel->getReviewStats($data['listing']->listing_id);
 
-		// SEO: per-page meta + LocalBusiness JSON-LD
+		// SEO: per-page meta + LocalBusiness JSON-LD.
+		// Prefer admin-curated listing_seo_* columns when present,
+		// fall back to a trimmed description / generated string.
 		$listing = $data['listing'];
-		$desc = trim(strip_tags((string) ($listing->listing_description ?? '')));
-		$desc = $desc !== '' ? mb_substr($desc, 0, 160) : ('Listing details for ' . $listing->listing_name . ' on Pearland411.');
-		$data['title']            = $listing->listing_name . ' — Pearland411';
-		$data['meta_description'] = $desc;
+		$desc_auto = trim(strip_tags((string) ($listing->listing_description ?? '')));
+		$desc_auto = $desc_auto !== '' ? mb_substr($desc_auto, 0, 160) : ('Listing details for ' . $listing->listing_name . ' on Pearland411.');
+		$data['title']            = !empty($listing->listing_seo_title)
+			? $listing->listing_seo_title
+			: ($listing->listing_name . ' — Pearland411');
+		$data['meta_description'] = !empty($listing->listing_seo_description)
+			? $listing->listing_seo_description
+			: $desc_auto;
+		$data['meta_keywords']    = !empty($listing->listing_seo_keywords)
+			? $listing->listing_seo_keywords
+			: '';
 		$data['canonical_url']    = base_url('listing-details/' . rawurlencode($listing->listing_slug));
 		if (!empty($listing->listing_image)) {
 			$data['og_image'] = base_url($listing->listing_image);
@@ -2329,12 +2369,20 @@ class User extends CI_Controller
 		// Get 3 related news (excluding current)
 		$data['related_news'] = $this->usermodel->getRelatedNews($data['news']->news_id, 3);
 
-		// SEO: per-page meta + NewsArticle JSON-LD
+		// SEO: per-page meta + NewsArticle JSON-LD. Prefer admin-set
+		// news_seo_* columns; fall back to trimmed body.
 		$news = $data['news'];
-		$desc = trim(strip_tags((string) ($news->news_description ?? '')));
-		$desc = $desc !== '' ? mb_substr($desc, 0, 160) : ('News story: ' . $news->news_title);
-		$data['title']            = $news->news_title . ' — Pearland411';
-		$data['meta_description'] = $desc;
+		$desc_auto = trim(strip_tags((string) ($news->news_description ?? '')));
+		$desc_auto = $desc_auto !== '' ? mb_substr($desc_auto, 0, 160) : ('News story: ' . $news->news_title);
+		$data['title']            = !empty($news->news_seo_title)
+			? $news->news_seo_title
+			: ($news->news_title . ' — Pearland411');
+		$data['meta_description'] = !empty($news->news_seo_description)
+			? $news->news_seo_description
+			: $desc_auto;
+		$data['meta_keywords']    = !empty($news->news_seo_keywords)
+			? $news->news_seo_keywords
+			: '';
 		$data['canonical_url']    = $news_url;
 		if (!empty($news->news_image)) $data['og_image'] = $news_image;
 

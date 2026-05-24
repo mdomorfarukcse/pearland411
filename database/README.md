@@ -2,20 +2,32 @@
 
 This project did not previously ship its schema in git. As we make
 schema changes for security/feature work, the DDL lands here as
-numbered SQL files (`0001_*.sql`, `0002_*.sql`, ...).
+numbered SQL files (`0000_*.sql`, `0001_*.sql`, ...).
 
 ## Running migrations
 
 Each file is safe to run **once** against the live MySQL database
-and (where MySQL allows) idempotent on re-run:
+and (where MySQL allows) idempotent on re-run. Run them in order:
 
 ```bash
+mysql -u <user> -p <db_name> < database/migrations/0000_schema_fixups.sql
 mysql -u <user> -p <db_name> < database/migrations/0001_auth_flows.sql
+mysql -u <user> -p <db_name> < database/migrations/0002_services.sql
+mysql -u <user> -p <db_name> < database/migrations/0003_newsletter_campaigns.sql
 ```
+
+## Why each migration exists
+
+| File | Why |
+|---|---|
+| `0000_schema_fixups.sql` | **Must run first.** Widens `admin.admin_password` to 255 chars (bcrypt is 60 chars; the existing `varchar(50)` would silently truncate it and lock the admin out on the next login). Adds `admin.banned` flag (referenced by `Adminmodel::login`). Widens `user.email_id` to 255 and adds a UNIQUE index. Adds a slug index on `listings`. |
+| `0001_auth_flows.sql` | Password-reset (`password_resets` table) + email-verification columns on `user`. Back-fills `email_verified = 1` for existing rows so legacy accounts aren't locked out. |
+| `0002_services.sql` | IT/web services catalog (`services`, `service_requests`). Seeds 10 placeholder services — edit in `/admin/services` to match the real Space Center Systems catalog. |
+| `0003_newsletter_campaigns.sql` | `newsletter_campaigns` + `newsletter_campaign_sends` so the admin can compose, queue, and batch-send emails to the existing subscriber list. |
 
 ## Outstanding follow-up
 
-A complete schema dump still needs to be added (see audit
+A complete schema dump still needs to be checked in (see audit
 recommendation D1). Suggested:
 
 ```bash
@@ -24,5 +36,3 @@ mysqldump --no-create-info --skip-extended-insert <db_name> \
     listing_categories listing_sub_categories plans plan_durations \
     > database/seed_reference.sql
 ```
-
-This keeps the live schema and reference data reproducible.
