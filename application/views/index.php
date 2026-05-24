@@ -1,88 +1,6 @@
 <?php
-// Weather API Proxy Handler (embedded in index.php)
-if (isset($_GET['weather_api']) && $_GET['weather_api'] === 'proxy') {
-  header("Access-Control-Allow-Origin: *");
-  header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-  header("Access-Control-Allow-Headers: Content-Type");
-  header("Content-Type: application/json");
-
-  if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-  }
-
-  $latitude = 29.5636;
-  $longitude = -95.2861;
-
-  $apiUrl = "https://api.open-meteo.com/v1/forecast?" . http_build_query([
-    'latitude' => $latitude,
-    'longitude' => $longitude,
-    'current' => 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m',
-    'daily' => 'temperature_2m_max,temperature_2m_min,weather_code',
-    'temperature_unit' => 'fahrenheit',
-    'wind_speed_unit' => 'mph',
-    'timezone' => 'America/Chicago',
-    'forecast_days' => 7
-  ]);
-
-  if (function_exists('curl_init')) {
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-      CURLOPT_URL => $apiUrl,
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_TIMEOUT => 10,
-      CURLOPT_SSL_VERIFYPEER => false,
-      CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; WeatherWidget/1.0)',
-      CURLOPT_HTTPHEADER => [
-        'Accept: application/json',
-        'Accept-Language: en-US,en;q=0.9'
-      ]
-    ]);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch);
-
-    if ($response === false || $httpCode !== 200) {
-      http_response_code(500);
-      echo json_encode([
-        'error' => true,
-        'message' => 'Weather service temporarily unavailable',
-        'details' => $curlError ?: 'HTTP ' . $httpCode
-      ]);
-      exit;
-    }
-  } else {
-    $context = stream_context_create([
-      'http' => [
-        'method' => 'GET',
-        'header' => "Accept: application/json\r\nUser-Agent: Mozilla/5.0 (compatible; WeatherWidget/1.0)\r\n",
-        'timeout' => 10
-      ],
-      'ssl' => [
-        'verify_peer' => false,
-        'verify_peer_name' => false
-      ]
-    ]);
-
-    $response = @file_get_contents($apiUrl, false, $context);
-
-    if ($response === false) {
-      http_response_code(500);
-      echo json_encode([
-        'error' => true,
-        'message' => 'Weather service temporarily unavailable',
-        'details' => 'Could not connect to weather service'
-      ]);
-      exit;
-    }
-  }
-
-  echo $response;
-  exit;
-}
+// Weather widget proxy now lives in application/controllers/Weather.php
+// and is served at /weather (route registered in config/routes.php).
 
 // Simple routing for search functionality
 if (isset($_SERVER['REQUEST_URI'])) {
@@ -4254,9 +4172,9 @@ Database Tables Required:
         86: "Heavy snow showers"
       };
 
-      // Use embedded proxy handler to avoid CORS and geo-blocking issues
-      // This works reliably from USA, Bangladesh, and all other countries
-      const proxyUrl = window.location.pathname + '?weather_api=proxy';
+      // Server-side proxy (application/controllers/Weather.php) — avoids
+      // browser CORS / regional blocks and lets us cache upstream.
+      const proxyUrl = '<?= base_url('weather') ?>';
 
       // Show loading state
       weatherCurrent.innerHTML = '<div style="text-align:center;padding:20px;color:#666;"><i class="fa fa-spinner fa-spin" style="font-size:24px;"></i><div style="margin-top:10px;">Loading weather data...</div></div>';
