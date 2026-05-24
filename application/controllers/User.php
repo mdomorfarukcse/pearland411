@@ -16,6 +16,7 @@ class User extends CI_Controller
 		$this->load->model('adminmodel');
 		$this->load->library('pagination');
 		$this->load->library('form_validation');
+		$this->load->library('rate_limit');
 		$this->load->helper('url');
 
 		if ($this->input->post('logout')) {
@@ -1723,6 +1724,12 @@ class User extends CI_Controller
 
 		if (isset($_POST['register_submit'])) {/*Registration Action*/
 
+			// 5 signups per IP per hour. Defends signup spam.
+			if (!$this->rate_limit->check_ip('register', 5, 3600)) {
+				$this->rate_limit->reject(3600);
+				return;
+			}
+
 			//Register User If data valid
 
 			$data['registrationSucess'] = $this->usermodel->registerUser();
@@ -1764,8 +1771,21 @@ class User extends CI_Controller
 		}
 
 		if (isset($_POST['login_submit'])) {
+			// 10 failed login attempts per IP per 15 minutes is plenty
+			// for an honest user; anything more is brute-force.
+			if (!$this->rate_limit->check_ip('login', 10, 900)) {
+				$this->rate_limit->reject(900);
+				return;
+			}
+
 			// Process login form submission
 			$data['loginSucess'] = $this->usermodel->login();
+
+			// Reset the bucket on success so an honest user who fat-
+			// fingered a couple of times isn't stuck near the limit.
+			if (!empty($data['loginSucess']['status'])) {
+				$this->rate_limit->reset_ip('login');
+			}
 
 			if ($data['loginSucess']['status']) {
 				// Check if there's a redirect URL stored in session
@@ -1820,6 +1840,13 @@ class User extends CI_Controller
 		$data['title'] = 'Pearland | Forgot Password';
 
 		if ($this->input->method() === 'post') {
+			// 5 reset requests per IP per hour. Each one emails a real
+			// person; we don't want this used as a free SMTP relay.
+			if (!$this->rate_limit->check_ip('forgot_password', 5, 3600)) {
+				$this->rate_limit->reject(3600);
+				return;
+			}
+
 			$this->form_validation->set_rules('email_id', 'Email', 'trim|required|valid_email');
 
 			if ($this->form_validation->run()) {
@@ -6006,6 +6033,12 @@ class User extends CI_Controller
 			return;
 		}
 
+		// 10 reviews per IP per hour. Stops review-bombing.
+		if (!$this->rate_limit->check_ip('submit_review', 10, 3600)) {
+			$this->rate_limit->reject(3600);
+			return;
+		}
+
 		// Get logged user info
 		$session = $this->session->userdata('logged_user');
 		$logged_id = $session['logged_id'];
@@ -6060,6 +6093,14 @@ class User extends CI_Controller
 		// Check if form was submitted
 		if ($this->input->method() !== 'post') {
 			show_404();
+			return;
+		}
+
+		// The enquiry table dump shows obvious anonymous spam — 8 per
+		// IP per hour is generous for a real visitor messaging
+		// multiple businesses, restrictive enough to deter bots.
+		if (!$this->rate_limit->check_ip('add_enquiry', 8, 3600)) {
+			$this->rate_limit->reject(3600);
 			return;
 		}
 
@@ -6652,6 +6693,15 @@ class User extends CI_Controller
 	{
 		header('Content-Type: application/json; charset=utf-8');
 
+		// 10 newsletter signups per IP per hour. The signup sends an
+		// email; rate-limiting matters more for email cost than for
+		// DB rows.
+		if (!$this->rate_limit->check_ip('subscribe_newsletter', 10, 3600)) {
+			http_response_code(429);
+			echo json_encode(['success' => false, 'message' => 'Too many subscribe requests. Try again in a few minutes.']);
+			return;
+		}
+
 		// Basic email validation
 		$this->load->library('form_validation');
 		$this->form_validation->set_rules('email', 'Email', 'required|valid_email|trim');
@@ -6799,6 +6849,12 @@ class User extends CI_Controller
 	{
 		if ($this->input->method() !== 'post') {
 			redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+			return;
+		}
+
+		// 5 service requests per IP per hour. Each one sends two emails.
+		if (!$this->rate_limit->check_ip('request_service', 5, 3600)) {
+			$this->rate_limit->reject(3600);
 			return;
 		}
 

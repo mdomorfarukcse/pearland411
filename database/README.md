@@ -14,6 +14,7 @@ mysql -u <user> -p <db_name> < database/migrations/0000_schema_fixups.sql
 mysql -u <user> -p <db_name> < database/migrations/0001_auth_flows.sql
 mysql -u <user> -p <db_name> < database/migrations/0002_services.sql
 mysql -u <user> -p <db_name> < database/migrations/0003_newsletter_campaigns.sql
+mysql -u <user> -p <db_name> < database/migrations/0004_rate_limits.sql
 ```
 
 ## Why each migration exists
@@ -24,6 +25,7 @@ mysql -u <user> -p <db_name> < database/migrations/0003_newsletter_campaigns.sql
 | `0001_auth_flows.sql` | Password-reset (`password_resets` table) + email-verification columns on `user`. Back-fills `email_verified = 1` for existing rows so legacy accounts aren't locked out. |
 | `0002_services.sql` | IT/web services catalog (`services`, `service_requests`). Seeds 10 placeholder services — edit in `/admin/services` to match the real Space Center Systems catalog. |
 | `0003_newsletter_campaigns.sql` | `newsletter_campaigns` + `newsletter_campaign_sends` so the admin can compose, queue, and batch-send emails to the existing subscriber list. |
+| `0004_rate_limits.sql` | `rate_limits` table backing the `Rate_limit` library. Protects login, register, password-reset, enquiry, review, newsletter signup, and service-request endpoints from brute-force / spam. |
 
 ## Outstanding follow-up
 
