@@ -39,16 +39,16 @@
                   <tr>
                     <td><?= $i; ?></td>
                     <td>
-                      <?= $blog->blog_name; ?>
+                      <?= e($blog->blog_name); ?>
                       <span><?= date('d, M Y', strtotime($blog->created_at)); ?></span>
                     </td>
                     <td>
                       <?php if (!empty($blog->name)) : ?>
-                        <a href="#" class="db-list-ststus" target="_blank"><?= $blog->name; ?></a>
+                        <a href="#" class="db-list-ststus" target="_blank"><?= e($blog->name); ?></a>
                       <?php endif; ?>
                     </td>
                     <?php $b_views = (isset($views_counts) && isset($views_counts[$blog->blog_id])) ? $views_counts[$blog->blog_id] : 0; ?>
-                    <td><span class="db-list-rat"><?= $b_views; ?></span></td>
+                    <td><span class="db-list-rat"><?= (int) $b_views; ?></span></td>
 
                     <td>
                       <?php if ($blog->blog_status == 0) { ?>

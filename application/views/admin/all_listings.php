@@ -52,17 +52,22 @@
                     <td><?= $i; ?></td>
 
                     <td>
-                      <img src="<?= (empty($value->listing_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($value->listing_image) ?>"><?= $value->listing_name; ?><span><?= date('d, M Y', strtotime($value->created_at)); ?></span>
+                      <?php if (empty($value->listing_image)): ?>
+                        <img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($value->listing_name) ?>" loading="lazy">
+                      <?php else: ?>
+                        <?= responsive_img($value->listing_image, $value->listing_name) ?>
+                      <?php endif; ?>
+                      <?= e($value->listing_name); ?><span><?= date('d, M Y', strtotime($value->created_at)); ?></span>
 
                     <td>
                       <?php if (!empty($value->category_name)): ?>
-                        <span class="db-list-rat"><?= $value->category_name ?></span>
+                        <span class="db-list-rat"><?= e($value->category_name) ?></span>
                       <?php endif; ?>
                     </td>
 
                     <td>
                       <?php if (!empty($value->postal_code)): ?>
-                        <span class="db-list-rat"><?= $value->postal_code ?></span>
+                        <span class="db-list-rat"><?= e($value->postal_code) ?></span>
                       <?php endif; ?>
                     </td>
 
@@ -72,7 +77,7 @@
 
                     <td>
                       <?php if (!empty($value->name)) : ?>
-                        <?= $value->name; ?>
+                        <?= e($value->name); ?>
                       <?php endif; ?>
                     </td>
 

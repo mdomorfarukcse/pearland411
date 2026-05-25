@@ -40,16 +40,21 @@
                   <tr>
                     <td><?= $i; ?></td>
                     <td>
-                      <img src="<?= (empty($news->news_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($news->news_image) ?>"><?= $news->news_title; ?><span><?= date('d, M Y', strtotime($news->created_at)); ?></span>
+                      <?php if (empty($news->news_image)): ?>
+                        <img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($news->news_title) ?>" loading="lazy">
+                      <?php else: ?>
+                        <?= responsive_img($news->news_image, $news->news_title) ?>
+                      <?php endif; ?>
+                      <?= e($news->news_title); ?><span><?= date('d, M Y', strtotime($news->created_at)); ?></span>
                     </td>
                     <td>
                       <?php if (!empty($news->category_name)) : ?>
-                        <a href="" class="db-list-ststus" target="_blank"><?= $news->category_name ?></a>
+                        <a href="" class="db-list-ststus" target="_blank"><?= e($news->category_name) ?></a>
                       <?php endif; ?>
                     </td>
                     <td>
                       <?php if (!empty($news->name)) : ?>
-                        <a href="" class="db-list-ststus" target="_blank"><?= $news->name; ?></a>
+                        <a href="" class="db-list-ststus" target="_blank"><?= e($news->name); ?></a>
                       <?php endif; ?>
                     </td>
                     <?php $n_views = (isset($views_counts) && isset($views_counts[$news->news_id])) ? $views_counts[$news->news_id] : 0; ?>

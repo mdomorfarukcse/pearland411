@@ -41,11 +41,11 @@
 							?>
 									<tr>
 										<td><?= $i++; ?></td>
-										<td><?= $event->event_name; ?> <span><?= date('d, M Y', strtotime($event->created_at)); ?></span></td>
+										<td><?= e($event->event_name); ?> <span><?= date('d, M Y', strtotime($event->created_at)); ?></span></td>
 										<td><?= date('d, M Y', strtotime($event->event_start_date)); ?></td>
 										<td>
 											<?php if (!empty($event->name)) : ?>
-												<a href="" class="db-list-ststus" target="_blank"><?= $event->name; ?></a>
+												<a href="" class="db-list-ststus" target="_blank"><?= e($event->name); ?></a>
 											<?php endif; ?>
 										</td>
 										<?php $e_views = (isset($views_counts) && isset($views_counts[$event->event_id])) ? $views_counts[$event->event_id] : 0; ?>

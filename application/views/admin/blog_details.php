@@ -16,7 +16,7 @@
 
 				<div class="head"> <span class="dat"><?= date('M d', strtotime($blog->created_at)); ?></span>
 
-					<h1><?= $blog->blog_name; ?></h1>
+					<h1><?= e($blog->blog_name); ?></h1>
 
 				</div>
 
