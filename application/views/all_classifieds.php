@@ -181,7 +181,12 @@
                     <tr>
                       <td><?= $i; ?></td>
                       <td>
-                        <img src="<?= (empty($classifieds->classifieds_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($classifieds->classifieds_image) ?>"><?= $classifieds->classifieds_title; ?><span><?= date('d, M Y', strtotime($classifieds->created_at)); ?></span>
+                        <?php if (empty($classifieds->classifieds_image)): ?>
+                          <img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($classifieds->classifieds_title) ?>" loading="lazy" decoding="async">
+                        <?php else: ?>
+                          <?= responsive_img($classifieds->classifieds_image, $classifieds->classifieds_title) ?>
+                        <?php endif; ?>
+                        <?= e($classifieds->classifieds_title); ?><span><?= date('d, M Y', strtotime($classifieds->created_at)); ?></span>
                       </td>
                       <td><a href="" class="db-list-ststus" target="_blank"><?= $classifieds->category_name ?></a></td>
                       <td><a href="" class="db-list-ststus" target="_blank"><?= $classifieds->name; ?></a></td>

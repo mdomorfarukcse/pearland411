@@ -18,10 +18,11 @@
 					<div class="col-md-6 col-lg-4" style="margin-bottom:24px;">
 						<div style="border:1px solid #e5e7eb;border-radius:8px;padding:0;background:#fff;overflow:hidden;height:100%;display:flex;flex-direction:column;">
 							<?php if (!empty($c->coupon_photo)): ?>
-								<a href="<?= base_url('coupons/' . (int) $c->coupon_id) ?>">
-									<img src="<?= e_attr(base_url($c->coupon_photo)) ?>"
-										 alt="<?= e_attr($c->coupon_name) ?>"
-										 style="width:100%;height:160px;object-fit:cover;display:block;">
+								<a href="<?= base_url('coupons/' . (int) $c->coupon_id) ?>"
+								   style="display:block;width:100%;height:160px;overflow:hidden;">
+									<?= responsive_img($c->coupon_photo, $c->coupon_name, array(
+										'style' => 'width:100%;height:160px;object-fit:cover;display:block;',
+									)) ?>
 								</a>
 							<?php endif; ?>
 							<div style="padding:16px;flex:1;display:flex;flex-direction:column;">

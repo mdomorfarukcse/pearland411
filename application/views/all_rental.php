@@ -180,7 +180,12 @@
                     <tr>
                       <td><?= $i; ?></td>
                       <td>
-                        <img src="<?= (empty($rental->rental_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($rental->rental_image) ?>"><?= $rental->rental_title; ?><span><?= date('d, M Y', strtotime($rental->created_at)); ?></span>
+                        <?php if (empty($rental->rental_image)): ?>
+                          <img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($rental->rental_title) ?>" loading="lazy" decoding="async">
+                        <?php else: ?>
+                          <?= responsive_img($rental->rental_image, $rental->rental_title) ?>
+                        <?php endif; ?>
+                        <?= e($rental->rental_title); ?><span><?= date('d, M Y', strtotime($rental->created_at)); ?></span>
                       </td>
                       <td><a href="" class="db-list-ststus" target="_blank"><?= !empty($rental->category_name) ? $rental->category_name : 'No Category' ?></a></td>
                       <td><a href="" class="db-list-ststus" target="_blank"><?= $rental->views; ?></a></td>

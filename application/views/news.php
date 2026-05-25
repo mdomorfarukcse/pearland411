@@ -258,7 +258,11 @@
 								<li>
 									<div class="pro-eve-box" style="border-radius: 10px;">
 										<div>
-											<img src="<?= !empty($news->news_image) ? base_url($news->news_image) : base_url('assets/images/no_image.png') ?>" alt="">
+											<?php if (!empty($news->news_image)): ?>
+												<?= responsive_img($news->news_image, $news->news_title) ?>
+											<?php else: ?>
+												<img src="<?= base_url('assets/images/no_image.png') ?>" alt="<?= e_attr($news->news_title) ?>" loading="lazy" decoding="async">
+											<?php endif; ?>
 										</div>
 										<div>
 											<p><?= date('d, M Y', strtotime($news->created_at)) ?></p>

@@ -34,7 +34,11 @@
 						<li>
 							<div class="pro-eve-box" style="border-radius: 10px;">
 								<div>
-									<img src="<?= base_url($blog->blog_image); ?>" alt="">
+									<?php if (!empty($blog->blog_image)): ?>
+											<?= responsive_img($blog->blog_image, $blog->blog_name) ?>
+										<?php else: ?>
+											<img src="<?= base_url('assets/images/no_image.png') ?>" alt="<?= e_attr($blog->blog_name) ?>" loading="lazy" decoding="async">
+										<?php endif; ?>
 								</div>
 								<div>
 									<p><?= date('d, M Y', strtotime($blog->created_at)); ?></p>

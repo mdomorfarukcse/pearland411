@@ -165,7 +165,12 @@
                     <tr>
                       <td><?= $i; ?></td>
                       <td>
-                        <img src="<?= (empty($house->house_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($house->house_image) ?>"><?= $house->house_title; ?><span><?= date('d, M Y', strtotime($house->created_at)); ?></span>
+                        <?php if (empty($house->house_image)): ?>
+                          <img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($house->house_title) ?>" loading="lazy" decoding="async">
+                        <?php else: ?>
+                          <?= responsive_img($house->house_image, $house->house_title) ?>
+                        <?php endif; ?>
+                        <?= e($house->house_title); ?><span><?= date('d, M Y', strtotime($house->created_at)); ?></span>
                       </td>
                       <td><a href="" class="db-list-ststus" target="_blank"><?= $house->category_name ?></a></td>
                       <!-- <td><a href="" class="db-list-ststus" target="_blank"><? //= $house->name; 
