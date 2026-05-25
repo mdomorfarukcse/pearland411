@@ -210,7 +210,11 @@
 											<li>
 												<div class="near-bx">
 													<div class="ne-1">
-														<img src="<?= (empty($value->listing_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($value->listing_image); ?>" alt="">
+														<?php if (empty($value->listing_image)): ?>
+															<img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($value->listing_name ?? '') ?>" loading="lazy" decoding="async">
+														<?php else: ?>
+															<?= responsive_img($value->listing_image, $value->listing_name ?? '') ?>
+														<?php endif; ?>
 													</div>
 													<div class="ne-2">
 														<h5><?= $value->listing_name; ?></h5>
@@ -507,7 +511,11 @@
 											<div class="al-img"> <span class="open-stat">open</span>
 												<a href="<?= base_url('user/listing-details/' . $value->listing_slug); ?>">
 
-													<img src="<?= (empty($value->listing_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($value->listing_image); ?>" alt="">
+													<?php if (empty($value->listing_image)): ?>
+															<img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($value->listing_name ?? '') ?>" loading="lazy" decoding="async">
+														<?php else: ?>
+															<?= responsive_img($value->listing_image, $value->listing_name ?? '') ?>
+														<?php endif; ?>
 												</a>
 											</div>
 											<!---END LISTING IMAGE--->

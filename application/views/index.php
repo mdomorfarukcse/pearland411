@@ -2826,12 +2826,15 @@ Database Tables Required:
                   <?php foreach ($latest_listings as $row): ?>
                     <?php
                     $categoryName = $this->usermodel->getCategoryName($row->category_id);
-                    $imgSrc = !empty($row->listing_image) ? base_url($row->listing_image) : 'https://www.freeworldmaps.net/world/blank/blank-world-map-high-resolution-hd.jpg';
                     ?>
                     <div class=" fade-in business-item lst-com-box" data-category="<?php echo htmlspecialchars($categoryName); ?>">
 
                       <div class="list-com-img">
-                        <img src="<?php echo $imgSrc; ?>" alt="<?php echo htmlspecialchars($row->listing_name); ?>" style="">
+                        <?php if (!empty($row->listing_image)): ?>
+                          <?= responsive_img($row->listing_image, $row->listing_name) ?>
+                        <?php else: ?>
+                          <img src="<?= base_url('assets/images/pearland-logo.png') ?>" alt="<?= e_attr($row->listing_name) ?>" loading="lazy" decoding="async">
+                        <?php endif; ?>
                         <span class="list-com-cat"><?php echo htmlspecialchars($categoryName); ?></span>
                         <?php
                         // Show "NEW" badge for listings created in the last 7 days
@@ -3009,16 +3012,15 @@ Database Tables Required:
                     <div class="row">
                       <?php if (!empty($latest_news)): ?>
                         <?php foreach ($latest_news as $i => $news): ?>
-                          <?php
-                          // Set column class
-                          $colClass = 'col-md-4 col-sm-6';
-                          // Fallback image
-                          $imgSrc = !empty($news->news_image) ? base_url($news->news_image) : '../assets/images/blog/blog1.jpg';
-                          ?>
+                          <?php $colClass = 'col-md-4 col-sm-6'; ?>
                           <div class="<?php echo $colClass; ?>">
                             <div class="blog-box">
                               <div class="blog-img">
-                                <img src="<?php echo $imgSrc; ?>" alt="<?php echo htmlspecialchars($news->news_title); ?>">
+                                <?php if (!empty($news->news_image)): ?>
+                                  <?= responsive_img($news->news_image, $news->news_title) ?>
+                                <?php else: ?>
+                                  <img src="<?= base_url('assets/images/pearland-logo.png') ?>" alt="<?= e_attr($news->news_title) ?>" loading="lazy" decoding="async">
+                                <?php endif; ?>
                               </div>
                               <div class="blog-con">
                                 <span class="blog-cat">News</span>
