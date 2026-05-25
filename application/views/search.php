@@ -442,7 +442,7 @@
                                     <?php foreach ($search_results['listings'] as $listing): ?>
                                         <div class="result-card">
                                             <h5 class="result-title">
-                                                <a href="user/listing-details/<?php echo isset($listing->listing_slug) ? $listing->listing_slug : $listing->listing_id; ?>">
+                                                <a href="<?= base_url() ?>listing-details/<?php echo isset($listing->listing_slug) ? $listing->listing_slug : $listing->listing_id; ?>">
                                                     <?php echo htmlspecialchars($listing->listing_name); ?>
                                                 </a>
                                             </h5>
@@ -505,7 +505,7 @@
                                     <?php foreach ($search_results['news'] as $news): ?>
                                         <div class="result-card">
                                             <h5 class="result-title">
-                                                <a href="user/news_details/<?php echo isset($news->news_slug) ? $news->news_slug : $news->news_id; ?>">
+                                                <a href="<?= base_url() ?>news_details/<?php echo isset($news->news_slug) ? $news->news_slug : $news->news_id; ?>">
                                                     <?php echo htmlspecialchars($news->news_title); ?>
                                                 </a>
                                             </h5>
@@ -558,7 +558,7 @@
                                     <?php foreach ($search_results['events'] as $event): ?>
                                         <div class="result-card">
                                             <h5 class="result-title">
-                                                <a href="user/event_details/<?php echo isset($event->event_slug) ? $event->event_slug : $event->event_id; ?>">
+                                                <a href="<?= base_url() ?>event-details/<?php echo isset($event->event_slug) ? $event->event_slug : $event->event_id; ?>">
                                                     <?php echo htmlspecialchars(isset($event->event_name) ? $event->event_name : (isset($event->event_title) ? $event->event_title : 'Event')); ?>
                                                 </a>
                                             </h5>
@@ -612,7 +612,7 @@
                                     <?php foreach ($search_results['blogs'] as $blog): ?>
                                         <div class="result-card">
                                             <h5 class="result-title">
-                                                <a href="user/blog_details/<?php echo isset($blog->blog_slug) ? $blog->blog_slug : $blog->blog_id; ?>">
+                                                <a href="<?= base_url() ?>blogs-details/<?php echo isset($blog->blog_slug) ? $blog->blog_slug : $blog->blog_id; ?>">
                                                     <?php echo htmlspecialchars(isset($blog->blog_name) ? $blog->blog_name : (isset($blog->blog_title) ? $blog->blog_title : 'Blog Post')); ?>
                                                 </a>
                                             </h5>
@@ -665,7 +665,7 @@
                                     <?php foreach ($search_results['products'] as $product): ?>
                                         <div class="result-card">
                                             <h5 class="result-title">
-                                                <a href="user/product_details/<?php echo isset($product->product_slug) ? $product->product_slug : $product->product_id; ?>">
+                                                <a href="<?= base_url() ?>products-details/<?php echo isset($product->product_slug) ? $product->product_slug : $product->product_id; ?>">
                                                     <?php echo htmlspecialchars(isset($product->product_name) ? $product->product_name : (isset($product->product_title) ? $product->product_title : 'Product')); ?>
                                                 </a>
                                             </h5>
@@ -726,7 +726,7 @@
                                     <?php foreach ($search_results['house'] as $house): ?>
                                         <div class="result-card">
                                             <h5 class="result-title">
-                                                <a href="user/house-details/<?php echo isset($house->house_slug) ? $house->house_slug : $house->house_id; ?>">
+                                                <a href="<?= base_url() ?>house-details/<?php echo isset($house->house_slug) ? $house->house_slug : $house->house_id; ?>">
                                                     <?php echo htmlspecialchars($house->house_title); ?>
                                                 </a>
                                             </h5>
@@ -787,7 +787,7 @@
                                     <?php foreach ($search_results['rental'] as $rental): ?>
                                         <div class="result-card">
                                             <h5 class="result-title">
-                                                <a href="user/rental-details/<?php echo isset($rental->rental_slug) ? $rental->rental_slug : $rental->rental_id; ?>">
+                                                <a href="<?= base_url() ?>rental-details/<?php echo isset($rental->rental_slug) ? $rental->rental_slug : $rental->rental_id; ?>">
                                                     <?php echo htmlspecialchars($rental->rental_title); ?>
                                                 </a>
                                             </h5>
@@ -848,7 +848,7 @@
                                     <?php foreach ($search_results['classifieds'] as $classified): ?>
                                         <div class="result-card">
                                             <h5 class="result-title">
-                                                <a href="user/classified_details/<?php echo isset($classified->classified_slug) ? $classified->classified_slug : $classified->classified_id; ?>">
+                                                <a href="<?= base_url() ?>classifieds-details/<?php echo isset($classified->classified_slug) ? $classified->classified_slug : $classified->classified_id; ?>">
                                                     <?php echo htmlspecialchars(isset($classified->classifieds_title) ? $classified->classifieds_title : (isset($classified->classified_name) ? $classified->classified_name : 'Classified Ad')); ?>
                                                 </a>
                                             </h5>
@@ -902,7 +902,7 @@
                                     <?php foreach ($search_results['videos'] as $video): ?>
                                         <div class="result-card">
                                             <h5 class="result-title">
-                                                <a href="user/video_details/<?php echo isset($video->video_slug) ? $video->video_slug : $video->video_id; ?>">
+                                                <a href="<?= base_url() ?>video_details/<?php echo isset($video->video_slug) ? $video->video_slug : $video->video_id; ?>">
                                                     <?php echo htmlspecialchars(isset($video->video_title) ? $video->video_title : (isset($video->video_name) ? $video->video_name : 'Video')); ?>
                                                 </a>
                                             </h5>
@@ -929,6 +929,72 @@
                                                         <?php echo htmlspecialchars($video->uploader_name); ?>
                                                     </span>
                                                 <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+
+                        <!-- Services -->
+                        <?php if (!empty($search_results['services'])): ?>
+                            <div class="result-section">
+                                <div class="section-header">
+                                    <div class="section-title">
+                                        <h4>Services (<?php echo count($search_results['services']); ?>)</h4>
+                                        <p>IT &amp; web services we offer</p>
+                                    </div>
+                                </div>
+                                <div class="results-grid">
+                                    <?php foreach ($search_results['services'] as $svc): ?>
+                                        <div class="result-card">
+                                            <h5 class="result-title">
+                                                <a href="<?= base_url('services/' . rawurlencode($svc->slug)) ?>">
+                                                    <?php echo htmlspecialchars($svc->name); ?>
+                                                </a>
+                                            </h5>
+                                            <p class="result-description">
+                                                <?php echo htmlspecialchars($svc->short_description); ?>
+                                            </p>
+                                            <div class="result-meta">
+                                                <span class="result-badge">Service</span>
+                                                <?php if (!empty($svc->category)): ?>
+                                                    <span class="result-meta-item">
+                                                        <?php echo htmlspecialchars($svc->category); ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+
+                        <!-- Coupons -->
+                        <?php if (!empty($search_results['coupons'])): ?>
+                            <div class="result-section">
+                                <div class="section-header">
+                                    <div class="section-title">
+                                        <h4>Coupons (<?php echo count($search_results['coupons']); ?>)</h4>
+                                        <p>Current deals from local businesses</p>
+                                    </div>
+                                </div>
+                                <div class="results-grid">
+                                    <?php foreach ($search_results['coupons'] as $coup): ?>
+                                        <div class="result-card">
+                                            <h5 class="result-title">
+                                                <a href="<?= base_url('coupons/' . (int) $coup->coupon_id) ?>">
+                                                    <?php echo htmlspecialchars($coup->coupon_name); ?>
+                                                </a>
+                                            </h5>
+                                            <p class="result-description">
+                                                Code: <code><?php echo htmlspecialchars($coup->coupon_code); ?></code>
+                                            </p>
+                                            <div class="result-meta">
+                                                <span class="result-badge">Coupon</span>
+                                                <span class="result-meta-item">
+                                                    Through <?php echo htmlspecialchars(date('M j, Y', strtotime($coup->coupon_end_date))); ?>
+                                                </span>
                                             </div>
                                         </div>
                                     <?php endforeach; ?>
@@ -1025,7 +1091,7 @@
                                         $category_url = $category->category_id;
                                     }
                                     ?>
-                                    <a href="user/all_listing/<?php echo $category_url; ?>">
+                                    <a href="<?= base_url() ?>all_listing/<?php echo $category_url; ?>">
                                         <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="margin-right: 8px;">
                                             <path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8z" />
                                         </svg>
@@ -1050,7 +1116,7 @@
                         <?php foreach (array_slice($latest_news, 0, 5) as $news): ?>
                             <div class="news-item">
                                 <h6>
-                                    <a href="user/news_details/<?php echo isset($news->news_slug) ? $news->news_slug : $news->news_id; ?>">
+                                    <a href="<?= base_url() ?>news_details/<?php echo isset($news->news_slug) ? $news->news_slug : $news->news_id; ?>">
                                         <?php echo htmlspecialchars($news->news_title); ?>
                                     </a>
                                 </h6>

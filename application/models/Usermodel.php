@@ -3302,17 +3302,19 @@ class Usermodel extends CI_Model
 	public function globalSearch($search_term, $limit = 50, $offset = 0)
 	{
 		$results = array(
-			'listings' => array(),
-			'news' => array(),
-			'events' => array(),
-			'blogs' => array(),
-			'products' => array(),
-			'house' => array(),
-			'rental' => array(),
+			'listings'    => array(),
+			'news'        => array(),
+			'events'      => array(),
+			'blogs'       => array(),
+			'products'    => array(),
+			'house'       => array(),
+			'rental'      => array(),
 			'classifieds' => array(),
-			'videos' => array(),
-			'categories' => array(),
-			'total_count' => 0
+			'videos'      => array(),
+			'categories'  => array(),
+			'services'    => array(),
+			'coupons'     => array(),
+			'total_count' => 0,
 		);
 
 		if (empty($search_term)) {
@@ -3351,14 +3353,57 @@ class Usermodel extends CI_Model
 		// Search in Categories
 		$results['categories'] = $this->searchCategories($search_term, 10);
 
+		// Search in Services catalog
+		$results['services'] = $this->searchServices($search_term, 10);
+
+		// Search in active Coupons
+		$results['coupons'] = $this->searchCoupons($search_term, 10);
+
 		// Calculate total count
 		$results['total_count'] = count($results['listings']) + count($results['news']) +
 			count($results['events']) + count($results['blogs']) +
 			count($results['products']) + count($results['house']) +
 			count($results['rental']) + count($results['classifieds']) +
-			count($results['videos']) + count($results['categories']);
+			count($results['videos']) + count($results['categories']) +
+			count($results['services']) + count($results['coupons']);
 
 		return $results;
+	}
+
+	public function searchServices($search_term, $limit = 10)
+	{
+		if (!$this->db->table_exists('services')) return array();
+		return $this->db
+			->from('services')
+			->where('is_active', 1)
+			->group_start()
+				->like('name', $search_term)
+				->or_like('short_description', $search_term)
+				->or_like('category', $search_term)
+				->or_like('body', $search_term)
+			->group_end()
+			->order_by('sort_order', 'ASC')
+			->limit((int) $limit)
+			->get()
+			->result();
+	}
+
+	public function searchCoupons($search_term, $limit = 10)
+	{
+		$today = date('Y-m-d');
+		return $this->db
+			->from('coupons')
+			->where('coupon_status', 1)
+			->where('coupon_start_date <=', $today)
+			->where('coupon_end_date >=',  $today)
+			->group_start()
+				->like('coupon_name', $search_term)
+				->or_like('coupon_code', $search_term)
+			->group_end()
+			->order_by('coupon_cdt', 'DESC')
+			->limit((int) $limit)
+			->get()
+			->result();
 	}
 
 	/**
