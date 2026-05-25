@@ -54,6 +54,8 @@ class User extends CI_Controller
 			'services', 'service_details', 'request_service',
 			// Listing claim (form gates on session itself)
 			'claim_listing',
+			// Public coupons / deals
+			'coupons', 'coupon_details',
 		);
 
 		$page = $this->router->fetch_method();
@@ -6925,6 +6927,51 @@ class User extends CI_Controller
 
 		$this->session->set_flashdata('service_request_success', 'Thanks! We received your request and will be in touch shortly.');
 		redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+	}
+
+	/*=========================
+		Public coupons / deals
+		==========================*/
+
+	public function coupons()
+	{
+		$data = array();
+		$data['coupons'] = $this->usermodel->getActiveCoupons(60);
+		$this->loadHeaderCategories($data);
+		$data['title']         = 'Local Coupons &amp; Deals — Pearland411';
+		$data['meta_description'] = 'Current coupons and deals from Pearland-area businesses listed on Pearland411.';
+		$data['canonical_url'] = base_url('coupons');
+
+		$this->load->view('header', $data);
+		$this->load->view('coupons', $data);
+		$this->load->view('footer');
+	}
+
+	public function coupon_details($id = 0)
+	{
+		$coupon = $this->usermodel->getCouponById($id);
+		if (!$coupon) { show_404(); return; }
+
+		// Date-window check so a freshly-deactivated coupon doesn't keep
+		// returning success via a stale share link.
+		$today = date('Y-m-d');
+		if ((int) $coupon->coupon_status !== 1
+			|| $coupon->coupon_start_date > $today
+			|| $coupon->coupon_end_date < $today) {
+			show_404();
+			return;
+		}
+
+		$data = array();
+		$data['coupon'] = $coupon;
+		$this->loadHeaderCategories($data);
+		$data['title']            = $coupon->coupon_name . ' — Coupon — Pearland411';
+		$data['meta_description'] = 'Coupon code ' . $coupon->coupon_code . ' for ' . ($coupon->listing_name ?? $coupon->owner_name);
+		$data['canonical_url']    = base_url('coupons/' . (int) $coupon->coupon_id);
+
+		$this->load->view('header', $data);
+		$this->load->view('coupon_details', $data);
+		$this->load->view('footer');
 	}
 
 	/*=========================

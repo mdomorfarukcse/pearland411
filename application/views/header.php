@@ -166,6 +166,11 @@
 																	<img src="<?= base_url() ?>assets/images/icon/blog1.png">Services</a>
 															</li>
 
+															<li>
+																<a href="<?= base_url('coupons') ?>">
+																	<img src="<?= base_url() ?>assets/images/icon/blog1.png">Coupons</a>
+															</li>
+
 
 
 														</ul>

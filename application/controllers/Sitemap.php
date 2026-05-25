@@ -51,6 +51,7 @@ class Sitemap extends CI_Controller
             'classifieds'       => '0.7',
             'all_products'      => '0.6',
             'videos'            => '0.4',
+            'coupons'           => '0.6',
         ) as $path => $priority) {
             $urls[] = array(base_url($path), $today, $priority);
         }

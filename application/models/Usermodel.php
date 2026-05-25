@@ -4836,4 +4836,43 @@ class Usermodel extends CI_Model
 		}
 		return $this->db->insert_id();
 	}
+
+	/*=========================
+		Public coupons / deals
+		==========================*/
+
+	/**
+	 * Coupons that are status=1 (active) and within their
+	 * coupon_start_date / coupon_end_date window. Joined to
+	 * listings + user when available so the public page can show
+	 * who's offering each deal.
+	 */
+	public function getActiveCoupons($limit = null, $offset = 0)
+	{
+		$today = date('Y-m-d');
+		$this->db
+			->select('c.*, l.listing_name, l.listing_slug, u.name AS owner_name')
+			->from('coupons c')
+			->join('user u', 'u.user_id = c.coupon_user_id', 'left')
+			->join('listings l', 'l.user_id = c.coupon_user_id AND (l.is_deleted IS NULL OR l.is_deleted = 0)', 'left')
+			->where('c.coupon_status', 1)
+			->where('c.coupon_start_date <=', $today)
+			->where('c.coupon_end_date >=',  $today)
+			->order_by('c.coupon_cdt', 'DESC');
+		if ($limit !== null) $this->db->limit((int) $limit, (int) $offset);
+		return $this->db->get()->result();
+	}
+
+	public function getCouponById($id)
+	{
+		return $this->db
+			->select('c.*, l.listing_name, l.listing_slug, u.name AS owner_name')
+			->from('coupons c')
+			->join('user u', 'u.user_id = c.coupon_user_id', 'left')
+			->join('listings l', 'l.user_id = c.coupon_user_id AND (l.is_deleted IS NULL OR l.is_deleted = 0)', 'left')
+			->where('c.coupon_id', (int) $id)
+			->limit(1)
+			->get()
+			->row();
+	}
 }

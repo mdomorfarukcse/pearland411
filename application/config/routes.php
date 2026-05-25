@@ -74,6 +74,10 @@ $route['request-service/(:any)']      = 'user/request_service/$1';
 // Listing claim
 $route['claim-listing/(:any)']        = 'user/claim_listing/$1';
 
+// Public coupons / deals
+$route['coupons']                     = 'user/coupons';
+$route['coupons/(:num)']              = 'user/coupon_details/$1';
+
 // IT / web services catalog (admin side)
 $route['admin/services']                       = 'admin/services_list';
 $route['admin/services/add']                   = 'admin/add_service';
