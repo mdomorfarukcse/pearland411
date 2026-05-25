@@ -89,7 +89,128 @@ function safe_upload_image($file, $target_dir, $max_bytes = 5 * 1024 * 1024)
     }
     @chmod($dest_abs, 0644);
 
+    // Best-effort: also generate sized variants so list pages can
+    // serve appropriately small images via thumb_url().
+    pearland411_generate_variants($dest_abs, $info['mime']);
+
     return rtrim($target_dir, '/') . '/' . $new_name;
+}
+
+/**
+ * Returns the web-relative path of a sized variant if it exists on
+ * disk, otherwise returns the original path. Sizes are 'thumb'
+ * (~200w) and 'medium' (~800w). Falls back gracefully so legacy
+ * images (uploaded before this commit) keep working.
+ *
+ * Cached in a static array so a list page rendering 60 images only
+ * does the file_exists() check once per filename.
+ *
+ *   <img src="<?= base_url(thumb_url($listing->listing_image, 'medium')) ?>">
+ */
+function thumb_url($path, $size = 'medium')
+{
+    static $cache = array();
+    if (empty($path)) return '';
+    $key = $path . '|' . $size;
+    if (isset($cache[$key])) return $cache[$key];
+
+    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    if (!in_array($ext, array('jpg', 'jpeg', 'png', 'webp'), true)) {
+        return $cache[$key] = $path;
+    }
+    $base    = pathinfo($path, PATHINFO_FILENAME);
+    $dir     = pathinfo($path, PATHINFO_DIRNAME);
+    $variant = ltrim($dir . '/' . $base . '_' . $size . '.jpg', './');
+    $abs     = FCPATH . $variant;
+    return $cache[$key] = is_file($abs) ? $variant : $path;
+}
+
+/**
+ * Emit a sized <img> with a srcset of available variants. Returns
+ * the markup as a string (so views can echo it). Skips the srcset
+ * silently if no variants exist on disk.
+ *
+ *   <?= responsive_img($listing->listing_image, $listing->listing_name, array('class' => 'card-img')) ?>
+ */
+function responsive_img($path, $alt = '', $attrs = array())
+{
+    if (empty($path)) return '';
+    $thumb_path  = thumb_url($path, 'thumb');
+    $medium_path = thumb_url($path, 'medium');
+
+    $base = function ($p) { return base_url($p); };
+    $src  = $base($medium_path);
+
+    $srcset = array();
+    if ($thumb_path !== $path)   $srcset[] = $base($thumb_path)  . ' 200w';
+    if ($medium_path !== $path)  $srcset[] = $base($medium_path) . ' 800w';
+    $srcset[] = $base($path) . ' 1600w';
+
+    $parts = array(
+        'src="' . htmlspecialchars($src, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"',
+        'srcset="' . htmlspecialchars(implode(', ', $srcset), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"',
+        'sizes="(max-width: 600px) 100vw, 50vw"',
+        'alt="' . htmlspecialchars((string) $alt, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"',
+        'loading="lazy"',
+        'decoding="async"',
+    );
+    foreach ($attrs as $k => $v) {
+        $parts[] = htmlspecialchars($k, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+            . '="' . htmlspecialchars((string) $v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
+    }
+    return '<img ' . implode(' ', $parts) . '>';
+}
+
+/**
+ * Internal: write `_thumb.jpg` and `_medium.jpg` variants next to
+ * $dest_abs. Returns true on success, false on any failure (failure
+ * is non-fatal — the original is still served).
+ */
+function pearland411_generate_variants($dest_abs, $mime)
+{
+    if (!function_exists('imagecreatefromjpeg')) return false;
+
+    switch ($mime) {
+        case 'image/jpeg': $src = @imagecreatefromjpeg($dest_abs); break;
+        case 'image/png':  $src = @imagecreatefrompng($dest_abs);  break;
+        case 'image/gif':  $src = @imagecreatefromgif($dest_abs);  break;
+        case 'image/webp':
+            $src = function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($dest_abs) : false;
+            break;
+        default: return false;
+    }
+    if (!$src) return false;
+
+    $w = imagesx($src);
+    $h = imagesy($src);
+    if ($w <= 0 || $h <= 0) { imagedestroy($src); return false; }
+
+    $base = pathinfo($dest_abs, PATHINFO_FILENAME);
+    $dir  = pathinfo($dest_abs, PATHINFO_DIRNAME);
+
+    $sizes = array('thumb' => 200, 'medium' => 800);
+    foreach ($sizes as $name => $max_w) {
+        if ($w <= $max_w) {
+            // Don't upscale — copy original as the variant so srcset
+            // points at something for honest small inputs.
+            @imagejpeg($src, $dir . '/' . $base . '_' . $name . '.jpg', 82);
+            continue;
+        }
+        $nw = $max_w;
+        $nh = (int) round($h * ($max_w / $w));
+        $dst = imagecreatetruecolor($nw, $nh);
+        if (in_array($mime, array('image/png', 'image/webp'), true)) {
+            imagealphablending($dst, false);
+            imagesavealpha($dst, true);
+            $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+            imagefilledrectangle($dst, 0, 0, $nw, $nh, $transparent);
+        }
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $w, $h);
+        @imagejpeg($dst, $dir . '/' . $base . '_' . $name . '.jpg', 82);
+        imagedestroy($dst);
+    }
+    imagedestroy($src);
+    return true;
 }
 
 function compress_image($tempPath, $originalPath, $imageQuality){
