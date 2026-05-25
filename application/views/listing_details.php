@@ -705,19 +705,19 @@
 							<div id="detail_enq_fail" class="log" style="display: none;">
 								<p>Something Went Wrong!!!</p>
 							</div>
-							<form method="post" action="<?= base_url('user/add-enquiry/listing_details/' . $listing->listing_slug); ?>" name="detail_enquiry_form" id="detail_enquiry_form">
+							<form method="post" action="<?= base_url('user/add-enquiry/listing_details/' . rawurlencode((string) $listing->listing_slug)); ?>" name="detail_enquiry_form" id="detail_enquiry_form">
 								<!-- Hidden fields for enquiry data -->
-								<input type="hidden" name="listing_id" value="<?= $listing->listing_id; ?>">
+								<input type="hidden" name="listing_id" value="<?= (int) $listing->listing_id; ?>">
 								<input type="hidden" name="event_id" value="">
 								<input type="hidden" name="blog_id" value="">
 								<input type="hidden" name="product_id" value="">
-								<input type="hidden" name="receiving_user_id" value="<?= $listing->user_id; ?>">
-								<input type="hidden" name="enquiry_sender_id" value="<?= isset($logged_id) ? $logged_id : ''; ?>">
-								<input type="hidden" name="enquiry_source" value="<?= e($listing->listing_name); ?>">
+								<input type="hidden" name="receiving_user_id" value="<?= (int) $listing->user_id; ?>">
+								<input type="hidden" name="enquiry_sender_id" value="<?= (int) (isset($logged_id) ? $logged_id : 0); ?>">
+								<input type="hidden" name="enquiry_source" value="<?= e_attr($listing->listing_name); ?>">
 								<input type="hidden" name="enquiry_type" value="listing">
 								<?php $disabled = empty($logged_id) ? 'disabled' : ''; ?>
 								<div class="form-group ic-user">
-									<input type="text" name="enquiry_name" value="<?= isset($user->name) ? $user->name : ''; ?>" required="required" class="form-control" placeholder="Enter name*" <?= $disabled; ?>>
+									<input type="text" name="enquiry_name" value="<?= e_attr(isset($user->name) ? $user->name : ''); ?>" required="required" class="form-control" placeholder="Enter name*" <?= $disabled; ?>>
 								</div>
 								<div class="form-group ic-eml">
 									<input type="email" class="form-control" placeholder="Enter email*" required="required" value="<?= isset($user->email_id) ? $user->email_id : ''; ?>" name="enquiry_email" pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$" title="Invalid email address" <?= $disabled; ?>>
@@ -1514,28 +1514,28 @@
 					<div class="quote-pop">
 						<h4>Get quote</h4>
 
-						<?php if ($this->session->flashdata('message')): ?>
+						<?php $__enq_msg = $this->session->flashdata('message'); if (!empty($__enq_msg)): ?>
 							<div class="alert alert-success" style="background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin: 10px 0;">
-								<?= $this->session->flashdata('message'); ?>
+								<?= e($__enq_msg); ?>
 							</div>
 						<?php endif; ?>
 
-						<?php if ($this->session->flashdata('error_msg')): ?>
+						<?php $__enq_err = $this->session->flashdata('error_msg'); if (!empty($__enq_err)): ?>
 							<div class="alert alert-danger" style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin: 10px 0;">
-								<?= $this->session->flashdata('error_msg'); ?>
+								<?= e($__enq_err); ?>
 							</div>
 						<?php endif; ?>
 
-						<form method="post" action="<?= base_url('user/add-enquiry/listing_details/' . $listing->listing_slug); ?>" name="enquiry_form" id="enquiry_form">
+						<form method="post" action="<?= base_url('user/add-enquiry/listing_details/' . rawurlencode((string) $listing->listing_slug)); ?>" name="enquiry_form" id="enquiry_form">
 
 							<!-- Hidden fields for enquiry data -->
-							<input type="hidden" name="listing_id" value="<?= $listing->listing_id; ?>">
+							<input type="hidden" name="listing_id" value="<?= (int) $listing->listing_id; ?>">
 							<input type="hidden" name="event_id" value="">
 							<input type="hidden" name="blog_id" value="">
 							<input type="hidden" name="product_id" value="">
-							<input type="hidden" name="receiving_user_id" value="<?= $listing->user_id; ?>">
-							<input type="hidden" name="enquiry_sender_id" value="<?= isset($logged_id) ? $logged_id : ''; ?>">
-							<input type="hidden" name="enquiry_source" value="<?= e($listing->listing_name); ?>">
+							<input type="hidden" name="receiving_user_id" value="<?= (int) $listing->user_id; ?>">
+							<input type="hidden" name="enquiry_sender_id" value="<?= (int) (isset($logged_id) ? $logged_id : 0); ?>">
+							<input type="hidden" name="enquiry_source" value="<?= e_attr($listing->listing_name); ?>">
 							<input type="hidden" name="enquiry_type" value="listing">
 
 							<div class="form-group">
