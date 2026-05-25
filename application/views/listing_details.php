@@ -118,7 +118,25 @@
 						<?php } ?>
 						<li> <span data-toggle="modal" data-target="#quote" class="pulse cta cta-get">Get quote</span>
 						</li>
+						<?php
+						// Only show the claim CTA when the listing has no owner yet.
+						// Once a successful claim transfers ownership (user_id is
+						// set on the listing row), the CTA is hidden.
+						if (empty($listing->user_id)):
+						?>
+							<li>
+								<a href="<?= base_url('claim-listing/' . rawurlencode($listing->listing_slug)) ?>"
+								   class="cta cta-get"
+								   style="background:#0e2a3a;color:#fff;">Claim this listing</a>
+							</li>
+						<?php endif; ?>
 					</ul>
+
+					<?php $__claim_msg = $this->session->flashdata('claim_message'); if (!empty($__claim_msg)): ?>
+						<div class="alert alert-info" style="margin-top:16px;">
+							<?= e($__claim_msg) ?>
+						</div>
+					<?php endif; ?>
 				</div>
 			</div>
 		</div>

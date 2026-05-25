@@ -4546,32 +4546,110 @@ class Admin extends CI_Controller
 		$this->load->view('admin/footer');
 	}
 
+	/**
+	 * Approve a pending listing claim.
+	 *
+	 * Old behavior tried to overwrite the listing row with the claim's
+	 * full-row data but malformed the array (`$getSingleListing[0]`
+	 * was never populated), so listing.user_id was never actually
+	 * updated and the claim flow silently no-op'd on the data side.
+	 * This rewrite:
+	 *   1) Marks the claim row approved.
+	 *   2) Updates ONLY listings.user_id to the claimant's user_id.
+	 *   3) Emails the claimant their approval notice.
+	 * All steps run inside a transaction.
+	 */
 	public function claim_approve($id)
 	{
-		$claimListing = $this->db->select('*')->from('claim_listings')->where('claim_listing_id', $id)->get()->row_array();
-
-		$getSingleListing = $this->db->select('*')->from('listings')->where('listing_id', $claimListing['listing_id'])->get()->row_array();
-
-		$lisitngID = '';
-
-		if ($getSingleListing != NULL) {
-
-			$listing_id = $getSingleListing['listing_id'];
-
-			$claimListing['claim_status'] = 1;
-			unset($getSingleListing[0]['listing_id']);
-			$getSingleListing[0]['user_id'] = $claimListing['enquiry_sender_id'];
-			if ($this->db->where('claim_listing_id', $id)->update('claim_listings', $claimListing)) {
-
-				if ($this->db->where('listing_id', $listing_id)->update('listings', $getSingleListing)) {
-					$this->session->set_flashdata('message', 'Successfully Status Updated !');
-					redirect('admin/claimed-listings', 'refresh');
-				}
-			} else {
-				$this->session->set_flashdata('message', 'Status Update Unsuccessful!');
-				redirect('admin/claimed-listings', 'refresh');
-			}
+		$claim = $this->db
+			->where('claim_listing_id', (int) $id)
+			->limit(1)
+			->get('claim_listings')
+			->row();
+		if (!$claim) {
+			$this->session->set_flashdata('message', 'Claim not found.');
+			redirect('admin/claimed-listings');
+			return;
 		}
+
+		$listing = $this->db
+			->where('listing_id', (int) $claim->listing_id)
+			->limit(1)
+			->get('listings')
+			->row();
+		if (!$listing) {
+			$this->session->set_flashdata('message', 'Underlying listing no longer exists.');
+			redirect('admin/claimed-listings');
+			return;
+		}
+
+		$this->db->trans_start();
+		$this->db
+			->where('claim_listing_id', (int) $id)
+			->update('claim_listings', array('claim_status' => 1));
+		$this->db
+			->where('listing_id', (int) $listing->listing_id)
+			->update('listings', array('user_id' => (int) $claim->enquiry_sender_id));
+		$this->db->trans_complete();
+
+		if (!$this->db->trans_status()) {
+			$this->session->set_flashdata('message', 'Could not approve claim.');
+			redirect('admin/claimed-listings');
+			return;
+		}
+
+		// Notify the claimant.
+		if (!empty($claim->enquiry_email)) {
+			$this->load->library('mailer');
+			$listing_url = base_url('listing-details/' . rawurlencode((string) $listing->listing_slug));
+			$body = '<p>Good news &mdash; your claim for <strong>'
+				. html_escape($listing->listing_name) . '</strong> has been approved.</p>'
+				. '<p>The listing is now linked to your account. Sign in and visit '
+				. '<a href="' . base_url('user/dashboard') . '">your dashboard</a> '
+				. 'to edit photos, hours, and contact information.</p>'
+				. '<p>Public page: <a href="' . $listing_url . '">' . $listing_url . '</a></p>';
+			$this->mailer->send($claim->enquiry_email, 'Your listing claim was approved', $body);
+		}
+
+		$this->session->set_flashdata('message', 'Claim approved and listing transferred.');
+		redirect('admin/claimed-listings');
+	}
+
+	/**
+	 * Reject a pending claim without deleting the row (so the audit
+	 * trail survives). Stores claim_status = 2 to distinguish from
+	 * pending (0) and approved (1).
+	 */
+	public function claim_reject($id)
+	{
+		$claim = $this->db
+			->where('claim_listing_id', (int) $id)
+			->limit(1)
+			->get('claim_listings')
+			->row();
+		if (!$claim) {
+			$this->session->set_flashdata('message', 'Claim not found.');
+			redirect('admin/claimed-listings');
+			return;
+		}
+
+		$this->db
+			->where('claim_listing_id', (int) $id)
+			->update('claim_listings', array('claim_status' => 2));
+
+		if (!empty($claim->enquiry_email)) {
+			$this->load->library('mailer');
+			$body = '<p>We reviewed your claim for <strong>'
+				. html_escape($claim->enquiry_source) . '</strong> and were '
+				. 'unable to verify it at this time.</p>'
+				. '<p>If you believe this was an error, reply to this email with '
+				. 'additional proof of ownership (current website, license, etc.) '
+				. 'and we will take another look.</p>';
+			$this->mailer->send($claim->enquiry_email, 'Update on your listing claim', $body);
+		}
+
+		$this->session->set_flashdata('message', 'Claim rejected and claimant notified.');
+		redirect('admin/claimed-listings');
 	}
 
 	public function delete_claim($id)

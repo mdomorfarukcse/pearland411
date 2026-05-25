@@ -112,25 +112,22 @@
 
 
                     <td>
-
-                      <?php if ($value->claim_status == 0) { ?>
-
-                        <a href="<?= base_url('admin/claim-approve/' . $value->claim_listing_id); ?>"><button class="db-list-ststus">Approve</button></a>
-
+                      <?php if ((int) $value->claim_status === 0) { ?>
+                        <a href="<?= base_url('admin/claim-approve/' . (int) $value->claim_listing_id) ?>"
+                           onclick="return confirm('Approve this claim? The listing will be transferred to the claimant.');">
+                          <button class="db-list-ststus">Approve</button>
+                        </a>
+                        <a href="<?= base_url('admin/claim-reject/' . (int) $value->claim_listing_id) ?>"
+                           onclick="return confirm('Reject this claim? The claimant will be emailed.');">
+                          <button class="db-list-ststus" style="background:#c00;color:#fff;">Reject</button>
+                        </a>
+                      <?php } elseif ((int) $value->claim_status === 1) { ?>
+                        <span style="color:green;font-weight:bold;">Approved</span>
+                      <?php } elseif ((int) $value->claim_status === 2) { ?>
+                        <span style="color:#c00;">Rejected</span>
                       <?php } else { ?>
-
-                        <span style="text-align: center;">-</span>
-
+                        <span>-</span>
                       <?php } ?>
-
-                      <input type="hidden" id="updateField" value="claim_status">
-
-                      <input type="hidden" id="tableName" value="claim_listings">
-
-                      <input type="hidden" id="tableIdName" value="claim_listing_id">
-
-                      <input type="hidden" id="id" value="<?= $value->claim_listing_id; ?>">
-
                     </td>
 
 

@@ -71,6 +71,9 @@ $route['services/(:any)']             = 'user/service_details/$1';
 $route['request-service']             = 'user/request_service';
 $route['request-service/(:any)']      = 'user/request_service/$1';
 
+// Listing claim
+$route['claim-listing/(:any)']        = 'user/claim_listing/$1';
+
 // IT / web services catalog (admin side)
 $route['admin/services']                       = 'admin/services_list';
 $route['admin/services/add']                   = 'admin/add_service';
@@ -82,6 +85,11 @@ $route['admin/service-requests/delete/(:num)'] = 'admin/service_request_delete/$
 
 // Admin self-service
 $route['admin/change-password']             = 'admin/change_password';
+
+// Listing claims
+$route['admin/claim-approve/(:num)']        = 'admin/claim_approve/$1';
+$route['admin/claim-reject/(:num)']         = 'admin/claim_reject/$1';
+$route['admin/claimed-listings']            = 'admin/claimed_listings';
 
 // Sub-admin / role management (super_admin only)
 $route['admin/sub-admins']                  = 'admin/sub_admin_all';

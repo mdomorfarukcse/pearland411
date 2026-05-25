@@ -52,6 +52,8 @@ class User extends CI_Controller
 			'add_enquiry', 'checkout', 'checkout_success', 'process_checkout',
 			// Services catalog + quote requests
 			'services', 'service_details', 'request_service',
+			// Listing claim (form gates on session itself)
+			'claim_listing',
 		);
 
 		$page = $this->router->fetch_method();
@@ -6923,5 +6925,146 @@ class User extends CI_Controller
 
 		$this->session->set_flashdata('service_request_success', 'Thanks! We received your request and will be in touch shortly.');
 		redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+	}
+
+	/*=========================
+		Claim listing flow (public side)
+
+		Anyone can submit a claim against a listing they say is their
+		business. The submission is queued in claim_listings; an admin
+		approves it from /admin/claimed-listings (Admin::claim_approve).
+		Both submitter and admin get an email notification at each
+		state change so the workflow doesn't stall silently.
+		==========================*/
+
+	public function claim_listing($slug = '')
+	{
+		// Visitors must be signed in so we can later transfer the
+		// listing to a real user_id on approval.
+		if (!$this->session->userdata('logged_user')) {
+			$this->session->set_userdata('redirect_url', current_url());
+			redirect('login');
+			return;
+		}
+
+		$listing = $this->usermodel->getSingleValue($slug, 'listing_slug', 'listings');
+		if (!$listing) { show_404(); return; }
+
+		$session = $this->session->userdata('logged_user');
+		$user_id = (int) $session['logged_id'];
+
+		// One claim per (listing, user) makes sense — don't let people
+		// spam a listing they already claimed.
+		$existing = $this->db
+			->where('listing_id',         (int) $listing->listing_id)
+			->where('enquiry_sender_id',  $user_id)
+			->limit(1)
+			->get('claim_listings')
+			->row();
+		if ($existing) {
+			$this->session->set_flashdata(
+				'claim_message',
+				'You have already submitted a claim for this listing — status: ' .
+				((int) $existing->claim_status === 1 ? 'approved' : 'pending review') . '.'
+			);
+			redirect('listing-details/' . rawurlencode($slug));
+			return;
+		}
+
+		if ($this->input->method() === 'post') {
+			// Light rate-limit (3 claims per IP per hour).
+			if (!$this->rate_limit->check_ip('claim_listing', 3, 3600)) {
+				$this->rate_limit->reject(3600);
+				return;
+			}
+
+			$this->form_validation->set_rules('enquiry_name',    'Your name',     'trim|required|min_length[2]');
+			$this->form_validation->set_rules('enquiry_email',   'Email',         'trim|required|valid_email');
+			$this->form_validation->set_rules('enquiry_message', 'Proof message', 'trim|required|min_length[20]');
+
+			if (!$this->form_validation->run()) {
+				$data = array(
+					'listing'   => $listing,
+					'error'     => strip_tags(validation_errors()) ?: 'Please complete the required fields.',
+				);
+				$this->loadHeaderCategories($data);
+				$data['title'] = 'Claim ' . $listing->listing_name . ' — Pearland411';
+				$this->load->view('header', $data);
+				$this->load->view('claim_listing', $data);
+				$this->load->view('footer');
+				return;
+			}
+
+			$claim_id = $this->usermodel->claimBusiness(array(
+				'listing_id'        => (int) $listing->listing_id,
+				'enquiry_sender_id' => $user_id,
+				'enquiry_name'      => $this->input->post('enquiry_name'),
+				'enquiry_email'     => $this->input->post('enquiry_email'),
+				'enquiry_mobile'    => $this->input->post('enquiry_mobile'),
+				'enquiry_message'   => $this->input->post('enquiry_message'),
+				'enquiry_source'    => $listing->listing_name,
+				'claim_status'      => 0,
+			));
+
+			if (!$claim_id) {
+				$this->session->set_flashdata('claim_message', 'Could not save your claim. Please try again.');
+				redirect('listing-details/' . rawurlencode($slug));
+				return;
+			}
+
+			// Notifications.
+			$this->load->library('mailer');
+			$listing_url = base_url('listing-details/' . rawurlencode($listing->listing_slug));
+
+			$ack = '<p>Thanks &mdash; we received your request to claim <strong>'
+				. html_escape($listing->listing_name) . '</strong>.</p>'
+				. '<p>An administrator will review the claim and email you when it is processed. '
+				. 'Approvals usually take 1&ndash;2 business days.</p>'
+				. '<p>Listing: <a href="' . $listing_url . '">' . $listing_url . '</a></p>';
+			$this->mailer->send(
+				$this->input->post('enquiry_email'),
+				'We received your listing claim request',
+				$ack
+			);
+
+			$admin_to = env('MAIL_FROM_ADDRESS', '');
+			if ($admin_to) {
+				$alert = '<p>New listing claim #' . $claim_id . '</p>'
+					. '<ul>'
+					. '<li>Listing: <a href="' . $listing_url . '">' . html_escape($listing->listing_name) . '</a></li>'
+					. '<li>Claimant: ' . html_escape($this->input->post('enquiry_name')) . '</li>'
+					. '<li>Email: '   . html_escape($this->input->post('enquiry_email')) . '</li>'
+					. '<li>Phone: '   . html_escape($this->input->post('enquiry_mobile')) . '</li>'
+					. '</ul>'
+					. '<p>Message:</p><blockquote>'
+					. nl2br(html_escape($this->input->post('enquiry_message')))
+					. '</blockquote>'
+					. '<p>Review &amp; approve at: '
+					. base_url('admin/claimed-listings')
+					. '</p>';
+				$this->mailer->send($admin_to, '[Pearland411] New listing claim — ' . $listing->listing_name, $alert);
+			}
+
+			$this->session->set_flashdata('claim_message',
+				'Thanks! Your claim has been submitted. We will email you when an administrator reviews it.');
+			redirect('listing-details/' . rawurlencode($slug));
+			return;
+		}
+
+		// GET — render the form.
+		$data = array(
+			'listing' => $listing,
+			'prefill' => array(
+				'enquiry_name'  => $session['name']     ?? '',
+				'enquiry_email' => $session['email_id'] ?? '',
+			),
+		);
+		$this->loadHeaderCategories($data);
+		$data['title']         = 'Claim ' . $listing->listing_name . ' — Pearland411';
+		$data['canonical_url'] = base_url('claim-listing/' . rawurlencode($slug));
+
+		$this->load->view('header', $data);
+		$this->load->view('claim_listing', $data);
+		$this->load->view('footer');
 	}
 }

@@ -2055,11 +2055,20 @@ class Usermodel extends CI_Model
 
 	public function claimBusiness($data)
 	{
+		$data['claim_created_at'] = date('Y-m-d H:i:s');
 		if ($this->db->insert('claim_listings', $data)) {
-			return true;
-		} else {
-			return false;
+			return (int) $this->db->insert_id();
 		}
+		return false;
+	}
+
+	public function getClaimById($claim_id)
+	{
+		return $this->db
+			->where('claim_listing_id', (int) $claim_id)
+			->limit(1)
+			->get('claim_listings')
+			->row();
 	}
 
 
