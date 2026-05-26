@@ -32,24 +32,30 @@ class User extends CI_Controller
 		// satisfy this — they're a different audience.
 		$public_actions = array(
 			// Auth pages
-			'register', 'login', 'forgot_password', 'forget_password',
+			'register', 'login', 'forgot_password',
 			'reset_password', 'verify_email',
 			'logout', 'subscribe_newsletter', 'newsletter_confirm',
+			'contact_submit',
 			// Home + static pages
 			'index', 'about_us', 'faq', 'contact_us', 'privacy_policy', 'terms_of_use',
 			// Public browsing — listings/categories
-			'all_category', 'all_listing', 'listing_preview',
-			'listing_details', 'listingdetails',
+			'all_category', 'category_search', 'all_listing',
+			'listing_details',
 			'pricing_plan', 'search', 'search_suggestions',
 			// Public content sections
-			'news', 'news_details', 'news_lists', 'news_preview',
+			'news', 'news_details',
 			'all_blog', 'blog_details',
 			'event', 'event_search', 'event_details',
 			'videos', 'video_details',
 			'classifieds', 'classifieds_details',
 			'all_products', 'product_details',
-			// Enquiry submission + checkout
-			'add_enquiry', 'checkout', 'checkout_success', 'process_checkout',
+			'house_details', 'rental_details',
+			// Checkout (currently disabled; require login is enforced
+			// at the page level — checkout() redirects to login below
+			// when no session is present).
+			'checkout', 'checkout_success', 'process_checkout',
+			// Enquiry submission (rate-limited; anonymous OK)
+			'add_enquiry',
 			// Services catalog + quote requests
 			'services', 'service_details', 'request_service',
 			// Listing claim (form gates on session itself)

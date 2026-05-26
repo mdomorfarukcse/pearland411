@@ -334,7 +334,7 @@ class Admin extends CI_Controller
 		// Admin pages reachable WITHOUT a session. Everything else
 		// requires a logged-in admin (session key 'logged_admin' —
 		// the end-user 'logged_user' key cannot satisfy this check).
-		$public_actions = array('index', 'login', 'forgot_password', 'forget_password');
+		$public_actions = array('index', 'login', 'forgot_password');
 		$page = $this->router->fetch_method();
 
 		// Routes restricted to super_admin only — sub-admin management,

@@ -120,8 +120,8 @@ $route['event-details/(:any)'] = '/user/event-details/$1';
 $route['classifieds-details/(:any)'] = '/user/classifieds-details/$1';
 // Products - Not working
 $route['products-details/(:any)'] = 'user/product_details/$1';
-// blogs - Not working
-$route['blogs-details/(:any)'] = 'user/blogs-details/$1';
+// blogs
+$route['blogs-details/(:any)'] = 'user/blog_details/$1';
 // rental 
 $route['rental-details/(:any)'] = 'user/rental-details/$1';
 // House 
