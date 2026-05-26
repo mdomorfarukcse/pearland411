@@ -242,3 +242,177 @@ After that, the next strategic pieces remain:
 
 Long-term, the §12 rebuild recommendation from
 `PROJECT_AUDIT_REPORT.md` still stands.
+
+---
+
+## 15. Additional findings from full page walkthrough
+
+Surfaced during a second-pass review of every public detail page.
+Re-grouped into the same severity buckets so they slot into the
+remediation list above.
+
+### Critical
+
+- **`routes.php:124` blog detail route is broken.**
+  `$route['blogs-details/(:any)'] = 'user/blogs-details/$1'`. With
+  `translate_uri_dashes=TRUE` that resolves to `user/blogs_details`
+  (plural) — but the controller method is `blog_details`
+  (singular). **Every `/blogs-details/<slug>` URL 404s.** The
+  search results page (`search.php:615`) links here, so every blog
+  result is dead. Routes file even has a comment "blogs - Not
+  working". **Fix:** change the route to
+  `'user/blog_details/$1'`. One-line fix; ship immediately.
+
+- **`contact-us.php` is a full standalone HTML document.**
+  Lines 1–9 contain `<!DOCTYPE>`, `<html>`, `<head>` and line 412
+  has the closing `</body></html>`. The controller wraps it with
+  `header.php` (which already emits `<html><head><body>`) +
+  `footer.php`, producing a doubly-nested HTML document. Browsers
+  render *something*, but it's invalid markup. **Fix:** rewrite as
+  a fragment (drop the `<html>`/`<head>`/`<body>` wrapper, keep
+  the inner content).
+
+- **Hardcoded sample social URLs on every listing page.**
+  `listing_details.php:765–789` "COMPANY BADGE" hardcodes
+  `https://www.facebook.com/`, `https://twitter.com/`,
+  `https://www.youtube.com/` plus icon URLs pointing at
+  `bizbookdirectorytemplate.com`. Every listing shows the same
+  dummy social links — there's no per-listing customization.
+  Either wire these to `$listing->facebook_url` etc. (add columns
+  if missing) or remove the block.
+
+- **`/all-news`, `pricing-details`, `post-your-ads` links 404.**
+  `index.php:3047, 2551, 2567, 2484` point at these URLs but no
+  matching controller method exists.
+
+- **Image fallback bug — `<img src="<?= base_url($news->news_image) ?>"`**
+  in `news_details.php:208, 405` and `blog_details.php:238, 497`.
+  When the column is NULL, `base_url(null)` returns the site root
+  URL, so the page renders the home page as a 404'd image. Add an
+  `empty()` check (the pattern is already used elsewhere — apply
+  here too).
+
+### High
+
+- **`event_details.php:407` echoes `$event->event_map` as raw HTML.**
+  Admins can paste arbitrary markup; today's UI lets them paste
+  full `<iframe>` tags. Stored XSS sink for any admin account
+  (after the role gating that's a smaller risk, but not zero).
+  Replace with a `lat/lng` column + a server-rendered iframe.
+
+- **N+1 queries in `events.php:96–107`** — calls
+  `$CI->usermodel->getSingleValue(...)` per row inside the loop to
+  fetch the event owner's name. Move the join into the controller.
+  Same problem in `news_details.php:284–289` and
+  `blog_details.php:367–371` which run raw `$this->db->...` queries
+  inside the view to fetch publisher info.
+
+- **`all-listing.php:220–221`** still echoes
+  `<?= $value->listing_name; ?>` and `listing_address` raw — the
+  earlier escape sweep (commits 10, 26) missed this view's `ne-2`
+  card body. Wrap with `e()` / `e_attr()`.
+
+- **External-CDN production fallbacks.**
+  `event_details.php:308, 549` fall back to
+  `https://placehold.co/600x400/...`; `event_details.php:424`
+  defaults the user avatar to a `freepik.com` URL. Move to local
+  `assets/images/` fallbacks so the site doesn't depend on third
+  parties for default imagery.
+
+- **`index.php` hardcoded image paths.** Multiple references mix
+  `/assets/...` (root-relative), `../assets/...` (parent-relative),
+  and `assets/...` (no prefix). On sub-paths these break. Use
+  `base_url('assets/...')` consistently.
+
+- **Search form action is relative.** `search.php:390`
+  `<form action="search">` — submitting from `/search/foo` posts
+  to `/search/foo/search` and 404s. Use
+  `action="<?= base_url('search') ?>"`.
+
+- **`flashdata()` echoes still unescaped in several pages:**
+  `listing_details.php:492, 689, 695`,
+  `news_details.php:217`, `blog_details.php:257`,
+  `event_details.php:320`. The values today are admin-controlled
+  but the pattern is fragile — wrap with `e()`.
+
+- **`$listing->display_address` / `display_phone`** accessed
+  unguarded throughout `listing_details.php` (lines 12, 78, 83,
+  108, 116). PHP 8.1 emits deprecation warnings on NULL → string
+  coercion; PHP 8.2+ may error on stricter setups. Add `?? 0`
+  or wrap with `isset()`.
+
+- **`listing_details.php:288–330, 314–324, 384–390`** has debug
+  `echo "Listing Image Gallery: ..."` blocks that leak DB content
+  into HTML comments visible in page source. Remove.
+
+### Medium
+
+- **Homepage SEO is bare.** `User::index` passes no `$title`,
+  meta description, canonical, or JSON-LD. We render a single
+  hardcoded `<title>Home - Pearland411</title>` in `index.php:137`
+  — but `header.php` would render a proper title if `$title` were
+  set. Wire it.
+
+- **Category / news / event / blog landing pages also have no
+  per-page meta description / canonical / `ItemList` JSON-LD.**
+  Only the detail pages got the SEO pass in commit 12.
+
+- **`all_listing` slug-fallback logic in views.** Lines 249–258,
+  428–434 of `all-listing.php` build URLs from a `listing_slug ??
+  listing_id` fallback inline. Move into the controller (or a
+  helper) so all view files share one rule.
+
+- **`coupons.php:36`** links to `listing-details/<slug>` even when
+  the coupon has no linked listing — produces `/listing-details/`
+  → 404. Guard with `if (!empty($c->listing_slug))`.
+
+- **`coupons.php:45`** `strtotime($c->coupon_end_date)` with a
+  null `coupon_end_date` returns false; `date()` then prints
+  1970-01-01. Defaults look bad; guard.
+
+- **`all-listing.php:177`** hardcodes `<h1>Business</h1>` — when
+  the user filters by category the title should reflect the
+  selection.
+
+- **Mixed link styles in `all-listing.php`.** Lines 225, 512, 525
+  variously use `base_url('user/listing-details/...')` and
+  `base_url('listing-details/...')`. The first form bypasses the
+  clean route. Standardize.
+
+- **`contact-us.php:20` background image** uses `./assets/...`
+  relative — 404s from `/contact-us/`. Use `base_url('assets/...')`.
+
+- **`contact-us.php:348–365` `<label>` tags missing `for=`** —
+  not associated with their inputs (screen-reader / a11y miss).
+
+### Low
+
+- `index.php:2772–2941` images use `alt=""` on many tags.
+- `news_details.php` etc. — same pattern; add per-image `alt`.
+- `blog-posts.php:46` links to `user/blog-details/...` (via the
+  catch-all + translate-dashes route). Works, but inconsistent
+  with the explicit `blogs-details` route (which is also broken
+  per §15.Critical).
+- `index.php:2413` and footer links use bare relative paths
+  (`href="index"`, `href="user/all_listing/..."`) — fine at site
+  root, broken at sub-paths.
+- `news.php:271`, `blog-posts.php` and similar — `$x->news_slug`
+  / `$x->blog_slug` accessed without `??` fallback. PHP 8.1
+  deprecation; will warn in logs.
+
+---
+
+### Combined remediation impact
+
+The third-pass findings stack onto the original list. Most are
+small (1-line route fix, missing escape, hardcoded URL → variable
+swap) but two are blocking:
+
+1. **Fix `routes.php:124`** — every blog detail link in the search
+   results is currently 404'ing.
+2. **Rewrite `contact-us.php` as a fragment** — invalid HTML
+   today; this is on top of the form being dead.
+
+Updated total work estimate to clear the consolidated list:
+**~1.5–2 dev-days** (was 1 dev-day, plus this pass added ~half a
+day of additional fix work).
