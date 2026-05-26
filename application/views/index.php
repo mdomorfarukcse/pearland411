@@ -1,117 +1,3 @@
-<?php
-// Weather widget proxy now lives in application/controllers/Weather.php
-// and is served at /weather (route registered in config/routes.php).
-
-// Simple routing for search functionality
-if (isset($_SERVER['REQUEST_URI'])) {
-  $request_uri = $_SERVER['REQUEST_URI'];
-  $request_path = parse_url($request_uri, PHP_URL_PATH);
-
-  // Remove leading slash and get path segments
-  $path = ltrim($request_path, '/');
-  $segments = explode('/', $path);
-
-  // Handle search route - both /search and direct search queries
-  $is_search_route = ($segments[0] === 'search' && count($segments) >= 1);
-  $has_search_query = (isset($_GET['q']) && !empty(trim($_GET['q'])));
-
-  if ($is_search_route || ($has_search_query && ($segments[0] === 'search' || strpos($request_uri, 'search') !== false))) {
-
-    // This is a search request, handle it with search page
-    $search_query = isset($_GET['q']) ? trim($_GET['q']) : '';
-
-    // Set up basic environment for search
-    error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_WARNING);
-
-    // Create a simple search handler
-    class SimpleSearchHandler
-    {
-      private $data = array();
-
-      public function __construct()
-      {
-        $this->data['search_query'] = '';
-        $this->data['search_results'] = array('total_count' => 0);
-        $this->data['categories'] = array();
-        $this->data['latest_news'] = array();
-      }
-
-      public function handleSearch($query)
-      {
-        $this->data['search_query'] = htmlspecialchars($query);
-
-        // Try to load model and get results if files exist
-        if (!empty($query) && file_exists('Usermodel.php')) {
-          include_once 'Usermodel.php';
-          try {
-            $model = new Usermodel();
-            if (method_exists($model, 'globalSearch')) {
-              $search_results = $model->globalSearch($query);
-              $this->data['search_results'] = $search_results;
-            }
-            if (method_exists($model, 'getCategoriesWithCount')) {
-              $this->data['categories'] = $model->getCategoriesWithCount();
-            }
-            if (method_exists($model, 'getLatestNews')) {
-              $this->data['latest_news'] = $model->getLatestNews(5);
-            }
-          } catch (Exception $e) {
-            // Handle error silently
-            $this->data['error'] = 'Search temporarily unavailable';
-            error_log('Search error: ' . $e->getMessage());
-          }
-        }
-
-        $this->renderSearchPage();
-      }
-
-      private function renderSearchPage()
-      {
-        // Make data available to included files
-        extract($this->data);
-
-        // Load header if exists
-        if (file_exists('header.php')) {
-          include 'header.php';
-        }
-
-        // Load search page
-        if (file_exists('search.php')) {
-          include 'search.php';
-        } else {
-          $this->renderBasicSearch();
-        }
-
-        // Load footer if exists  
-        if (file_exists('footer.php')) {
-          include 'footer.php';
-        }
-      }
-
-      private function renderBasicSearch()
-      {
-        echo "<div style='padding: 40px; text-align: center;'>";
-        echo "<h1>Search Pearland411</h1>";
-        if (!empty($this->data['search_query'])) {
-          echo "<p>Search results for: <strong>" . $this->data['search_query'] . "</strong></p>";
-          if (isset($this->data['search_results']['total_count'])) {
-            echo "<p>Found " . $this->data['search_results']['total_count'] . " results</p>";
-          }
-        }
-        echo "<form method='GET' action='search' style='max-width: 500px; margin: 20px auto;'>";
-        echo "<input type='text' name='q' value='" . htmlspecialchars($this->data['search_query']) . "' placeholder='Search...' style='padding: 10px; width: 70%; border: 1px solid #ccc;'>";
-        echo "<button type='submit' style='padding: 10px 20px; background: #7bb73f; color: white; border: none; cursor: pointer;'>Search</button>";
-        echo "</form>";
-        echo "</div>";
-      }
-    }
-
-    $handler = new SimpleSearchHandler();
-    $handler->handleSearch($search_query);
-    exit; // Stop execution after handling search
-  }
-}
-?>
 <!doctype html>
 <!--
 ===============================================================================
@@ -2856,104 +2742,18 @@ Database Tables Required:
                     </div>
                   <?php endforeach; ?>
                 <?php else: ?>
-                  <!-- Sample Data for Testing -->
-                  <div class="col-md-4 col-sm-6 fade-in business-item" data-category="Restaurant">
-                    <div class="lst-com-box">
-                      <div class="list-com-img">
-                        <img src="../assets/images/listings/list1.jpg" alt="Bella's Bistro">
-                      </div>
-                      <div class="list-com-con">
-                        <h4>Bella's Bistro</h4>
-                        <span class="list-com-cat">Restaurant</span>
-                        <p>Farm-to-table restaurant serving fresh, locally-sourced dishes...</p>
-                        <a href="#" class="list-enq-btn">View Details</a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-md-4 col-sm-6 fade-in business-item" data-category="Fitness">
-                    <div class="news-card p-2">
-                      <div class="card-image" style="height:120px; background: linear-gradient(45deg, #180f5e, #7bb73f); display: flex; align-items: center; justify-content: center;">
-                        <img src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=100&h=100&fit=crop&crop=center" alt="Pearland Fit Gym" style="width:60px;height:60px;background:#fff;border-radius:50%; object-fit: cover;">
-                        <span class="card-category">Fitness</span>
-                      </div>
-                      <div class="card-content p-2">
-                        <h3 class="card-title" style="font-size:1rem;">Pearland Fit Gym</h3>
-                        <p class="card-excerpt" style="font-size:0.92rem;">
-                          Modern equipment, expert trainers, and a welcoming atmosphere for all ages and fitness levels in Pearland...
-                        </p>
-                        <a href="#" class="read-more">Read More →</a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-md-4 col-sm-6 fade-in business-item" data-category="Pizza">
-                    <div class="news-card p-2">
-                      <div class="card-image" style="height:120px; background: linear-gradient(45deg, #180f5e, #7bb73f); display: flex; align-items: center; justify-content: center;">
-                        <img src="https://images.unsplash.com/photo-1513104890138-7c749659a591?w=100&h=100&fit=crop&crop=center" alt="Tony's Pizzeria" style="width:60px;height:60px;background:#fff;border-radius:50%; object-fit: cover;">
-                        <span class="card-category">Pizza</span>
-                      </div>
-                      <div class="card-content p-2">
-                        <h3 class="card-title" style="font-size:1rem;">Tony's Pizzeria</h3>
-                        <p class="card-excerpt" style="font-size:0.92rem;">
-                          Hand-tossed pizzas, classic recipes, and a warm family vibe. Serving authentic Italian cuisine since 1995...
-                        </p>
-                        <a href="#" class="read-more">Read More →</a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-md-4 col-sm-6 fade-in business-item" data-category="Healthcare">
-                    <div class="news-card p-2">
-                      <div class="card-image" style="height:120px; background: linear-gradient(45deg, #180f5e, #7bb73f); display: flex; align-items: center; justify-content: center;">
-                        <img src="https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=100&h=100&fit=crop&crop=center" alt="Care+ Medical Clinic" style="width:60px;height:60px;background:#fff;border-radius:50%; object-fit: cover;">
-                        <span class="card-category">Healthcare</span>
-                      </div>
-                      <div class="card-content p-2">
-                        <h3 class="card-title" style="font-size:1rem;">Care+ Medical Clinic</h3>
-                        <p class="card-excerpt" style="font-size:0.92rem;">
-                          Comprehensive healthcare services with experienced doctors and state-of-the-art medical equipment...
-                        </p>
-                        <a href="#" class="read-more">Read More →</a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-md-4 col-sm-6 fade-in business-item" data-category="Automotive">
-                    <div class="news-card p-2">
-                      <div class="card-image" style="height:120px; background: linear-gradient(45deg, #180f5e, #7bb73f); display: flex; align-items: center; justify-content: center;">
-                        <img src="https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=100&h=100&fit=crop&crop=center" alt="AutoCare Plus" style="width:60px;height:60px;background:#fff;border-radius:50%; object-fit: cover;">
-                        <span class="card-category">Automotive</span>
-                      </div>
-                      <div class="card-content p-2">
-                        <h3 class="card-title" style="font-size:1rem;">AutoCare Plus</h3>
-                        <p class="card-excerpt" style="font-size:0.92rem;">
-                          Professional auto repair and maintenance services. ASE certified technicians with 20+ years experience...
-                        </p>
-                        <a href="#" class="read-more">Read More →</a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-md-4 col-sm-6 fade-in business-item" data-category="Beauty">
-                    <div class="news-card p-2">
-                      <div class="card-image" style="height:120px; background: linear-gradient(45deg, #180f5e, #7bb73f); display: flex; align-items: center; justify-content: center;">
-                        <img src="https://images.unsplash.com/photo-1560066984-138dadb4c035?w=100&h=100&fit=crop&crop=center" alt="Luxe Hair Salon" style="width:60px;height:60px;background:#fff;border-radius:50%; object-fit: cover;">
-                        <span class="card-category">Beauty</span>
-                      </div>
-                      <div class="card-content p-2">
-                        <h3 class="card-title" style="font-size:1rem;">Luxe Hair Salon</h3>
-                        <p class="card-excerpt" style="font-size:0.92rem;">
-                          Professional hair styling, coloring, and beauty treatments. Expert stylists using premium products...
-                        </p>
-                        <a href="#" class="read-more">Read More →</a>
-                      </div>
+                  <div class="col-12">
+                    <div class="alert alert-light" style="background:#f9fafb;border:1px solid #e5e7eb;">
+                      No featured listings yet.
+                      <a href="<?= base_url('all_listing') ?>">Browse the directory</a>
+                      or
+                      <a href="<?= base_url('register') ?>">add your business</a>.
                     </div>
                   </div>
                 <?php endif; ?>
               </div>
               <div class="text-center mt-3">
-                <a href="/all-listing" class="btn btn-view-more mt-3 m1-5">View More</a>
+                <a href="<?= base_url('all_listing') ?>" class="btn btn-view-more mt-3 m1-5">View More</a>
               </div>
             </section>
             <!-- =========================
