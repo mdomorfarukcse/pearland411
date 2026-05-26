@@ -761,35 +761,47 @@
 					<div class="ld-rhs-pro pglist-bg pglist-p-com">
 						<div class="lis-comp-badg">
 							<div class="s1">
-								<div> <span class="by">Business profile</span>
-									<img class="proi" src="<?= !empty($listing->listing_image) ? base_url($listing->listing_image) : '/assets/images/fallback_profile.svg'; ?>" alt="">
-									<h4><?= isset($listing->listing_name) ? $listing->listing_name : 'Business Name'; ?></h4>
-									<p>Address: <?= isset($listing->listing_address) ? $listing->listing_address : 'Business Address'; ?></p>
-									<ul>
-										<li>
-											<a href="https://www.facebook.com/" target="_blank">
-												<img src="https://bizbookdirectorytemplate.com/images/social/3.png">
-											</a>
-										</li>
-										<li>
-											<a href="https://twitter.com/" target="_blank">
-												<img src="https://bizbookdirectorytemplate.com/images/social/2.png">
-											</a>
-										</li>
-										<li>
-											<a href="https://www.youtube.com/" target="_blank">
-												<img src="https://bizbookdirectorytemplate.com/images/social/5.png">
-											</a>
-										</li>
-										<li>
-											<a href="#" target="_blank">
-												<img src="https://bizbookdirectorytemplate.com/images/social/6.png">
-											</a>
-										</li>
-									</ul>
+								<div>
+									<span class="by">Business profile</span>
+									<img class="proi"
+										 src="<?= !empty($listing->listing_image) ? base_url($listing->listing_image) : base_url('assets/images/fallback_profile.svg') ?>"
+										 alt="<?= e_attr($listing->listing_name ?? '') ?>"
+										 loading="lazy" decoding="async">
+									<h4><?= e($listing->listing_name ?? '') ?></h4>
+									<?php if (!empty($listing->listing_address)): ?>
+										<p>Address: <?= e($listing->listing_address) ?></p>
+									<?php endif; ?>
+
+									<?php
+									$__socials = isset($owner_socials) ? $owner_socials : array();
+									$__has_socials = !empty(array_filter($__socials));
+									?>
+									<?php if ($__has_socials): ?>
+										<ul>
+											<?php if (!empty($__socials['facebook'])): ?>
+												<li><a href="<?= e_url($__socials['facebook']) ?>" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+													<img src="<?= base_url('assets/images/social/3.png') ?>" alt="Facebook" loading="lazy">
+												</a></li>
+											<?php endif; ?>
+											<?php if (!empty($__socials['twitter'])): ?>
+												<li><a href="<?= e_url($__socials['twitter']) ?>" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
+													<img src="<?= base_url('assets/images/social/2.png') ?>" alt="Twitter" loading="lazy">
+												</a></li>
+											<?php endif; ?>
+											<?php if (!empty($__socials['youtube'])): ?>
+												<li><a href="<?= e_url($__socials['youtube']) ?>" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
+													<img src="<?= base_url('assets/images/social/5.png') ?>" alt="YouTube" loading="lazy">
+												</a></li>
+											<?php endif; ?>
+											<?php if (!empty($__socials['website'])): ?>
+												<li><a href="<?= e_url($__socials['website']) ?>" target="_blank" rel="noopener noreferrer" aria-label="Website">
+													<img src="<?= base_url('assets/images/social/6.png') ?>" alt="Website" loading="lazy">
+												</a></li>
+											<?php endif; ?>
+										</ul>
+									<?php endif; ?>
 								</div>
 							</div>
-						
 						</div>
 					</div>
 					<!--END LISTING DETAILS: COMPANY BADGE-->

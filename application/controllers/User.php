@@ -62,6 +62,8 @@ class User extends CI_Controller
 			'claim_listing',
 			// Public coupons / deals
 			'coupons', 'coupon_details',
+			// Advertise landing page (form posts to /contact-submit)
+			'post_your_ads',
 		);
 
 		$page = $this->router->fetch_method();
@@ -2332,6 +2334,30 @@ class User extends CI_Controller
 		// Get review statistics for rating breakdown
 		$data['review_stats'] = $this->usermodel->getReviewStats($data['listing']->listing_id);
 
+		// Owner social-profile lookup so the "Company badge" block
+		// can render real per-listing social links instead of the
+		// placeholder facebook.com/twitter.com URLs that used to be
+		// hardcoded in the view.
+		$data['owner_socials'] = array(
+			'facebook' => '', 'twitter' => '', 'youtube' => '', 'website' => '',
+		);
+		if (!empty($data['listing']->user_id)) {
+			$owner = $this->db
+				->select('user_facebook, user_twitter, user_youtube, user_website')
+				->where('user_id', (int) $data['listing']->user_id)
+				->limit(1)
+				->get('user')
+				->row();
+			if ($owner) {
+				$data['owner_socials'] = array(
+					'facebook' => (string) ($owner->user_facebook ?? ''),
+					'twitter'  => (string) ($owner->user_twitter  ?? ''),
+					'youtube'  => (string) ($owner->user_youtube  ?? ''),
+					'website'  => (string) ($owner->user_website  ?? ''),
+				);
+			}
+		}
+
 		// SEO: per-page meta + LocalBusiness JSON-LD.
 		// Prefer admin-curated listing_seo_* columns when present,
 		// fall back to a trimmed description / generated string.
@@ -4174,6 +4200,22 @@ class User extends CI_Controller
 		// Load views
 		$this->load->view('header', $data);
 		$this->load->view('house_details', $data);
+		$this->load->view('footer');
+	}
+
+	/**
+	 * Public "advertise on Pearland411" landing page.
+	 * Form is now wired to /contact-submit (see views/post_your_ads.php)
+	 * — self-serve ad checkout is blocked on Authorize.Net.
+	 */
+	public function post_your_ads()
+	{
+		$data = array();
+		$this->loadHeaderCategories($data);
+		$data['title'] = 'Advertise on Pearland411';
+		$data['meta_description'] = 'Display ads on Pearland411 — homepage, listing, and category placements. Request pricing and inventory from our sales team.';
+		$this->load->view('header', $data);
+		$this->load->view('post_your_ads', $data);
 		$this->load->view('footer');
 	}
 
