@@ -217,8 +217,8 @@
 														<?php endif; ?>
 													</div>
 													<div class="ne-2">
-														<h5><?= $value->listing_name; ?></h5>
-														<p><?= ($value->display_address == 1) ? $value->listing_address : '[Adderss hidden]'; ?></p>
+														<h5><?= e($value->listing_name); ?></h5>
+														<p><?= ((int) ($value->display_address ?? 0) === 1 && !empty($value->listing_address)) ? e($value->listing_address) : '[Address hidden]'; ?></p>
 													</div>
 													<!--<div class="ne-3"> <span>5.0</span>-->
 													<!--</div>-->
@@ -522,12 +522,12 @@
 											<!---LISTING NAME--->
 											<div>
 												<h4>
-													<a href="<?= base_url('user/listing-details/' . $value->listing_slug); ?>"><?= $value->listing_name; ?></a>
+													<a href="<?= base_url('listing-details/' . rawurlencode((string) $value->listing_slug)); ?>"><?= e($value->listing_name); ?></a>
 													<i class="li-veri"><img src="<?= base_url('assets/images/icon/svg/verified.png'); ?>" alt=""></i>
 												</h4>
 
 												<?php if ($value->display_address == 1 && !empty($value->listing_address)): ?>
-													<span class="addr"><?= $value->listing_address; ?></span>
+													<span class="addr"><?= e($value->listing_address); ?></span>
 												<?php endif; ?>
 
 												<?php if ($value->display_phone == 1 && !empty($value->listing_mobile)): ?>

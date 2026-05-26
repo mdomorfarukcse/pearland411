@@ -296,7 +296,7 @@
                     <div class="quote-pop">
                         <?php if ($this->session->flashdata('message')) { ?>
                             <div class="log-suc">
-                                <p><?= $this->session->flashdata('message') ?></p>
+                                <p><?= e($this->session->flashdata('message')); ?></p>
                             </div>
                         <?php } ?>
                         <h3>Register Now</h3>

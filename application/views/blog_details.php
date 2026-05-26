@@ -235,7 +235,11 @@
 
 				<div class="img">
 
-					<img src="<?= base_url($blog->blog_image); ?>" alt="">
+					<?php if (!empty($blog->blog_image)): ?>
+						<?= responsive_img($blog->blog_image, $blog->blog_name) ?>
+					<?php else: ?>
+						<img src="<?= base_url('assets/images/no_image.png') ?>" alt="<?= e_attr($blog->blog_name) ?>" loading="lazy" decoding="async">
+					<?php endif; ?>
 
 				</div>
 
@@ -254,7 +258,7 @@
 						<?php if ($this->session->flashdata('message')) { ?>
 
 							<div class="log-suc">
-								<p><?= $this->session->flashdata('message') ?></p>
+								<p><?= e($this->session->flashdata('message')); ?></p>
 							</div>
 
 						<?php } ?>

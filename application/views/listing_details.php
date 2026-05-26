@@ -489,7 +489,7 @@
 
 										<?php if ($this->session->flashdata('review_success')): ?>
 											<div style="text-align:center;color: green;padding: 10px;background: #d4edda;border: 1px solid #c3e6cb;border-radius: 5px;margin: 10px 0;">
-												<?= $this->session->flashdata('review_success'); ?>
+												<?= e($this->session->flashdata('review_success')); ?>
 											</div>
 										<?php endif; ?>
 
@@ -686,13 +686,13 @@
 
 							<?php if ($this->session->flashdata('message')): ?>
 								<div class="alert alert-success" style="background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin: 10px 0;">
-									<?= $this->session->flashdata('message'); ?>
+									<?= e($this->session->flashdata('message')); ?>
 								</div>
 							<?php endif; ?>
 
 							<?php if ($this->session->flashdata('error_msg')): ?>
 								<div class="alert alert-danger" style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin: 10px 0;">
-									<?= $this->session->flashdata('error_msg'); ?>
+									<?= e($this->session->flashdata('error_msg')); ?>
 								</div>
 							<?php endif; ?>
 

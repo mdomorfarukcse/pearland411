@@ -205,7 +205,11 @@
         <div class="eve-deta-pg-main">
             <div class="lhs">
                 <div class="img">
-                    <img src="<?= base_url($news->news_image); ?>" alt="">
+                    <?php if (!empty($news->news_image)): ?>
+                        <?= responsive_img($news->news_image, $news->news_title) ?>
+                    <?php else: ?>
+                        <img src="<?= base_url('assets/images/no_image.png') ?>" alt="<?= e_attr($news->news_title) ?>" loading="lazy" decoding="async">
+                    <?php endif; ?>
                 </div>
 
             </div>
@@ -214,7 +218,7 @@
                     <div class="quote-pop">
                         <?php if ($this->session->flashdata('message')) { ?>
                             <div class="log-suc">
-                                <p><?= $this->session->flashdata('message') ?></p>
+                                <p><?= e($this->session->flashdata('message')); ?></p>
                             </div>
                         <?php } ?>
                         <h3>Get Quote</h3>
@@ -402,7 +406,11 @@
                             <li>
                                 <div class="pro-eve-box" style="border-radius: 10px;">
                                     <div>
-                                        <img src="<?= base_url($rel_news->news_image); ?>" alt="<?= htmlspecialchars($rel_news->news_title); ?>">
+                                        <?php if (!empty($rel_news->news_image)): ?>
+                                            <?= responsive_img($rel_news->news_image, $rel_news->news_title) ?>
+                                        <?php else: ?>
+                                            <img src="<?= base_url('assets/images/no_image.png') ?>" alt="<?= e_attr($rel_news->news_title) ?>" loading="lazy" decoding="async">
+                                        <?php endif; ?>
                                     </div>
                                     <div>
                                         <?php $date = date('d, M Y', strtotime($rel_news->created_at)); ?>
