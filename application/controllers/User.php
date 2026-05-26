@@ -161,13 +161,6 @@ class User extends CI_Controller
 	/*Home Page*/
 	public function index()
 	{
-		// Check if this is a listing-details request
-		$uri_string = $_SERVER['REQUEST_URI'];
-		if (preg_match('/\/listing-details\/([^\/]+)/', $uri_string, $matches)) {
-			$slug = $matches[1];
-			$this->listing_details_global($slug);
-			return;
-		}
 
 		// Initialize data array
 		$data = array();

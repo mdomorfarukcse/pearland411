@@ -5387,7 +5387,7 @@ class Admin extends CI_Controller
 	/**
 	 * Get subscription data for dashboard
 	 */
-	public function getSubscriptionDataForDashboard($user_id)
+	private function getSubscriptionDataForDashboard($user_id)
 	{
 		$data = array();
 		$data['subscription_stats'] = $this->adminmodel->getUserStats($user_id);
