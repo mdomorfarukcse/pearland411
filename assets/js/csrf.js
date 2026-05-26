@@ -1,14 +1,12 @@
 /**
  * Reads the CSRF token from the <meta name="csrf-token"> tag injected
  * by application/hooks/Csrf_inject.php and attaches it to every
- * non-GET jQuery AJAX request as a POST/header parameter.
+ * non-GET request — both jQuery $.ajax and native fetch().
  *
- * After each response, if the server rotated the token it will appear
- * in a new <meta name="csrf-token"> — we re-read on each ajaxSuccess
- * to stay in sync.
- *
- * Plain `fetch()` callers should read the token from the meta tag and
- * include it in their request body / X-CSRF-TOKEN header.
+ * Without this shim, native fetch() callers (the homepage newsletter
+ * widget, anything written with modern JS) would silently 403 on every
+ * POST because CodeIgniter's CSRF check fires before the controller
+ * sees the request.
  */
 (function () {
     function readToken() {
@@ -20,35 +18,64 @@
         };
     }
 
-    if (typeof window.jQuery === 'undefined') {
-        return;
+    /* ---------- jQuery AJAX ---------- */
+    if (typeof window.jQuery !== 'undefined') {
+        var $ = window.jQuery;
+        $.ajaxPrefilter(function (options, original, xhr) {
+            var t = readToken();
+            if (!t.name || !t.value) return;
+            var method = (options.type || options.method || 'GET').toUpperCase();
+            if (method === 'GET' || method === 'HEAD') return;
+            xhr.setRequestHeader('X-CSRF-TOKEN', t.value);
+
+            if (typeof options.data === 'string') {
+                options.data += (options.data.length ? '&' : '')
+                    + encodeURIComponent(t.name) + '=' + encodeURIComponent(t.value);
+            } else if (options.data && typeof options.data === 'object' && !(options.data instanceof FormData)) {
+                options.data[t.name] = t.value;
+            } else if (options.data instanceof FormData) {
+                options.data.append(t.name, t.value);
+            }
+        });
     }
 
-    var $ = window.jQuery;
-
-    $.ajaxPrefilter(function (options, original, xhr) {
-        var t = readToken();
-        if (!t.name || !t.value) {
-            return;
-        }
-        var method = (options.type || options.method || 'GET').toUpperCase();
-        if (method === 'GET' || method === 'HEAD') {
-            return;
-        }
-        xhr.setRequestHeader('X-CSRF-TOKEN', t.value);
-
-        // Also append to form-encoded payloads (CI3 reads the token from
-        // POST/COOKIE, not from headers).
-        if (typeof options.data === 'string') {
-            if (options.data.length) {
-                options.data += '&' + encodeURIComponent(t.name) + '=' + encodeURIComponent(t.value);
-            } else {
-                options.data = encodeURIComponent(t.name) + '=' + encodeURIComponent(t.value);
+    /* ---------- window.fetch ---------- */
+    if (typeof window.fetch === 'function') {
+        var origFetch = window.fetch.bind(window);
+        window.fetch = function (resource, init) {
+            init = init || {};
+            var method = (init.method || (resource && resource.method) || 'GET').toUpperCase();
+            if (method === 'GET' || method === 'HEAD') {
+                return origFetch(resource, init);
             }
-        } else if (options.data && typeof options.data === 'object' && !(options.data instanceof FormData)) {
-            options.data[t.name] = t.value;
-        } else if (options.data instanceof FormData) {
-            options.data.append(t.name, t.value);
-        }
-    });
+            var t = readToken();
+            if (!t.name || !t.value) {
+                return origFetch(resource, init);
+            }
+
+            // Add X-CSRF-TOKEN header (some apps read it server-side).
+            var headers = new Headers(init.headers || {});
+            if (!headers.has('X-CSRF-TOKEN')) headers.set('X-CSRF-TOKEN', t.value);
+            init.headers = headers;
+
+            // CI3 reads the token from $_POST / cookie, so append to body
+            // when we recognise the body type.
+            var body = init.body;
+            if (body instanceof FormData) {
+                if (!body.has(t.name)) body.append(t.name, t.value);
+            } else if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+                if (!body.has(t.name)) body.append(t.name, t.value);
+            } else if (typeof body === 'string') {
+                var sep = body.length ? '&' : '';
+                init.body = body + sep + encodeURIComponent(t.name) + '=' + encodeURIComponent(t.value);
+            } else if (body == null) {
+                var fd = new FormData();
+                fd.append(t.name, t.value);
+                init.body = fd;
+            }
+            // JSON / Blob / ArrayBuffer bodies: callers must include the
+            // token themselves; we still send the header above.
+            return origFetch(resource, init);
+        };
+    }
 })();

@@ -3380,7 +3380,8 @@ Database Tables Required:
             <div class="widget hide_on_phone">
               <h3 class="widget-title">Subscribe for Local Deals</h3>
               <p>Get the best local deals, new openings, and events in Pearland — direct to your inbox.</p>
-              <form id="newsletterForm" class="newsletter-form">
+              <form id="newsletterForm" class="newsletter-form" method="post" action="<?= base_url('user/subscribe_newsletter') ?>">
+                <label for="newsletterEmail" style="position:absolute;left:-9999px;">Email</label>
                 <input type="email" id="newsletterEmail" name="email" class="newsletter-input" placeholder="Your email address" required>
                 <button type="submit" id="newsletterSubmit" class="newsletter-btn">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"

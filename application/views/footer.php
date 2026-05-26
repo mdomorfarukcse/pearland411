@@ -5,52 +5,43 @@
 			<h3>What service do you need? <span>Pearland will help you</span></h3>
 		</div>
 		<div class="hom-col-req">
-			<div id="home_slide_enq_success" class="log" style="display: none;">
-				<p>Your Enquiry Is Submitted Successfully!!!</p>
-			</div>
-			<div id="home_slide_enq_fail" class="log" style="display: none;">
-				<p>Something Went Wrong!!!</p>
-			</div>
-			<div id="home_slide_enq_same" class="log" style="display: none;">
-				<p>You cannot make enquiry on your own listing</p>
-			</div>
-			<form name="home_slide_enquiry_form" id="home_slide_enquiry_form" method="post" enctype="multipart/form-data">
-				<input type="hidden" class="form-control" name="listing_id" value="0" placeholder="" required>
-				<input type="hidden" class="form-control" name="listing_user_id" value="0" placeholder="" required>
-				<input type="hidden" class="form-control" name="enquiry_sender_id" value="" placeholder="" required>
-				<input type="hidden" class="form-control" name="enquiry_source" value="Website" placeholder="" required>
+			<?php $__hs = $this->session->flashdata('contact_success'); if (!empty($__hs)): ?>
+				<div class="log"><p><?= e($__hs) ?></p></div>
+			<?php endif; ?>
+			<?php $__he = $this->session->flashdata('contact_error'); if (!empty($__he)): ?>
+				<div class="alert alert-danger"><p><?= e($__he) ?></p></div>
+			<?php endif; ?>
+
+			<form name="home_slide_enquiry_form" id="home_slide_enquiry_form"
+				  method="post" action="<?= base_url('contact-submit') ?>">
+				<input type="hidden" name="subject" value="Help &amp; Support slide-out">
+
 				<div class="form-group">
-					<input type="text" name="enquiry_name" value="" required="required" class="form-control" placeholder="Enter name*">
+					<label for="hs_name" style="position:absolute;left:-9999px;">Your name</label>
+					<input id="hs_name" type="text" name="fullName" required class="form-control" placeholder="Enter name*">
 				</div>
 				<div class="form-group">
-					<input type="email" class="form-control" placeholder="Enter email*" required="required" value="" name="enquiry_email" pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$" title="Invalid email address">
+					<label for="hs_email" style="position:absolute;left:-9999px;">Email</label>
+					<input id="hs_email" type="email" name="email" required class="form-control"
+						   placeholder="Enter email*"
+						   pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$"
+						   title="Invalid email address">
 				</div>
 				<div class="form-group">
-					<input type="text" class="form-control" value="" name="enquiry_mobile" placeholder="Enter mobile number *" pattern="[0-9+()\- ]{7,20}" title="Enter a phone number (7–20 characters, digits/+/()/-/space allowed)" required="">
+					<label for="hs_phone" style="position:absolute;left:-9999px;">Phone</label>
+					<input id="hs_phone" type="tel" name="phone" class="form-control"
+						   placeholder="Enter mobile number *"
+						   pattern="[0-9+()\- ]{7,20}"
+						   title="Enter a phone number (7–20 characters, digits/+/()/-/space allowed)" required>
 				</div>
 				<div class="form-group">
-					<select name="enquiry_category" id="enquiry_category" class="form-control">
-						<option value="">Select Category</option>
-						<option value="19">Wedding halls</option>
-						<option value="18">Hotel & Food</option>
-						<option value="17">Pet shop</option>
-						<option value="16">Digital Products</option>
-						<option value="15">Spa and Facial</option>
-						<option value="10">Real Estate</option>
-						<option value="8">Sports</option>
-						<option value="7">Education</option>
-						<option value="6">Electricals</option>
-						<option value="5">Automobiles</option>
-						<option value="3">Transportation</option>
-						<option value="2">Hospitals</option>
-						<option value="1">Hotels And Resorts</option>
-					</select>
+					<label for="hs_msg" style="position:absolute;left:-9999px;">Message</label>
+					<textarea id="hs_msg" class="form-control" rows="3" name="message" required
+							  placeholder="Enter your query or message"></textarea>
 				</div>
-				<div class="form-group">
-					<textarea class="form-control" rows="3" name="enquiry_message" placeholder="Enter your query or message"></textarea>
-				</div>
-				<input type="hidden" id="source">
-				<button type="submit" id="home_slide_enquiry_submit" name="home_slide_enquiry_submit" class="btn btn-primary">Submit Requirements</button>
+				<button type="submit" id="home_slide_enquiry_submit" class="btn btn-primary">
+					Submit Requirements
+				</button>
 			</form>
 		</div>
 	</div>

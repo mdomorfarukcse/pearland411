@@ -225,12 +225,88 @@ class User extends CI_Controller
 	// CONTACT Page (static, with header/footer)
 	public function contact_us()
 	{
-		$this->load->model('usermodel');
 		$data = array();
 		$data['title'] = 'Contact Us';
+		$this->loadHeaderCategories($data);
 		$this->load->view('header', $data);
-		$this->load->view('contact-us');
+		$this->load->view('contact-us', $data);
 		$this->load->view('footer');
+	}
+
+	/**
+	 * Handle the /contact-us form submission.
+	 *
+	 * The previous view had a JS handler that just alert()'d "thanks"
+	 * and discarded the data — every contact message ever sent was
+	 * silently lost. This action validates, persists into `enquiries`,
+	 * notifies the admin address, acknowledges to the sender, and
+	 * redirects back to /contact-us with a flash.
+	 */
+	public function contact_submit()
+	{
+		if ($this->input->method() !== 'post') {
+			redirect('contact-us');
+			return;
+		}
+
+		if (!$this->rate_limit->check_ip('contact_submit', 6, 3600)) {
+			$this->rate_limit->reject(3600);
+			return;
+		}
+
+		$this->form_validation->set_rules('fullName', 'Name',  'trim|required|min_length[2]');
+		$this->form_validation->set_rules('email',    'Email', 'trim|required|valid_email');
+		$this->form_validation->set_rules('message',  'Message', 'trim|required|min_length[10]');
+
+		if (!$this->form_validation->run()) {
+			$this->session->set_flashdata('contact_error',
+				strip_tags(validation_errors()) ?: 'Please complete the required fields.');
+			redirect('contact-us');
+			return;
+		}
+
+		$name    = (string) $this->input->post('fullName');
+		$email   = (string) $this->input->post('email');
+		$phone   = (string) $this->input->post('phone');
+		$subject = (string) $this->input->post('subject');
+		$message = (string) $this->input->post('message');
+
+		$this->db->insert('enquiries', array(
+			'enquiry_name'       => $name,
+			'enquiry_email'      => $email,
+			'enquiry_mobile'     => $phone,
+			'enquiry_message'    => ($subject !== '' ? '[' . $subject . '] ' : '') . $message,
+			'enquiry_source'     => 'Contact Us',
+			'enquiry_type'       => 'contact',
+			'enquiry_save'       => 0,
+			'enquiry_created_at' => date('Y-m-d H:i:s'),
+		));
+
+		$this->load->library('mailer');
+
+		// Acknowledge to the sender.
+		$ack = '<p>Thanks — we received your message and will get back to you shortly.</p>'
+			. '<p>For reference, you sent:</p>'
+			. '<blockquote>' . nl2br(html_escape($message)) . '</blockquote>';
+		$this->mailer->send($email, 'We received your message', $ack);
+
+		// Notify the admin address.
+		$admin_to = env('MAIL_FROM_ADDRESS', '');
+		if ($admin_to) {
+			$alert = '<p>New contact-form submission:</p>'
+				. '<ul>'
+				. '<li>Name: '    . html_escape($name)    . '</li>'
+				. '<li>Email: '   . html_escape($email)   . '</li>'
+				. '<li>Phone: '   . html_escape($phone)   . '</li>'
+				. '<li>Subject: ' . html_escape($subject) . '</li>'
+				. '</ul>'
+				. '<p>Message:</p><blockquote>' . nl2br(html_escape($message)) . '</blockquote>';
+			$this->mailer->send($admin_to, '[Pearland411] Contact-Us message from ' . $name, $alert);
+		}
+
+		$this->session->set_flashdata('contact_success',
+			'Thanks! We received your message and will be in touch soon.');
+		redirect('contact-us');
 	}
 
 

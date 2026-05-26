@@ -1,11 +1,17 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Contact Us - Pearland411</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css">
+<?php
+/**
+ * /contact-us — public contact form.
+ *
+ * Rendered between the public header.php + footer.php (which already
+ * emit <html>/<head>/<body>) — this view is therefore a FRAGMENT,
+ * not a standalone document.
+ *
+ * The form posts to /contact-submit (User::contact_submit) which
+ * persists into `enquiries`, emails the admin address, and
+ * acknowledges to the sender.
+ */
+?>
+<style>
     <style>
         .p411-contact-page * {
             box-sizing: border-box;
@@ -17,7 +23,7 @@
         }
 
         .p411-contact-page .p411-banner {
-            background: linear-gradient(135deg, rgba(24, 15, 94, 0.95), rgba(24, 15, 94, 0.85)), url('./assets/images/pearland-contact.jpg');
+            background: linear-gradient(135deg, rgba(24, 15, 94, 0.95), rgba(24, 15, 94, 0.85)), url('<?= base_url('assets/images/pearland-contact.jpg') ?>');
             background-size: cover;
             background-position: center;
             padding: 80px 0;
@@ -264,10 +270,9 @@
             }
         }
     </style>
-</head>
+</style>
 
-<body>
-    <div class="p411-contact-page">
+<div class="p411-contact-page">
         <!-- Banner Section -->
         <section class="p411-banner">
             <div class="container">
@@ -343,26 +348,34 @@
                         <div class="p411-form-container">
                             <h2>Send Us a Message</h2>
                             <p>Fill out the form below and we'll get back to you as soon as possible.</p>
-                            <form id="p411ContactForm">
+
+                            <?php $__cs = $this->session->flashdata('contact_success'); if (!empty($__cs)): ?>
+                                <div class="alert alert-success" role="alert"><?= e($__cs) ?></div>
+                            <?php endif; ?>
+                            <?php $__ce = $this->session->flashdata('contact_error'); if (!empty($__ce)): ?>
+                                <div class="alert alert-danger" role="alert"><?= e($__ce) ?></div>
+                            <?php endif; ?>
+
+                            <form id="p411ContactForm" method="post" action="<?= base_url('contact-submit') ?>">
                                 <div class="p411-form-group">
-                                    <label>Full Name <span class="p411-required">*</span></label>
-                                    <input type="text" class="p411-form-control" name="fullName" required>
+                                    <label for="p411_full_name">Full Name <span class="p411-required">*</span></label>
+                                    <input id="p411_full_name" type="text" class="p411-form-control" name="fullName" required>
                                 </div>
                                 <div class="p411-form-group">
-                                    <label>Email Address <span class="p411-required">*</span></label>
-                                    <input type="email" class="p411-form-control" name="email" required>
+                                    <label for="p411_email">Email Address <span class="p411-required">*</span></label>
+                                    <input id="p411_email" type="email" class="p411-form-control" name="email" required>
                                 </div>
                                 <div class="p411-form-group">
-                                    <label>Phone Number</label>
-                                    <input type="tel" class="p411-form-control" name="phone">
+                                    <label for="p411_phone">Phone Number</label>
+                                    <input id="p411_phone" type="tel" class="p411-form-control" name="phone">
                                 </div>
                                 <div class="p411-form-group">
-                                    <label>Subject <span class="p411-required">*</span></label>
-                                    <input type="text" class="p411-form-control" name="subject" required>
+                                    <label for="p411_subject">Subject <span class="p411-required">*</span></label>
+                                    <input id="p411_subject" type="text" class="p411-form-control" name="subject" required>
                                 </div>
                                 <div class="p411-form-group">
-                                    <label>Message <span class="p411-required">*</span></label>
-                                    <textarea class="p411-form-control p411-textarea" name="message" required></textarea>
+                                    <label for="p411_message">Message <span class="p411-required">*</span></label>
+                                    <textarea id="p411_message" class="p411-form-control p411-textarea" name="message" required></textarea>
                                 </div>
                                 <button type="submit" class="p411-submit-btn">Send Message</button>
                             </form>
@@ -371,42 +384,4 @@
                 </div>
             </div>
         </section>
-
-        <!-- Map Section -->
-        <section class="p411-map-section">
-            <iframe
-                class="p411-map-container"
-                width="100%"
-                height="400"
-                style="border:0;"
-                loading="lazy"
-                allowfullscreen
-                src="https://maps.google.com/maps?q=Pearland%2C%20TX%2C%20USA&z=19&output=embed">
-            </iframe>
-
-        </section>
-
-        <!-- Final Note Section -->
-        <section class="p411-final-note">
-            <div class="container">
-                <h3>We Value Your Time and Feedback</h3>
-                <p>Whether you're a business owner seeking listing support or a visitor exploring local services,</p>
-                <p>the Pearland411 team is here to assist you every step of the way.</p>
-                <p class="p411-accent">📩 Let's build a stronger Pearland — together!</p>
-            </div>
-        </section>
-    </div>
-
-    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script>
-    <script>
-        document.getElementById('p411ContactForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            alert('Thank you for contacting us! We will get back to you soon.');
-            this.reset();
-        });
-    </script>
-</body>
-
-</html>
+</div>
