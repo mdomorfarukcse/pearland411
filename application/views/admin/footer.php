@@ -25,12 +25,18 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 	$(document).ready(function() {
-		$('select').select2({
+		// Skip selects that opt out (admin-table toolbar uses its own dropdowns).
+		$('select:not(.admin-table-size):not(.no-select2)').select2({
 			width: '100%',
-			minimumResultsForSearch: 0 // always show search box
+			minimumResultsForSearch: 0
 		});
 	});
 </script>
+
+<!-- Universal admin-table enhancer — search, page-size, prev/next.
+     Wires automatically to every <table data-admin-table>, plus any
+     <table> following the legacy #pg-sear input. -->
+<script src="<?= base_url('assets/admin/js/admin-table.js') ?>"></script>
 
 <!-- CKEditor 4 — only initialised on textareas with class="js-ckeditor" -->
 <script src="https://cdn.ckeditor.com/4.16.1/standard/ckeditor.js"></script>
