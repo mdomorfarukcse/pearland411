@@ -17,7 +17,7 @@
               <p><?= $this->session->flashdata('message') ?></p>
             </div>
           <?php } ?>
-          <table class="responsive-table bordered" id="pg-resu">
+          <table data-admin-table class="responsive-table bordered" id="pg-resu">
             <thead>
               <tr>
                 <th>No</th>
@@ -26,9 +26,7 @@
                 <th>Created by</th>
                 <th>Views</th>
                 <th>Status</th>
-                <th>Edit</th>
-                <th>Delete</th>
-                <th>Preview</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -67,13 +65,12 @@
                       <input type="hidden" id="id" value="<?= $rental->rental_id; ?>">
                     </td>
 
-                    <td>
-                      <a href="<?= base_url('admin/edit-rental/' . $rental->rental_slug); ?>" class="db-list-edit">Edit</a>
-                    </td>
-                    <td>
-                      <a href="#" onclick="javascript:deleteConfirm('<?php echo base_url() . 'admin/delete-rental/' . $rental->rental_slug; ?>');" class="db-list-edit">Delete</a>
-                    </td>
-                    <td><a href="<?= base_url('admin/rental-details/' . $rental->rental_slug); ?>" class="db-list-edit" target="_blank">Preview</a></td>
+                    <td><?= admin_actions(array(
+                      'view'   => base_url('rental-details/' . rawurlencode((string) $rental->rental_slug)),
+                      'edit'   => base_url('admin/edit-rental/' . rawurlencode((string) $rental->rental_slug)),
+                      'delete' => base_url('admin/delete-rental/' . rawurlencode((string) $rental->rental_slug)),
+                      'delete_confirm' => 'Delete this rental?',
+                    ), 'rental') ?></td>
                   </tr>
                 <?php
                   $i++;

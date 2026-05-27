@@ -16,7 +16,7 @@
 					<h2>Services</h2>
 					<a href="<?= base_url('admin/services/add') ?>" class="db-tit-btn">Add new service</a>
 
-					<table class="responsive-table bordered">
+					<table data-admin-table class="responsive-table bordered">
 						<thead>
 							<tr>
 								<th>#</th>
@@ -49,13 +49,12 @@
 									<td>
 										<?= ((int) $s->is_active === 1) ? '<span style="color:green;">Yes</span>' : '<span style="color:#999;">No</span>' ?>
 									</td>
-									<td>
-										<a href="<?= base_url('services/' . rawurlencode($s->slug)) ?>" target="_blank">View</a> |
-										<a href="<?= base_url('admin/services/edit/' . (int) $s->service_id) ?>">Edit</a> |
-										<a href="<?= base_url('admin/services/delete/' . (int) $s->service_id) ?>"
-										   onclick="return confirm('Delete this service?');"
-										   style="color:#c00;">Delete</a>
-									</td>
+									<td><?= admin_actions(array(
+										'view'   => base_url('services/' . rawurlencode($s->slug)),
+										'edit'   => base_url('admin/services/edit/' . (int) $s->service_id),
+										'delete' => base_url('admin/services/delete/' . (int) $s->service_id),
+										'delete_confirm' => 'Delete this service?',
+									), 'service') ?></td>
 								</tr>
 							<?php endforeach; endif; ?>
 						</tbody>

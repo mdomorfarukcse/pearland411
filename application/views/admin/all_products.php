@@ -29,7 +29,7 @@
 
 					<a href="<?= base_url('admin/add-product'); ?>" class="db-tit-btn">Add new product</a>
 
-					<table class="responsive-table bordered" id="pg-resu">
+					<table data-admin-table class="responsive-table bordered" id="pg-resu">
 
 						<thead>
 
@@ -47,11 +47,7 @@
 
 								<th>Views</th>
 
-								<th>Edit</th>
-
-								<th>Delete</th>
-
-								<th>Preview</th>
+								<th>Actions</th>
 
 							</tr>
 
@@ -112,27 +108,14 @@
 
 										<?php $p_views = (isset($views_counts) && isset($views_counts[$product->product_id])) ? $views_counts[$product->product_id] : 0; ?>
 										<td><span class="db-list-rat"><?= $p_views; ?></span></td>
-										<td>
-											<a href="<?= base_url('admin/edit-products/' . $product->product_id); ?>" class="db-list-edit"> Edit
-
-											</a>
-											<input type="hidden" name="product_id" value="<?php echo $product->product_id; ?>">
-										</td>
-
-										<td>
-											<a href="#"
-												onclick="javascript:deleteConfirm('<?php echo base_url('admin/delete_product/' . $product->product_id); ?>');"
-												class="db-list-edit">Delete</a>
-
-										</td>
-
-										<td>
-
-											<a href="<?= base_url('admin/product-details/' . $product->product_id); ?>" class="db-list-edit" target="_blank">
-												Preview
-											</a>
-
-										</td>
+										<td><?= admin_actions(array(
+											'view'   => !empty($product->product_slug)
+												? base_url('products-details/' . rawurlencode((string) $product->product_slug))
+												: base_url('admin/product-details/' . (int) $product->product_id),
+											'edit'   => base_url('admin/edit-products/' . (int) $product->product_id),
+											'delete' => base_url('admin/delete_product/' . (int) $product->product_id),
+											'delete_confirm' => 'Delete this product?',
+										), 'product') ?></td>
 
 									</tr>
 

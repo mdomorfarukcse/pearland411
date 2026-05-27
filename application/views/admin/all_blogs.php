@@ -17,7 +17,7 @@
               <p><?= $this->session->flashdata('message') ?></p>
             </div>
           <?php } ?>
-          <table class="responsive-table bordered" id="pg-resu">
+          <table data-admin-table class="responsive-table bordered" id="pg-resu">
             <thead>
               <tr>
                 <th>No</th>
@@ -25,9 +25,7 @@
                 <th>Created by</th>
                 <th>Views</th>
                 <th>Status</th>
-                <th>Edit</th>
-                <th>Delete</th>
-                <th>Preview</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -63,13 +61,12 @@
                       <input type="hidden" id="id" value="<?= $blog->blog_id; ?>">
                     </td>
 
-                    <td>
-                      <a href="<?= base_url('admin/edit-blog/' . $blog->blog_slug); ?>" class="db-list-edit">Edit</a>
-                    </td>
-                    <td>
-                      <a href="#" onclick="javascript:deleteConfirm('<?php echo base_url() . 'admin/delete-blog/' . $blog->blog_slug; ?>');" class="db-list-edit">Delete</a>
-                    </td>
-                    <td><a href="<?= base_url('admin/blog-details/' . $blog->blog_slug); ?>" class="db-list-edit" target="_blank">Preview</a></td>
+                    <td><?= admin_actions(array(
+                      'view'   => base_url('blogs-details/' . rawurlencode((string) $blog->blog_slug)),
+                      'edit'   => base_url('admin/edit-blog/' . rawurlencode((string) $blog->blog_slug)),
+                      'delete' => base_url('admin/delete-blog/' . rawurlencode((string) $blog->blog_slug)),
+                      'delete_confirm' => 'Delete this blog post?',
+                    ), 'blog') ?></td>
                   </tr>
                 <?php
                   $i++;

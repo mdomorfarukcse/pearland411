@@ -18,7 +18,7 @@
 					</p>
 					<a href="<?= base_url('admin/campaigns/new') ?>" class="db-tit-btn">Compose new campaign</a>
 
-					<table class="responsive-table bordered">
+					<table data-admin-table class="responsive-table bordered">
 						<thead>
 							<tr>
 								<th>#</th>
@@ -28,7 +28,7 @@
 								<th>Sent</th>
 								<th>Failed</th>
 								<th>Created</th>
-								<th></th>
+								<th>Actions</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -43,9 +43,14 @@
 									<td><?= (int) $c->sent_count ?></td>
 									<td><?= (int) $c->failed_count ?></td>
 									<td><?= e(date('Y-m-d H:i', strtotime($c->created_at))) ?></td>
-									<td>
-										<a href="<?= base_url('admin/campaigns/view/' . (int) $c->campaign_id) ?>">Open</a>
-									</td>
+									<td><?= admin_actions(array(
+										'view'   => base_url('admin/campaigns/view/' . (int) $c->campaign_id),
+										'edit'   => ($c->status === 'draft')
+											? base_url('admin/campaigns/edit/' . (int) $c->campaign_id)
+											: null,
+										'delete' => base_url('admin/campaigns/delete/' . (int) $c->campaign_id),
+										'delete_confirm' => 'Delete this campaign and all its send-log rows?',
+									), 'campaign') ?></td>
 								</tr>
 							<?php endforeach; endif; ?>
 						</tbody>

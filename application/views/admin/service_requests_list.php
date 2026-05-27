@@ -21,7 +21,7 @@
 						<?php endforeach; ?>
 					</div>
 
-					<table class="responsive-table bordered">
+					<table data-admin-table class="responsive-table bordered">
 						<thead>
 							<tr>
 								<th>#</th>
@@ -32,7 +32,7 @@
 								<th>Phone</th>
 								<th>Budget</th>
 								<th>Status</th>
-								<th></th>
+								<th>Actions</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -48,9 +48,12 @@
 									<td><?= e($r->phone) ?></td>
 									<td><?= e($r->budget_range) ?></td>
 									<td><?= e(str_replace('_', ' ', $r->status)) ?></td>
-									<td>
-										<a href="<?= base_url('admin/service-requests/' . (int) $r->request_id) ?>">Open</a>
-									</td>
+									<td><?= admin_actions(array(
+										'view'   => base_url('admin/service-requests/' . (int) $r->request_id),
+										'edit'   => base_url('admin/service-requests/' . (int) $r->request_id),
+										'delete' => base_url('admin/service-requests/delete/' . (int) $r->request_id),
+										'delete_confirm' => 'Delete this service request?',
+									), 'request') ?></td>
 								</tr>
 							<?php endforeach; endif; ?>
 						</tbody>

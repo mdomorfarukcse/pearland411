@@ -16,7 +16,7 @@
 					<h2>Sub-Admins</h2>
 					<a href="<?= base_url('admin/sub-admins/new') ?>" class="db-tit-btn">Add new sub-admin</a>
 
-					<table class="responsive-table bordered">
+					<table data-admin-table class="responsive-table bordered">
 						<thead>
 							<tr>
 								<th>#</th>
@@ -25,7 +25,7 @@
 								<th>Role</th>
 								<th>Active</th>
 								<th>Created</th>
-								<th></th>
+								<th>Actions</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -44,14 +44,11 @@
 									<td><?= e($a->role ?? 'editor') ?></td>
 									<td><?= ((int) ($a->is_active ?? 1) === 1) ? '<span style="color:green;">Yes</span>' : '<span style="color:#999;">No</span>' ?></td>
 									<td><?= e(date('Y-m-d', strtotime($a->admin_created))) ?></td>
-									<td>
-										<a href="<?= base_url('admin/sub-admins/edit/' . (int) $a->admin_id) ?>">Edit</a>
-										<?php if (!$is_self): ?>
-											| <a href="<?= base_url('admin/sub-admins/delete/' . (int) $a->admin_id) ?>"
-												onclick="return confirm('Delete this sub-admin?');"
-												style="color:#c00;">Delete</a>
-										<?php endif; ?>
-									</td>
+									<td><?= admin_actions(array(
+										'edit'   => base_url('admin/sub-admins/edit/' . (int) $a->admin_id),
+										'delete' => $is_self ? null : base_url('admin/sub-admins/delete/' . (int) $a->admin_id),
+										'delete_confirm' => 'Delete this sub-admin?',
+									), 'sub-admin') ?></td>
 								</tr>
 							<?php endforeach; ?>
 						</tbody>
