@@ -193,13 +193,7 @@
 
 							<th>Status</th>
 
-							<th>Edit</th>
-
-							<!--<th>-->
-
-							<!--</th>-->
-
-							<th>Preview</th>
+							<th>Actions</th>
 
 						</tr>
 
@@ -249,21 +243,11 @@
 
 									</td>
 
-									<td><a href="<?= base_url('user/edit-listing/' . $value->listing_slug); ?>" class="db-list-edit">Edit</a>
-
+									<td><?= admin_actions(array(
+										'view' => base_url('listing-details/' . rawurlencode((string) $value->listing_slug)),
+										'edit' => base_url('user/edit-listing/' . rawurlencode((string) $value->listing_slug)),
+									), 'listing') ?>
 									</td>
-
-									<!--									<td><a href="promote-business.html?code=-->
-
-									<!--&&type=listing" class="db-list-edit">-->
-
-									<!--</a></td>-->
-
-									<td><a href="<?= base_url('listing-details/' . $value->listing_slug); ?>" class="db-list-edit" target="_blank">Preview</a>
-
-									</td>
-
-									<!-- 'user/listing-preview/'.$value->listing_id -->
 
 								</tr>
 

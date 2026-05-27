@@ -6,7 +6,7 @@
         <div class="log-bor">&nbsp;</div>
         <span class="steps">Ad details</span>
         <div class="ad-table-inn ud-cen-s2">
-          <table class="responsive-table bordered">
+          <table data-admin-table class="responsive-table bordered">
             <thead>
               <tr>
                 <th>No</th>

@@ -17,7 +17,7 @@
           </div>
 
           <a href="<?= base_url() ?>admin/add-video-category" class="db-tit-btn">Add video Category</a>
-          <table class="responsive-table bordered" id="pg-resu">
+          <table data-admin-table class="responsive-table bordered" id="pg-resu">
             <thead>
               <tr>
                 <th>No</th>

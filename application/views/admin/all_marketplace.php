@@ -15,7 +15,7 @@
           <?php if($this->session->flashdata('message')){ ?>
             <div class="log-suc" ><p><?= $this->session->flashdata('message') ?></p></div>
           <?php } ?>  
-          <table class="responsive-table bordered" id="pg-resu">
+          <table data-admin-table class="responsive-table bordered" id="pg-resu">
            <thead>
             <tr>
              <th>No</th>

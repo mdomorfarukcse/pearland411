@@ -8,7 +8,7 @@
 	<div class="ud-cen-s2">
 		<h2>Product Details</h2>
 		<a href="<?= base_url('user/add-product');?>" class="db-tit-btn">Add new Product</a>
-		<table class="responsive-table bordered">
+		<table data-admin-table class="responsive-table bordered">
 			<thead>
 				<tr>
 					<th>No</th>

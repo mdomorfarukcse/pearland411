@@ -15,7 +15,7 @@
           <div class="ad-int-sear">
             <input type="text" id="pg-sear" placeholder="Search this page..">
           </div>
-          <table class="responsive-table bordered" id="pg-resu">
+          <table data-admin-table class="responsive-table bordered" id="pg-resu">
            <thead>
             <tr>
              <th>No</th>

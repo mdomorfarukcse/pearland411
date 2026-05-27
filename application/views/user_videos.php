@@ -152,7 +152,7 @@
           </div> <!-- Close container div -->
 
           <?php if ($has_subscription): ?>
-            <table class="responsive-table bordered" id="pg-resu">
+            <table data-admin-table class="responsive-table bordered" id="pg-resu">
               <thead>
                 <tr>
                   <th>No</th>
@@ -161,8 +161,7 @@
                   <th>Created by</th>
                   <th>Views</th>
                   <th>Status</th>
-                  <th>Edit</th>
-                  <th>Preview</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="videosTableBody">
@@ -191,10 +190,10 @@
                         </span>
                       </td>
 
-                      <td>
-                        <a href="<?= base_url('user/edit-video/' . $video->video_slug); ?>" class="db-list-edit">Edit</a>
-                      </td>
-                      <td><a href="<?= base_url('video_details/' . $video->video_slug); ?>" class="db-list-edit" target="_blank">Preview</a></td>
+                      <td><?= admin_actions(array(
+                          'view' => base_url('video_details/' . rawurlencode((string) $video->video_slug)),
+                          'edit' => base_url('user/edit-video/' . rawurlencode((string) $video->video_slug)),
+                      ), 'video') ?></td>
                     </tr>
                   <?php
                     $i++;

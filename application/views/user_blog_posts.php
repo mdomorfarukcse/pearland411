@@ -144,16 +144,14 @@
 		<!-- End Subscription Details -->
 
 		<?php if ($has_subscription): ?>
-			<table class="responsive-table bordered">
+			<table data-admin-table class="responsive-table bordered">
 				<thead>
 					<tr>
 						<th>No</th>
 						<th>Post Name</th>
 						<th>Status</th>
 						<th>Views</th>
-						<th>Edit</th>
-						<!--<th>Delete</th>-->
-						<th>Preview</th>
+						<th>Actions</th>
 					</tr>
 				</thead>
 				<tbody id="blogsTableBody">
@@ -177,12 +175,10 @@
 								</td>
 								<td><span class="db-list-rat"><?= isset($blog->views) ? (int)$blog->views : 0 ?></span>
 								</td>
-								<td><a href="<?= base_url('user/edit_blog/' . $blog->blog_slug); ?>" class="db-list-edit">Edit</a>
-								</td>
-								<!--<td><a href="#" class="db-list-edit" onclick="javascript:deleteConfirm('<?php echo base_url() . 'user/delete-blog/' . $blog->blog_slug; ?>');" class="db-list-edit">Delete</a>
-							</td>-->
-								<td><a href="<?= base_url('user/blog_details/' . $blog->blog_slug); ?>" class="db-list-edit" target="_blank">Preview</a>
-								</td>
+								<td><?= admin_actions(array(
+									'view' => base_url('blogs-details/' . rawurlencode((string) $blog->blog_slug)),
+									'edit' => base_url('user/edit_blog/' . rawurlencode((string) $blog->blog_slug)),
+								), 'blog') ?></td>
 							</tr>
 							<?php
 							$i++;

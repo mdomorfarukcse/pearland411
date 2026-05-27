@@ -28,7 +28,7 @@
 
           <a href="<?= base_url() ?>admin/add_new_product_sub_category" class="db-tit-btn">Add new product sub category</a>
 
-          <table class="responsive-table bordered" id="pg-resu">
+          <table data-admin-table class="responsive-table bordered" id="pg-resu">
 
             <thead>
 
