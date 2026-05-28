@@ -17,7 +17,7 @@
               <p><?= $this->session->flashdata('message') ?></p>
             </div>
           <?php } ?>
-          <table class="responsive-table bordered" id="pg-resu">
+          <table data-admin-table class="responsive-table bordered" id="pg-resu">
             <thead>
               <tr>
                 <th>No</th>
@@ -26,9 +26,7 @@
                 <th>Created by</th>
                 <th>Views</th>
                 <th>Status</th>
-                <th>Edit</th>
-                <th>Delete</th>
-                <!-- <th>Preview</th> -->
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -67,13 +65,12 @@
                       <input type="hidden" id="id" value="<?= $house->house_id; ?>">
                     </td>
 
-                    <td>
-                      <a href="<?= base_url('admin/edit_house/' . $house->house_slug); ?>" class="db-list-edit">Edit</a>
-                    </td>
-                    <td>
-                      <a href="#" onclick="javascript:deleteConfirm('<?= base_url('admin/delete_house/' . $house->house_slug); ?>');" class="db-list-edit">Delete</a>
-                    </td>
-                    <!-- <td><a href="<?= base_url('admin/house-details/' . $house->house_slug); ?>" class="db-list-edit" target="_blank">Preview</a></td> -->
+                    <td><?= admin_actions(array(
+                      'view'   => base_url('house-details/' . rawurlencode((string) $house->house_slug)),
+                      'edit'   => base_url('admin/edit_house/' . rawurlencode((string) $house->house_slug)),
+                      'delete' => base_url('admin/delete_house/' . rawurlencode((string) $house->house_slug)),
+                      'delete_confirm' => 'Delete this house listing?',
+                    ), 'house listing') ?></td>
                   </tr>
                 <?php
                   $i++;

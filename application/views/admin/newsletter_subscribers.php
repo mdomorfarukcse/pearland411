@@ -8,18 +8,13 @@
                 <div class="ud-cen-s2">
                     <h2>Newsletter Subscribers List</h2>
 
-                    <!-- Search Box -->
-                    <div class="ad-int-sear">
-                        <input type="text" id="subscriberSearchBox" class="form-control" placeholder="Search by Email or Name...">
-                    </div>
-
                     <?php if ($this->session->flashdata('message')) { ?>
                         <div class="log-suc">
-                            <p><?= $this->session->flashdata('message') ?></p>
+                            <p><?= e($this->session->flashdata('message')) ?></p>
                         </div>
                     <?php } ?>
 
-                    <table class="responsive-table bordered" id="pg-resu">
+                    <table data-admin-table class="responsive-table bordered" id="pg-resu">
                         <thead>
                             <tr>
                                 <th>No</th>
@@ -47,21 +42,23 @@
                                         <td><?= isset($s->is_confirmed) && $s->is_confirmed ? '<span class="text-success">Confirmed</span>' : '<span class="text-danger">Pending</span>'; ?></td>
                                         <td><?= isset($s->created_at) ? date('d, M Y', strtotime($s->created_at)) : ''; ?></td>
                                         <td>
-                                            <a href="#" class="db-list-edit view-subscriber" data-toggle="modal" data-target="#subscriberModal"
-                                                data-email="<?= htmlspecialchars($s->email, ENT_QUOTES, 'UTF-8') ?>"
-                                                data-name="<?= htmlspecialchars(isset($s->name) ? $s->name : '', ENT_QUOTES, 'UTF-8') ?>"
-                                                data-ip="<?= htmlspecialchars(isset($s->ip_address) ? $s->ip_address : '', ENT_QUOTES, 'UTF-8') ?>"
-                                                data-agent="<?= htmlspecialchars(isset($s->user_agent) ? $s->user_agent : '', ENT_QUOTES, 'UTF-8') ?>"
-                                                data-confirmed="<?= isset($s->is_confirmed) ? (int)$s->is_confirmed : 0 ?>"
-                                                data-created="<?= isset($s->created_at) ? $s->created_at : '' ?>">View</a>
-
-                                            <?php if (isset($s->is_confirmed) && $s->is_confirmed): ?>
-                                                <a href="<?= base_url('admin/cancel-newsletter-subscription/' . $s->id); ?>" class="db-list-edit" onclick="return confirm('Cancel this subscription?');">Cancel</a>
-                                            <?php else: ?>
-                                                <span class="db-list-edit disabled">Cancel</span>
-                                            <?php endif; ?>
-
-                                            <a href="<?= base_url('admin/delete-newsletter-subscriber/' . $s->id); ?>" class="db-list-edit" onclick="return confirm('Delete this subscriber?');">Delete</a>
+                                            <div class="admin-actions" style="display:inline-flex;gap:8px;flex-wrap:wrap;">
+                                                <a href="#" class="db-list-edit view-subscriber" data-toggle="modal" data-target="#subscriberModal"
+                                                   data-email="<?= e_attr($s->email) ?>"
+                                                   data-name="<?= e_attr(isset($s->name) ? $s->name : '') ?>"
+                                                   data-ip="<?= e_attr(isset($s->ip_address) ? $s->ip_address : '') ?>"
+                                                   data-agent="<?= e_attr(isset($s->user_agent) ? $s->user_agent : '') ?>"
+                                                   data-confirmed="<?= isset($s->is_confirmed) ? (int)$s->is_confirmed : 0 ?>"
+                                                   data-created="<?= e_attr(isset($s->created_at) ? $s->created_at : '') ?>">View</a>
+                                                <?php if (isset($s->is_confirmed) && $s->is_confirmed): ?>
+                                                    <a href="<?= base_url('admin/cancel-newsletter-subscription/' . (int) $s->id) ?>"
+                                                       class="db-list-edit"
+                                                       onclick="return confirm('Cancel this subscription?');">Cancel</a>
+                                                <?php endif; ?>
+                                                <a href="<?= base_url('admin/delete-newsletter-subscriber/' . (int) $s->id) ?>"
+                                                   class="db-list-edit" style="color:#c00;"
+                                                   onclick="return confirm('Delete this subscriber?');">Delete</a>
+                                            </div>
                                         </td>
                                     </tr>
                                 <?php
@@ -113,34 +110,18 @@
 </div>
 
 <script>
-    // Search/filter functionality for subscribers table
+    // Subscriber-detail modal population. The search + pagination
+    // toolbar is added automatically by assets/admin/js/admin-table.js
+    // via the data-admin-table attribute on the table above.
     document.addEventListener('DOMContentLoaded', function() {
-        const searchBox = document.getElementById('subscriberSearchBox');
-        const tableBody = document.getElementById('subscriberTableBody');
-        const rows = Array.from(tableBody.getElementsByTagName('tr'));
-        searchBox.addEventListener('input', function() {
-            const query = searchBox.value.toLowerCase();
-            rows.forEach(row => {
-                const emailCell = row.querySelector('td:nth-child(2)');
-                const nameCell = row.querySelector('td:nth-child(3)');
-                if (emailCell || nameCell) {
-                    const emailText = emailCell ? emailCell.textContent.toLowerCase() : '';
-                    const nameText = nameCell ? nameCell.textContent.toLowerCase() : '';
-                    row.style.display = (emailText.includes(query) || nameText.includes(query)) ? '' : 'none';
-                }
-            });
-        });
-
-        // Modal population
-        const viewButtons = document.querySelectorAll('.view-subscriber');
-        viewButtons.forEach(btn => {
+        document.querySelectorAll('.view-subscriber').forEach(function (btn) {
             btn.addEventListener('click', function() {
-                document.getElementById('modalEmail').textContent = this.getAttribute('data-email') || '';
-                document.getElementById('modalName').textContent = this.getAttribute('data-name') || '';
-                document.getElementById('modalIp').textContent = this.getAttribute('data-ip') || '';
-                document.getElementById('modalAgent').textContent = this.getAttribute('data-agent') || '';
+                document.getElementById('modalEmail').textContent     = this.getAttribute('data-email') || '';
+                document.getElementById('modalName').textContent      = this.getAttribute('data-name') || '';
+                document.getElementById('modalIp').textContent        = this.getAttribute('data-ip') || '';
+                document.getElementById('modalAgent').textContent     = this.getAttribute('data-agent') || '';
                 document.getElementById('modalConfirmed').textContent = (this.getAttribute('data-confirmed') === '1') ? 'Yes' : 'No';
-                document.getElementById('modalCreated').textContent = this.getAttribute('data-created') || '';
+                document.getElementById('modalCreated').textContent   = this.getAttribute('data-created') || '';
             });
         });
     });

@@ -33,7 +33,7 @@
 
 		<div class="row">
 
-			<h2><?= $product->product_name; ?></h2>
+			<h2><?= e($product->product_name); ?></h2>
 
 			<ul>
 
@@ -45,7 +45,7 @@
 
 				</li>
 
-				<li><a href="#"><?= $product->cat_name; ?></a>
+				<li><a href="#"><?= e($product->cat_name); ?></a>
 
 				</li>
 
@@ -79,17 +79,17 @@
 
 							if (!empty($images) && is_array($images)): ?>
 								<div class="carousel-item active">
-									<img src="<?= base_url($images[0]); ?>" alt="<?= $product->product_name; ?>">
+									<img src="<?= base_url($images[0]); ?>" alt="<?= e($product->product_name); ?>">
 								</div>
 
 								<?php for ($j = 1; $j < count($images); $j++): ?>
 									<div class="carousel-item">
-										<img src="<?= base_url($images[$j]); ?>" alt="<?= $product->product_name; ?>">
+										<img src="<?= base_url($images[$j]); ?>" alt="<?= e($product->product_name); ?>">
 									</div>
 								<?php endfor; ?>
 							<?php else: ?>
 								<div class="carousel-item active">
-									<img src="<?= base_url('assets/images/products/default.jpg'); ?>" alt="<?= $product->product_name; ?>">
+									<img src="<?= base_url('assets/images/products/default.jpg'); ?>" alt="<?= e($product->product_name); ?>">
 								</div>
 							<?php endif; ?>
 						</div>
@@ -112,7 +112,7 @@
 
 					<a href="#" data-toggle="modal" data-target="#quote" class="btn btn1">Get quote</a>
 
-					<a target="_blank" href="<?= $product->product_payment_link; ?>" class="btn btn2">Buy now</a>
+					<a target="_blank" rel="noopener noreferrer" href="<?= e_url($product->product_payment_link); ?>" class="btn btn2">Buy now</a>
 
 				</div>
 
@@ -124,11 +124,11 @@
 
 					<div class="pro-pbox-2"> <span class="veri">Verified</span>
 
-						<h1><?= $product->product_name; ?></h1>
+						<h1><?= e($product->product_name); ?></h1>
 
 						<!-- <span class="rat">4.0</span> -->
 
-						<span class="pro-cost">$<?= $product->product_price; ?> <b class="pro-off"><?= $product->product_price_offer; ?>% off</b></span>
+						<span class="pro-cost">$<?= number_format((float) $product->product_price, 2) ?> <b class="pro-off"><?= (int) $product->product_price_offer ?>% off</b></span>
 
 					</div>
 
@@ -365,13 +365,13 @@
 
 						<?php if ($this->session->flashdata('message')): ?>
 							<div class="alert alert-success" style="background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin: 10px 0;">
-								<?= $this->session->flashdata('message'); ?>
+								<?= e($this->session->flashdata('message')); ?>
 							</div>
 						<?php endif; ?>
 
 						<?php if ($this->session->flashdata('error_msg')): ?>
 							<div class="alert alert-danger" style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin: 10px 0;">
-								<?= $this->session->flashdata('error_msg'); ?>
+								<?= e($this->session->flashdata('error_msg')); ?>
 							</div>
 						<?php endif; ?>
 
@@ -384,7 +384,7 @@
 							<input type="hidden" name="product_id" value="<?= $product->product_id; ?>">
 							<input type="hidden" name="receiving_user_id" value="<?= $product->user_id; ?>">
 							<input type="hidden" name="enquiry_sender_id" value="<?= isset($logged_id) ? $logged_id : ''; ?>">
-							<input type="hidden" name="enquiry_source" value="<?= $product->product_name; ?>">
+							<input type="hidden" name="enquiry_source" value="<?= e($product->product_name); ?>">
 							<input type="hidden" name="enquiry_type" value="product">
 
 							<div class="form-group">

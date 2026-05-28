@@ -22,7 +22,7 @@
             <input type="text" id="pg-sear" placeholder="Search this page..">
           </div>
           <a href="<?= base_url() ?>admin/add_new_listings" class="db-tit-btn">Add new listing</a>
-          <table class="responsive-table bordered" id="pg-resu">
+          <table data-admin-table class="responsive-table bordered" id="pg-resu">
             <thead>
               <tr>
                 <th>No</th>

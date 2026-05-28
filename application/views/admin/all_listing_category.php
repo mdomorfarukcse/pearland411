@@ -28,7 +28,7 @@
 
           <a href="<?= base_url() ?>admin/add_new_listing_category" class="db-tit-btn">Add New Listing Category</a>
 
-          <table class="responsive-table bordered" id="pg-resu">
+          <table data-admin-table class="responsive-table bordered" id="pg-resu">
 
             <thead>
 

@@ -324,23 +324,49 @@ class Admin extends CI_Controller
 		$this->load->model('usermodel');
 		$this->load->library('pagination');
 
-		if (isset($_POST['logout'])) {
-			$this->session->unset_userdata('logged_user');
+		if ($this->input->post('logout')) {
+			$this->session->unset_userdata('logged_admin');
 			$this->session->sess_destroy();
-			redirect(base_url());
-			die();
+			redirect(base_url('admin'));
+			return;
 		}
-		/*Page Access Prevention*/
+
+		// Admin pages reachable WITHOUT a session. Everything else
+		// requires a logged-in admin (session key 'logged_admin' —
+		// the end-user 'logged_user' key cannot satisfy this check).
+		$public_actions = array('index', 'login', 'forgot_password');
 		$page = $this->router->fetch_method();
-		if ($page != 'register' && $page != 'login' && $page != 'index' && $page != 'forget_password') {
-			if (!$this->session->userdata('logged_user')) {
-				redirect(base_url());
-				die();
+
+		// Routes restricted to super_admin only — sub-admin management,
+		// billing/subscriptions, ad sales, pricing-plan editing. Anything
+		// not in this list is reachable by any logged-in admin.
+		$super_admin_only = array(
+			'sub_admin_all', 'sub_admin_create', 'sub_admin_edit', 'sub_admin_delete',
+			'pricing', 'pricing_plan', 'add_pricing_plan', 'edit_pricing_plan',
+			'delete_pricing_plan', 'all_subscriptions', 'subscription_view',
+			'cancel_subscription', 'delete_subscription', 'purchase_subscription',
+			'current_ads', 'create_ads', 'ads_edit', 'ads_delete',
+			'ads_price', 'create_ads_price', 'ads_price_edit',
+			'ads_request', 'ads_history', 'ads_history_delete', 'approveAdStatus',
+		);
+
+		if (!in_array($page, $public_actions, true)) {
+			$admin = $this->session->userdata('logged_admin');
+			if (empty($admin) || empty($admin['logged_id'])) {
+				redirect(base_url('admin'));
+				return;
+			}
+			// Sessions written before this commit will lack the role
+			// key — treat them as editor (safer default).
+			if (in_array($page, $super_admin_only, true)) {
+				$role = isset($admin['role']) ? $admin['role'] : 'editor';
+				if ($role !== 'super_admin') {
+					$this->session->set_flashdata('error', 'This area is restricted to super-admins.');
+					redirect(base_url('admin/dashboard'));
+					return;
+				}
 			}
 		}
-		//if($this->session->userdata('logged_user')){ redirect('admin/dashboard'); die(); }
-
-
 	}
 
 	/*Home Page && Login Page*/
@@ -563,10 +589,70 @@ class Admin extends CI_Controller
 	/*Logout*/
 	public function logout()
 	{
-		$this->session->unset_userdata('logged_user');
+		$this->session->unset_userdata('logged_admin');
 		$this->session->sess_destroy();
 		redirect(base_url());
 		die();
+	}
+
+	/**
+	 * Admin self-service password change (any logged-in admin).
+	 * Requires the current password as a confirmation step so a
+	 * left-unattended browser session can't be hijacked into a
+	 * password reset.
+	 */
+	public function change_password()
+	{
+		$session = $this->session->userdata('logged_admin');
+		$admin_id = (int) ($session['logged_id'] ?? 0);
+		$admin = $this->adminmodel->getAdminByIdRaw($admin_id);
+		if (!$admin) { show_404(); return; }
+
+		if ($this->input->method() === 'post') {
+			$this->form_validation->set_rules('current_password', 'Current Password', 'required');
+			$this->form_validation->set_rules('new_password',     'New Password',     'required|min_length[8]');
+			$this->form_validation->set_rules('new_password_confirm', 'Confirm New Password', 'required|matches[new_password]');
+
+			if (!$this->form_validation->run()) {
+				$this->session->set_flashdata('error', strip_tags(validation_errors()));
+				redirect('admin/change-password');
+				return;
+			}
+
+			// Verify the current password — accept either bcrypt or
+			// the legacy MD5 hash so this also works as a one-off
+			// upgrade for the seeded admin@gmail.com / 12345 account.
+			$current = (string) $this->input->post('current_password');
+			$stored  = (string) $admin->admin_password;
+			$ok = false;
+			if (strlen($stored) > 0 && $stored[0] === '$') {
+				$ok = password_verify($current, $stored);
+			} elseif (strlen($stored) === 32 && ctype_xdigit($stored)) {
+				$ok = hash_equals(strtolower($stored), md5($current));
+			}
+			if (!$ok) {
+				$this->session->set_flashdata('error', 'Current password is incorrect.');
+				redirect('admin/change-password');
+				return;
+			}
+
+			$this->adminmodel->updateAdminMeta(
+				$admin_id,
+				array(),
+				(string) $this->input->post('new_password')
+			);
+
+			$this->session->set_flashdata('message', 'Password updated. Please sign in again with your new password.');
+			$this->session->unset_userdata('logged_admin');
+			$this->session->sess_destroy();
+			redirect(base_url('admin'));
+			return;
+		}
+
+		$data = array('admin_row' => $admin);
+		$this->load->view('admin/header');
+		$this->load->view('admin/change_password', $data);
+		$this->load->view('admin/footer');
 	}
 
 
@@ -1979,19 +2065,24 @@ class Admin extends CI_Controller
 				$info['product_info_answer'] = json_encode($this->input->post('product_info_answer'));
 			}
 
-			// Robust image upload logic
+			// Robust image upload logic — validated via safe_upload_image()
+			// (random filename, MIME-sniffed, extension allow-listed, .htaccess
+			// auto-written to block PHP execution in the target dir).
 			$gallery_images = array();
 			if (isset($_FILES['gallery_image']) && $_FILES['gallery_image']['name'][0] != '') {
 				$files = $_FILES['gallery_image'];
 				$count = count($files['name']);
 				for ($i = 0; $i < $count; $i++) {
-					if ($files['error'][$i] == 0) {
-						$ext = pathinfo($files['name'][$i], PATHINFO_EXTENSION);
-						$filename = uniqid('prod_') . '.' . $ext;
-						$upload_path = 'uploads/products/' . $filename;
-						if (move_uploaded_file($files['tmp_name'][$i], $upload_path)) {
-							$gallery_images[] = $upload_path;
-						}
+					$single = array(
+						'name'     => $files['name'][$i],
+						'type'     => $files['type'][$i],
+						'tmp_name' => $files['tmp_name'][$i],
+						'error'    => $files['error'][$i],
+						'size'     => $files['size'][$i],
+					);
+					$saved = safe_upload_image($single, 'uploads/products/');
+					if ($saved !== false) {
+						$gallery_images[] = $saved;
 					}
 				}
 				// Only update if at least one image uploaded
@@ -2310,8 +2401,8 @@ class Admin extends CI_Controller
 
 		$data['logged_id'] = NULL;
 
-		if ($this->session->userdata('logged_user')) {
-			$session 		   = $this->session->userdata('logged_user');
+		if ($this->session->userdata('logged_admin')) {
+			$session 		   = $this->session->userdata('logged_admin');
 			$data['logged_id'] = $session['logged_id'];
 		}
 
@@ -3149,8 +3240,8 @@ class Admin extends CI_Controller
 
 		$data['logged_id'] = NULL;
 
-		if ($this->session->userdata('logged_user')) {
-			$session 		   = $this->session->userdata('logged_user');
+		if ($this->session->userdata('logged_admin')) {
+			$session 		   = $this->session->userdata('logged_admin');
 			$data['logged_id'] = $session['logged_id'];
 		}
 
@@ -3960,8 +4051,8 @@ class Admin extends CI_Controller
 
 		// Logged-in user id (used by enquiry form)
 		$data['logged_id'] = NULL;
-		if ($this->session->userdata('logged_user')) {
-			$session = $this->session->userdata('logged_user');
+		if ($this->session->userdata('logged_admin')) {
+			$session = $this->session->userdata('logged_admin');
 			$data['logged_id'] = isset($session['logged_id']) ? $session['logged_id'] : NULL;
 		}
 
@@ -4057,8 +4148,8 @@ class Admin extends CI_Controller
 
 		$data['logged_id'] = NULL;
 
-		if ($this->session->userdata('logged_user')) {
-			$session 		   = $this->session->userdata('logged_user');
+		if ($this->session->userdata('logged_admin')) {
+			$session 		   = $this->session->userdata('logged_admin');
 			$data['logged_id'] = $session['logged_id'];
 		}
 
@@ -4325,7 +4416,7 @@ class Admin extends CI_Controller
 	public function enquiries()
 	{
 		$data['logged_id'] = NULL;
-		$session 		   = $this->session->userdata('logged_user');
+		$session 		   = $this->session->userdata('logged_admin');
 		$data['logged_id'] = $session['logged_id'];
 
 		$data['enquiries'] = $this->adminmodel->getEnquiries();
@@ -4340,7 +4431,7 @@ class Admin extends CI_Controller
 	public function saved_enquiry()
 	{
 		$data['logged_id'] = NULL;
-		$session 		   = $this->session->userdata('logged_user');
+		$session 		   = $this->session->userdata('logged_admin');
 		$data['logged_id'] = $session['logged_id'];
 
 		$data['enquiries'] = $this->adminmodel->savedEnquiry();
@@ -4372,35 +4463,78 @@ class Admin extends CI_Controller
 
 	/*==========================================
 		ACTIVE/INACTIVE STATUS UPDATE FUNCTION
+		==========================================
+
+		Toggles a single status column on a single resource row from
+		the admin's list pages.
+
+		SECURITY NOTE
+		Previously this method took tableName + fieldName + value
+		directly from POST and ran an arbitrary UPDATE. Any caller
+		could rewrite any column in any table (e.g.
+		admin.admin_password). The current implementation strictly
+		whitelists every (table, id-column, status-column) tuple the
+		admin UI legitimately needs to flip, and accepts only
+		integer 0/1 as the new value.
 		==========================================*/
 
 	public function update_status()
 	{
-		$id = $this->input->post('id');
-		$fieldName = $this->input->post('fieldName');
-		$selectedValue = $this->input->post('value');
-		$tableName = $this->input->post('tableName');
-		$tableID = $this->input->post('tableIdName');
+		// (table => [ id_column, status_column ])
+		$allowed = array(
+			'listings'       => array('listing_id',       'listing_status'),
+			'news'           => array('news_id',          'news_status'),
+			'blogs'          => array('blog_id',          'blog_status'),
+			'events'         => array('event_id',         'event_status'),
+			'video'          => array('video_id',         'video_status'),
+			'classifieds'    => array('classifieds_id',   'classifieds_status'),
+			'products'       => array('product_id',       'product_status'),
+			'marketplace'    => array('marketplace_id',   'marketplace_status'),
+			'house'          => array('house_id',         'house_status'),
+			'rental'         => array('rental_id',        'rental_status'),
+			'enquiries'      => array('enquiry_id',       'enquiry_save'),
+			'claim_listings' => array('claim_listing_id', 'claim_status'),
+		);
 
-		$data = $this->adminmodel->getSingleAjaxValue($id, $tableID, $tableName);
+		$tableName = (string) $this->input->post('tableName');
+		$tableID   = (string) $this->input->post('tableIdName');
+		$fieldName = (string) $this->input->post('fieldName');
+		$id        = $this->input->post('id');
+		$value     = $this->input->post('value');
 
-		$data[$fieldName] = $selectedValue;
-
-		if ($this->db->where($tableID, $id)->update($tableName, $data)) {
-			$update['message'] = 'success';
-			$this->session->set_flashdata('message', 'Status Updated Successfully!');
-		} else {
-			$update['message'] = 'error';
-			$this->session->set_flashdata('message', 'Status Update Unsuccessful!');
+		// Validate the (table, id-column, status-column) tuple.
+		if (!isset($allowed[$tableName])
+			|| $allowed[$tableName][0] !== $tableID
+			|| $allowed[$tableName][1] !== $fieldName) {
+			$this->output->set_status_header(400);
+			echo json_encode(array('message' => 'error', 'reason' => 'invalid target'));
+			return;
 		}
-		echo json_encode($update);
+
+		// Only allow integer 0 / 1 as the new status value.
+		if (!is_numeric($id) || !in_array((int) $value, array(0, 1), true)) {
+			$this->output->set_status_header(400);
+			echo json_encode(array('message' => 'error', 'reason' => 'invalid value'));
+			return;
+		}
+
+		$ok = $this->db
+			->where($tableID, (int) $id)
+			->update($tableName, array($fieldName => (int) $value));
+
+		if ($ok) {
+			$this->session->set_flashdata('message', 'Status Updated Successfully!');
+			echo json_encode(array('message' => 'success'));
+		} else {
+			echo json_encode(array('message' => 'error', 'reason' => 'db error'));
+		}
 	}
 
 
 	public function claimed_listings()
 	{
 		$data['logged_id'] = NULL;
-		$session 		   = $this->session->userdata('logged_user');
+		$session 		   = $this->session->userdata('logged_admin');
 		$data['logged_id'] = $session['logged_id'];
 
 		$data['listing_requests'] = $this->usermodel->getAllValues('claim_listings');
@@ -4412,32 +4546,110 @@ class Admin extends CI_Controller
 		$this->load->view('admin/footer');
 	}
 
+	/**
+	 * Approve a pending listing claim.
+	 *
+	 * Old behavior tried to overwrite the listing row with the claim's
+	 * full-row data but malformed the array (`$getSingleListing[0]`
+	 * was never populated), so listing.user_id was never actually
+	 * updated and the claim flow silently no-op'd on the data side.
+	 * This rewrite:
+	 *   1) Marks the claim row approved.
+	 *   2) Updates ONLY listings.user_id to the claimant's user_id.
+	 *   3) Emails the claimant their approval notice.
+	 * All steps run inside a transaction.
+	 */
 	public function claim_approve($id)
 	{
-		$claimListing = $this->db->select('*')->from('claim_listings')->where('claim_listing_id', $id)->get()->row_array();
-
-		$getSingleListing = $this->db->select('*')->from('listings')->where('listing_id', $claimListing['listing_id'])->get()->row_array();
-
-		$lisitngID = '';
-
-		if ($getSingleListing != NULL) {
-
-			$listing_id = $getSingleListing['listing_id'];
-
-			$claimListing['claim_status'] = 1;
-			unset($getSingleListing[0]['listing_id']);
-			$getSingleListing[0]['user_id'] = $claimListing['enquiry_sender_id'];
-			if ($this->db->where('claim_listing_id', $id)->update('claim_listings', $claimListing)) {
-
-				if ($this->db->where('listing_id', $listing_id)->update('listings', $getSingleListing)) {
-					$this->session->set_flashdata('message', 'Successfully Status Updated !');
-					redirect('admin/claimed-listings', 'refresh');
-				}
-			} else {
-				$this->session->set_flashdata('message', 'Status Update Unsuccessful!');
-				redirect('admin/claimed-listings', 'refresh');
-			}
+		$claim = $this->db
+			->where('claim_listing_id', (int) $id)
+			->limit(1)
+			->get('claim_listings')
+			->row();
+		if (!$claim) {
+			$this->session->set_flashdata('message', 'Claim not found.');
+			redirect('admin/claimed-listings');
+			return;
 		}
+
+		$listing = $this->db
+			->where('listing_id', (int) $claim->listing_id)
+			->limit(1)
+			->get('listings')
+			->row();
+		if (!$listing) {
+			$this->session->set_flashdata('message', 'Underlying listing no longer exists.');
+			redirect('admin/claimed-listings');
+			return;
+		}
+
+		$this->db->trans_start();
+		$this->db
+			->where('claim_listing_id', (int) $id)
+			->update('claim_listings', array('claim_status' => 1));
+		$this->db
+			->where('listing_id', (int) $listing->listing_id)
+			->update('listings', array('user_id' => (int) $claim->enquiry_sender_id));
+		$this->db->trans_complete();
+
+		if (!$this->db->trans_status()) {
+			$this->session->set_flashdata('message', 'Could not approve claim.');
+			redirect('admin/claimed-listings');
+			return;
+		}
+
+		// Notify the claimant.
+		if (!empty($claim->enquiry_email)) {
+			$this->load->library('mailer');
+			$listing_url = base_url('listing-details/' . rawurlencode((string) $listing->listing_slug));
+			$body = '<p>Good news &mdash; your claim for <strong>'
+				. html_escape($listing->listing_name) . '</strong> has been approved.</p>'
+				. '<p>The listing is now linked to your account. Sign in and visit '
+				. '<a href="' . base_url('user/dashboard') . '">your dashboard</a> '
+				. 'to edit photos, hours, and contact information.</p>'
+				. '<p>Public page: <a href="' . $listing_url . '">' . $listing_url . '</a></p>';
+			$this->mailer->send($claim->enquiry_email, 'Your listing claim was approved', $body);
+		}
+
+		$this->session->set_flashdata('message', 'Claim approved and listing transferred.');
+		redirect('admin/claimed-listings');
+	}
+
+	/**
+	 * Reject a pending claim without deleting the row (so the audit
+	 * trail survives). Stores claim_status = 2 to distinguish from
+	 * pending (0) and approved (1).
+	 */
+	public function claim_reject($id)
+	{
+		$claim = $this->db
+			->where('claim_listing_id', (int) $id)
+			->limit(1)
+			->get('claim_listings')
+			->row();
+		if (!$claim) {
+			$this->session->set_flashdata('message', 'Claim not found.');
+			redirect('admin/claimed-listings');
+			return;
+		}
+
+		$this->db
+			->where('claim_listing_id', (int) $id)
+			->update('claim_listings', array('claim_status' => 2));
+
+		if (!empty($claim->enquiry_email)) {
+			$this->load->library('mailer');
+			$body = '<p>We reviewed your claim for <strong>'
+				. html_escape($claim->enquiry_source) . '</strong> and were '
+				. 'unable to verify it at this time.</p>'
+				. '<p>If you believe this was an error, reply to this email with '
+				. 'additional proof of ownership (current website, license, etc.) '
+				. 'and we will take another look.</p>';
+			$this->mailer->send($claim->enquiry_email, 'Update on your listing claim', $body);
+		}
+
+		$this->session->set_flashdata('message', 'Claim rejected and claimant notified.');
+		redirect('admin/claimed-listings');
 	}
 
 	public function delete_claim($id)
@@ -4459,7 +4671,7 @@ class Admin extends CI_Controller
 	public function current_ads()
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['ads'] 		= $this->adminmodel->getAllAds();
@@ -4472,7 +4684,7 @@ class Admin extends CI_Controller
 	public function create_ads()
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['users'] 		= $this->adminmodel->getAllValues('user');
@@ -4525,7 +4737,7 @@ class Admin extends CI_Controller
 	public function ads_edit($id)
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['users'] 		= $this->adminmodel->getAllValues('user');
@@ -4602,7 +4814,7 @@ class Admin extends CI_Controller
 	public function ads_price()
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['prices']		= $this->adminmodel->allAdsPrices();
@@ -4615,7 +4827,7 @@ class Admin extends CI_Controller
 	public function create_ads_price()
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$this->form_validation->set_rules('name', 'Name', 'trim|required');
@@ -4663,7 +4875,7 @@ class Admin extends CI_Controller
 	public function ads_price_edit($id)
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['price']		= $this->adminmodel->getAdsPrice($id);
@@ -4718,7 +4930,7 @@ class Admin extends CI_Controller
 	public function ads_request()
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['ads'] 		= $this->adminmodel->getAllInactiveAds();
@@ -4731,7 +4943,7 @@ class Admin extends CI_Controller
 	public function ads_history()
 	{
 		$data['logged_id'] 	= NULL;
-		$session  			= $this->session->userdata('logged_user');
+		$session  			= $this->session->userdata('logged_admin');
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['ads'] 		= $this->adminmodel->getAllAdsHistory();
@@ -5175,7 +5387,7 @@ class Admin extends CI_Controller
 	/**
 	 * Get subscription data for dashboard
 	 */
-	public function getSubscriptionDataForDashboard($user_id)
+	private function getSubscriptionDataForDashboard($user_id)
 	{
 		$data = array();
 		$data['subscription_stats'] = $this->adminmodel->getUserStats($user_id);
@@ -5219,5 +5431,368 @@ class Admin extends CI_Controller
 			$this->session->set_flashdata('error', 'Failed to activate subscription. Please try again.');
 			redirect('admin/pricing');
 		}
+	}
+
+	/*=========================
+		IT / Web services catalog (admin side)
+		See database/migrations/0002_services.sql.
+		==========================*/
+
+	public function services_list()
+	{
+		$data = array();
+		$data['services'] = $this->adminmodel->getAllServices();
+		$this->load->view('admin/header');
+		$this->load->view('admin/services_list', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function add_service()
+	{
+		if ($this->input->method() === 'post') {
+			if ($this->_saveServiceFromPost(null)) {
+				$this->session->set_flashdata('message', 'Service added.');
+				redirect('admin/services');
+				return;
+			}
+		}
+		$data = array('service' => null);
+		$this->load->view('admin/header');
+		$this->load->view('admin/service_edit', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function edit_service($id = 0)
+	{
+		$service = $this->adminmodel->getServiceById($id);
+		if (!$service) { show_404(); return; }
+
+		if ($this->input->method() === 'post') {
+			if ($this->_saveServiceFromPost((int) $id)) {
+				$this->session->set_flashdata('message', 'Service updated.');
+				redirect('admin/services');
+				return;
+			}
+		}
+		$data = array('service' => $service);
+		$this->load->view('admin/header');
+		$this->load->view('admin/service_edit', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function delete_service($id = 0)
+	{
+		$this->adminmodel->deleteService((int) $id);
+		$this->session->set_flashdata('message', 'Service deleted.');
+		redirect('admin/services');
+	}
+
+	private function _saveServiceFromPost($id)
+	{
+		$this->form_validation->set_rules('name', 'Name', 'trim|required|min_length[2]|max_length[160]');
+		$this->form_validation->set_rules('slug', 'Slug', 'trim|required|alpha_dash|max_length[160]');
+		$this->form_validation->set_rules('short_description', 'Short description', 'trim|required|max_length[500]');
+		$this->form_validation->set_rules('price_unit', 'Price unit', 'trim|required');
+
+		if (!$this->form_validation->run()) {
+			$this->session->set_flashdata('error', strip_tags(validation_errors()));
+			return false;
+		}
+
+		$allowed_units = array('one_time','monthly','annual','project','hourly','custom');
+		$unit = $this->input->post('price_unit');
+		if (!in_array($unit, $allowed_units, true)) $unit = 'custom';
+
+		$base_price = $this->input->post('base_price');
+		$base_price = ($base_price === '' || $base_price === null) ? null : round((float) $base_price, 2);
+
+		$data = array(
+			'name'              => $this->input->post('name'),
+			'slug'              => $this->input->post('slug'),
+			'short_description' => $this->input->post('short_description'),
+			'body'              => $this->input->post('body'),
+			'icon'              => $this->input->post('icon'),
+			'category'          => $this->input->post('category'),
+			'base_price'        => $base_price,
+			'price_unit'        => $unit,
+			'sort_order'        => (int) $this->input->post('sort_order'),
+			'is_active'         => $this->input->post('is_active') ? 1 : 0,
+		);
+
+		if ($id === null) {
+			return (bool) $this->adminmodel->insertService($data);
+		}
+		return (bool) $this->adminmodel->updateService($id, $data);
+	}
+
+	public function service_requests_list()
+	{
+		$data = array();
+		$status = $this->input->get('status');
+		$data['selected_status'] = $status;
+		$data['requests'] = $this->adminmodel->getAllServiceRequests($status, 100);
+		$this->load->view('admin/header');
+		$this->load->view('admin/service_requests_list', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function service_request_view($id = 0)
+	{
+		$request = $this->adminmodel->getServiceRequestById($id);
+		if (!$request) { show_404(); return; }
+
+		if ($this->input->method() === 'post') {
+			$this->adminmodel->updateServiceRequestStatus(
+				(int) $id,
+				$this->input->post('status'),
+				$this->input->post('admin_notes')
+			);
+			$this->session->set_flashdata('message', 'Request updated.');
+			redirect('admin/service-requests/' . (int) $id);
+			return;
+		}
+
+		$data = array('request' => $request);
+		$this->load->view('admin/header');
+		$this->load->view('admin/service_request_view', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function service_request_delete($id = 0)
+	{
+		$this->adminmodel->deleteServiceRequest((int) $id);
+		$this->session->set_flashdata('message', 'Request deleted.');
+		redirect('admin/service-requests');
+	}
+
+	/*=========================
+		Newsletter campaigns (admin side)
+		See database/migrations/0003_newsletter_campaigns.sql.
+		==========================*/
+
+	public function campaigns_list()
+	{
+		$data = array();
+		$data['campaigns']   = $this->adminmodel->getAllCampaigns();
+		$data['subscribers'] = $this->adminmodel->countAllNewsletterSubscribers();
+		$this->load->view('admin/header');
+		$this->load->view('admin/campaigns_list', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function campaign_compose($id = 0)
+	{
+		$campaign = $id ? $this->adminmodel->getCampaignById($id) : null;
+		if ($id && !$campaign) { show_404(); return; }
+		if ($campaign && $campaign->status !== 'draft') {
+			$this->session->set_flashdata('error', 'This campaign has already been queued and can no longer be edited.');
+			redirect('admin/campaigns');
+			return;
+		}
+
+		if ($this->input->method() === 'post') {
+			$this->form_validation->set_rules('subject',   'Subject',  'trim|required|max_length[255]');
+			$this->form_validation->set_rules('body_html', 'Message',  'trim|required');
+
+			if (!$this->form_validation->run()) {
+				$this->session->set_flashdata('error', strip_tags(validation_errors()));
+			} else {
+				$session = $this->session->userdata('logged_admin');
+				$data_in = array(
+					'subject'      => $this->input->post('subject'),
+					'body_html'    => $this->input->post('body_html'),
+					'from_name'    => $this->input->post('from_name'),
+					'from_address' => $this->input->post('from_address'),
+					'created_by'   => $session ? (int) ($session['logged_id'] ?? 0) : null,
+					'status'       => 'draft',
+				);
+				if ($campaign) {
+					$this->adminmodel->updateCampaign($campaign->campaign_id, $data_in);
+					$cid = (int) $campaign->campaign_id;
+				} else {
+					$cid = (int) $this->adminmodel->createCampaign($data_in);
+				}
+				$this->session->set_flashdata('message', 'Draft saved.');
+				redirect('admin/campaigns/edit/' . $cid);
+				return;
+			}
+		}
+
+		$data = array('campaign' => $campaign);
+		$this->load->view('admin/header');
+		$this->load->view('admin/campaign_compose', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function campaign_queue($id = 0)
+	{
+		$count = $this->adminmodel->queueCampaign((int) $id);
+		if ($count === false) {
+			$this->session->set_flashdata('error', 'Campaign cannot be queued (already sent, or not found).');
+		} else {
+			$this->session->set_flashdata('message', "Queued — {$count} recipients ready to send.");
+		}
+		redirect('admin/campaigns/view/' . (int) $id);
+	}
+
+	public function campaign_send_batch($id = 0)
+	{
+		$batch = max(1, min(200, (int) $this->input->post('batch_size', true) ?: 25));
+		$result = $this->adminmodel->sendCampaignBatch((int) $id, $batch);
+		$this->session->set_flashdata(
+			'message',
+			"Sent batch: {$result['sent']} delivered, {$result['failed']} failed, {$result['remaining']} remaining."
+		);
+		redirect('admin/campaigns/view/' . (int) $id);
+	}
+
+	public function campaign_view($id = 0)
+	{
+		$campaign = $this->adminmodel->getCampaignById($id);
+		if (!$campaign) { show_404(); return; }
+		$data = array('campaign' => $campaign);
+		$this->load->view('admin/header');
+		$this->load->view('admin/campaign_view', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function campaign_delete($id = 0)
+	{
+		$this->adminmodel->deleteCampaign((int) $id);
+		$this->session->set_flashdata('message', 'Campaign deleted.');
+		redirect('admin/campaigns');
+	}
+
+	/*=========================
+		Sub-admin / role management (super_admin only).
+		Gated in the constructor via $super_admin_only.
+		See database/migrations/0005_admin_roles.sql.
+		==========================*/
+
+	public function sub_admin_all()
+	{
+		$data['admins']  = $this->adminmodel->getAllAdmins();
+		$data['current'] = $this->session->userdata('logged_admin');
+		$this->load->view('admin/header');
+		$this->load->view('admin/sub_admin_all', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function sub_admin_create()
+	{
+		if ($this->input->method() === 'post') {
+			$this->form_validation->set_rules('admin_name',  'Name',     'trim|required|min_length[2]|max_length[50]');
+			$this->form_validation->set_rules('admin_email', 'Email',    'trim|required|valid_email|max_length[50]');
+			$this->form_validation->set_rules('password',    'Password', 'required|min_length[8]');
+			$this->form_validation->set_rules('role',        'Role',     'trim|required');
+
+			if (!$this->form_validation->run()) {
+				$this->session->set_flashdata('error', strip_tags(validation_errors()));
+			} elseif ($this->adminmodel->adminEmailExists($this->input->post('admin_email'))) {
+				$this->session->set_flashdata('error', 'An admin with that email already exists.');
+			} else {
+				$role = $this->input->post('role');
+				if (!in_array($role, array('super_admin', 'editor'), true)) $role = 'editor';
+
+				$id = $this->adminmodel->createAdmin(array(
+					'admin_name'  => $this->input->post('admin_name'),
+					'admin_email' => $this->input->post('admin_email'),
+					'role'        => $role,
+					'is_active'   => $this->input->post('is_active') ? 1 : 0,
+				), (string) $this->input->post('password'));
+
+				if ($id) {
+					$this->session->set_flashdata('message', 'Sub-admin created.');
+					redirect('admin/sub-admins');
+					return;
+				}
+				$this->session->set_flashdata('error', 'Could not create the sub-admin.');
+			}
+		}
+
+		$data = array('admin_row' => null);
+		$this->load->view('admin/header');
+		$this->load->view('admin/sub_admin_edit', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function sub_admin_edit($id = 0)
+	{
+		$admin_row = $this->adminmodel->getAdminByIdRaw($id);
+		if (!$admin_row) { show_404(); return; }
+
+		if ($this->input->method() === 'post') {
+			$this->form_validation->set_rules('admin_name',  'Name',  'trim|required|min_length[2]|max_length[50]');
+			$this->form_validation->set_rules('admin_email', 'Email', 'trim|required|valid_email|max_length[50]');
+			$this->form_validation->set_rules('role',        'Role',  'trim|required');
+
+			if (!$this->form_validation->run()) {
+				$this->session->set_flashdata('error', strip_tags(validation_errors()));
+			} elseif ($this->adminmodel->adminEmailExists($this->input->post('admin_email'), (int) $id)) {
+				$this->session->set_flashdata('error', 'Another admin with that email already exists.');
+			} else {
+				$role = $this->input->post('role');
+				if (!in_array($role, array('super_admin', 'editor'), true)) $role = 'editor';
+
+				$current  = $this->session->userdata('logged_admin');
+				$self_id  = (int) ($current['logged_id'] ?? 0);
+
+				// Refuse to let the only active super-admin demote
+				// themselves or deactivate themselves.
+				if ((int) $admin_row->admin_id === $self_id
+					&& ($admin_row->role === 'super_admin')
+					&& ($role !== 'super_admin' || !$this->input->post('is_active'))) {
+					$other_super = 0;
+					foreach ($this->adminmodel->getAllAdmins() as $a) {
+						if ((int) $a->admin_id !== $self_id
+							&& ($a->role ?? '') === 'super_admin'
+							&& (int) ($a->is_active ?? 0) === 1) {
+							$other_super++;
+						}
+					}
+					if ($other_super === 0) {
+						$this->session->set_flashdata('error',
+							'You cannot demote or deactivate yourself while you are the only active super-admin.');
+						redirect('admin/sub-admins/edit/' . (int) $id);
+						return;
+					}
+				}
+
+				$ok = $this->adminmodel->updateAdminMeta((int) $id, array(
+					'admin_name'  => $this->input->post('admin_name'),
+					'admin_email' => $this->input->post('admin_email'),
+					'role'        => $role,
+					'is_active'   => $this->input->post('is_active') ? 1 : 0,
+				), $this->input->post('password') ?: null);
+
+				if ($ok) {
+					$this->session->set_flashdata('message', 'Sub-admin updated.');
+					redirect('admin/sub-admins');
+					return;
+				}
+				$this->session->set_flashdata('error', 'Could not save changes.');
+			}
+		}
+
+		$data = array('admin_row' => $admin_row);
+		$this->load->view('admin/header');
+		$this->load->view('admin/sub_admin_edit', $data);
+		$this->load->view('admin/footer');
+	}
+
+	public function sub_admin_delete($id = 0)
+	{
+		$current = $this->session->userdata('logged_admin');
+		if ((int) ($current['logged_id'] ?? 0) === (int) $id) {
+			$this->session->set_flashdata('error', 'You cannot delete the account you are signed in as.');
+			redirect('admin/sub-admins');
+			return;
+		}
+		if (!$this->adminmodel->deleteAdmin((int) $id)) {
+			$this->session->set_flashdata('error', 'Cannot delete — this is the last active super-admin.');
+		} else {
+			$this->session->set_flashdata('message', 'Sub-admin deleted.');
+		}
+		redirect('admin/sub-admins');
 	}
 }

@@ -143,7 +143,7 @@
 		</script>
 		<!-- End Subscription Details -->
 		<?php if ($has_subscription): ?>
-			<table class="responsive-table bordered">
+			<table data-admin-table class="responsive-table bordered">
 				<thead>
 					<tr>
 						<th>No</th>
@@ -151,8 +151,7 @@
 						<th>Event Date</th>
 						<th>Status</th>
 						<th>Views</th>
-						<th>Edit</th>
-						<th>Preview</th>
+						<th>Actions</th>
 					</tr>
 				</thead>
 				<tbody id="eventsTableBody">
@@ -177,10 +176,10 @@
 								</td>
 								<td><span class="db-list-rat"><?= isset($event->views) ? (int)$event->views : 0 ?></span>
 								</td>
-								<td><a href="<?= base_url('user/edit-user-event/' . $event->event_slug); ?>" class="db-list-edit">Edit</a>
-								</td>
-								<td><a href="<?= base_url('event-details/' . $event->event_slug); ?>" class="db-list-edit" target="_blank">Preview</a>
-								</td>
+								<td><?= admin_actions(array(
+									'view' => base_url('event-details/' . rawurlencode((string) $event->event_slug)),
+									'edit' => base_url('user/edit-user-event/' . rawurlencode((string) $event->event_slug)),
+								), 'event') ?></td>
 							</tr>
 							<?php
 							$i++;

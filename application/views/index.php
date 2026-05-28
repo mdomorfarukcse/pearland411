@@ -1,199 +1,3 @@
-<?php
-// Weather API Proxy Handler (embedded in index.php)
-if (isset($_GET['weather_api']) && $_GET['weather_api'] === 'proxy') {
-  header("Access-Control-Allow-Origin: *");
-  header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-  header("Access-Control-Allow-Headers: Content-Type");
-  header("Content-Type: application/json");
-
-  if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
-  }
-
-  $latitude = 29.5636;
-  $longitude = -95.2861;
-
-  $apiUrl = "https://api.open-meteo.com/v1/forecast?" . http_build_query([
-    'latitude' => $latitude,
-    'longitude' => $longitude,
-    'current' => 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m',
-    'daily' => 'temperature_2m_max,temperature_2m_min,weather_code',
-    'temperature_unit' => 'fahrenheit',
-    'wind_speed_unit' => 'mph',
-    'timezone' => 'America/Chicago',
-    'forecast_days' => 7
-  ]);
-
-  if (function_exists('curl_init')) {
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-      CURLOPT_URL => $apiUrl,
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_TIMEOUT => 10,
-      CURLOPT_SSL_VERIFYPEER => false,
-      CURLOPT_USERAGENT => 'Mozilla/5.0 (compatible; WeatherWidget/1.0)',
-      CURLOPT_HTTPHEADER => [
-        'Accept: application/json',
-        'Accept-Language: en-US,en;q=0.9'
-      ]
-    ]);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch);
-
-    if ($response === false || $httpCode !== 200) {
-      http_response_code(500);
-      echo json_encode([
-        'error' => true,
-        'message' => 'Weather service temporarily unavailable',
-        'details' => $curlError ?: 'HTTP ' . $httpCode
-      ]);
-      exit;
-    }
-  } else {
-    $context = stream_context_create([
-      'http' => [
-        'method' => 'GET',
-        'header' => "Accept: application/json\r\nUser-Agent: Mozilla/5.0 (compatible; WeatherWidget/1.0)\r\n",
-        'timeout' => 10
-      ],
-      'ssl' => [
-        'verify_peer' => false,
-        'verify_peer_name' => false
-      ]
-    ]);
-
-    $response = @file_get_contents($apiUrl, false, $context);
-
-    if ($response === false) {
-      http_response_code(500);
-      echo json_encode([
-        'error' => true,
-        'message' => 'Weather service temporarily unavailable',
-        'details' => 'Could not connect to weather service'
-      ]);
-      exit;
-    }
-  }
-
-  echo $response;
-  exit;
-}
-
-// Simple routing for search functionality
-if (isset($_SERVER['REQUEST_URI'])) {
-  $request_uri = $_SERVER['REQUEST_URI'];
-  $request_path = parse_url($request_uri, PHP_URL_PATH);
-
-  // Remove leading slash and get path segments
-  $path = ltrim($request_path, '/');
-  $segments = explode('/', $path);
-
-  // Handle search route - both /search and direct search queries
-  $is_search_route = ($segments[0] === 'search' && count($segments) >= 1);
-  $has_search_query = (isset($_GET['q']) && !empty(trim($_GET['q'])));
-
-  if ($is_search_route || ($has_search_query && ($segments[0] === 'search' || strpos($request_uri, 'search') !== false))) {
-
-    // This is a search request, handle it with search page
-    $search_query = isset($_GET['q']) ? trim($_GET['q']) : '';
-
-    // Set up basic environment for search
-    error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED & ~E_WARNING);
-
-    // Create a simple search handler
-    class SimpleSearchHandler
-    {
-      private $data = array();
-
-      public function __construct()
-      {
-        $this->data['search_query'] = '';
-        $this->data['search_results'] = array('total_count' => 0);
-        $this->data['categories'] = array();
-        $this->data['latest_news'] = array();
-      }
-
-      public function handleSearch($query)
-      {
-        $this->data['search_query'] = htmlspecialchars($query);
-
-        // Try to load model and get results if files exist
-        if (!empty($query) && file_exists('Usermodel.php')) {
-          include_once 'Usermodel.php';
-          try {
-            $model = new Usermodel();
-            if (method_exists($model, 'globalSearch')) {
-              $search_results = $model->globalSearch($query);
-              $this->data['search_results'] = $search_results;
-            }
-            if (method_exists($model, 'getCategoriesWithCount')) {
-              $this->data['categories'] = $model->getCategoriesWithCount();
-            }
-            if (method_exists($model, 'getLatestNews')) {
-              $this->data['latest_news'] = $model->getLatestNews(5);
-            }
-          } catch (Exception $e) {
-            // Handle error silently
-            $this->data['error'] = 'Search temporarily unavailable';
-            error_log('Search error: ' . $e->getMessage());
-          }
-        }
-
-        $this->renderSearchPage();
-      }
-
-      private function renderSearchPage()
-      {
-        // Make data available to included files
-        extract($this->data);
-
-        // Load header if exists
-        if (file_exists('header.php')) {
-          include 'header.php';
-        }
-
-        // Load search page
-        if (file_exists('search.php')) {
-          include 'search.php';
-        } else {
-          $this->renderBasicSearch();
-        }
-
-        // Load footer if exists  
-        if (file_exists('footer.php')) {
-          include 'footer.php';
-        }
-      }
-
-      private function renderBasicSearch()
-      {
-        echo "<div style='padding: 40px; text-align: center;'>";
-        echo "<h1>Search Pearland411</h1>";
-        if (!empty($this->data['search_query'])) {
-          echo "<p>Search results for: <strong>" . $this->data['search_query'] . "</strong></p>";
-          if (isset($this->data['search_results']['total_count'])) {
-            echo "<p>Found " . $this->data['search_results']['total_count'] . " results</p>";
-          }
-        }
-        echo "<form method='GET' action='search' style='max-width: 500px; margin: 20px auto;'>";
-        echo "<input type='text' name='q' value='" . htmlspecialchars($this->data['search_query']) . "' placeholder='Search...' style='padding: 10px; width: 70%; border: 1px solid #ccc;'>";
-        echo "<button type='submit' style='padding: 10px 20px; background: #7bb73f; color: white; border: none; cursor: pointer;'>Search</button>";
-        echo "</form>";
-        echo "</div>";
-      }
-    }
-
-    $handler = new SimpleSearchHandler();
-    $handler->handleSearch($search_query);
-    exit; // Stop execution after handling search
-  }
-}
-?>
 <!doctype html>
 <!--
 ===============================================================================
@@ -2898,6 +2702,9 @@ Database Tables Required:
                 <div class="swiper-button-prev"></div>
               </div>
             </section>
+
+            <?php $slot = 'home-hero'; include APPPATH . 'views/partials/ad_slot.php'; ?>
+
             <!-- =========================
                      SECTION 2: Explore Pearland Businesses (Replaces Latest Directory)
                 ========================= -->
@@ -2908,12 +2715,15 @@ Database Tables Required:
                   <?php foreach ($latest_listings as $row): ?>
                     <?php
                     $categoryName = $this->usermodel->getCategoryName($row->category_id);
-                    $imgSrc = !empty($row->listing_image) ? base_url($row->listing_image) : 'https://www.freeworldmaps.net/world/blank/blank-world-map-high-resolution-hd.jpg';
                     ?>
                     <div class=" fade-in business-item lst-com-box" data-category="<?php echo htmlspecialchars($categoryName); ?>">
 
                       <div class="list-com-img">
-                        <img src="<?php echo $imgSrc; ?>" alt="<?php echo htmlspecialchars($row->listing_name); ?>" style="">
+                        <?php if (!empty($row->listing_image)): ?>
+                          <?= responsive_img($row->listing_image, $row->listing_name) ?>
+                        <?php else: ?>
+                          <img src="<?= base_url('assets/images/pearland-logo.png') ?>" alt="<?= e_attr($row->listing_name) ?>" loading="lazy" decoding="async">
+                        <?php endif; ?>
                         <span class="list-com-cat"><?php echo htmlspecialchars($categoryName); ?></span>
                         <?php
                         // Show "NEW" badge for listings created in the last 7 days
@@ -2935,104 +2745,18 @@ Database Tables Required:
                     </div>
                   <?php endforeach; ?>
                 <?php else: ?>
-                  <!-- Sample Data for Testing -->
-                  <div class="col-md-4 col-sm-6 fade-in business-item" data-category="Restaurant">
-                    <div class="lst-com-box">
-                      <div class="list-com-img">
-                        <img src="../assets/images/listings/list1.jpg" alt="Bella's Bistro">
-                      </div>
-                      <div class="list-com-con">
-                        <h4>Bella's Bistro</h4>
-                        <span class="list-com-cat">Restaurant</span>
-                        <p>Farm-to-table restaurant serving fresh, locally-sourced dishes...</p>
-                        <a href="#" class="list-enq-btn">View Details</a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-md-4 col-sm-6 fade-in business-item" data-category="Fitness">
-                    <div class="news-card p-2">
-                      <div class="card-image" style="height:120px; background: linear-gradient(45deg, #180f5e, #7bb73f); display: flex; align-items: center; justify-content: center;">
-                        <img src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=100&h=100&fit=crop&crop=center" alt="Pearland Fit Gym" style="width:60px;height:60px;background:#fff;border-radius:50%; object-fit: cover;">
-                        <span class="card-category">Fitness</span>
-                      </div>
-                      <div class="card-content p-2">
-                        <h3 class="card-title" style="font-size:1rem;">Pearland Fit Gym</h3>
-                        <p class="card-excerpt" style="font-size:0.92rem;">
-                          Modern equipment, expert trainers, and a welcoming atmosphere for all ages and fitness levels in Pearland...
-                        </p>
-                        <a href="#" class="read-more">Read More →</a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-md-4 col-sm-6 fade-in business-item" data-category="Pizza">
-                    <div class="news-card p-2">
-                      <div class="card-image" style="height:120px; background: linear-gradient(45deg, #180f5e, #7bb73f); display: flex; align-items: center; justify-content: center;">
-                        <img src="https://images.unsplash.com/photo-1513104890138-7c749659a591?w=100&h=100&fit=crop&crop=center" alt="Tony's Pizzeria" style="width:60px;height:60px;background:#fff;border-radius:50%; object-fit: cover;">
-                        <span class="card-category">Pizza</span>
-                      </div>
-                      <div class="card-content p-2">
-                        <h3 class="card-title" style="font-size:1rem;">Tony's Pizzeria</h3>
-                        <p class="card-excerpt" style="font-size:0.92rem;">
-                          Hand-tossed pizzas, classic recipes, and a warm family vibe. Serving authentic Italian cuisine since 1995...
-                        </p>
-                        <a href="#" class="read-more">Read More →</a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-md-4 col-sm-6 fade-in business-item" data-category="Healthcare">
-                    <div class="news-card p-2">
-                      <div class="card-image" style="height:120px; background: linear-gradient(45deg, #180f5e, #7bb73f); display: flex; align-items: center; justify-content: center;">
-                        <img src="https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=100&h=100&fit=crop&crop=center" alt="Care+ Medical Clinic" style="width:60px;height:60px;background:#fff;border-radius:50%; object-fit: cover;">
-                        <span class="card-category">Healthcare</span>
-                      </div>
-                      <div class="card-content p-2">
-                        <h3 class="card-title" style="font-size:1rem;">Care+ Medical Clinic</h3>
-                        <p class="card-excerpt" style="font-size:0.92rem;">
-                          Comprehensive healthcare services with experienced doctors and state-of-the-art medical equipment...
-                        </p>
-                        <a href="#" class="read-more">Read More →</a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-md-4 col-sm-6 fade-in business-item" data-category="Automotive">
-                    <div class="news-card p-2">
-                      <div class="card-image" style="height:120px; background: linear-gradient(45deg, #180f5e, #7bb73f); display: flex; align-items: center; justify-content: center;">
-                        <img src="https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=100&h=100&fit=crop&crop=center" alt="AutoCare Plus" style="width:60px;height:60px;background:#fff;border-radius:50%; object-fit: cover;">
-                        <span class="card-category">Automotive</span>
-                      </div>
-                      <div class="card-content p-2">
-                        <h3 class="card-title" style="font-size:1rem;">AutoCare Plus</h3>
-                        <p class="card-excerpt" style="font-size:0.92rem;">
-                          Professional auto repair and maintenance services. ASE certified technicians with 20+ years experience...
-                        </p>
-                        <a href="#" class="read-more">Read More →</a>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="col-md-4 col-sm-6 fade-in business-item" data-category="Beauty">
-                    <div class="news-card p-2">
-                      <div class="card-image" style="height:120px; background: linear-gradient(45deg, #180f5e, #7bb73f); display: flex; align-items: center; justify-content: center;">
-                        <img src="https://images.unsplash.com/photo-1560066984-138dadb4c035?w=100&h=100&fit=crop&crop=center" alt="Luxe Hair Salon" style="width:60px;height:60px;background:#fff;border-radius:50%; object-fit: cover;">
-                        <span class="card-category">Beauty</span>
-                      </div>
-                      <div class="card-content p-2">
-                        <h3 class="card-title" style="font-size:1rem;">Luxe Hair Salon</h3>
-                        <p class="card-excerpt" style="font-size:0.92rem;">
-                          Professional hair styling, coloring, and beauty treatments. Expert stylists using premium products...
-                        </p>
-                        <a href="#" class="read-more">Read More →</a>
-                      </div>
+                  <div class="col-12">
+                    <div class="alert alert-light" style="background:#f9fafb;border:1px solid #e5e7eb;">
+                      No featured listings yet.
+                      <a href="<?= base_url('all_listing') ?>">Browse the directory</a>
+                      or
+                      <a href="<?= base_url('register') ?>">add your business</a>.
                     </div>
                   </div>
                 <?php endif; ?>
               </div>
               <div class="text-center mt-3">
-                <a href="/all-listing" class="btn btn-view-more mt-3 m1-5">View More</a>
+                <a href="<?= base_url('all_listing') ?>" class="btn btn-view-more mt-3 m1-5">View More</a>
               </div>
             </section>
             <!-- =========================
@@ -3091,16 +2815,15 @@ Database Tables Required:
                     <div class="row">
                       <?php if (!empty($latest_news)): ?>
                         <?php foreach ($latest_news as $i => $news): ?>
-                          <?php
-                          // Set column class
-                          $colClass = 'col-md-4 col-sm-6';
-                          // Fallback image
-                          $imgSrc = !empty($news->news_image) ? base_url($news->news_image) : '../assets/images/blog/blog1.jpg';
-                          ?>
+                          <?php $colClass = 'col-md-4 col-sm-6'; ?>
                           <div class="<?php echo $colClass; ?>">
                             <div class="blog-box">
                               <div class="blog-img">
-                                <img src="<?php echo $imgSrc; ?>" alt="<?php echo htmlspecialchars($news->news_title); ?>">
+                                <?php if (!empty($news->news_image)): ?>
+                                  <?= responsive_img($news->news_image, $news->news_title) ?>
+                                <?php else: ?>
+                                  <img src="<?= base_url('assets/images/pearland-logo.png') ?>" alt="<?= e_attr($news->news_title) ?>" loading="lazy" decoding="async">
+                                <?php endif; ?>
                               </div>
                               <div class="blog-con">
                                 <span class="blog-cat">News</span>
@@ -3300,8 +3023,7 @@ Database Tables Required:
               </div>
             </section>
 
-
-
+            <?php $cta_variant = 'banner'; include APPPATH . 'views/partials/web_dev_cta.php'; ?>
 
           </div>
           <!-- =========================
@@ -3317,6 +3039,8 @@ Database Tables Required:
               <div id="weather-current"></div>
             </div>
 
+            <?php $slot = 'home-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
+            <?php include APPPATH . 'views/partials/web_dev_cta.php'; ?>
 
             <!-- Categories Widget -->
             <div class="widget categories">
@@ -3460,7 +3184,8 @@ Database Tables Required:
             <div class="widget hide_on_phone">
               <h3 class="widget-title">Subscribe for Local Deals</h3>
               <p>Get the best local deals, new openings, and events in Pearland — direct to your inbox.</p>
-              <form id="newsletterForm" class="newsletter-form">
+              <form id="newsletterForm" class="newsletter-form" method="post" action="<?= base_url('user/subscribe_newsletter') ?>">
+                <label for="newsletterEmail" style="position:absolute;left:-9999px;">Email</label>
                 <input type="email" id="newsletterEmail" name="email" class="newsletter-input" placeholder="Your email address" required>
                 <button type="submit" id="newsletterSubmit" class="newsletter-btn">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
@@ -4254,9 +3979,9 @@ Database Tables Required:
         86: "Heavy snow showers"
       };
 
-      // Use embedded proxy handler to avoid CORS and geo-blocking issues
-      // This works reliably from USA, Bangladesh, and all other countries
-      const proxyUrl = window.location.pathname + '?weather_api=proxy';
+      // Server-side proxy (application/controllers/Weather.php) — avoids
+      // browser CORS / regional blocks and lets us cache upstream.
+      const proxyUrl = '<?= base_url('weather') ?>';
 
       // Show loading state
       weatherCurrent.innerHTML = '<div style="text-align:center;padding:20px;color:#666;"><i class="fa fa-spinner fa-spin" style="font-size:24px;"></i><div style="margin-top:10px;">Loading weather data...</div></div>';

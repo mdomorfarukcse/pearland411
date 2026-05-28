@@ -191,7 +191,7 @@
                     <div class="quote-pop">
                         <?php if ($this->session->flashdata('message')) { ?>
                             <div class="log-suc">
-                                <p><?= $this->session->flashdata('message') ?></p>
+                                <p><?= e($this->session->flashdata('message')); ?></p>
                             </div>
                         <?php } ?>
                         <h3>Get Quote</h3>
@@ -259,9 +259,9 @@
         <div class="eve-deta-body-main">
             <div class="lhs">
                 <div class="head">
-                    <div class="cl_pri"><b>Price</b>: $<?= $classifieds->classifieds_price; ?></div>
+                    <div class="cl_pri"><b>Price</b>: $<?= number_format((float) $classifieds->classifieds_price, 2) ?></div>
 
-                    <h1 class="pg_title"><?= $classifieds->classifieds_title; ?></h1>
+                    <h1 class="pg_title"><?= e($classifieds->classifieds_title); ?></h1>
                 </div>
                 <p><?= strip_tags(html_entity_decode($classifieds->classifieds_description)); ?></p>
 

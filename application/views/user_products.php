@@ -153,7 +153,7 @@
 		<!-- End Subscription Details -->
 
 		<?php if ($has_subscription): ?>
-			<table class="responsive-table bordered" id="pg-resu">
+			<table data-admin-table class="responsive-table bordered" id="pg-resu">
 
 				<thead>
 
@@ -171,9 +171,7 @@
 
 						<th>Status</th>
 
-						<th>Edit</th>
-
-						<th>Preview</th>
+						<th>Actions</th>
 
 					</tr>
 
@@ -236,23 +234,10 @@
 
 								</td>
 
-								<td>
-
-									<a href="<?= base_url('user/edit-products/' . $product->product_id); ?>" class="db-list-edit"> Edit
-
-									</a>
-
-								</td>
-
-								<td>
-
-									<a href="<?= base_url('user/product-details/' . $product->product_slug); ?>" class="db-list-edit" target="_blank">
-
-										Preview
-
-									</a>
-
-								</td>
+								<td><?= admin_actions(array(
+									'view' => base_url('products-details/' . rawurlencode((string) $product->product_slug)),
+									'edit' => base_url('user/edit-products/' . (int) $product->product_id),
+								), 'product') ?></td>
 
 							</tr>
 

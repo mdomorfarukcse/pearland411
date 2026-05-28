@@ -1,28 +1,24 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-// Dedicated Authorize.Net configuration file
-// Toggle sandbox => TRUE for test, FALSE for production
-$__authnet_cfg = array(
-    'api_login_id' => '6Wau4j6YnkQ',
-    'transaction_key' => '97rn54P6e8uEKUma',
-    'signature_key' => '679811E35E054203C2AC7203B1E308E31455C02CD1C13D8DF4BF6F4591419CDAB8E88A377D669AC187E1ABF3270924D4FA943DB814CA90BEE3FD0E86C17484C2',
-    'client_key' => '8zY728jrxz283wNTHDNbD9UU5ntS2R5nPFn7vVKEzLq253PWsEbA39s2SY7yd5Sn',
-    'environment' => 'sandbox', // change to production when going live
-    'endpoint_url' => 'https://apitest.authorize.net/xml/v1/request.api',
-    'currency' => 'USD',
+// Authorize.Net configuration — values come from the environment.
+// See .env.example for the variable list.
+//
+// Sandbox endpoint:    https://apitest.authorize.net/xml/v1/request.api
+// Production endpoint: https://api.authorize.net/xml/v1/request.api
+//
+// IMPORTANT: never commit real API credentials to this file.
 
-    // Webhook settings
-    'webhook_url' => 'https://yourdomain.com/webhooks/authorize_net', // UPDATE THIS
-
-    // Email settings (for subscription notifications)
-    'email_enabled' => true,
-    'email_from' => 'noreply@yourdomain.com', // UPDATE THIS
-    'email_name' => 'Your Site Name' // UPDATE THIS
+$config['authorize_net'] = array(
+    'api_login_id'    => env('AUTHNET_API_LOGIN_ID', ''),
+    'transaction_key' => env('AUTHNET_TRANSACTION_KEY', ''),
+    'signature_key'   => env('AUTHNET_SIGNATURE_KEY', ''),
+    'client_key'      => env('AUTHNET_CLIENT_KEY', ''),
+    'environment'     => env('AUTHNET_ENVIRONMENT', 'sandbox'),
+    'endpoint_url'    => env('AUTHNET_ENDPOINT_URL', 'https://apitest.authorize.net/xml/v1/request.api'),
+    'currency'        => env('AUTHNET_CURRENCY', 'USD'),
+    'webhook_url'     => env('AUTHNET_WEBHOOK_URL', ''),
+    'email_enabled'   => true,
+    'email_from'      => env('MAIL_FROM_ADDRESS', 'no-reply@pearland411.com'),
+    'email_name'      => env('MAIL_FROM_NAME', 'Pearland411'),
 );
-
-if (!isset($config) || !is_array($config)) {
-    $config = array();
-}
-$config['authorize_net'] = $__authnet_cfg;
-unset($__authnet_cfg);

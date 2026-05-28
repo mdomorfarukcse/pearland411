@@ -23,8 +23,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 | a PHP script and you can easily do that on your own.
 |
 */
-$config['base_url'] = 'https://new.pearland411.com/';
-// 	$config['base_url']= 'http://localhost:8081/pearland/';
+$config['base_url'] = env('BASE_URL', 'https://new.pearland411.com/');
 
 /*
 |--------------------------------------------------------------------------
@@ -101,7 +100,9 @@ $config['charset'] = 'UTF-8';
 | setting this variable to TRUE (boolean).  See the user guide for details.
 |
 */
-$config['enable_hooks'] = FALSE;
+// Required for the CSRF auto-inject display_override hook
+// (see application/hooks/Csrf_inject.php).
+$config['enable_hooks'] = TRUE;
 
 /*
 |--------------------------------------------------------------------------
@@ -325,7 +326,9 @@ $config['cache_query_string'] = FALSE;
 | https://codeigniter.com/user_guide/libraries/encryption.html
 |
 */
-$config['encryption_key'] = '';
+// 32-byte random key. MUST be set in .env. Generate with:
+//   php -r 'echo bin2hex(random_bytes(16)), "\n";'
+$config['encryption_key'] = env('ENCRYPTION_KEY', '');
 
 /*
 |--------------------------------------------------------------------------
@@ -404,8 +407,10 @@ $config['sess_regenerate_destroy'] = FALSE;
 $config['cookie_prefix']    = '';
 $config['cookie_domain']    = '';
 $config['cookie_path']        = '/';
-$config['cookie_secure']    = FALSE;
-$config['cookie_httponly']     = FALSE;
+// Cookies should only travel over HTTPS in production and never be
+// accessible to JavaScript. Override in dev via env if needed.
+$config['cookie_secure']    = (ENVIRONMENT === 'production');
+$config['cookie_httponly']  = TRUE;
 
 /*
 |--------------------------------------------------------------------------
@@ -449,11 +454,22 @@ $config['global_xss_filtering'] = FALSE;
 | 'csrf_regenerate' = Regenerate token on every submission
 | 'csrf_exclude_uris' = Array of URIs which ignore CSRF checks
 */
-$config['csrf_protection'] = FALSE;
-$config['csrf_token_name'] = 'csrf_test_name';
-$config['csrf_cookie_name'] = 'csrf_cookie_name';
-$config['csrf_expire'] = 7200;
-$config['csrf_regenerate'] = TRUE;
+// CSRF protection. Token is auto-injected into every <form method="post">
+// by the display_override hook (application/hooks/Csrf_inject.php).
+// AJAX clients should read the <meta name="csrf-token"> tag the hook adds
+// to <head>; jQuery setup ships in assets/js/csrf.js.
+$config['csrf_protection']  = TRUE;
+$config['csrf_token_name']  = 'pearland411_csrf';
+$config['csrf_cookie_name'] = 'pearland411_csrf';
+$config['csrf_expire']      = 7200;
+// Keep the token stable across requests so multi-step AJAX flows
+// don't break. We can flip this back to TRUE once every AJAX caller
+// re-reads the meta tag after each response.
+$config['csrf_regenerate']  = FALSE;
+// Paths exempted from CSRF verification. Keep this list minimal.
+// CI3 only enforces CSRF on POST requests; GET handlers (e.g. the
+// weather-API proxy in views/index.php that's keyed off
+// ?weather_api=proxy) do not need to be listed here.
 $config['csrf_exclude_uris'] = array();
 
 /*

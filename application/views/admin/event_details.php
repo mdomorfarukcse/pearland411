@@ -8,7 +8,7 @@
           <?php } ?>
 		<h2>Event Details</h2>
 		<a href="<?= base_url('user/add_user_event');?>" class="db-tit-btn">Add new Event</a>
-		<table class="responsive-table bordered">
+		<table data-admin-table class="responsive-table bordered">
 			<thead>
 				<tr>
 					<th>No</th>

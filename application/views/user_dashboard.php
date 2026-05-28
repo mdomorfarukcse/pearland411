@@ -242,7 +242,7 @@ if (!function_exists('createSafeSlug')) {
 
 
 
-		<table class="responsive-table bordered">
+		<table data-admin-table class="responsive-table bordered">
 
 			<thead>
 

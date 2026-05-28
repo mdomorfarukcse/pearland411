@@ -17,7 +17,7 @@
               <p><?= $this->session->flashdata('message') ?></p>
             </div>
           <?php } ?>
-          <table class="responsive-table bordered" id="pg-resu">
+          <table data-admin-table class="responsive-table bordered" id="pg-resu">
             <thead>
               <tr>
                 <th>No</th>
@@ -26,9 +26,7 @@
                 <th>Created by</th>
                 <th>Views</th>
                 <th>Status</th>
-                <th>Edit</th>
-                <th>Delete</th>
-                <th>Preview</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -40,16 +38,21 @@
                   <tr>
                     <td><?= $i; ?></td>
                     <td>
-                      <img src="<?= (empty($news->news_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($news->news_image) ?>"><?= $news->news_title; ?><span><?= date('d, M Y', strtotime($news->created_at)); ?></span>
+                      <?php if (empty($news->news_image)): ?>
+                        <img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($news->news_title) ?>" loading="lazy">
+                      <?php else: ?>
+                        <?= responsive_img($news->news_image, $news->news_title) ?>
+                      <?php endif; ?>
+                      <?= e($news->news_title); ?><span><?= date('d, M Y', strtotime($news->created_at)); ?></span>
                     </td>
                     <td>
                       <?php if (!empty($news->category_name)) : ?>
-                        <a href="" class="db-list-ststus" target="_blank"><?= $news->category_name ?></a>
+                        <a href="" class="db-list-ststus" target="_blank"><?= e($news->category_name) ?></a>
                       <?php endif; ?>
                     </td>
                     <td>
                       <?php if (!empty($news->name)) : ?>
-                        <a href="" class="db-list-ststus" target="_blank"><?= $news->name; ?></a>
+                        <a href="" class="db-list-ststus" target="_blank"><?= e($news->name); ?></a>
                       <?php endif; ?>
                     </td>
                     <?php $n_views = (isset($views_counts) && isset($views_counts[$news->news_id])) ? $views_counts[$news->news_id] : 0; ?>
@@ -67,13 +70,12 @@
                       <input type="hidden" id="id" value="<?= $news->news_id; ?>">
                     </td>
 
-                    <td>
-                      <a href="<?= base_url('admin/edit-news/' . $news->news_slug); ?>" class="db-list-edit">Edit</a>
-                    </td>
-                    <td>
-                      <a href="#" onclick="javascript:deleteConfirm('<?php echo base_url() . 'admin/delete-news/' . $news->news_slug; ?>');" class="db-list-edit">Delete</a>
-                    </td>
-                    <td><a href="<?= base_url('admin/news-details/' . $news->news_slug); ?>" class="db-list-edit" target="_blank">Preview</a></td>
+                    <td><?= admin_actions(array(
+                      'view'   => base_url('news_details/' . rawurlencode((string) $news->news_slug)),
+                      'edit'   => base_url('admin/edit-news/' . rawurlencode((string) $news->news_slug)),
+                      'delete' => base_url('admin/delete-news/' . rawurlencode((string) $news->news_slug)),
+                      'delete_confirm' => 'Delete this news post?',
+                    ), 'news post') ?></td>
                   </tr>
                 <?php
                   $i++;

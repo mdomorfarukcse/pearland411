@@ -210,11 +210,15 @@
 											<li>
 												<div class="near-bx">
 													<div class="ne-1">
-														<img src="<?= (empty($value->listing_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($value->listing_image); ?>" alt="">
+														<?php if (empty($value->listing_image)): ?>
+															<img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($value->listing_name ?? '') ?>" loading="lazy" decoding="async">
+														<?php else: ?>
+															<?= responsive_img($value->listing_image, $value->listing_name ?? '') ?>
+														<?php endif; ?>
 													</div>
 													<div class="ne-2">
-														<h5><?= $value->listing_name; ?></h5>
-														<p><?= ($value->display_address == 1) ? $value->listing_address : '[Adderss hidden]'; ?></p>
+														<h5><?= e($value->listing_name); ?></h5>
+														<p><?= ((int) ($value->display_address ?? 0) === 1 && !empty($value->listing_address)) ? e($value->listing_address) : '[Address hidden]'; ?></p>
 													</div>
 													<!--<div class="ne-3"> <span>5.0</span>-->
 													<!--</div>-->
@@ -261,9 +265,8 @@
 						</div>
 						<!--END-->
 						<!--START-->
-						<div class="ban-ati-com ads-det-page" style="padding: 0px !important;">
-							<a href=""><span>Ad</span><img src="<?= base_url('assets/images/AD-SAMPLE.png') ?>" alt=""></a>
-						</div>
+						<?php $slot = 'listing-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
+						<?php include APPPATH . 'views/partials/web_dev_cta.php'; ?>
 						<!--END-->
 						<div class="all-list-filt-form form-position" style="z-index: 10;" >
 							<div class="tit">
@@ -352,9 +355,7 @@
 						<!-- Web Development Card -->
 
 						<!-- END -->
-						<div class="ban-ati-com ads-det-page">
-							<a href=""><span>Ad</span><img src="<?= base_url('assets/images/AD-SAMPLE.png') ?>" alt=""></a>
-						</div>
+						<?php $slot = 'listing-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
 					</div>
 				</div>
 				<div class="col-md-9" style="margin-bottom:110px; overflow-x: hidden;">
@@ -364,10 +365,7 @@
 							<i class="material-icons ic3" title="Map view">location_on</i>
 						</div>
 					</div>
-					<div class="ban-ati-com ads-all-list" style="margin: 20px 0; overflow: hidden;">
-						<a href="#"><span>Ad</span><img src="<?= base_url('assets/images/AD-SAMPLE.png'); ?>" alt="" style="max-width: 100%; height: auto;"></a>
-					</div>
-					<!--ADS-->
+					<?php $slot = 'listing-top'; include APPPATH . 'views/partials/ad_slot.php'; ?>
 					<!-- Loader Image -->
 					<div id="loadingmessage" style="display:none">
 						<div id="loadingmessage1">&nbsp;</div>
@@ -507,19 +505,23 @@
 											<div class="al-img"> <span class="open-stat">open</span>
 												<a href="<?= base_url('user/listing-details/' . $value->listing_slug); ?>">
 
-													<img src="<?= (empty($value->listing_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($value->listing_image); ?>" alt="">
+													<?php if (empty($value->listing_image)): ?>
+															<img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($value->listing_name ?? '') ?>" loading="lazy" decoding="async">
+														<?php else: ?>
+															<?= responsive_img($value->listing_image, $value->listing_name ?? '') ?>
+														<?php endif; ?>
 												</a>
 											</div>
 											<!---END LISTING IMAGE--->
 											<!---LISTING NAME--->
 											<div>
 												<h4>
-													<a href="<?= base_url('user/listing-details/' . $value->listing_slug); ?>"><?= $value->listing_name; ?></a>
+													<a href="<?= base_url('listing-details/' . rawurlencode((string) $value->listing_slug)); ?>"><?= e($value->listing_name); ?></a>
 													<i class="li-veri"><img src="<?= base_url('assets/images/icon/svg/verified.png'); ?>" alt=""></i>
 												</h4>
 
 												<?php if ($value->display_address == 1 && !empty($value->listing_address)): ?>
-													<span class="addr"><?= $value->listing_address; ?></span>
+													<span class="addr"><?= e($value->listing_address); ?></span>
 												<?php endif; ?>
 
 												<?php if ($value->display_phone == 1 && !empty($value->listing_mobile)): ?>
@@ -927,11 +929,7 @@
 						</style>
 					<?php endif; ?>
 
-					<!--ADS-->
-					<div class="ban-ati-com ads-all-list">
-						<a href="#"><span>Ad</span><img src="<?= base_url('assets/images/AD-SAMPLE.png') ?>" alt=""></a>
-					</div>
-					<!--ADS-->
+					<?php $slot = 'listing-inline'; include APPPATH . 'views/partials/ad_slot.php'; ?>
 				</div>
 			</div>
 		</div>

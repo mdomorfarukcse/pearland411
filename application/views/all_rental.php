@@ -152,7 +152,7 @@
           </div> <!-- Close container div -->
 
           <?php if ($has_subscription): ?>
-            <table class="responsive-table bordered" id="pg-resu">
+            <table data-admin-table class="responsive-table bordered" id="pg-resu">
               <thead>
                 <tr>
                   <th>No</th>
@@ -160,9 +160,7 @@
                   <th>Category</th>
                   <th>Views</th>
                   <th>Status</th>
-                  <th>Edit</th>
-
-                  <th>Preview</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="rentalTableBody">
@@ -180,7 +178,12 @@
                     <tr>
                       <td><?= $i; ?></td>
                       <td>
-                        <img src="<?= (empty($rental->rental_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($rental->rental_image) ?>"><?= $rental->rental_title; ?><span><?= date('d, M Y', strtotime($rental->created_at)); ?></span>
+                        <?php if (empty($rental->rental_image)): ?>
+                          <img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($rental->rental_title) ?>" loading="lazy" decoding="async">
+                        <?php else: ?>
+                          <?= responsive_img($rental->rental_image, $rental->rental_title) ?>
+                        <?php endif; ?>
+                        <?= e($rental->rental_title); ?><span><?= date('d, M Y', strtotime($rental->created_at)); ?></span>
                       </td>
                       <td><a href="" class="db-list-ststus" target="_blank"><?= !empty($rental->category_name) ? $rental->category_name : 'No Category' ?></a></td>
                       <td><a href="" class="db-list-ststus" target="_blank"><?= $rental->views; ?></a></td>
@@ -190,11 +193,10 @@
                         </span>
                       </td> 
 
-                      <td>
-                        <a href="<?= base_url('user/edit-rental/' . $rental->rental_slug); ?>" class="db-list-edit">Edit</a>
-                      </td>
-
-                      <td><a href="<?= base_url('rental-details/' . $rental->rental_slug); ?>" class="db-list-edit" target="_blank">Preview</a></td>
+                      <td><?= admin_actions(array(
+                          'view' => base_url('rental-details/' . rawurlencode((string) $rental->rental_slug)),
+                          'edit' => base_url('user/edit-rental/' . rawurlencode((string) $rental->rental_slug)),
+                      ), 'rental') ?></td>
                     </tr>
                   <?php
                     $i++;

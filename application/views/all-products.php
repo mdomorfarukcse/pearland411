@@ -333,19 +333,19 @@
 		<div id="home_slide_enq_same" class="log" style="display: none;">
 			<p>You cannot make enquiry on your own listing</p>
 		</div>
-		<form name="home_slide_enquiry_form" id="home_slide_enquiry_form" method="post" enctype="multipart/form-data">
+		<form name="home_slide_enquiry_form" id="home_slide_enquiry_form" method="post" action="<?= base_url('contact-submit') ?>"><input type="hidden" name="subject" value="Help &amp; Support slide-out">
 			<input type="hidden" class="form-control" name="listing_id" value="0" placeholder="" required>
 			<input type="hidden" class="form-control" name="listing_user_id" value="0" placeholder="" required>
 			<input type="hidden" class="form-control" name="enquiry_sender_id" value="" placeholder="" required>
 			<input type="hidden" class="form-control" name="enquiry_source" value="Website" placeholder="" required>
 			<div class="form-group">
-				<input type="text" name="enquiry_name" value="" required="required" class="form-control" placeholder="Enter name*">
+				<input type="text" name="fullName" value="" required="required" class="form-control" placeholder="Enter name*">
 			</div>
 			<div class="form-group">
-				<input type="email" class="form-control" placeholder="Enter email*" required="required" value="" name="enquiry_email" pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$" title="Invalid email address">
+				<input type="email" class="form-control" placeholder="Enter email*" required="required" value="" name="email" pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$" title="Invalid email address">
 			</div>
 			<div class="form-group">
-				<input type="text" class="form-control" value="" name="enquiry_mobile" placeholder="Enter mobile number *" pattern="[7-9]{1}[0-9]{9}" title="Phone number starting with 7-9 and remaing 9 digit with 0-9" required="">
+				<input type="text" class="form-control" value="" name="phone" placeholder="Enter mobile number *" pattern="[0-9+()\- ]{7,20}" title="Enter a phone number (7–20 characters, digits/+/()/-/space allowed)" required="">
 			</div>
 			<div class="form-group">
 				<select name="enquiry_category" id="enquiry_category" class="form-control">
@@ -366,7 +366,7 @@
 				</select>
 			</div>
 			<div class="form-group">
-				<textarea class="form-control" rows="3" name="enquiry_message" placeholder="Enter your query or message"></textarea>
+				<textarea class="form-control" rows="3" name="message" placeholder="Enter your query or message"></textarea>
 			</div>
 			<input type="hidden" id="source">
 			<button type="submit" id="home_slide_enquiry_submit" name="home_slide_enquiry_submit" class="btn btn-primary">Submit Requirements</button>
@@ -425,25 +425,25 @@
 
 							<div class="form-group">
 
-								<input type="text" class="form-control" name="enquiry_name" placeholder="Enter name*" required>
+								<input type="text" class="form-control" name="fullName" placeholder="Enter name*" required>
 
 							</div>
 
 							<div class="form-group">
 
-								<input type="email" class="form-control" name="enquiry_email" placeholder="Enter email*" pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$" title="Invalid email address" required>
+								<input type="email" class="form-control" name="email" placeholder="Enter email*" pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$" title="Invalid email address" required>
 
 							</div>
 
 							<div class="form-group">
 
-								<input type="text" class="form-control" name="enquiry_mobile" placeholder="Enter mobile number *" pattern="[0-9]{10,15}" title="Please enter a valid phone number (10-15 digits)" required>
+								<input type="text" class="form-control" name="phone" placeholder="Enter mobile number *" pattern="[0-9]{10,15}" title="Please enter a valid phone number (10-15 digits)" required>
 
 							</div>
 
 							<div class="form-group">
 
-								<textarea class="form-control" rows="3" name="enquiry_message" placeholder="Enter your query or message"></textarea>
+								<textarea class="form-control" rows="3" name="message" placeholder="Enter your query or message"></textarea>
 
 							</div>
 

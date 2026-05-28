@@ -75,7 +75,7 @@
 
 								<div class="form-group ic-pho">
 
-									<input type="text" class="form-control" value="" name="enquiry_mobile" placeholder="Enter mobile number *" pattern="[7-9]{1}[0-9]{9}" title="Phone number starting with 7-9 and remaing 9 digit with 0-9" required>
+									<input type="text" class="form-control" value="" name="enquiry_mobile" placeholder="Enter mobile number *" pattern="[0-9+()\- ]{7,20}" title="Enter a phone number (7–20 characters, digits/+/()/-/space allowed)" required>
 
 								</div>
 

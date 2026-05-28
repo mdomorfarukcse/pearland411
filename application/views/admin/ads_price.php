@@ -13,7 +13,7 @@
    
        <div class="ud-cen-s2 ad-table-inn">
         <h2>Ad Pricing and other details</h2>
-        <table class="responsive-table bordered">
+        <table data-admin-table class="responsive-table bordered">
           <thead>
             <tr>
               <th>No</th>

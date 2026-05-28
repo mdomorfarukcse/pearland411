@@ -17,7 +17,7 @@
 					<?php } ?>
 					<a href="<?= base_url() ?>admin/add-new-event" class="db-tit-btn">Add new event</a>
 
-					<table class="responsive-table bordered" id="pg-resu">
+					<table data-admin-table class="responsive-table bordered" id="pg-resu">
 						<thead>
 							<tr>
 								<th>No</th>
@@ -26,9 +26,7 @@
 								<th>Created by</th>
 								<th>Views</th>
 								<th>Status</th>
-								<th>Edit</th>
-								<th>Delete</th>
-								<th>Preview</th>
+								<th>Actions</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -41,11 +39,11 @@
 							?>
 									<tr>
 										<td><?= $i++; ?></td>
-										<td><?= $event->event_name; ?> <span><?= date('d, M Y', strtotime($event->created_at)); ?></span></td>
+										<td><?= e($event->event_name); ?> <span><?= date('d, M Y', strtotime($event->created_at)); ?></span></td>
 										<td><?= date('d, M Y', strtotime($event->event_start_date)); ?></td>
 										<td>
 											<?php if (!empty($event->name)) : ?>
-												<a href="" class="db-list-ststus" target="_blank"><?= $event->name; ?></a>
+												<a href="" class="db-list-ststus" target="_blank"><?= e($event->name); ?></a>
 											<?php endif; ?>
 										</td>
 										<?php $e_views = (isset($views_counts) && isset($views_counts[$event->event_id])) ? $views_counts[$event->event_id] : 0; ?>
@@ -64,9 +62,12 @@
 											<input type="hidden" id="id" value="<?= $event->event_id; ?>">
 										</td>
 
-										<td><a href="<?= base_url('admin/edit_event/' . $event->event_slug); ?>" class="db-list-edit">Edit</a></td>
-										<td><a onclick="javascript:deleteConfirm('<?php echo base_url() . 'admin/delete_event/' . $event->event_id; ?>');" href="#" class="db-list-edit">Delete</a></td>
-										<td><a href="<?= base_url('admin/event-details/' . $event->event_slug); ?>" class="db-list-edit" target="_blank">Preview</a></td>
+										<td><?= admin_actions(array(
+											'view'   => base_url('event-details/' . rawurlencode((string) $event->event_slug)),
+											'edit'   => base_url('admin/edit_event/' . rawurlencode((string) $event->event_slug)),
+											'delete' => base_url('admin/delete_event/' . (int) $event->event_id),
+											'delete_confirm' => 'Delete this event?',
+										), 'event') ?></td>
 									</tr>
 							<?php }
 							} ?>

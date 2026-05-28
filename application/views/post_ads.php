@@ -131,7 +131,7 @@
 		<!-- End Subscription Details -->
 
 		<?php if ($has_subscription): ?>
-			<table class="responsive-table bordered">
+			<table data-admin-table class="responsive-table bordered">
 
 				<thead>
 

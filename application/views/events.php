@@ -59,6 +59,7 @@ function createSafeSlug($text)
 <!-- START -->
 <section class=" event-body">
 	<div class="container">
+		<?php $slot = 'events-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
 		<div class="us-ppg-com">
 			<ul id="intseres">
 				<?php
@@ -74,7 +75,11 @@ function createSafeSlug($text)
 									?>
 									<a href="<?= base_url('user/event-details/' . $event_slug); ?>">
 
-										<img src="<?= !empty($event->event_image) ? base_url($event->event_image) : base_url('assets/images/no_image.png') ?>" alt="">
+										<?php if (!empty($event->event_image)): ?>
+										<?= responsive_img($event->event_image, $event->event_name) ?>
+									<?php else: ?>
+										<img src="<?= base_url('assets/images/no_image.png') ?>" alt="<?= e_attr($event->event_name) ?>" loading="lazy" decoding="async">
+									<?php endif; ?>
 										<span><?= date('M', strtotime($event->created_at)); ?><b><?= date('d', strtotime($event->created_at)); ?></b></span>
 									</a>
 								</div>
@@ -261,6 +266,9 @@ function createSafeSlug($text)
 	</div>
 	</ul>
 	</div>
+	</div>
+	<div class="container">
+		<?php $cta_variant = 'banner'; include APPPATH . 'views/partials/web_dev_cta.php'; ?>
 	</div>
 </section>
 

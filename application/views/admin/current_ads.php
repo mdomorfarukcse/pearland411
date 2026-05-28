@@ -28,7 +28,7 @@
 
         </div>
 
-        <table class="responsive-table bordered" id="pg-resu">
+        <table data-admin-table class="responsive-table bordered" id="pg-resu">
 
           <thead>
 

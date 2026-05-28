@@ -9,7 +9,7 @@
         <span class="udb-inst">Ad Request & Enquiry</span>
         <div class="ud-cen-s2 ad-table-inn">
           <h2>Ad Request</h2>
-          <table class="responsive-table bordered">
+          <table data-admin-table class="responsive-table bordered">
             <thead>
               <tr>
                 <th>No</th>

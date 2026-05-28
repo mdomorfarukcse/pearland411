@@ -12,7 +12,7 @@
          <div class="ad-int-sear">
           <input type="text" id="pg-sear" placeholder="Search this page..">
         </div>
-        <table class="responsive-table bordered tb-bold-dis" id="pg-resu">
+        <table data-admin-table class="responsive-table bordered tb-bold-dis" id="pg-resu">
          <thead>
           <tr>
             <th>No</th>
@@ -49,22 +49,22 @@
       <tr>
         <td><?= $i; ?></td>
         <td>
-          <?= $enq->enquiry_name; ?> <span><?= date('d, M Y',strtotime($enq->enquiry_created_at)); ?></span>
+          <?= e($enq->enquiry_name); ?> <span><?= date('d, M Y',strtotime($enq->enquiry_created_at)); ?></span>
         </td>
         <td>
-          <?= $enq->enquiry_email; ?>
+          <?= e($enq->enquiry_email); ?>
         </td>
         <td>
-          <?= $enq->enquiry_mobile; ?>
+          <?= e($enq->enquiry_mobile); ?>
         </td>
         <td>
-          <?= $enq->enquiry_message; ?>
+          <?= e_nl2br($enq->enquiry_message); ?>
         </td>
         <td>
-          <?= ucfirst($enq->enquiry_type); ?>
+          <?= e(ucfirst((string) $enq->enquiry_type)); ?>
         </td>
         <td>
-          <a href="<?= base_url('admin/'.$link.'/'.$enq->$id);?>"><?= $enq->enquiry_source; ?></a>
+          <a href="<?= base_url('admin/'.$link.'/'.rawurlencode((string)$enq->$id));?>"><?= e($enq->enquiry_source); ?></a>
         </td>               
         <td>
           <a onclick="javascript:deleteConfirm('<?php echo base_url().'admin/delete-enquiry/'.$enq->enquiry_id;?>');"  href="#" class="db-list-edit">Delete</a>

@@ -139,41 +139,67 @@
 		// Login
 		function login()
 		{
-
 			$this->form_validation->set_rules('admin_email', 'Email Address', 'required|trim|valid_email');
-
 			$this->form_validation->set_rules('admin_password', 'Password', 'required');
 
-			if ($this->form_validation->run()) {
-
-				$admin_email = htmlentities($this->input->post('admin_email'), ENT_QUOTES);
-
-				$admin_password  = md5($this->input->post('admin_password'));
-
-				$query = $this->db->query("SELECT * FROM admin WHERE admin_email = '$admin_email' AND admin_password = '$admin_password'");
-
-				$result = $query->result();
-
-				if (sizeof($result) > 0) {
-
-					if ($result[0]->banned != 1) {
-
-						$sess_array = array('logged_id' => $result[0]->admin_id);
-
-						$this->session->set_userdata('logged_user', $sess_array);
-
-						return array('status' => TRUE, 'url' => 'admin/dashboard');
-					} else {
-
-						return array('status' => FALSE, 'message' => 'You account removed. Please Contact Administrator ', 'url' => 'login');
-					}
-				}
-			} else {
-
-				return array('status' => FALSE, 'referror' => '', 'message' => 'Email OR Password Worng');
+			if (!$this->form_validation->run()) {
+				return array('status' => FALSE, 'referror' => '', 'message' => 'Email or Password is incorrect.');
 			}
 
-			return array('status' => FALSE, 'message' => 'Email OR Password Worng', 'url' => '');
+			$admin_email = $this->input->post('admin_email');
+			$admin_password = (string) $this->input->post('admin_password');
+
+			$admin = $this->db
+				->where('admin_email', $admin_email)
+				->limit(1)
+				->get('admin')
+				->row();
+
+			if (!$admin) {
+				return array('status' => FALSE, 'message' => 'Email or Password is incorrect.', 'url' => '');
+			}
+
+			$stored = (string) $admin->admin_password;
+			$verified = false;
+
+			if (strlen($stored) > 0 && $stored[0] === '$') {
+				$verified = password_verify($admin_password, $stored);
+			} elseif (strlen($stored) === 32 && ctype_xdigit($stored)) {
+				if (hash_equals(strtolower($stored), md5($admin_password))) {
+					$verified = true;
+					$this->db
+						->where('admin_id', $admin->admin_id)
+						->update('admin', array(
+							'admin_password' => password_hash($admin_password, PASSWORD_DEFAULT),
+						));
+				}
+			}
+
+			if (!$verified) {
+				return array('status' => FALSE, 'message' => 'Email or Password is incorrect.', 'url' => '');
+			}
+
+			if ((int) $admin->banned === 1) {
+				return array('status' => FALSE, 'message' => 'Your account has been removed. Please contact Administrator.', 'url' => 'login');
+			}
+
+			// Dedicated admin session key so an end-user session can
+			// never satisfy an admin access check. Role is read by
+			// Admin::requireRole() to gate sensitive screens.
+			$role = property_exists($admin, 'role') && $admin->role
+				? (string) $admin->role
+				: 'editor';
+			if (property_exists($admin, 'is_active') && (int) $admin->is_active === 0) {
+				return array('status' => FALSE, 'message' => 'This admin account is disabled.', 'url' => 'login');
+			}
+			$this->session->set_userdata('logged_admin', array(
+				'logged_id'   => $admin->admin_id,
+				'admin_email' => $admin->admin_email,
+				'admin_name'  => isset($admin->admin_name) ? $admin->admin_name : null,
+				'role'        => $role,
+			));
+
+			return array('status' => TRUE, 'url' => 'admin/dashboard');
 		}
 
 		// Get Admin Information
@@ -2416,5 +2442,284 @@
 		{
 			$data = array('is_confirmed' => (int)$status, 'updated_at' => date('Y-m-d H:i:s'));
 			return $this->db->where('id', $id)->update('newsletter_subscriptions', $data);
+		}
+
+		/*=========================
+			IT / Web services catalog (admin-side)
+			==========================*/
+
+		public function getAllServices($limit = null, $offset = 0)
+		{
+			$this->db->from('services')->order_by('sort_order', 'ASC')->order_by('service_id', 'ASC');
+			if ($limit !== null) $this->db->limit((int)$limit, (int)$offset);
+			return $this->db->get()->result();
+		}
+
+		public function countServices() { return $this->db->count_all('services'); }
+
+		public function getServiceById($id)
+		{
+			return $this->db->where('service_id', (int)$id)->limit(1)->get('services')->row();
+		}
+
+		public function insertService($data)
+		{
+			$data['created_at'] = $data['updated_at'] = date('Y-m-d H:i:s');
+			return $this->db->insert('services', $data) ? $this->db->insert_id() : null;
+		}
+
+		public function updateService($id, $data)
+		{
+			$data['updated_at'] = date('Y-m-d H:i:s');
+			return $this->db->where('service_id', (int)$id)->update('services', $data);
+		}
+
+		public function deleteService($id)
+		{
+			return $this->db->where('service_id', (int)$id)->delete('services');
+		}
+
+		public function getAllServiceRequests($status = null, $limit = null, $offset = 0)
+		{
+			$this->db->select('sr.*, s.name AS service_name, s.slug AS service_slug')
+				->from('service_requests sr')
+				->join('services s', 's.service_id = sr.service_id', 'left')
+				->order_by('sr.created_at', 'DESC');
+			if ($status) $this->db->where('sr.status', $status);
+			if ($limit !== null) $this->db->limit((int)$limit, (int)$offset);
+			return $this->db->get()->result();
+		}
+
+		public function getServiceRequestById($id)
+		{
+			return $this->db->select('sr.*, s.name AS service_name, s.slug AS service_slug')
+				->from('service_requests sr')
+				->join('services s', 's.service_id = sr.service_id', 'left')
+				->where('sr.request_id', (int)$id)
+				->limit(1)
+				->get()->row();
+		}
+
+		public function updateServiceRequestStatus($id, $status, $admin_notes = null)
+		{
+			$allowed = array('new','in_review','quoted','won','lost','spam');
+			if (!in_array($status, $allowed, true)) return false;
+			$data = array('status' => $status, 'updated_at' => date('Y-m-d H:i:s'));
+			if ($admin_notes !== null) $data['admin_notes'] = $admin_notes;
+			return $this->db->where('request_id', (int)$id)->update('service_requests', $data);
+		}
+
+		public function deleteServiceRequest($id)
+		{
+			return $this->db->where('request_id', (int)$id)->delete('service_requests');
+		}
+
+		/*=========================
+			Sub-admin / role management
+			See database/migrations/0005_admin_roles.sql.
+			==========================*/
+
+		public function getAllAdmins()
+		{
+			return $this->db
+				->from('admin')
+				->order_by('admin_id', 'ASC')
+				->get()->result();
+		}
+
+		public function getAdminByIdRaw($id)
+		{
+			return $this->db
+				->where('admin_id', (int)$id)
+				->limit(1)
+				->get('admin')->row();
+		}
+
+		public function adminEmailExists($email, $exclude_id = 0)
+		{
+			$this->db->where('admin_email', $email);
+			if ($exclude_id) $this->db->where('admin_id !=', (int)$exclude_id);
+			return $this->db->count_all_results('admin') > 0;
+		}
+
+		public function createAdmin($data, $plain_password)
+		{
+			$data['admin_password'] = password_hash($plain_password, PASSWORD_DEFAULT);
+			$data['admin_created']  = date('Y-m-d H:i:s');
+			if (!isset($data['role']))      $data['role']      = 'editor';
+			if (!isset($data['is_active'])) $data['is_active'] = 1;
+			return $this->db->insert('admin', $data) ? $this->db->insert_id() : null;
+		}
+
+		public function updateAdminMeta($id, $data, $plain_password = null)
+		{
+			if ($plain_password !== null && $plain_password !== '') {
+				$data['admin_password'] = password_hash($plain_password, PASSWORD_DEFAULT);
+			}
+			return $this->db->where('admin_id', (int)$id)->update('admin', $data);
+		}
+
+		public function deleteAdmin($id)
+		{
+			// Refuse to delete the last super_admin so the system is
+			// never left without anyone who can manage roles.
+			$row = $this->getAdminByIdRaw($id);
+			if (!$row) return false;
+			if (($row->role ?? '') === 'super_admin') {
+				$other_super = $this->db
+					->where('role', 'super_admin')
+					->where('admin_id !=', (int)$id)
+					->where('is_active', 1)
+					->count_all_results('admin');
+				if ($other_super < 1) return false;
+			}
+			return $this->db->where('admin_id', (int)$id)->delete('admin');
+		}
+
+		/*=========================
+			Newsletter campaigns (admin side)
+			See database/migrations/0003_newsletter_campaigns.sql.
+			==========================*/
+
+		public function getAllCampaigns($limit = null, $offset = 0)
+		{
+			$this->db->from('newsletter_campaigns')->order_by('created_at', 'DESC');
+			if ($limit !== null) $this->db->limit((int)$limit, (int)$offset);
+			return $this->db->get()->result();
+		}
+
+		public function getCampaignById($id)
+		{
+			return $this->db->where('campaign_id', (int)$id)->limit(1)->get('newsletter_campaigns')->row();
+		}
+
+		public function createCampaign($data)
+		{
+			$data['created_at'] = $data['updated_at'] = date('Y-m-d H:i:s');
+			if (empty($data['status'])) $data['status'] = 'draft';
+			return $this->db->insert('newsletter_campaigns', $data) ? $this->db->insert_id() : null;
+		}
+
+		public function updateCampaign($id, $data)
+		{
+			$data['updated_at'] = date('Y-m-d H:i:s');
+			return $this->db->where('campaign_id', (int)$id)->update('newsletter_campaigns', $data);
+		}
+
+		public function deleteCampaign($id)
+		{
+			$this->db->where('campaign_id', (int)$id)->delete('newsletter_campaign_sends');
+			return $this->db->where('campaign_id', (int)$id)->delete('newsletter_campaigns');
+		}
+
+		/**
+		 * Move a draft campaign to 'queued' and populate the per-recipient
+		 * send rows from confirmed newsletter subscribers. Returns the
+		 * number of recipients enqueued, or false on failure.
+		 */
+		public function queueCampaign($campaign_id)
+		{
+			$campaign = $this->getCampaignById($campaign_id);
+			if (!$campaign || $campaign->status !== 'draft') return false;
+
+			$subs = $this->db
+				->select('email')
+				->from('newsletter_subscriptions')
+				->where('is_confirmed', 1)
+				->get()->result();
+
+			$now = date('Y-m-d H:i:s');
+			$rows = array();
+			foreach ($subs as $s) {
+				$rows[] = array(
+					'campaign_id' => (int)$campaign_id,
+					'email'       => $s->email,
+					'status'      => 'pending',
+					'created_at'  => $now,
+				);
+			}
+			if (!empty($rows)) {
+				$this->db->insert_batch('newsletter_campaign_sends', $rows);
+			}
+
+			$this->db->where('campaign_id', (int)$campaign_id)->update('newsletter_campaigns', array(
+				'status'          => 'queued',
+				'total_recipients' => count($rows),
+				'updated_at'      => $now,
+			));
+			return count($rows);
+		}
+
+		/**
+		 * Pop up to $batch_size pending recipients of the given (queued
+		 * or sending) campaign, send each one via the Mailer library,
+		 * and update the per-send row. Returns array(sent, failed,
+		 * remaining).
+		 */
+		public function sendCampaignBatch($campaign_id, $batch_size = 25)
+		{
+			$campaign = $this->getCampaignById($campaign_id);
+			if (!$campaign || !in_array($campaign->status, array('queued', 'sending'), true)) {
+				return array('sent' => 0, 'failed' => 0, 'remaining' => 0);
+			}
+
+			if ($campaign->status === 'queued') {
+				$this->db->where('campaign_id', (int)$campaign_id)->update('newsletter_campaigns', array(
+					'status'     => 'sending',
+					'started_at' => date('Y-m-d H:i:s'),
+					'updated_at' => date('Y-m-d H:i:s'),
+				));
+			}
+
+			$pending = $this->db
+				->where('campaign_id', (int)$campaign_id)
+				->where('status', 'pending')
+				->order_by('send_id', 'ASC')
+				->limit((int)$batch_size)
+				->get('newsletter_campaign_sends')
+				->result();
+
+			$CI =& get_instance();
+			$CI->load->library('mailer');
+
+			$sent = 0; $failed = 0;
+			foreach ($pending as $row) {
+				$ok = $CI->mailer->send($row->email, $campaign->subject, $campaign->body_html);
+				if ($ok) {
+					$sent++;
+					$this->db->where('send_id', $row->send_id)->update('newsletter_campaign_sends', array(
+						'status' => 'sent',
+						'sent_at' => date('Y-m-d H:i:s'),
+					));
+				} else {
+					$failed++;
+					$this->db->where('send_id', $row->send_id)->update('newsletter_campaign_sends', array(
+						'status' => 'failed',
+						'error'  => 'send_failed',
+						'sent_at' => date('Y-m-d H:i:s'),
+					));
+				}
+			}
+
+			// Increment counters on the campaign and mark sent if done.
+			$totals = $this->db
+				->select("SUM(status='pending') AS pending, SUM(status='sent') AS sent_total, SUM(status='failed') AS failed_total", false)
+				->from('newsletter_campaign_sends')
+				->where('campaign_id', (int)$campaign_id)
+				->get()->row();
+
+			$remaining = (int) ($totals->pending ?? 0);
+			$update = array(
+				'sent_count'   => (int) ($totals->sent_total ?? 0),
+				'failed_count' => (int) ($totals->failed_total ?? 0),
+				'updated_at'   => date('Y-m-d H:i:s'),
+			);
+			if ($remaining === 0) {
+				$update['status']      = 'sent';
+				$update['finished_at'] = date('Y-m-d H:i:s');
+			}
+			$this->db->where('campaign_id', (int)$campaign_id)->update('newsletter_campaigns', $update);
+
+			return array('sent' => $sent, 'failed' => $failed, 'remaining' => $remaining);
 		}
 	}

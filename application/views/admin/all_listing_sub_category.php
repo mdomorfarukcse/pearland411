@@ -39,7 +39,7 @@
 
           <a href="<?= base_url() ?>admin/add_new_listing_sub_category" class="db-tit-btn">Add new Listing sub category</a>
 
-          <table class="responsive-table bordered tb_cus" id="pg-resu">
+          <table data-admin-table class="responsive-table bordered tb_cus" id="pg-resu">
 
             <thead>
 

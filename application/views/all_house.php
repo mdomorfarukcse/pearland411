@@ -136,7 +136,7 @@
           <!-- End Subscription Details -->
 
           <?php if ($has_subscription): ?>
-            <table class="responsive-table bordered" id="pg-resu">
+            <table data-admin-table class="responsive-table bordered" id="pg-resu">
               <thead>
                 <tr>
                   <th>No</th>
@@ -145,9 +145,7 @@
                   <!-- <th>Created by</th> -->
                   <th>Views</th>
                   <th>Status</th>
-                  <th>Edit</th>
-
-                  <th>Preview</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="houseTableBody">
@@ -165,7 +163,12 @@
                     <tr>
                       <td><?= $i; ?></td>
                       <td>
-                        <img src="<?= (empty($house->house_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($house->house_image) ?>"><?= $house->house_title; ?><span><?= date('d, M Y', strtotime($house->created_at)); ?></span>
+                        <?php if (empty($house->house_image)): ?>
+                          <img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($house->house_title) ?>" loading="lazy" decoding="async">
+                        <?php else: ?>
+                          <?= responsive_img($house->house_image, $house->house_title) ?>
+                        <?php endif; ?>
+                        <?= e($house->house_title); ?><span><?= date('d, M Y', strtotime($house->created_at)); ?></span>
                       </td>
                       <td><a href="" class="db-list-ststus" target="_blank"><?= $house->category_name ?></a></td>
                       <!-- <td><a href="" class="db-list-ststus" target="_blank"><? //= $house->name; 
@@ -177,11 +180,10 @@
                         </span>
                       </td> 
 
-                      <td>
-                        <a href="<?= base_url('user/edit-house/' . $house->house_slug); ?>" class="db-list-edit">Edit</a>
-                      </td>
-
-                      <td><a href="<?= base_url('house-details/' . $house->house_slug); ?>" class="db-list-edit" target="_blank">Preview</a></td>
+                      <td><?= admin_actions(array(
+                          'view' => base_url('house-details/' . rawurlencode((string) $house->house_slug)),
+                          'edit' => base_url('user/edit-house/' . rawurlencode((string) $house->house_slug)),
+                      ), 'house') ?></td>
                     </tr>
                   <?php
                     $i++;

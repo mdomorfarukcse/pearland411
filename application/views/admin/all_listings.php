@@ -19,7 +19,7 @@
           </div>
           <a href="<?= base_url() ?>admin/add-new-listing" class="db-tit-btn">Add new listing</a>
 
-          <table class="responsive-table bordered" id="pg-resu">
+          <table data-admin-table class="responsive-table bordered" id="pg-resu">
             <thead>
               <tr>
                 <th>No</th>
@@ -29,9 +29,7 @@
                 <th>Views</th>
                 <th>Created by</th>
                 <th>Status</th>
-                <th>Edit</th>
-                <th>Delete</th>
-                <th>Preview</th>
+                <th>Actions</th>
               </tr>
             </thead>
 
@@ -52,17 +50,22 @@
                     <td><?= $i; ?></td>
 
                     <td>
-                      <img src="<?= (empty($value->listing_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($value->listing_image) ?>"><?= $value->listing_name; ?><span><?= date('d, M Y', strtotime($value->created_at)); ?></span>
+                      <?php if (empty($value->listing_image)): ?>
+                        <img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($value->listing_name) ?>" loading="lazy">
+                      <?php else: ?>
+                        <?= responsive_img($value->listing_image, $value->listing_name) ?>
+                      <?php endif; ?>
+                      <?= e($value->listing_name); ?><span><?= date('d, M Y', strtotime($value->created_at)); ?></span>
 
                     <td>
                       <?php if (!empty($value->category_name)): ?>
-                        <span class="db-list-rat"><?= $value->category_name ?></span>
+                        <span class="db-list-rat"><?= e($value->category_name) ?></span>
                       <?php endif; ?>
                     </td>
 
                     <td>
                       <?php if (!empty($value->postal_code)): ?>
-                        <span class="db-list-rat"><?= $value->postal_code ?></span>
+                        <span class="db-list-rat"><?= e($value->postal_code) ?></span>
                       <?php endif; ?>
                     </td>
 
@@ -72,7 +75,7 @@
 
                     <td>
                       <?php if (!empty($value->name)) : ?>
-                        <?= $value->name; ?>
+                        <?= e($value->name); ?>
                       <?php endif; ?>
                     </td>
 
@@ -98,10 +101,12 @@
 
                     </td>
 
-                    <td><a href="<?= base_url('admin/edit-listing/' . $value->listing_slug); ?>" class="db-list-edit">Edit</a></td>
-                    <td><a href="#" onclick="javascript:deleteConfirm('<?php echo base_url() . 'admin/delete_listing/' . $value->listing_slug; ?>');" class="db-list-edit">Delete</a></td>
-                    <td><a href="<?= base_url('admin/listing-preview/' . $value->listing_slug); ?>" class="db-list-edit" target="_blank">Preview</a></td>
-                    <!-- 'admin/listing-preview/'.$value->listing_id -->
+                    <td><?= admin_actions(array(
+                      'view'   => base_url('listing-details/' . rawurlencode((string) $value->listing_slug)),
+                      'edit'   => base_url('admin/edit-listing/' . rawurlencode((string) $value->listing_slug)),
+                      'delete' => base_url('admin/delete_listing/' . rawurlencode((string) $value->listing_slug)),
+                      'delete_confirm' => 'Delete this listing?',
+                    ), 'listing') ?></td>
                   </tr>
 
               <?php
@@ -121,38 +126,12 @@
 
           </div>
         </div>
-
-
-
       </div>
-
-      <div class="ad-pgnat">
-
-        <ul class="pagination">
-
-          <li class="page-item"><a class="page-link" href="#">Previous</a></li>
-
-          <li class="page-item active"><a class="page-link" href="#">1</a></li>
-
-          <li class="page-item"><a class="page-link" href="#">2</a></li>
-
-          <li class="page-item"><a class="page-link" href="#">3</a></li>
-
-          <li class="page-item"><a class="page-link" href="#">Next</a></li>
-
-        </ul>
-
-      </div>
-
     </div>
-
   </div>
-
 </section>
-
 <!-- END -->
 
-<script src="http://harvesthq.github.io/chosen/chosen.jquery.js"></script>
 <script>
   function deleteConfirm(url) {
     if (confirm('Are you sure you want to delete this listing? This action cannot be undone.')) {

@@ -16,26 +16,65 @@ class User extends CI_Controller
 		$this->load->model('adminmodel');
 		$this->load->library('pagination');
 		$this->load->library('form_validation');
+		$this->load->library('rate_limit');
 		$this->load->helper('url');
 
-		if (isset($_POST['logout'])) {
+		if ($this->input->post('logout')) {
 			$this->session->unset_userdata('logged_user');
 			$this->session->sess_destroy();
 			redirect(base_url());
-			die();
+			return;
 		}
 
-		/*Page Access Prevention*/
+		// Public methods reachable without a session. Anything not in
+		// this list requires a logged-in end-user (session key
+		// 'logged_user'). Admin sessions ('logged_admin') do NOT
+		// satisfy this — they're a different audience.
+		$public_actions = array(
+			// Auth pages
+			'register', 'login', 'forgot_password',
+			'reset_password', 'verify_email',
+			'logout', 'subscribe_newsletter', 'newsletter_confirm',
+			'contact_submit',
+			// Home + static pages
+			'index', 'about_us', 'faq', 'contact_us', 'privacy_policy', 'terms_of_use',
+			// Public browsing — listings/categories
+			'all_category', 'category_search', 'all_listing',
+			'listing_details',
+			'pricing_plan', 'search', 'search_suggestions',
+			// Public content sections
+			'news', 'news_details',
+			'all_blog', 'blog_details',
+			'event', 'event_search', 'event_details',
+			'videos', 'video_details',
+			'classifieds', 'classifieds_details',
+			'all_products', 'product_details',
+			'house_details', 'rental_details',
+			// Checkout (currently disabled; require login is enforced
+			// at the page level — checkout() redirects to login below
+			// when no session is present).
+			'checkout', 'checkout_success', 'process_checkout',
+			// Enquiry submission (rate-limited; anonymous OK)
+			'add_enquiry',
+			// Services catalog + quote requests
+			'services', 'service_details', 'request_service',
+			// Listing claim (form gates on session itself)
+			'claim_listing',
+			// Public coupons / deals
+			'coupons', 'coupon_details',
+			// Advertise landing page (form posts to /contact-submit)
+			'post_your_ads',
+		);
+
 		$page = $this->router->fetch_method();
 
-		if ($page != 'register' && $page != 'login' && $page != 'index' && $page != 'forget_password' && $page != 'all_category' && $page != 'all_listing' && $page != 'listing_preview' && $page != 'news_preview' && $page != 'all_blog' && $page != 'event' && $page != 'event_search' && $page != 'all_products' && $page != 'product_details' && $page != 'event_details' && $page != 'blog_details' && $page != 'news' && $page != 'news_details' && $page != 'news_lists' && $page != 'listing_details_n' && $page != 'listing_details' && $page != 'listingdetails' && $page != 'pricing_plan' && $page != 'listing_list_n' && $page != 'event_details_n' && $page != 'test_account' && $page != 'test_listing_urls' && $page != 'test_payment_gateway' && $page != 'search' && $page != 'search_suggestions' && $page != 'checkout' && $page != 'checkout_success' && $page != 'process_checkout' && $page != 'add_enquiry' && $page != 'about_us' && $page != 'faq' && $page != 'contact_us' && $page != 'privacy_policy' && $page != 'terms_of_use' && $page != 'videos' && $page != 'video_details' && $page != 'classifieds_details' && $page != 'classifieds' && $page != 'subscribe_newsletter' && $page != 'newsletter_confirm') {
-
+		if (!in_array($page, $public_actions, true)) {
 			if (!$this->session->userdata('logged_user')) {
-				redirect(base_url());
-				die();
+				$this->session->set_userdata('redirect_url', current_url());
+				redirect(base_url('login'));
+				return;
 			}
 		}
-		//if($this->session->userdata('logged_admin')){ redirect('dashboard'); die(); }
 	}
 
 	/**
@@ -122,13 +161,6 @@ class User extends CI_Controller
 	/*Home Page*/
 	public function index()
 	{
-		// Check if this is a listing-details request
-		$uri_string = $_SERVER['REQUEST_URI'];
-		if (preg_match('/\/listing-details\/([^\/]+)/', $uri_string, $matches)) {
-			$slug = $matches[1];
-			$this->listing_details_global($slug);
-			return;
-		}
 
 		// Initialize data array
 		$data = array();
@@ -188,12 +220,88 @@ class User extends CI_Controller
 	// CONTACT Page (static, with header/footer)
 	public function contact_us()
 	{
-		$this->load->model('usermodel');
 		$data = array();
 		$data['title'] = 'Contact Us';
+		$this->loadHeaderCategories($data);
 		$this->load->view('header', $data);
-		$this->load->view('contact-us');
+		$this->load->view('contact-us', $data);
 		$this->load->view('footer');
+	}
+
+	/**
+	 * Handle the /contact-us form submission.
+	 *
+	 * The previous view had a JS handler that just alert()'d "thanks"
+	 * and discarded the data — every contact message ever sent was
+	 * silently lost. This action validates, persists into `enquiries`,
+	 * notifies the admin address, acknowledges to the sender, and
+	 * redirects back to /contact-us with a flash.
+	 */
+	public function contact_submit()
+	{
+		if ($this->input->method() !== 'post') {
+			redirect('contact-us');
+			return;
+		}
+
+		if (!$this->rate_limit->check_ip('contact_submit', 6, 3600)) {
+			$this->rate_limit->reject(3600);
+			return;
+		}
+
+		$this->form_validation->set_rules('fullName', 'Name',  'trim|required|min_length[2]');
+		$this->form_validation->set_rules('email',    'Email', 'trim|required|valid_email');
+		$this->form_validation->set_rules('message',  'Message', 'trim|required|min_length[10]');
+
+		if (!$this->form_validation->run()) {
+			$this->session->set_flashdata('contact_error',
+				strip_tags(validation_errors()) ?: 'Please complete the required fields.');
+			redirect('contact-us');
+			return;
+		}
+
+		$name    = (string) $this->input->post('fullName');
+		$email   = (string) $this->input->post('email');
+		$phone   = (string) $this->input->post('phone');
+		$subject = (string) $this->input->post('subject');
+		$message = (string) $this->input->post('message');
+
+		$this->db->insert('enquiries', array(
+			'enquiry_name'       => $name,
+			'enquiry_email'      => $email,
+			'enquiry_mobile'     => $phone,
+			'enquiry_message'    => ($subject !== '' ? '[' . $subject . '] ' : '') . $message,
+			'enquiry_source'     => 'Contact Us',
+			'enquiry_type'       => 'contact',
+			'enquiry_save'       => 0,
+			'enquiry_created_at' => date('Y-m-d H:i:s'),
+		));
+
+		$this->load->library('mailer');
+
+		// Acknowledge to the sender.
+		$ack = '<p>Thanks — we received your message and will get back to you shortly.</p>'
+			. '<p>For reference, you sent:</p>'
+			. '<blockquote>' . nl2br(html_escape($message)) . '</blockquote>';
+		$this->mailer->send($email, 'We received your message', $ack);
+
+		// Notify the admin address.
+		$admin_to = env('MAIL_FROM_ADDRESS', '');
+		if ($admin_to) {
+			$alert = '<p>New contact-form submission:</p>'
+				. '<ul>'
+				. '<li>Name: '    . html_escape($name)    . '</li>'
+				. '<li>Email: '   . html_escape($email)   . '</li>'
+				. '<li>Phone: '   . html_escape($phone)   . '</li>'
+				. '<li>Subject: ' . html_escape($subject) . '</li>'
+				. '</ul>'
+				. '<p>Message:</p><blockquote>' . nl2br(html_escape($message)) . '</blockquote>';
+			$this->mailer->send($admin_to, '[Pearland411] Contact-Us message from ' . $name, $alert);
+		}
+
+		$this->session->set_flashdata('contact_success',
+			'Thanks! We received your message and will be in touch soon.');
+		redirect('contact-us');
 	}
 
 
@@ -875,6 +983,37 @@ class User extends CI_Controller
 
 		// Get 3 related blogs (excluding current)
 		$data['related_blogs'] = $this->usermodel->getRelatedBlogs($data['blog']->blog_id, 3);
+
+		// SEO: per-page meta + BlogPosting JSON-LD. Prefer admin-set
+		// seo_* columns; fall back to trimmed body.
+		$blog = $data['blog'];
+		$desc_auto = trim(strip_tags((string) ($blog->blog_description ?? '')));
+		$desc_auto = $desc_auto !== '' ? mb_substr($desc_auto, 0, 160) : ('Blog post: ' . $blog->blog_name);
+		$data['title']            = !empty($blog->seo_title)
+			? $blog->seo_title
+			: ($blog->blog_name . ' — Pearland411');
+		$data['meta_description'] = !empty($blog->seo_description)
+			? $blog->seo_description
+			: $desc_auto;
+		$data['meta_keywords']    = !empty($blog->seo_keywords)
+			? $blog->seo_keywords
+			: '';
+		$data['canonical_url']    = $blog_url;
+		if (!empty($blog->blog_image)) $data['og_image'] = $blog_image;
+
+		$data['json_ld'] = json_ld(array(
+			'@context'         => 'https://schema.org',
+			'@type'            => 'BlogPosting',
+			'headline'         => (string) $blog->blog_name,
+			'datePublished'    => !empty($blog->created_at) ? date('c', strtotime($blog->created_at)) : null,
+			'image'            => $blog_image ?: null,
+			'mainEntityOfPage' => $blog_url,
+			'publisher'        => array(
+				'@type' => 'Organization',
+				'name'  => 'Pearland411',
+				'logo'  => array('@type' => 'ImageObject', 'url' => base_url('assets/images/pearland-logo.png')),
+			),
+		));
 
 		// Load views
 		$this->load->view('header', $data);
@@ -1666,6 +1805,12 @@ class User extends CI_Controller
 
 		if (isset($_POST['register_submit'])) {/*Registration Action*/
 
+			// 5 signups per IP per hour. Defends signup spam.
+			if (!$this->rate_limit->check_ip('register', 5, 3600)) {
+				$this->rate_limit->reject(3600);
+				return;
+			}
+
 			//Register User If data valid
 
 			$data['registrationSucess'] = $this->usermodel->registerUser();
@@ -1707,8 +1852,21 @@ class User extends CI_Controller
 		}
 
 		if (isset($_POST['login_submit'])) {
+			// 10 failed login attempts per IP per 15 minutes is plenty
+			// for an honest user; anything more is brute-force.
+			if (!$this->rate_limit->check_ip('login', 10, 900)) {
+				$this->rate_limit->reject(900);
+				return;
+			}
+
 			// Process login form submission
 			$data['loginSucess'] = $this->usermodel->login();
+
+			// Reset the bucket on success so an honest user who fat-
+			// fingered a couple of times isn't stuck near the limit.
+			if (!empty($data['loginSucess']['status'])) {
+				$this->rate_limit->reset_ip('login');
+			}
 
 			if ($data['loginSucess']['status']) {
 				// Check if there's a redirect URL stored in session
@@ -1746,18 +1904,111 @@ class User extends CI_Controller
 
 
 
-	/*Forget Password*/
+	/*=========================
+		Password reset + email verification
+		==========================*/
 
+	/**
+	 * GET  -> render the forgot-password form.
+	 * POST -> accept an email address and (silently) email a reset link
+	 *         if it matches a registered user. We always show the same
+	 *         confirmation message so attackers can't enumerate emails.
+	 */
 	public function forgot_password()
 	{
-		// Load header categories using professional MVC approach
 		$data = array();
 		$this->loadHeaderCategories($data);
+		$data['title'] = 'Pearland | Forgot Password';
+
+		if ($this->input->method() === 'post') {
+			// 5 reset requests per IP per hour. Each one emails a real
+			// person; we don't want this used as a free SMTP relay.
+			if (!$this->rate_limit->check_ip('forgot_password', 5, 3600)) {
+				$this->rate_limit->reject(3600);
+				return;
+			}
+
+			$this->form_validation->set_rules('email_id', 'Email', 'trim|required|valid_email');
+
+			if ($this->form_validation->run()) {
+				$email = $this->input->post('email_id');
+				$this->usermodel->requestPasswordReset(
+					$email,
+					$this->input->ip_address()
+				);
+				$this->session->set_flashdata(
+					'forgot_message',
+					'If an account exists for that email, we have sent a password reset link. ' .
+					'It will expire in 1 hour.'
+				);
+				redirect('forgot-password');
+				return;
+			}
+			$data['error'] = 'Please enter a valid email address.';
+		}
 
 		$this->load->view('header', $data);
+		$this->load->view('forgot_password', $data);
+		$this->load->view('footer');
+	}
 
-		$this->load->view('forgot_password');
+	/**
+	 * GET  /reset-password/<token> -> render the reset form.
+	 * POST same URL              -> verify token, write new password.
+	 */
+	public function reset_password($token = '')
+	{
+		$reset = $this->usermodel->findActiveResetByToken($token);
 
+		$data = array();
+		$this->loadHeaderCategories($data);
+		$data['title'] = 'Pearland | Reset Password';
+		$data['token'] = $token;
+
+		if (!$reset) {
+			$data['expired'] = true;
+			$this->load->view('header', $data);
+			$this->load->view('reset_password', $data);
+			$this->load->view('footer');
+			return;
+		}
+
+		if ($this->input->method() === 'post') {
+			$this->form_validation->set_rules('password', 'Password', 'trim|required|min_length[8]');
+			$this->form_validation->set_rules('password_confirm', 'Confirm Password', 'trim|required|matches[password]');
+
+			if ($this->form_validation->run()) {
+				$ok = $this->usermodel->completePasswordReset($reset, $this->input->post('password'));
+				if ($ok) {
+					$this->session->set_flashdata('login_message', 'Your password has been reset. Please sign in with your new password.');
+					redirect('login');
+					return;
+				}
+				$data['error'] = 'Something went wrong. Please request a new reset link.';
+			} else {
+				$data['error'] = strip_tags(validation_errors()) ?: 'Please correct the errors above.';
+			}
+		}
+
+		$this->load->view('header', $data);
+		$this->load->view('reset_password', $data);
+		$this->load->view('footer');
+	}
+
+	/**
+	 * GET /verify-email/<token> -> mark the user verified.
+	 */
+	public function verify_email($token = '')
+	{
+		$ok = $this->usermodel->verifyEmailByToken($token);
+
+		$data = array();
+		$this->loadHeaderCategories($data);
+		$data['title']    = 'Pearland | Email Verification';
+		$data['verified'] = $ok;
+
+		$this->load->view('header', $data);
+		$this->load->view('verify_email', $data);
 		$this->load->view('footer');
 	}
 
@@ -1954,7 +2205,7 @@ class User extends CI_Controller
 
 		// Optional: handle password change if provided
 		if ($this->input->post('password') && trim($this->input->post('password')) !== '') {
-			$info['password'] = md5($this->input->post('password'));
+			$info['password'] = password_hash($this->input->post('password'), PASSWORD_DEFAULT);
 		}
 
 		// Handle profile image upload using project's upload helper function
@@ -2076,6 +2327,78 @@ class User extends CI_Controller
 		// Get review statistics for rating breakdown
 		$data['review_stats'] = $this->usermodel->getReviewStats($data['listing']->listing_id);
 
+		// Owner social-profile lookup so the "Company badge" block
+		// can render real per-listing social links instead of the
+		// placeholder facebook.com/twitter.com URLs that used to be
+		// hardcoded in the view.
+		$data['owner_socials'] = array(
+			'facebook' => '', 'twitter' => '', 'youtube' => '', 'website' => '',
+		);
+		if (!empty($data['listing']->user_id)) {
+			$owner = $this->db
+				->select('user_facebook, user_twitter, user_youtube, user_website')
+				->where('user_id', (int) $data['listing']->user_id)
+				->limit(1)
+				->get('user')
+				->row();
+			if ($owner) {
+				$data['owner_socials'] = array(
+					'facebook' => (string) ($owner->user_facebook ?? ''),
+					'twitter'  => (string) ($owner->user_twitter  ?? ''),
+					'youtube'  => (string) ($owner->user_youtube  ?? ''),
+					'website'  => (string) ($owner->user_website  ?? ''),
+				);
+			}
+		}
+
+		// SEO: per-page meta + LocalBusiness JSON-LD.
+		// Prefer admin-curated listing_seo_* columns when present,
+		// fall back to a trimmed description / generated string.
+		$listing = $data['listing'];
+		$desc_auto = trim(strip_tags((string) ($listing->listing_description ?? '')));
+		$desc_auto = $desc_auto !== '' ? mb_substr($desc_auto, 0, 160) : ('Listing details for ' . $listing->listing_name . ' on Pearland411.');
+		$data['title']            = !empty($listing->listing_seo_title)
+			? $listing->listing_seo_title
+			: ($listing->listing_name . ' — Pearland411');
+		$data['meta_description'] = !empty($listing->listing_seo_description)
+			? $listing->listing_seo_description
+			: $desc_auto;
+		$data['meta_keywords']    = !empty($listing->listing_seo_keywords)
+			? $listing->listing_seo_keywords
+			: '';
+		$data['canonical_url']    = base_url('listing-details/' . rawurlencode($listing->listing_slug));
+		if (!empty($listing->listing_image)) {
+			$data['og_image'] = base_url($listing->listing_image);
+		}
+
+		$ld = array(
+			'@context' => 'https://schema.org',
+			'@type'    => 'LocalBusiness',
+			'name'     => (string) $listing->listing_name,
+			'url'      => $data['canonical_url'],
+		);
+		if (!empty($listing->listing_address))  $ld['address']   = (string) $listing->listing_address;
+		if (!empty($listing->listing_mobile))   $ld['telephone'] = (string) $listing->listing_mobile;
+		if (!empty($listing->listing_email))    $ld['email']     = (string) $listing->listing_email;
+		if (!empty($listing->listing_website))  $ld['sameAs']    = array((string) $listing->listing_website);
+		if (!empty($listing->listing_image))    $ld['image']     = base_url($listing->listing_image);
+		if (!empty($listing->listing_lat) && !empty($listing->listing_lng)) {
+			$ld['geo'] = array(
+				'@type'     => 'GeoCoordinates',
+				'latitude'  => (float) $listing->listing_lat,
+				'longitude' => (float) $listing->listing_lng,
+			);
+		}
+		$rs = $data['review_stats'] ?? null;
+		if (is_object($rs) && !empty($rs->total_reviews) && (int) $rs->total_reviews > 0) {
+			$ld['aggregateRating'] = array(
+				'@type'       => 'AggregateRating',
+				'ratingValue' => (float) $rs->average_rating,
+				'reviewCount' => (int) $rs->total_reviews,
+			);
+		}
+		$data['json_ld'] = json_ld($ld);
+
 		// Load views
 		$this->load->view('header', $data);
 		$this->load->view('listing_details', $data);
@@ -2178,6 +2501,37 @@ class User extends CI_Controller
 		// Get 3 related news (excluding current)
 		$data['related_news'] = $this->usermodel->getRelatedNews($data['news']->news_id, 3);
 
+		// SEO: per-page meta + NewsArticle JSON-LD. Prefer admin-set
+		// news_seo_* columns; fall back to trimmed body.
+		$news = $data['news'];
+		$desc_auto = trim(strip_tags((string) ($news->news_description ?? '')));
+		$desc_auto = $desc_auto !== '' ? mb_substr($desc_auto, 0, 160) : ('News story: ' . $news->news_title);
+		$data['title']            = !empty($news->news_seo_title)
+			? $news->news_seo_title
+			: ($news->news_title . ' — Pearland411');
+		$data['meta_description'] = !empty($news->news_seo_description)
+			? $news->news_seo_description
+			: $desc_auto;
+		$data['meta_keywords']    = !empty($news->news_seo_keywords)
+			? $news->news_seo_keywords
+			: '';
+		$data['canonical_url']    = $news_url;
+		if (!empty($news->news_image)) $data['og_image'] = $news_image;
+
+		$data['json_ld'] = json_ld(array(
+			'@context'      => 'https://schema.org',
+			'@type'         => 'NewsArticle',
+			'headline'      => (string) $news->news_title,
+			'datePublished' => !empty($news->created_at) ? date('c', strtotime($news->created_at)) : null,
+			'image'         => $news_image ?: null,
+			'mainEntityOfPage' => $news_url,
+			'publisher'     => array(
+				'@type' => 'Organization',
+				'name'  => 'Pearland411',
+				'logo'  => array('@type' => 'ImageObject', 'url' => base_url('assets/images/pearland-logo.png')),
+			),
+		));
+
 		// Load views
 		$this->load->view('header', $data);
 		$this->load->view('news_details', $data);
@@ -2186,456 +2540,6 @@ class User extends CI_Controller
 
 
 
-	//   public function add_listing_step_1()
-
-	//   {
-
-	//   	$data['categories'] = $this->usermodel->getAllValues('listing_categories');
-
-	// 	//$data['sub-category'] = $this->usermodel->getAllSubCategory($data['category']->category_id);
-
-
-
-
-
-
-
-	//   	if($this->form_validation->run('listing_step_1') == FALSE)
-
-	//   	{	        
-
-	//   		$this->load->view('header');
-
-	//   		$this->load->view('add_listing_step_1',$data);
-
-	//   		$this->load->view('footer');
-
-	//   	} else 
-
-	//   	{
-
-	//   		$info = array(
-
-	//   			'listing_name' 		=> htmlentities($this->input->post('listing_name'), ENT_QUOTES), 
-
-	//   			'listing_mobile'	=> htmlentities($this->input->post('listing_mobile'), ENT_QUOTES),
-
-	//   			'listing_email'		=> htmlentities($this->input->post('listing_email'), ENT_QUOTES),
-
-	//   			'listing_whatsapp'	=> htmlentities($this->input->post('listing_whatsapp'), ENT_QUOTES),
-
-	//   			'listing_website'	=> htmlentities($this->input->post('listing_website'), ENT_QUOTES),
-
-	//   			'listing_address'	=> htmlentities($this->input->post('listing_address'), ENT_QUOTES),
-
-	//   			'listing_lat'		=> htmlentities($this->input->post('listing_lat'), ENT_QUOTES),
-
-	//   			'listing_lng'		=> htmlentities($this->input->post('listing_lng'), ENT_QUOTES),
-
-	//   			'country_name'		=> htmlentities($this->input->post('country_name'), ENT_QUOTES),
-
-	//   			'city_name'			=> htmlentities($this->input->post('city_name'), ENT_QUOTES),
-
-	//   			'category_id'		=> htmlentities($this->input->post('category_id'), ENT_QUOTES),
-
-	// 		// 'sub_category_id'=>
-
-	//   			'listing_description'=> $this->input->post('listing_description'),
-
-	//   			'service_locations' => $this->input->post('service_locations'),
-
-	//   		);
-
-	//   		if($_FILES && $_FILES['profile_image']['name'])
-
-	//   		{
-
-	//   			$img_info = [
-
-	//   				'upload_path' => 'images/listings',
-
-	//   				'quality'     => '60%',
-
-	//   				'height'      => 500,
-
-	//   				'width'       => 500,
-
-	//   				'image_name'  => 'profile_image'
-
-	//   			];
-
-	//   			$info['profile_image'] = uploadAndResize($img_info);
-
-	//   		}
-
-	// Removed stray code block after edit_listing
-
-
-	//   		$inserted_id = $this->usermodel->addListing('listings',$info);
-
-	//   		if($inserted_id > 0)
-
-	//   		{
-
-	// 		// $this->session->set_flashdata('message', 'Successfully Added Listing!!');
-
-	//   			redirect('user/add_listing_step_2/'.$inserted_id);
-
-	//   		}
-
-	//   		else 
-
-	//   		{
-
-	// 		// $this->session->set_flashdata('message', 'Adding Listing Failed!!');
-
-	//   			redirect('user/add_listing_step_1');
-
-	//   		}	
-
-	//   	}
-
-	//   }
-
-
-
-	//   public function add_listing_step_2($inserted_id = NULL)
-
-	//   {
-
-	//   	$data['listing_id'] = $inserted_id;
-
-	//   	if($this->form_validation->run('listing_step_2') == FALSE)
-
-	//   	{	        
-
-	//   		$this->load->view('header');
-
-	//   		$this->load->view('add_listing_step_2',$data);
-
-	//   		$this->load->view('footer');
-
-	//   	} else 
-
-	//   	{
-
-	//   		$inserted_id = htmlentities($this->input->post('listing_id'), ENT_QUOTES);
-
-	//   		$info = array(
-
-	//   			'service_name' 		=> htmlentities($this->input->post('service_name'), ENT_QUOTES), 
-
-	//   		);
-
-	//   		if($_FILES && $_FILES['service_image']['name'])
-
-	//   		{
-
-	//   			$img_info = [
-
-	//   				'upload_path' => 'images/listings',
-
-	//   				'quality'     => '60%',
-
-	//   				'height'      => 500,
-
-	//   				'width'       => 500,
-
-	//   				'image_name'  => 'service_image'
-
-	//   			];
-
-	//   			$info['service_image'] = uploadAndResize($img_info);
-
-	//   		}
-
-
-
-	//   		if($this->usermodel->update($inserted_id,$info,'listing_id','listings'))
-
-	//   		{
-
-	//   			redirect('user/add_listing_step_3/'.$inserted_id);
-
-	//   		}
-
-	//   		else 
-
-	//   		{
-
-	//   			redirect('user/add_listing_step_2/'.$inserted_id);
-
-	//   		}	
-
-	//   	}
-
-	//   }
-
-
-
-	//   public function add_listing_step_3($inserted_id = NULL)
-
-	//   {
-
-	//   	$data['listing_id'] = $inserted_id;
-
-	//   	if($this->form_validation->run('listing_step_3') == FALSE)
-
-	//   	{	        
-
-	//   		$this->load->view('header');
-
-	//   		$this->load->view('add_listing_step_3',$data);
-
-	//   		$this->load->view('footer');
-
-	//   	} else 
-
-	//   	{
-
-	//   		$inserted_id = htmlentities($this->input->post('listing_id'), ENT_QUOTES);
-
-
-
-	//   		$info = array(
-
-	//   			'service_1_name' 		=> htmlentities($this->input->post('service_1_name'), ENT_QUOTES), 
-
-	//   			'service_1_price' 		=> htmlentities($this->input->post('service_1_price'), ENT_QUOTES), 
-
-	//   			'service_1_detail' 		=> htmlentities($this->input->post('service_1_detail'), ENT_QUOTES), 
-
-	//   			'service_1_view_more' 	=> htmlentities($this->input->post('service_1_view_more'), ENT_QUOTES), 
-
-	//   		);
-
-	//   		if($_FILES && $_FILES['service_1_image']['name'])
-
-	//   		{
-
-	//   			$img_info = [
-
-	//   				'upload_path' => 'images/listings',
-
-	//   				'quality'     => '60%',
-
-	//   				'height'      => 400,
-
-	//   				'width'       => 1000,
-
-	//   				'image_name'  => 'service_1_image'
-
-	//   			];
-
-	//   			$info['service_1_image'] = uploadAndResize($img_info);
-
-	//   		}
-
-
-
-	//   		if($this->usermodel->update($inserted_id,$info,'listing_id','listings'))
-
-	//   		{
-
-	//   			redirect('user/add_listing_step_4/'.$inserted_id);
-
-	//   		}
-
-	//   		else 
-
-	//   		{
-
-	//   			redirect('user/add_listing_step_3/'.$inserted_id);
-
-	//   		}	
-
-	//   	}
-
-	//   }	
-
-
-
-	//   public function add_listing_step_4($inserted_id = NULL)
-
-	//   {
-
-	//   	$data['listing_id'] = $inserted_id;
-
-
-
-	//   	if($this->form_validation->run('listing_step_4') == FALSE)
-
-	//   	{	        
-
-	//   		$this->load->view('header');
-
-	//   		$this->load->view('add_listing_step_4',$data);
-
-	//   		$this->load->view('footer');
-
-	//   	} else 
-
-	//   	{
-
-	//   		$inserted_id = htmlentities($this->input->post('listing_id'), ENT_QUOTES);
-
-
-
-
-
-	//   		$info = array(
-
-	//   			'google_map' 	=> htmlentities($this->input->post('google_map'), ENT_QUOTES), 
-
-	//   			'360_view' 		=> htmlentities($this->input->post('360_view'), ENT_QUOTES),  
-
-	//   		);
-
-	//   		if(!empty($this->input->post('listing_video')))
-
-	//   		{
-
-	//   			$info['listing_video'] = json_encode($this->input->post('listing_video'));
-
-	//   		}
-
-
-
-	//   		if($_FILES && $_FILES['gallery_image']['name'])
-
-	//   		{
-
-	//   			$img_info = [
-
-	//   				'upload_path' => 'images/listings',
-
-	//   				'quality'     => '60%',
-
-	//   				'height'      => 500,
-
-	//   				'width'       => 500,
-
-	//   				'image_name'  => 'gallery_image'
-
-	//   			];
-
-	//   			$info['gallery_image'] = uploadMultipleAndResize($img_info);
-
-	//   		}
-
-
-
-	//   		if($this->usermodel->update($inserted_id,$info,'listing_id','listings'))
-
-	//   		{
-
-	//   			redirect('user/add-listing-step-5/'.$inserted_id);
-
-	//   		}
-
-	//   		else 
-
-	//   		{
-
-	//   			redirect('user/add-listing-step-4/'.$inserted_id);
-
-	//   		}	
-
-	//   	}
-
-	//   }
-
-
-
-	//   public function add_listing_step_5($inserted_id = NULL)
-
-	//   {
-
-	//   	$data['listing_id'] = $inserted_id;
-
-
-
-	//   	if($this->form_validation->run('listing_step_5') == FALSE)
-
-	//   	{	        
-
-	//   		$this->load->view('header');
-
-	//   		$this->load->view('add_listing_step_5',$data);
-
-	//   		$this->load->view('footer');
-
-	//   	} else 
-
-	//   	{
-
-	//   		$info = array();
-
-	//   		$inserted_id = htmlentities($this->input->post('listing_id'), ENT_QUOTES);
-
-
-
-	//   		if(!empty($this->input->post('listing_info_question')))
-
-	//   		{
-
-	//   			$info['listing_info_question'] = json_encode($this->input->post('listing_info_question'));
-
-	//   		}
-
-
-
-	//   		if(!empty($this->input->post('listing_info_answer')))
-
-	//   		{
-
-	//   			$info['listing_info_answer'] = json_encode($this->input->post('listing_info_answer'));
-
-	//   		}
-
-	// 	// echo "<pre>";
-
-	// 	// var_dump($info);
-
-	// 	// die();
-
-	//   		redirect('user/add-listing-step-6/'.$inserted_id);
-
-	// 	// if($this->usermodel->update($inserted_id,$info,'listing_id','listings'))
-
-	// 	// {
-
-	// 	// 	redirect('user/add-listing-step-6/'.$inserted_id);
-
-	// 	// }
-
-	// 	// else 
-
-	// 	// {
-
-	// 	// 	redirect('user/add-listing-step-5/'.$inserted_id);
-
-	// 	// }	
-
-	//   	}
-
-	//   }
-
-	//   public function add_listing_step_6($listing_id = NULL)
-
-	//   {
-
-	//   	$data['listing_id'] = $listing_id;
-
-
-
-	//   	$this->load->view('header');
-
-	//   	$this->load->view('add_listing_step_6',$data);
-
-	//   	$this->load->view('footer');
-
-	//   }
 
 
 
@@ -3071,157 +2975,6 @@ class User extends CI_Controller
 	}
 
 	/*Test Listing Details URL*/
-	public function test_listing_urls()
-	{
-		echo "<h1>Listing Details URL Test</h1>";
-		echo "<h2>Available URLs for testing:</h2>";
-		echo "<ul>";
-		echo "<li><a href='" . base_url('user/listing-details/Regan-Whitley') . "'>/user/listing-details/Regan-Whitley</a></li>";
-		echo "<li><a href='" . base_url('user/listing-details-n/Regan-Whitley') . "'>/user/listing-details-n/Regan-Whitley</a></li>";
-		echo "<li><a href='" . base_url('user/listingdetails/Regan-Whitley') . "'>/user/listingdetails/Regan-Whitley</a></li>";
-		echo "</ul>";
-		echo "<p><strong>Note:</strong> Make sure 'Regan-Whitley' exists as a listing_slug in your database.</p>";
-
-		// Debug: Check if listing exists
-		echo "<hr><h3>Debug Information:</h3>";
-		$listing = $this->usermodel->getSingleValue('Regan-Whitley', 'listing_slug', 'listings');
-		if ($listing) {
-			echo "<p style='color:green;'>✓ Listing 'Regan-Whitley' found in database!</p>";
-			echo "<p><strong>Name:</strong> " . $listing->listing_name . "</p>";
-			echo "<p><strong>ID:</strong> " . $listing->listing_id . "</p>";
-		} else {
-			echo "<p style='color:red;'>✗ Listing 'Regan-Whitley' NOT found in database!</p>";
-			echo "<p>Available listing slugs:</p>";
-			// Show some existing listings
-			$listings = $this->db->select('listing_slug, listing_name')->from('listings')->limit(5)->get()->result();
-			echo "<ul>";
-			foreach ($listings as $item) {
-				echo "<li>" . $item->listing_slug . " (" . $item->listing_name . ")</li>";
-			}
-			echo "</ul>";
-		}
-	}
-
-	/*Test Payment Gateway*/
-	public function test_payment_gateway()
-	{
-		echo "<h1>Payment Gateway Test</h1>";
-
-		// Show current directory and expected paths
-		echo "<h3>Directory Information:</h3>";
-		echo "<p><strong>Current Controller File:</strong> " . __FILE__ . "</p>";
-		echo "<p><strong>Current Directory:</strong> " . dirname(__FILE__) . "</p>";
-		echo "<p><strong>Application Path:</strong> " . (defined('APPPATH') ? APPPATH : 'APPPATH not defined') . "</p>";
-
-		// Load Authorize.Net library
-		if (!class_exists('Authorize_net_lib')) {
-			$info = array(
-				'listing_name'      => $this->input->post('listing_name'),
-				'category_id'       => $this->input->post('category_id'),
-				'sub_category_id'   => $this->input->post('sub_category_id'),
-				'listing_mobile'    => $this->input->post('listing_mobile'),
-				'listing_whatsapp'  => $this->input->post('listing_whatsapp'),
-				'display_phone'     => $this->input->post('display_phone'),
-				'listing_email'     => $this->input->post('listing_email'),
-				'listing_website'   => $this->input->post('listing_website'),
-				'listing_address'   => $this->input->post('listing_address'),
-				'county_name'       => $this->input->post('county_name'),
-				'postal_code'       => $this->input->post('postal_code'),
-				'listing_lat'       => $this->input->post('listing_lat'),
-				'listing_lng'       => $this->input->post('listing_lng'),
-				'display_address'   => $this->input->post('display_address'),
-				'listing_description' => $this->input->post('listing_description'),
-				'service_locations' => $this->input->post('service_locations'),
-				'service_offered'   => $this->input->post('service_offered'),
-				'listing_video'     => $this->input->post('listing_video'),
-				'listing_seo_title' => $this->input->post('listing_seo_title'),
-				'listing_seo_keywords' => $this->input->post('listing_seo_keywords'),
-				'listing_seo_description' => $this->input->post('listing_seo_description'),
-				'listing_slug' => $listing_slug
-			);
-
-			if ($_FILES && isset($_FILES['listing_profile_image']) && $_FILES['listing_profile_image']['name']) {
-				$img_info = array(
-					'upload_path' => 'images/listings',
-					'quality'     => '60%',
-					'height'      => 500,
-					'width'       => 500,
-					'image_name'  => 'listing_profile_image'
-				);
-				$info['listing_image'] = uploadAndResize($img_info);
-			}
-			if (!$lib_loaded) {
-				if ($this->usermodel->update($slug, $info, 'listing_slug', 'listings')) {
-					$this->session->set_flashdata('message', 'Lisitng Updated Successfully.');
-					redirect('user/user-listing', 'refresh');
-				} else {
-					redirect('user/edit-listing/' . $slug);
-				}
-				return;
-			}
-			echo "<h3 style='color:red;'>Library Not Found!</h3>";
-			echo "<p>Please ensure Authorize_net_lib.php is uploaded to one of these locations on your server:</p>";
-			echo "<ul>";
-			foreach ($lib_paths as $path) {
-				echo "<li><code>$path</code></li>";
-			}
-			echo "</ul>";
-			return;
-		} else {
-			echo "<p style='color:green; font-weight:bold;'>✓ Authorize_net_lib successfully loaded!</p>";
-		}
-		// Try CodeIgniter's native library loader as backup
-
-		if (!class_exists('Authorize_net_lib')) {
-			echo "<h3>Trying CodeIgniter's Library Loader:</h3>";
-			try {
-				$this->load->library('Authorize_net_lib');
-				echo "<p style='color:green;'>✓ Library loaded via CodeIgniter loader!</p>";
-			} catch (Exception $e) {
-				echo "<p style='color:red;'>✗ CodeIgniter loader failed: " . $e->getMessage() . "</p>";
-			}
-		}
-
-		if (!class_exists('Authorize_net_lib')) {
-			echo "<p style='color:red;'><strong>ERROR: Authorize_net_lib class still not found!</strong></p>";
-			echo "<p>Please make sure the file is uploaded to the correct location on your server.</p>";
-			return;
-		}
-
-		try {
-			echo "<h3>Testing Payment Gateway Connection...</h3>";
-			$authorize_net = new Authorize_net_lib();
-			echo "<p style='color:green;'>✓ Authorize.Net library initialized successfully</p>";
-
-			// Test connection with sandbox credentials
-			$result = $authorize_net->test_connection();
-
-			echo "<h4>Connection Test Result:</h4>";
-			echo "<pre style='background:#f5f5f5; padding:10px; border:1px solid #ddd;'>" . print_r($result, true) . "</pre>";
-
-			if (isset($result['success']) && $result['success']) {
-				echo "<p style='color: green; font-size:16px;'><strong>✓ Payment gateway is working correctly!</strong></p>";
-				echo "<p>Transaction ID: " . (isset($result['transaction_id']) ? $result['transaction_id'] : 'N/A') . "</p>";
-			} else {
-				echo "<p style='color: red; font-size:16px;'><strong>✗ Payment gateway has issues:</strong></p>";
-				if (isset($result['error_message'])) {
-					echo "<p><strong>Error:</strong> " . $result['error_message'] . "</p>";
-				}
-				if (isset($result['response_code'])) {
-					echo "<p><strong>Response Code:</strong> " . $result['response_code'] . "</p>";
-				}
-			}
-		} catch (Exception $e) {
-			echo "<p style='color: red;'><strong>Exception occurred:</strong> " . $e->getMessage() . "</p>";
-			echo "<pre style='background:#ffe6e6; padding:10px; border:1px solid #ff9999;'>" . $e->getTraceAsString() . "</pre>";
-		}
-
-		echo "<hr>";
-		echo "<p><a href='" . base_url('user/checkout') . "'>Go to Checkout Page</a></p>";
-	}
-
-
-
 
 
 	/*======================
@@ -4440,6 +4193,22 @@ class User extends CI_Controller
 		// Load views
 		$this->load->view('header', $data);
 		$this->load->view('house_details', $data);
+		$this->load->view('footer');
+	}
+
+	/**
+	 * Public "advertise on Pearland411" landing page.
+	 * Form is now wired to /contact-submit (see views/post_your_ads.php)
+	 * — self-serve ad checkout is blocked on Authorize.Net.
+	 */
+	public function post_your_ads()
+	{
+		$data = array();
+		$this->loadHeaderCategories($data);
+		$data['title'] = 'Advertise on Pearland411';
+		$data['meta_description'] = 'Display ads on Pearland411 — homepage, listing, and category placements. Request pricing and inventory from our sales team.';
+		$this->load->view('header', $data);
+		$this->load->view('post_your_ads', $data);
 		$this->load->view('footer');
 	}
 
@@ -5686,10 +5455,35 @@ class User extends CI_Controller
 		}
 
 		$data['event'] = $event;
-		$data['title'] = $event->event_name . " | Event Details";
+		$data['title'] = $event->event_name . ' — Pearland411 Events';
 
 		// Get related events excluding current event
 		$data['related_events'] = $this->usermodel->getRelatedEvents($event->event_id, 3);
+
+		// SEO: per-page meta + Event JSON-LD
+		$desc = trim(strip_tags((string) ($event->event_description ?? '')));
+		$desc = $desc !== '' ? mb_substr($desc, 0, 160) : ('Event details for ' . $event->event_name);
+		$data['meta_description'] = $desc;
+		$data['canonical_url']    = base_url('event-details/' . rawurlencode($event->event_slug));
+		if (!empty($event->event_image)) $data['og_image'] = base_url($event->event_image);
+
+		$ld = array(
+			'@context' => 'https://schema.org',
+			'@type'    => 'Event',
+			'name'     => (string) $event->event_name,
+			'url'      => $data['canonical_url'],
+		);
+		if (!empty($event->event_start_date)) $ld['startDate'] = date('c', strtotime($event->event_start_date));
+		if (!empty($event->event_end_date))   $ld['endDate']   = date('c', strtotime($event->event_end_date));
+		if (!empty($event->event_address)) {
+			$ld['location'] = array(
+				'@type'   => 'Place',
+				'name'    => (string) $event->event_address,
+				'address' => (string) $event->event_address,
+			);
+		}
+		if (!empty($event->event_image)) $ld['image'] = base_url($event->event_image);
+		$data['json_ld'] = json_ld($ld);
 
 		// Load header categories using professional MVC approach
 		$this->loadHeaderCategories($data);
@@ -5756,19 +5550,14 @@ class User extends CI_Controller
 			$event_name = $_POST['event_name'];
 			$event_slug = strtolower(str_replace(' ', '-', $event_name)) . '-' . time();
 
-			// Handle image upload
+			// Handle image upload via the safe helper — MIME-sniffed,
+			// extension allow-listed, random filename, target dir
+			// gets an auto-written .htaccess blocking PHP execution.
 			$event_image = '';
 			if (!empty($_FILES['event_image']['name'])) {
-				$upload_path = './uploads/events/';
-				if (!is_dir($upload_path)) {
-					mkdir($upload_path, 0777, true);
-				}
-
-				$file_ext = pathinfo($_FILES['event_image']['name'], PATHINFO_EXTENSION);
-				$new_filename = 'event_' . time() . '.' . $file_ext;
-
-				if (move_uploaded_file($_FILES['event_image']['tmp_name'], $upload_path . $new_filename)) {
-					$event_image = 'uploads/events/' . $new_filename;
+				$saved = safe_upload_image($_FILES['event_image'], 'uploads/events/');
+				if ($saved !== false) {
+					$event_image = $saved;
 				}
 			}
 
@@ -5915,6 +5704,12 @@ class User extends CI_Controller
 			return;
 		}
 
+		// 10 reviews per IP per hour. Stops review-bombing.
+		if (!$this->rate_limit->check_ip('submit_review', 10, 3600)) {
+			$this->rate_limit->reject(3600);
+			return;
+		}
+
 		// Get logged user info
 		$session = $this->session->userdata('logged_user');
 		$logged_id = $session['logged_id'];
@@ -5969,6 +5764,14 @@ class User extends CI_Controller
 		// Check if form was submitted
 		if ($this->input->method() !== 'post') {
 			show_404();
+			return;
+		}
+
+		// The enquiry table dump shows obvious anonymous spam — 8 per
+		// IP per hour is generous for a real visitor messaging
+		// multiple businesses, restrictive enough to deter bots.
+		if (!$this->rate_limit->check_ip('add_enquiry', 8, 3600)) {
+			$this->rate_limit->reject(3600);
 			return;
 		}
 
@@ -6175,25 +5978,6 @@ class User extends CI_Controller
 			default:
 				return base_url();
 		}
-	}
-
-	public function simple_test()
-	{
-		echo 'SIMPLE TEST WORKS';
-		exit;
-	}
-
-	// Test method to debug AJAX calls
-	public function test_ajax()
-	{
-		header('Content-Type: application/json');
-		echo json_encode([
-			'success' => true,
-			'message' => 'AJAX endpoint is working',
-			'post_data' => $_POST,
-			'method' => $_SERVER['REQUEST_METHOD']
-		]);
-		exit;
 	}
 
 	/*==========================
@@ -6485,26 +6269,39 @@ class User extends CI_Controller
 	}
 
 	/**
-	 * Process Checkout - Handle form submission and payment processing
+	 * Process Checkout — handle form submission and payment processing.
+	 *
+	 * SECURITY NOTE
+	 * The previous implementation mocked the payment as successful
+	 * (`$payment_successful = true`) without calling Authorize.Net,
+	 * stored the full PAN + CVV (via json_encode($_POST)) into
+	 * `transactions.response_payload`, and recorded a "success" row
+	 * the admin dashboard counted as real revenue.
+	 *
+	 * Until Authorize.Net credentials are wired (see
+	 * application/libraries/Authorize_net_lib.php +
+	 * application/config/authorize_net.php), this endpoint refuses
+	 * to accept card data and returns the user to the pricing page
+	 * with a clear message. No card number, CVV, expiry, or
+	 * cardholder name is ever read from POST in this code path.
+	 *
 	 * URL: /process-checkout (POST)
 	 */
 	public function process_checkout()
 	{
-		// Check if POST request
-		if (!$_POST) {
+		if ($this->input->method() !== 'post') {
 			redirect('user/pricing_plan');
 			return;
 		}
 
-		// Get plan ID
+		// Sanity-check the plan (no money will move; we still validate
+		// so an attacker can't probe with junk).
 		$plan_id = $this->input->post('plan_id');
 		if (!$plan_id || !is_numeric($plan_id)) {
 			$this->session->set_flashdata('error', 'Invalid plan selected.');
 			redirect('user/pricing_plan');
 			return;
 		}
-
-		// Get plan details
 		$selected_plan = $this->usermodel->getPlanByIdForPricing($plan_id);
 		if (!$selected_plan) {
 			$this->session->set_flashdata('error', 'Selected plan not found.');
@@ -6512,189 +6309,18 @@ class User extends CI_Controller
 			return;
 		}
 
-		// Get selected duration (robust handling)
-		$duration_id = $this->input->post('duration_id');
-		$selected_duration = null;
-
-		// If a duration_id was posted and looks numeric, try to load it
-		if ($duration_id && is_numeric($duration_id)) {
-			$selected_duration = $this->usermodel->getDurationById($duration_id);
-		}
-
-		// If not found, try to pick a sensible fallback:
-		// 1) pick the first active plan duration with a valid numeric price
-		// 2) if no durations exist in DB for this plan, fallback to plan default price (30 days / 1 month)
-		if (!$selected_duration) {
-			$plan_durations = $this->usermodel->getPlanDurations($plan_id);
-			if (!empty($plan_durations)) {
-				// prefer first duration with numeric price > 0
-				foreach ($plan_durations as $d) {
-					if (isset($d->price) && is_numeric($d->price) && (float)$d->price > 0) {
-						$selected_duration = $d;
-						break;
-					}
-				}
-
-				// if none had a valid price, pick the first one anyway
-				if (!$selected_duration && !empty($plan_durations)) {
-					$selected_duration = $plan_durations[0];
-				}
-			} else {
-				// No durations configured for this plan — create a safe fallback
-				$selected_duration = (object) array(
-					'id' => null,
-					'price' => isset($selected_plan->price) ? $selected_plan->price : 0,
-					'duration_days' => 30,
-					'duration_months' => 1,
-					'currency' => isset($selected_plan->currency) && $selected_plan->currency ? $selected_plan->currency : 'USD'
-				);
-			}
-		}
-
-		// Final server-side price sanity check (do not allow zero/negative/non-numeric prices)
-		$price = isset($selected_duration->price) ? (float) $selected_duration->price : 0;
-		if ($price <= 0) {
-			$this->session->set_flashdata('error', 'Invalid price for the selected duration. Please contact support.');
-			redirect('checkout?plan_id=' . $plan_id);
-			return;
-		}
-
-		// Server-side tax calculation (10%) — keep in sync with client JS rate
-		$tax_rate = 0.10; // 10%
-		$tax_amount = round($price * $tax_rate, 2);
-		$total_amount = round($price + $tax_amount, 2);
-
-		// Basic form validation
-		$required_fields = array(
-			'first_name' => 'First Name',
-			'last_name' => 'Last Name',
-			'email' => 'Email',
-			'address' => 'Address',
-			'city' => 'City',
-			'state' => 'State',
-			'zip' => 'ZIP Code',
-			'country' => 'Country',
-			'card_number' => 'Card Number',
-			'exp_month' => 'Expiration Month',
-			'exp_year' => 'Expiration Year',
-			'cvv' => 'CVV',
-			'card_name' => 'Name on Card'
+		// HARD STOP. The Authorize.Net integration is not yet
+		// configured. We never read card_number / cvv / exp_* /
+		// card_name from POST — accepting them would store PCI data
+		// the application is not authorized to hold.
+		log_message('error', 'process_checkout called before live payments are wired; refusing.');
+		$this->session->set_flashdata(
+			'error',
+			'Online payments are temporarily unavailable while we finalize our payment processor. ' .
+			'Please contact support to activate your subscription.'
 		);
-
-		$validation_errors = array();
-		foreach ($required_fields as $field => $label) {
-			if (empty($_POST[$field])) {
-				$validation_errors[] = $label . ' is required';
-			}
-		}
-
-		if (!empty($validation_errors)) {
-			$this->session->set_flashdata('error', implode('. ', $validation_errors));
-			redirect('checkout?plan_id=' . $plan_id);
-			return;
-		}
-
-		// Get or create user ID
-		$user_id = null;
-		if ($this->session->userdata('logged_user')) {
-			$user_data = $this->session->userdata('logged_user');
-			$user_id = $user_data['logged_id'];
-		}
-
-		// Simulate payment processing (replace with actual Authorize.Net integration)
-		$payment_successful = true; // This would be actual payment result
-		$transaction_id = 'txn_' . time() . '_' . rand(1000, 9999); // Mock transaction ID
-
-		if ($payment_successful) {
-			// Create billing info string
-			$billing_info = $this->input->post('first_name') . ' ' . $this->input->post('last_name') .
-				' (' . $this->input->post('email') . ')';
-
-			// Store payment card information (if user is logged in)
-			if ($user_id) {
-				$card_data = array(
-					'user_id' => $user_id,
-					'card_holder_name' => $this->input->post('card_name'),
-					'card_last4' => substr($this->input->post('card_number'), -4),
-					'exp_month' => $this->input->post('exp_month'),
-					'exp_year' => $this->input->post('exp_year'),
-					'card_brand' => $this->getCardBrand($this->input->post('card_number')),
-					'is_default' => 1,
-					'created_at' => date('Y-m-d H:i:s')
-				);
-
-				$this->db->insert('payment_cards', $card_data);
-			}
-
-			// Create subscription record (use server-validated $price) — map to existing DB columns
-			// The current `subscriptions` table does not include duration_id/duration_days/duration_months/price columns
-			// so store the amount in `total_amount` and persist currency and billing_cycle instead.
-			$subscription_data = array(
-				'user_id' => $user_id,
-				'plan_id' => $plan_id,
-				'status' => 'active',
-				'start_date' => date('Y-m-d H:i:s'),
-				'end_date' => date('Y-m-d H:i:s', strtotime('+' . (isset($selected_duration->duration_days) ? $selected_duration->duration_days : 0) . ' days')),
-				'next_billing_date' => date('Y-m-d H:i:s', strtotime('+' . (isset($selected_duration->duration_days) ? $selected_duration->duration_days : 0) . ' days')),
-				'created_at' => date('Y-m-d H:i:s'),
-				'total_amount' => $total_amount,
-				'currency' => isset($selected_duration->currency) ? $selected_duration->currency : 'USD',
-				'billing_cycle' => isset($selected_plan->billing_interval) ? $selected_plan->billing_interval : 'monthly'
-			);
-
-			$subscription_id = $this->db->insert('subscriptions', $subscription_data) ? $this->db->insert_id() : null;
-
-			// Create transaction record (use server-validated $price and duration currency)
-			// Build a richer response payload that includes selected duration metadata
-			$payload = $_POST;
-			$payload['selected_duration'] = array(
-				'id' => isset($selected_duration->id) ? $selected_duration->id : null,
-				'duration_months' => isset($selected_duration->duration_months) ? $selected_duration->duration_months : null,
-				'duration_days' => isset($selected_duration->duration_days) ? $selected_duration->duration_days : null,
-				'price' => $price,
-				'currency' => isset($selected_duration->currency) ? $selected_duration->currency : 'USD'
-			);
-
-			$transaction_data = array(
-				'user_id' => $user_id,
-				'plan_id' => $plan_id,
-				'subscription_id' => $subscription_id,
-				'txn_ref' => $transaction_id,
-				// store subtotal/total in transaction as well
-				'amount' => $total_amount,
-				'currency' => isset($selected_duration->currency) ? $selected_duration->currency : 'USD',
-				'method' => 'card',
-				'status' => 'success',
-				'response_payload' => json_encode($payload), // Store form data + selected duration
-				'created_at' => date('Y-m-d H:i:s')
-			);
-
-			$this->db->insert('transactions', $transaction_data);
-
-			// Prepare success data
-			$success_data = array(
-				'subscription_id' => $subscription_id,
-				'transaction_id' => $transaction_id,
-				'plan_name' => $selected_plan->name,
-				'subtotal' => $price,
-				'tax' => $tax_amount,
-				'total' => $total_amount,
-				'currency' => isset($selected_duration->currency) ? $selected_duration->currency : 'USD',
-				'duration_months' => isset($selected_duration->duration_months) ? $selected_duration->duration_months : null,
-				'duration_days' => isset($selected_duration->duration_days) ? $selected_duration->duration_days : null,
-				'billing_info' => $billing_info,
-				'start_date' => date('Y-m-d H:i:s'),
-				'next_billing_date' => date('Y-m-d H:i:s', strtotime('+' . (isset($selected_duration->duration_days) ? $selected_duration->duration_days : 0) . ' days'))
-			);
-
-			// Store success data in session and redirect
-			$this->session->set_userdata('checkout_success_data', $success_data);
-			redirect('checkout-success');
-		} else {
-			// Payment failed
-			$this->session->set_flashdata('error', 'Payment processing failed. Please try again.');
-			redirect('checkout?plan_id=' . $plan_id);
-		}
+		redirect('checkout?plan_id=' . (int) $plan_id);
+		return;
 	}
 
 	/**
@@ -6731,32 +6357,21 @@ class User extends CI_Controller
 	}
 
 	/**
-	 * Helper method to determine card brand from card number
-	 */
-	private function getCardBrand($card_number)
-	{
-		$card_number = preg_replace('/\D/', '', $card_number);
-
-		if (preg_match('/^4[0-9]{12}(?:[0-9]{3})?$/', $card_number)) {
-			return 'Visa';
-		} elseif (preg_match('/^5[1-5][0-9]{14}$/', $card_number)) {
-			return 'Mastercard';
-		} elseif (preg_match('/^3[47][0-9]{13}$/', $card_number)) {
-			return 'American Express';
-		} elseif (preg_match('/^6(?:011|5[0-9]{2})[0-9]{12}$/', $card_number)) {
-			return 'Discover';
-		}
-
-		return 'Unknown';
-	}
-
-	/**
 	 * Newsletter subscription endpoint (AJAX)
 	 * URL: /user/subscribe_newsletter (POST)
 	 */
 	public function subscribe_newsletter()
 	{
 		header('Content-Type: application/json; charset=utf-8');
+
+		// 10 newsletter signups per IP per hour. The signup sends an
+		// email; rate-limiting matters more for email cost than for
+		// DB rows.
+		if (!$this->rate_limit->check_ip('subscribe_newsletter', 10, 3600)) {
+			http_response_code(429);
+			echo json_encode(['success' => false, 'message' => 'Too many subscribe requests. Try again in a few minutes.']);
+			return;
+		}
 
 		// Basic email validation
 		$this->load->library('form_validation');
@@ -6820,5 +6435,350 @@ class User extends CI_Controller
 		} else {
 			echo '<!doctype html><html><body><p>Invalid or expired confirmation link.</p></body></html>';
 		}
+	}
+
+	/*=========================
+		IT / Web services catalog (public side)
+		See database/migrations/0002_services.sql.
+		==========================*/
+
+	public function services()
+	{
+		$data = array();
+		$category = $this->input->get('category');
+		$category = $category ? trim($category) : null;
+
+		$data['services']   = $this->usermodel->getActiveServices($category);
+		$data['categories'] = $this->usermodel->getServiceCategories();
+		$data['selected_category'] = $category;
+		$data['title']      = 'IT & Web Services for Local Businesses';
+		$this->loadHeaderCategories($data);
+
+		$this->load->view('header', $data);
+		$this->load->view('services_index', $data);
+		$this->load->view('footer');
+	}
+
+	public function service_details($slug = '')
+	{
+		$service = $this->usermodel->getServiceBySlug($slug);
+		if (!$service) {
+			show_404();
+			return;
+		}
+
+		$data = array();
+		$data['service'] = $service;
+		$data['title']   = $service->name . ' — Pearland411 Services';
+		$data['meta_description'] = (string) $service->short_description;
+		$data['canonical_url']    = base_url('services/' . rawurlencode($service->slug));
+		if (!empty($service->image)) $data['og_image'] = base_url($service->image);
+
+		$ld = array(
+			'@context'    => 'https://schema.org',
+			'@type'       => 'Service',
+			'name'        => (string) $service->name,
+			'description' => (string) $service->short_description,
+			'url'         => $data['canonical_url'],
+			'provider'    => array(
+				'@type' => 'Organization',
+				'name'  => 'Pearland411',
+				'url'   => base_url(),
+			),
+		);
+		if (!empty($service->category)) $ld['serviceType'] = (string) $service->category;
+		if ($service->base_price !== null && $service->price_unit !== 'custom') {
+			$ld['offers'] = array(
+				'@type'         => 'Offer',
+				'price'         => number_format((float) $service->base_price, 2, '.', ''),
+				'priceCurrency' => 'USD',
+			);
+		}
+		$data['json_ld'] = json_ld($ld);
+
+		$this->loadHeaderCategories($data);
+
+		// Pre-fill the request form with session data when available.
+		$data['prefill'] = array('name' => '', 'email' => '', 'phone' => '', 'company' => '');
+		if ($this->session->userdata('logged_user')) {
+			$session = $this->session->userdata('logged_user');
+			$data['prefill']['name']  = isset($session['name']) ? $session['name'] : '';
+			$data['prefill']['email'] = isset($session['email_id']) ? $session['email_id'] : '';
+		}
+
+		$this->load->view('header', $data);
+		$this->load->view('service_details', $data);
+		$this->load->view('footer');
+	}
+
+	/**
+	 * Handle quote-request submission. Slug is optional — a generic
+	 * "request quote" form (no service preselected) can post here
+	 * with service_slug empty.
+	 */
+	public function request_service($slug = '')
+	{
+		if ($this->input->method() !== 'post') {
+			redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+			return;
+		}
+
+		// 5 service requests per IP per hour. Each one sends two emails.
+		if (!$this->rate_limit->check_ip('request_service', 5, 3600)) {
+			$this->rate_limit->reject(3600);
+			return;
+		}
+
+		$this->form_validation->set_rules('name',  'Name',  'trim|required|min_length[2]');
+		$this->form_validation->set_rules('email', 'Email', 'trim|required|valid_email');
+		$this->form_validation->set_rules('message', 'Message', 'trim|required|min_length[5]');
+
+		$service = $slug ? $this->usermodel->getServiceBySlug($slug) : null;
+
+		if (!$this->form_validation->run()) {
+			$this->session->set_flashdata('service_request_error', strip_tags(validation_errors()) ?: 'Please complete the required fields.');
+			redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+			return;
+		}
+
+		$user_id = null;
+		if ($this->session->userdata('logged_user')) {
+			$session = $this->session->userdata('logged_user');
+			$user_id = isset($session['logged_id']) ? (int) $session['logged_id'] : null;
+		}
+
+		$payload = array(
+			'service_id'   => $service ? (int) $service->service_id : null,
+			'user_id'      => $user_id,
+			'name'         => $this->input->post('name'),
+			'email'        => $this->input->post('email'),
+			'phone'        => $this->input->post('phone'),
+			'company'      => $this->input->post('company'),
+			'budget_range' => $this->input->post('budget_range'),
+			'message'      => $this->input->post('message'),
+			'status'       => 'new',
+			'ip'           => $this->input->ip_address(),
+			'user_agent'   => substr((string) $this->input->user_agent(), 0, 255),
+		);
+
+		$request_id = $this->usermodel->createServiceRequest($payload);
+
+		if (!$request_id) {
+			$this->session->set_flashdata('service_request_error', 'Could not save your request. Please try again or call us.');
+			redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+			return;
+		}
+
+		// Best-effort notifications:
+		//   (a) acknowledge to the submitter
+		//   (b) alert MAIL_FROM_ADDRESS that a new request landed.
+		$this->load->library('mailer');
+		$svc_name = $service ? $service->name : 'general inquiry';
+		$ack_body = '<p>Thanks for your message — we received your request about <strong>' . html_escape($svc_name) . '</strong> and will be in touch shortly.</p>';
+		$this->mailer->send($this->input->post('email'), 'We received your Pearland411 services request', $ack_body);
+
+		$admin_to = env('MAIL_FROM_ADDRESS', '');
+		if ($admin_to) {
+			$alert_body = '<p>New service request #' . (int) $request_id . '</p>'
+				. '<ul>'
+				. '<li>Service: ' . html_escape($svc_name) . '</li>'
+				. '<li>Name: '    . html_escape($this->input->post('name')) . '</li>'
+				. '<li>Email: '   . html_escape($this->input->post('email')) . '</li>'
+				. '<li>Phone: '   . html_escape($this->input->post('phone')) . '</li>'
+				. '<li>Company: ' . html_escape($this->input->post('company')) . '</li>'
+				. '<li>Budget: '  . html_escape($this->input->post('budget_range')) . '</li>'
+				. '</ul>'
+				. '<p>Message:</p><blockquote>' . nl2br(html_escape($this->input->post('message'))) . '</blockquote>';
+			$this->mailer->send($admin_to, '[Pearland411] New service request — ' . $svc_name, $alert_body);
+		}
+
+		$this->session->set_flashdata('service_request_success', 'Thanks! We received your request and will be in touch shortly.');
+		redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+	}
+
+	/*=========================
+		Public coupons / deals
+		==========================*/
+
+	public function coupons()
+	{
+		$data = array();
+		$data['coupons'] = $this->usermodel->getActiveCoupons(60);
+		$this->loadHeaderCategories($data);
+		$data['title']         = 'Local Coupons &amp; Deals — Pearland411';
+		$data['meta_description'] = 'Current coupons and deals from Pearland-area businesses listed on Pearland411.';
+		$data['canonical_url'] = base_url('coupons');
+
+		$this->load->view('header', $data);
+		$this->load->view('coupons', $data);
+		$this->load->view('footer');
+	}
+
+	public function coupon_details($id = 0)
+	{
+		$coupon = $this->usermodel->getCouponById($id);
+		if (!$coupon) { show_404(); return; }
+
+		// Date-window check so a freshly-deactivated coupon doesn't keep
+		// returning success via a stale share link.
+		$today = date('Y-m-d');
+		if ((int) $coupon->coupon_status !== 1
+			|| $coupon->coupon_start_date > $today
+			|| $coupon->coupon_end_date < $today) {
+			show_404();
+			return;
+		}
+
+		$data = array();
+		$data['coupon'] = $coupon;
+		$this->loadHeaderCategories($data);
+		$data['title']            = $coupon->coupon_name . ' — Coupon — Pearland411';
+		$data['meta_description'] = 'Coupon code ' . $coupon->coupon_code . ' for ' . ($coupon->listing_name ?? $coupon->owner_name);
+		$data['canonical_url']    = base_url('coupons/' . (int) $coupon->coupon_id);
+
+		$this->load->view('header', $data);
+		$this->load->view('coupon_details', $data);
+		$this->load->view('footer');
+	}
+
+	/*=========================
+		Claim listing flow (public side)
+
+		Anyone can submit a claim against a listing they say is their
+		business. The submission is queued in claim_listings; an admin
+		approves it from /admin/claimed-listings (Admin::claim_approve).
+		Both submitter and admin get an email notification at each
+		state change so the workflow doesn't stall silently.
+		==========================*/
+
+	public function claim_listing($slug = '')
+	{
+		// Visitors must be signed in so we can later transfer the
+		// listing to a real user_id on approval.
+		if (!$this->session->userdata('logged_user')) {
+			$this->session->set_userdata('redirect_url', current_url());
+			redirect('login');
+			return;
+		}
+
+		$listing = $this->usermodel->getSingleValue($slug, 'listing_slug', 'listings');
+		if (!$listing) { show_404(); return; }
+
+		$session = $this->session->userdata('logged_user');
+		$user_id = (int) $session['logged_id'];
+
+		// One claim per (listing, user) makes sense — don't let people
+		// spam a listing they already claimed.
+		$existing = $this->db
+			->where('listing_id',         (int) $listing->listing_id)
+			->where('enquiry_sender_id',  $user_id)
+			->limit(1)
+			->get('claim_listings')
+			->row();
+		if ($existing) {
+			$this->session->set_flashdata(
+				'claim_message',
+				'You have already submitted a claim for this listing — status: ' .
+				((int) $existing->claim_status === 1 ? 'approved' : 'pending review') . '.'
+			);
+			redirect('listing-details/' . rawurlencode($slug));
+			return;
+		}
+
+		if ($this->input->method() === 'post') {
+			// Light rate-limit (3 claims per IP per hour).
+			if (!$this->rate_limit->check_ip('claim_listing', 3, 3600)) {
+				$this->rate_limit->reject(3600);
+				return;
+			}
+
+			$this->form_validation->set_rules('enquiry_name',    'Your name',     'trim|required|min_length[2]');
+			$this->form_validation->set_rules('enquiry_email',   'Email',         'trim|required|valid_email');
+			$this->form_validation->set_rules('enquiry_message', 'Proof message', 'trim|required|min_length[20]');
+
+			if (!$this->form_validation->run()) {
+				$data = array(
+					'listing'   => $listing,
+					'error'     => strip_tags(validation_errors()) ?: 'Please complete the required fields.',
+				);
+				$this->loadHeaderCategories($data);
+				$data['title'] = 'Claim ' . $listing->listing_name . ' — Pearland411';
+				$this->load->view('header', $data);
+				$this->load->view('claim_listing', $data);
+				$this->load->view('footer');
+				return;
+			}
+
+			$claim_id = $this->usermodel->claimBusiness(array(
+				'listing_id'        => (int) $listing->listing_id,
+				'enquiry_sender_id' => $user_id,
+				'enquiry_name'      => $this->input->post('enquiry_name'),
+				'enquiry_email'     => $this->input->post('enquiry_email'),
+				'enquiry_mobile'    => $this->input->post('enquiry_mobile'),
+				'enquiry_message'   => $this->input->post('enquiry_message'),
+				'enquiry_source'    => $listing->listing_name,
+				'claim_status'      => 0,
+			));
+
+			if (!$claim_id) {
+				$this->session->set_flashdata('claim_message', 'Could not save your claim. Please try again.');
+				redirect('listing-details/' . rawurlencode($slug));
+				return;
+			}
+
+			// Notifications.
+			$this->load->library('mailer');
+			$listing_url = base_url('listing-details/' . rawurlencode($listing->listing_slug));
+
+			$ack = '<p>Thanks &mdash; we received your request to claim <strong>'
+				. html_escape($listing->listing_name) . '</strong>.</p>'
+				. '<p>An administrator will review the claim and email you when it is processed. '
+				. 'Approvals usually take 1&ndash;2 business days.</p>'
+				. '<p>Listing: <a href="' . $listing_url . '">' . $listing_url . '</a></p>';
+			$this->mailer->send(
+				$this->input->post('enquiry_email'),
+				'We received your listing claim request',
+				$ack
+			);
+
+			$admin_to = env('MAIL_FROM_ADDRESS', '');
+			if ($admin_to) {
+				$alert = '<p>New listing claim #' . $claim_id . '</p>'
+					. '<ul>'
+					. '<li>Listing: <a href="' . $listing_url . '">' . html_escape($listing->listing_name) . '</a></li>'
+					. '<li>Claimant: ' . html_escape($this->input->post('enquiry_name')) . '</li>'
+					. '<li>Email: '   . html_escape($this->input->post('enquiry_email')) . '</li>'
+					. '<li>Phone: '   . html_escape($this->input->post('enquiry_mobile')) . '</li>'
+					. '</ul>'
+					. '<p>Message:</p><blockquote>'
+					. nl2br(html_escape($this->input->post('enquiry_message')))
+					. '</blockquote>'
+					. '<p>Review &amp; approve at: '
+					. base_url('admin/claimed-listings')
+					. '</p>';
+				$this->mailer->send($admin_to, '[Pearland411] New listing claim — ' . $listing->listing_name, $alert);
+			}
+
+			$this->session->set_flashdata('claim_message',
+				'Thanks! Your claim has been submitted. We will email you when an administrator reviews it.');
+			redirect('listing-details/' . rawurlencode($slug));
+			return;
+		}
+
+		// GET — render the form.
+		$data = array(
+			'listing' => $listing,
+			'prefill' => array(
+				'enquiry_name'  => $session['name']     ?? '',
+				'enquiry_email' => $session['email_id'] ?? '',
+			),
+		);
+		$this->loadHeaderCategories($data);
+		$data['title']         = 'Claim ' . $listing->listing_name . ' — Pearland411';
+		$data['canonical_url'] = base_url('claim-listing/' . rawurlencode($slug));
+
+		$this->load->view('header', $data);
+		$this->load->view('claim_listing', $data);
+		$this->load->view('footer');
 	}
 }

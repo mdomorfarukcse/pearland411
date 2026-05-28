@@ -80,7 +80,7 @@
 			</div>
 		</div>
 		<div id="couponacc" class="container tab-pane fade">
-			<table class="responsive-table bordered">
+			<table data-admin-table class="responsive-table bordered">
 				<thead>
 					<tr>
 						<th>No</th>

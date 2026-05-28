@@ -24,140 +24,84 @@
 
           <!-- <a href="admin-add-new-listings.html" class="db-tit-btn">Add new listing</a> -->
 
-          <table class="responsive-table bordered">
-
+          <table data-admin-table class="responsive-table bordered">
             <thead>
-
               <tr>
-
                 <th>No</th>
-
-                <th>Listing Name</th>
-
-                <th>Enquirer Name</th>
-
-                <th>Enquirer Mobile</th>
-
-                <th>Enquirer Email Id</th>
-
-                <th>Verification Image</th>
-
-                <th>Enquirer Message</th>
-
-                <th>Enquiry Date</th>
-
+                <th>Listing</th>
+                <th>Claimant</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Proof image</th>
+                <th>Message</th>
+                <th>Submitted</th>
                 <th>Status</th>
-
-                <th>Approve</th>
-
-                <th>Delete</th>
-
-                <!-- <th>Preview</th> -->
-
+                <th>Decision</th>
+                <th>Actions</th>
               </tr>
-
             </thead>
-
             <tbody>
-
-              <?php
-
-              if ($listing_requests) {
-
-                $i = 0;
-
-                foreach ($listing_requests as $value) {
-
-                  $i++;
-
-              ?>
-
-                  <tr>
-
-                    <td><?= $i; ?></td>
-
-                    <td><?= $value->enquiry_source; ?></td>
-
-                    <td><?= $value->enquiry_name; ?></td>
-
-
-
-                    <td><?= $value->enquiry_mobile; ?></td>
-
-                    <td><?= $value->enquiry_email; ?></td>
-
-                    <td><img src="<?= base_url($value->enquiry_image); ?>" width="50px"></td>
-
-                    <td><?= $value->enquiry_message; ?></td>
-
-                    <td><span class="db-list-rat"><?= date('d, M Y', strtotime($value->claim_created_at)); ?></span></td>
-
-
-
-                    <td>
-
-                      <?php if ($value->claim_status == 0) { ?>
-
-                        <span class="db-list-rat">Pending</span>
-
-                      <?php }
-                      if ($value->claim_status == 1) { ?>
-
-                        <span class="db-list-rat">Approved</span>
-
-                      <?php } ?>
-
-                    </td>
-
-
-
-                    <td>
-
-                      <?php if ($value->claim_status == 0) { ?>
-
-                        <a href="<?= base_url('admin/claim-approve/' . $value->claim_listing_id); ?>"><button class="db-list-ststus">Approve</button></a>
-
-                      <?php } else { ?>
-
-                        <span style="text-align: center;">-</span>
-
-                      <?php } ?>
-
-                      <input type="hidden" id="updateField" value="claim_status">
-
-                      <input type="hidden" id="tableName" value="claim_listings">
-
-                      <input type="hidden" id="tableIdName" value="claim_listing_id">
-
-                      <input type="hidden" id="id" value="<?= $value->claim_listing_id; ?>">
-
-                    </td>
-
-
-
-
-
-                    <td><a href="#" onclick="javascript:deleteConfirm('<?php echo base_url() . 'admin/delete_claim/' . $value->claim_listing_id; ?>');" class="db-list-edit">Delete</a></td>
-
-                    <!-- <td><a href="../listing-details.html?code=LIST384" class="db-list-edit" target="_blank">Preview</a></td> -->
-
-                  </tr>
-
-                <?php }
-              } else { ?>
-
+              <?php if ($listing_requests): $i = 0; foreach ($listing_requests as $value): $i++; ?>
                 <tr>
-
-                  <td colspan="11">
-                    <h5>No Requests Available.</h5>
+                  <td><?= $i ?></td>
+                  <td><?= e($value->enquiry_source) ?></td>
+                  <td><?= e($value->enquiry_name) ?></td>
+                  <td><?= e($value->enquiry_mobile) ?></td>
+                  <td><a href="mailto:<?= e_attr($value->enquiry_email) ?>"><?= e($value->enquiry_email) ?></a></td>
+                  <td>
+                    <?php if (!empty($value->enquiry_image)): ?>
+                      <a href="<?= base_url($value->enquiry_image) ?>" target="_blank" rel="noopener noreferrer">
+                        <img src="<?= base_url($value->enquiry_image) ?>" width="50" alt="Proof" loading="lazy">
+                      </a>
+                    <?php else: ?>
+                      <span style="color:#999;">—</span>
+                    <?php endif; ?>
                   </td>
-
+                  <td><?= e_nl2br($value->enquiry_message) ?></td>
+                  <td><span class="db-list-rat"><?= date('d, M Y', strtotime($value->claim_created_at)) ?></span></td>
+                  <td>
+                    <?php $st = (int) $value->claim_status; ?>
+                    <?php if ($st === 0): ?>
+                      <span class="db-list-rat">Pending</span>
+                    <?php elseif ($st === 1): ?>
+                      <span style="color:green;font-weight:bold;">Approved</span>
+                    <?php elseif ($st === 2): ?>
+                      <span style="color:#c00;">Rejected</span>
+                    <?php endif; ?>
+                  </td>
+                  <td>
+                    <?php if ((int) $value->claim_status === 0): ?>
+                      <a href="<?= base_url('admin/claim-approve/' . (int) $value->claim_listing_id) ?>"
+                         onclick="return confirm('Approve this claim? The listing will be transferred to the claimant.');">
+                        <button class="db-list-ststus">Approve</button>
+                      </a>
+                      <a href="<?= base_url('admin/claim-reject/' . (int) $value->claim_listing_id) ?>"
+                         onclick="return confirm('Reject this claim? The claimant will be emailed.');">
+                        <button class="db-list-ststus" style="background:#c00;color:#fff;">Reject</button>
+                      </a>
+                    <?php else: ?>
+                      <span>—</span>
+                    <?php endif; ?>
+                  </td>
+                  <td><?php
+                    // Build the View link to the listing-details page when we have a slug.
+                    $listing_row = $this->db
+                      ->select('listing_slug')
+                      ->where('listing_id', (int) $value->listing_id)
+                      ->limit(1)->get('listings')->row();
+                    echo admin_actions(array(
+                      'view'   => !empty($listing_row->listing_slug)
+                        ? base_url('listing-details/' . rawurlencode((string) $listing_row->listing_slug))
+                        : null,
+                      'delete' => base_url('admin/delete_claim/' . (int) $value->claim_listing_id),
+                      'delete_confirm' => 'Delete this claim?',
+                    ), 'claim');
+                  ?></td>
                 </tr>
-
-              <?php } ?>
-
+              <?php endforeach; else: ?>
+                <tr><td colspan="11"><h5>No requests yet.</h5></td></tr>
+              <?php endif; ?>
             </tbody>
-
           </table>
 
         </div>

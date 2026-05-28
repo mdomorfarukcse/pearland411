@@ -119,24 +119,151 @@ class Usermodel extends CI_Model
 		$this->form_validation->set_rules('password', 'Password', 'trim|required|min_length[6]');
 
 		if ($this->form_validation->run()) {
-			$form_data 		= array(
-				'name'				=> htmlentities($this->input->post('name'), ENT_QUOTES),
-				'email_id'				=> htmlentities($this->input->post('email_id'), ENT_QUOTES),
-				'password'				=> md5($this->input->post('password')),
-				'mobile_number'			=> htmlentities($this->input->post('mobile_number'), ENT_QUOTES),
-				'hear_us'				=> htmlentities($this->input->post('hear_us'), ENT_QUOTES),
-				'sale_representative'	=> htmlentities($this->input->post('sale_representative'), ENT_QUOTES),
-				'user_zip_code'				=> htmlentities($this->input->post('zip_code'), ENT_QUOTES)
+			// Generate a verification token (stored raw because we email
+			// it to the user; lookups are by indexed exact match).
+			$verification_token = bin2hex(random_bytes(32));
+
+			// Store raw values; escape on output via html_escape().
+			// htmlentities() at write-time corrupts data on round-trip.
+			$form_data = array(
+				'name'                         => $this->input->post('name'),
+				'email_id'                     => $this->input->post('email_id'),
+				'password'                     => password_hash($this->input->post('password'), PASSWORD_DEFAULT),
+				'mobile_number'                => $this->input->post('mobile_number'),
+				'hear_us'                      => $this->input->post('hear_us'),
+				'sale_representative'          => $this->input->post('sale_representative'),
+				'user_zip_code'                => $this->input->post('zip_code'),
+				'email_verified'               => 0,
+				'email_verification_token'     => $verification_token,
+				'email_verification_sent_at'   => date('Y-m-d H:i:s'),
 			);
 
-			if ($this->db->insert('user', $form_data)) {
-				return array('status' => TRUE);
-			} else {
+			if (!$this->db->insert('user', $form_data)) {
 				return array('status' => FALSE, 'referror' => '', 'message' => 'Something Wrong please try again!');
 			}
+
+			// Fire off the verification email (best-effort — failures
+			// are logged but do not block account creation).
+			$this->load->library('mailer');
+			$verify_url = base_url('verify-email/' . $verification_token);
+			$body = '<p>Welcome to Pearland411.</p>'
+				. '<p>Please confirm your email by clicking the link below:</p>'
+				. '<p><a href="' . $verify_url . '">' . $verify_url . '</a></p>'
+				. '<p>If you did not create this account you can safely ignore this message.</p>';
+			$this->mailer->send($this->input->post('email_id'), 'Confirm your Pearland411 account', $body);
+
+			return array('status' => TRUE);
 		}
 
 		return array('status' => FALSE, 'referror' => '');
+	}
+
+	/*=========================
+		Email verification + password reset
+		==========================*/
+
+	/**
+	 * Look up a user by their email-verification token and, if found,
+	 * mark them verified. Returns true on success.
+	 */
+	public function verifyEmailByToken($token)
+	{
+		if (empty($token) || !ctype_xdigit($token)) {
+			return false;
+		}
+		$user = $this->db
+			->where('email_verification_token', $token)
+			->limit(1)
+			->get('user')
+			->row();
+		if (!$user) {
+			return false;
+		}
+		$this->db->where('user_id', $user->user_id)->update('user', array(
+			'email_verified'           => 1,
+			'email_verified_at'        => date('Y-m-d H:i:s'),
+			'email_verification_token' => null,
+		));
+		return true;
+	}
+
+	/**
+	 * Create a password-reset record + email the user a tokenized link.
+	 * Always returns the same shape so callers cannot enumerate which
+	 * emails exist in the system.
+	 */
+	public function requestPasswordReset($email, $ip = null)
+	{
+		$user = $this->db
+			->where('email_id', $email)
+			->limit(1)
+			->get('user')
+			->row();
+		if (!$user) {
+			// Silent success — do not leak which emails are registered.
+			return true;
+		}
+
+		$token = bin2hex(random_bytes(32));
+		$token_hash = hash('sha256', $token);
+
+		$this->db->insert('password_resets', array(
+			'user_id'    => $user->user_id,
+			'email'      => $user->email_id,
+			'token_hash' => $token_hash,
+			'created_at' => date('Y-m-d H:i:s'),
+			'expires_at' => date('Y-m-d H:i:s', time() + 3600), // 1 hour
+			'ip'         => $ip,
+		));
+
+		$this->load->library('mailer');
+		$reset_url = base_url('reset-password/' . $token);
+		$body = '<p>We received a request to reset the password on your Pearland411 account.</p>'
+			. '<p><a href="' . $reset_url . '">Click here to choose a new password</a></p>'
+			. '<p>This link expires in 1 hour. If you did not request a reset you can ignore this email — your password will not change.</p>';
+		$this->mailer->send($user->email_id, 'Reset your Pearland411 password', $body);
+
+		return true;
+	}
+
+	/**
+	 * Look up an unused, unexpired reset row by token. Returns the
+	 * password_resets row (object) or null.
+	 */
+	public function findActiveResetByToken($token)
+	{
+		if (empty($token) || !ctype_xdigit($token)) {
+			return null;
+		}
+		$token_hash = hash('sha256', $token);
+		$row = $this->db
+			->where('token_hash', $token_hash)
+			->where('used_at', null)
+			->where('expires_at >=', date('Y-m-d H:i:s'))
+			->limit(1)
+			->get('password_resets')
+			->row();
+		return $row ?: null;
+	}
+
+	/**
+	 * Apply a password reset: hash the new password, write it to user,
+	 * mark the reset row used. Returns true on success.
+	 */
+	public function completePasswordReset($reset_row, $new_password)
+	{
+		if (!$reset_row || empty($reset_row->user_id)) {
+			return false;
+		}
+		$this->db->trans_start();
+		$this->db->where('user_id', $reset_row->user_id)->update('user', array(
+			'password' => password_hash($new_password, PASSWORD_DEFAULT),
+		));
+		$this->db->where('id', $reset_row->id)->update('password_resets', array(
+			'used_at' => date('Y-m-d H:i:s'),
+		));
+		$this->db->trans_complete();
+		return $this->db->trans_status();
 	}
 
 	/*====================
@@ -149,39 +276,68 @@ class Usermodel extends CI_Model
 
 		$this->form_validation->set_rules('password', 'Password', 'required');
 
-		if ($this->form_validation->run()) {
-			$email_id = htmlentities($this->input->post('email_id'), ENT_QUOTES);
-			$password  = md5($this->input->post('password'));
-			$query = $this->db->query("SELECT * FROM user WHERE email_id = '$email_id' AND password = '$password'");
-			$result = $query->result();
-
-			if (sizeof($result) > 0) {
-
-				if ($result[0]->banned != 1) {
-
-					$sess_array = array(
-						'logged_id' => $result[0]->user_id,
-						'name' => $result[0]->name,
-						'email_id' => $result[0]->email_id,
-						'profile_image' => $result[0]->profile_image,
-						'user_created' => $result[0]->user_created
-					);
-					$this->session->set_userdata('logged_user', $sess_array);
-
-					// Force redirect to dashboard regardless of lastpage
-					return array('status' => TRUE, 'url' => 'dashboard', 'redirect' => true);
-				} else {
-
-					return array('status' => FALSE, 'message' => 'Your account has been removed. Please contact Administrator.', 'url' => 'login');
-				}
-			} else {
-				// No user found with given credentials
-				return array('status' => FALSE, 'message' => 'Email or Password is incorrect.', 'url' => 'login');
-			}
-		} else {
-			// Form validation failed
+		if (!$this->form_validation->run()) {
 			return array('status' => FALSE, 'referror' => '', 'message' => 'Please enter valid email and password.');
 		}
+
+		$email_id = $this->input->post('email_id');
+		$password = (string) $this->input->post('password');
+
+		// Look up by email only — verify the password in PHP so timing
+		// attacks see uniform behaviour and so we never interpolate
+		// user input into SQL.
+		$user = $this->db
+			->where('email_id', $email_id)
+			->limit(1)
+			->get('user')
+			->row();
+
+		if (!$user) {
+			return array('status' => FALSE, 'message' => 'Email or Password is incorrect.', 'url' => 'login');
+		}
+
+		$stored = (string) $user->password;
+		$verified = false;
+
+		// Modern bcrypt/argon hashes start with $2y$ / $argon...
+		if (strlen($stored) > 0 && $stored[0] === '$') {
+			$verified = password_verify($password, $stored);
+		} elseif (strlen($stored) === 32 && ctype_xdigit($stored)) {
+			// Legacy MD5 — accept once, then transparently upgrade to bcrypt.
+			if (hash_equals(strtolower($stored), md5($password))) {
+				$verified = true;
+				$this->db
+					->where('user_id', $user->user_id)
+					->update('user', array(
+						'password' => password_hash($password, PASSWORD_DEFAULT),
+					));
+			}
+		}
+
+		if (!$verified) {
+			return array('status' => FALSE, 'message' => 'Email or Password is incorrect.', 'url' => 'login');
+		}
+
+		if ((int) $user->banned === 1) {
+			return array('status' => FALSE, 'message' => 'Your account has been removed. Please contact Administrator.', 'url' => 'login');
+		}
+
+		// Block login until the email is verified. The email_verified
+		// column is added by migration 0001 and back-filled to 1 for
+		// existing rows, so this only affects NEW signups.
+		if (property_exists($user, 'email_verified') && (int) $user->email_verified === 0) {
+			return array('status' => FALSE, 'message' => 'Please confirm your email before signing in. Check your inbox for the verification link.', 'url' => 'login');
+		}
+
+		$this->session->set_userdata('logged_user', array(
+			'logged_id'     => $user->user_id,
+			'name'          => $user->name,
+			'email_id'      => $user->email_id,
+			'profile_image' => $user->profile_image,
+			'user_created'  => $user->user_created,
+		));
+
+		return array('status' => TRUE, 'url' => 'dashboard', 'redirect' => true);
 	}
 
 	/**
@@ -693,14 +849,14 @@ class Usermodel extends CI_Model
 		$this->load->library('email');
 
 		$email_config = array(
-			'protocol' => 'smtp',
-			'smtp_host' => 'smtp.gmail.com', // Change to your SMTP
-			'smtp_port' => 587,
-			'smtp_user' => 'your-email@gmail.com', // Change to your email
-			'smtp_pass' => 'your-password', // Change to your password
-			'smtp_crypto' => 'tls',
-			'mailtype' => 'html',
-			'charset' => 'utf-8'
+			'protocol'    => 'smtp',
+			'smtp_host'   => env('SMTP_HOST', 'smtp.gmail.com'),
+			'smtp_port'   => (int) env('SMTP_PORT', 587),
+			'smtp_user'   => env('SMTP_USER', ''),
+			'smtp_pass'   => env('SMTP_PASS', ''),
+			'smtp_crypto' => env('SMTP_CRYPTO', 'tls'),
+			'mailtype'    => 'html',
+			'charset'     => 'utf-8',
 		);
 
 		$this->email->initialize($email_config);
@@ -1899,11 +2055,20 @@ class Usermodel extends CI_Model
 
 	public function claimBusiness($data)
 	{
+		$data['claim_created_at'] = date('Y-m-d H:i:s');
 		if ($this->db->insert('claim_listings', $data)) {
-			return true;
-		} else {
-			return false;
+			return (int) $this->db->insert_id();
 		}
+		return false;
+	}
+
+	public function getClaimById($claim_id)
+	{
+		return $this->db
+			->where('claim_listing_id', (int) $claim_id)
+			->limit(1)
+			->get('claim_listings')
+			->row();
 	}
 
 
@@ -3137,17 +3302,19 @@ class Usermodel extends CI_Model
 	public function globalSearch($search_term, $limit = 50, $offset = 0)
 	{
 		$results = array(
-			'listings' => array(),
-			'news' => array(),
-			'events' => array(),
-			'blogs' => array(),
-			'products' => array(),
-			'house' => array(),
-			'rental' => array(),
+			'listings'    => array(),
+			'news'        => array(),
+			'events'      => array(),
+			'blogs'       => array(),
+			'products'    => array(),
+			'house'       => array(),
+			'rental'      => array(),
 			'classifieds' => array(),
-			'videos' => array(),
-			'categories' => array(),
-			'total_count' => 0
+			'videos'      => array(),
+			'categories'  => array(),
+			'services'    => array(),
+			'coupons'     => array(),
+			'total_count' => 0,
 		);
 
 		if (empty($search_term)) {
@@ -3186,14 +3353,57 @@ class Usermodel extends CI_Model
 		// Search in Categories
 		$results['categories'] = $this->searchCategories($search_term, 10);
 
+		// Search in Services catalog
+		$results['services'] = $this->searchServices($search_term, 10);
+
+		// Search in active Coupons
+		$results['coupons'] = $this->searchCoupons($search_term, 10);
+
 		// Calculate total count
 		$results['total_count'] = count($results['listings']) + count($results['news']) +
 			count($results['events']) + count($results['blogs']) +
 			count($results['products']) + count($results['house']) +
 			count($results['rental']) + count($results['classifieds']) +
-			count($results['videos']) + count($results['categories']);
+			count($results['videos']) + count($results['categories']) +
+			count($results['services']) + count($results['coupons']);
 
 		return $results;
+	}
+
+	public function searchServices($search_term, $limit = 10)
+	{
+		if (!$this->db->table_exists('services')) return array();
+		return $this->db
+			->from('services')
+			->where('is_active', 1)
+			->group_start()
+				->like('name', $search_term)
+				->or_like('short_description', $search_term)
+				->or_like('category', $search_term)
+				->or_like('body', $search_term)
+			->group_end()
+			->order_by('sort_order', 'ASC')
+			->limit((int) $limit)
+			->get()
+			->result();
+	}
+
+	public function searchCoupons($search_term, $limit = 10)
+	{
+		$today = date('Y-m-d');
+		return $this->db
+			->from('coupons')
+			->where('coupon_status', 1)
+			->where('coupon_start_date <=', $today)
+			->where('coupon_end_date >=',  $today)
+			->group_start()
+				->like('coupon_name', $search_term)
+				->or_like('coupon_code', $search_term)
+			->group_end()
+			->order_by('coupon_cdt', 'DESC')
+			->limit((int) $limit)
+			->get()
+			->result();
 	}
 
 	/**
@@ -4605,5 +4815,142 @@ class Usermodel extends CI_Model
 		}
 
 		return $results;
+	}
+
+	/*=========================
+		IT / Web services catalog (public-side)
+		==========================*/
+
+	/**
+	 * Returns active services ordered for display on /services.
+	 * @param string|null $category Optional category filter.
+	 * @return array of stdClass
+	 */
+	public function getActiveServices($category = null)
+	{
+		$this->db->from('services')->where('is_active', 1);
+		if ($category) {
+			$this->db->where('category', $category);
+		}
+		return $this->db
+			->order_by('sort_order', 'ASC')
+			->order_by('service_id', 'ASC')
+			->get()
+			->result();
+	}
+
+	/**
+	 * Distinct category list for the services index page.
+	 */
+	public function getServiceCategories()
+	{
+		return $this->db
+			->distinct()
+			->select('category')
+			->from('services')
+			->where('is_active', 1)
+			->where('category IS NOT NULL', null, false)
+			->order_by('category', 'ASC')
+			->get()
+			->result();
+	}
+
+	/**
+	 * Single service by slug. Returns null if missing or inactive.
+	 */
+	public function getServiceBySlug($slug)
+	{
+		if (empty($slug)) return null;
+		return $this->db
+			->where('slug', $slug)
+			->where('is_active', 1)
+			->limit(1)
+			->get('services')
+			->row();
+	}
+
+	/**
+	 * Create a service request (quote) row. Returns insert id or null.
+	 */
+	public function createServiceRequest($data)
+	{
+		$data['created_at'] = date('Y-m-d H:i:s');
+		$data['updated_at'] = date('Y-m-d H:i:s');
+		if (!$this->db->insert('service_requests', $data)) {
+			return null;
+		}
+		return $this->db->insert_id();
+	}
+
+	/*=========================
+		Public coupons / deals
+		==========================*/
+
+	/**
+	 * Coupons that are status=1 (active) and within their
+	 * coupon_start_date / coupon_end_date window. Joined to
+	 * listings + user when available so the public page can show
+	 * who's offering each deal.
+	 */
+	public function getActiveCoupons($limit = null, $offset = 0)
+	{
+		$today = date('Y-m-d');
+		$this->db
+			->select('c.*, l.listing_name, l.listing_slug, u.name AS owner_name')
+			->from('coupons c')
+			->join('user u', 'u.user_id = c.coupon_user_id', 'left')
+			->join('listings l', 'l.user_id = c.coupon_user_id AND (l.is_deleted IS NULL OR l.is_deleted = 0)', 'left')
+			->where('c.coupon_status', 1)
+			->where('c.coupon_start_date <=', $today)
+			->where('c.coupon_end_date >=',  $today)
+			->order_by('c.coupon_cdt', 'DESC');
+		if ($limit !== null) $this->db->limit((int) $limit, (int) $offset);
+		return $this->db->get()->result();
+	}
+
+	public function getCouponById($id)
+	{
+		return $this->db
+			->select('c.*, l.listing_name, l.listing_slug, u.name AS owner_name')
+			->from('coupons c')
+			->join('user u', 'u.user_id = c.coupon_user_id', 'left')
+			->join('listings l', 'l.user_id = c.coupon_user_id AND (l.is_deleted IS NULL OR l.is_deleted = 0)', 'left')
+			->where('c.coupon_id', (int) $id)
+			->limit(1)
+			->get()
+			->row();
+	}
+
+	/*=========================
+		Ad-slot lookup (used by application/views/partials/ad_slot.php)
+		See database/migrations/0006_ad_zones.sql for the slot list.
+		==========================*/
+
+	/**
+	 * Return one active ad for the given ad zone (e.g. 'home-hero',
+	 * 'listing-sidebar'). Rotates randomly when multiple ads target
+	 * the same slot so impressions get shared.
+	 *
+	 * Returns an object with photo / link / size / slot_key, or null
+	 * when there's nothing live for that slot.
+	 */
+	public function getAdForSlot($slot_key)
+	{
+		if (empty($slot_key) || !$this->db->table_exists('ads')) return null;
+		if (!$this->db->field_exists('slot_key', 'ads_prices')) return null;
+
+		$today = date('Y-m-d H:i:s');
+		return $this->db
+			->select('a.id, a.ad_photo, a.ad_link, ap.size, ap.slot_key')
+			->from('ads a')
+			->join('ads_prices ap', 'ap.id = a.ads_price_id', 'inner')
+			->where('ap.slot_key', $slot_key)
+			->where('a.ad_status', 1)
+			->where('a.ad_start_date <=', $today)
+			->where('a.ad_end_date >=',   $today)
+			->order_by('RAND()', '', false)
+			->limit(1)
+			->get()
+			->row();
 	}
 }

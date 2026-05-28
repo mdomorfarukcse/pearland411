@@ -205,7 +205,11 @@
         <div class="eve-deta-pg-main">
             <div class="lhs">
                 <div class="img">
-                    <img src="<?= base_url($news->news_image); ?>" alt="">
+                    <?php if (!empty($news->news_image)): ?>
+                        <?= responsive_img($news->news_image, $news->news_title) ?>
+                    <?php else: ?>
+                        <img src="<?= base_url('assets/images/no_image.png') ?>" alt="<?= e_attr($news->news_title) ?>" loading="lazy" decoding="async">
+                    <?php endif; ?>
                 </div>
 
             </div>
@@ -214,7 +218,7 @@
                     <div class="quote-pop">
                         <?php if ($this->session->flashdata('message')) { ?>
                             <div class="log-suc">
-                                <p><?= $this->session->flashdata('message') ?></p>
+                                <p><?= e($this->session->flashdata('message')); ?></p>
                             </div>
                         <?php } ?>
                         <h3>Get Quote</h3>
@@ -308,59 +312,14 @@
                             <span class="date-text"><?= $publish_date; ?></span>
                         </div>
                     </div>
-                    <h1 class="pg_title"><?= $news->news_title; ?></h1>
+                    <h1 class="pg_title"><?= e($news->news_title); ?></h1>
                 </div>
                 <p><?= strip_tags(html_entity_decode($news->news_description)); ?></p>
 
             </div>
             <div class="rhs">
-                <!-- Web Development Card -->
-                <section class="sidebar-marketing-section">
-                    <div class="marketing-card">
-                        <div class="card-content">
-                            <div class="icon-container">
-                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <rect x="2" y="3" width="20" height="14" rx="2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                                    <path d="M8 21h8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                                    <path d="M12 17v4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                                    <path d="M7 7h10M7 11h6" stroke="white" stroke-width="1.5" stroke-linecap="round" />
-                                </svg>
-                            </div>
-
-                            <h2 class="main-heading">Do You Need a Website?</h2>
-                            <p class="description">
-                                Transform your business with a professional, modern website that drives results.
-                            </p>
-
-                            <div class="features-wrapper">
-                                <div class="feature">
-                                    <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <circle cx="12" cy="12" r="10" fill="rgba(255, 255, 255, 0.25)" />
-                                        <path d="M8 12.5l2.5 2.5 5.5-5.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                                    </svg>
-                                    <span>Custom design tailored to your brand</span>
-                                </div>
-                                <div class="feature">
-                                    <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <circle cx="12" cy="12" r="10" fill="rgba(255, 255, 255, 0.25)" />
-                                        <path d="M8 12.5l2.5 2.5 5.5-5.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                                    </svg>
-                                    <span>Mobile-responsive & fast loading</span>
-                                </div>
-                                <div class="feature">
-                                    <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <circle cx="12" cy="12" r="10" fill="rgba(255, 255, 255, 0.25)" />
-                                        <path d="M8 12.5l2.5 2.5 5.5-5.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                                    </svg>
-                                    <span>SEO optimized for better visibility</span>
-                                </div>
-                            </div>
-
-                            <a href="/contact-us" class="primary-button">Get Your Website</a>
-                        </div>
-                    </div>
-                </section>
-                <!-- Web Development Card -->
+                <?php $slot = 'news-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
+                <?php include APPPATH . 'views/partials/web_dev_cta.php'; ?>
             </div>
         </div>
         <div class="pro-bot-shar">
@@ -402,7 +361,11 @@
                             <li>
                                 <div class="pro-eve-box" style="border-radius: 10px;">
                                     <div>
-                                        <img src="<?= base_url($rel_news->news_image); ?>" alt="<?= htmlspecialchars($rel_news->news_title); ?>">
+                                        <?php if (!empty($rel_news->news_image)): ?>
+                                            <?= responsive_img($rel_news->news_image, $rel_news->news_title) ?>
+                                        <?php else: ?>
+                                            <img src="<?= base_url('assets/images/no_image.png') ?>" alt="<?= e_attr($rel_news->news_title) ?>" loading="lazy" decoding="async">
+                                        <?php endif; ?>
                                     </div>
                                     <div>
                                         <?php $date = date('d, M Y', strtotime($rel_news->created_at)); ?>
