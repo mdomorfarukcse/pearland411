@@ -1,12 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About Us - Pearland411</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css">
-    <!-- FontAwesome removed, using SVG icons instead -->
     <style>
         .p411-about-page {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -533,9 +524,7 @@
             }
         }
     </style>
-</head>
-
-<body>
+<?php /* fragment view — chrome comes from header.php + footer.php */ ?>
     <div class="p411-about-page">
         <!-- Hero Section -->
         <section class="p411-hero-banner">
@@ -846,9 +835,5 @@
         </section>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"></script>
-</body>
 
-</html>
+<?php $cta_variant = "banner"; include APPPATH . "views/partials/web_dev_cta.php"; ?>
