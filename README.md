@@ -20,15 +20,27 @@ git clone <repo> pearland411 && cd pearland411
 cp .env.example .env
 # edit .env — see "Environment" below
 
-# 3. Run the database migrations IN ORDER
+# 3. Set up the CI3 database config (gitignored — won't be tracked)
+cp application/config/database.php.example application/config/database.php
+# The example file already reads everything from .env via env()
+# calls. If you'd rather hard-code credentials, edit this file
+# directly — your changes won't show up in `git status`.
+
+# 4. Run the database migrations IN ORDER
 mysql -u <user> -p <db> < database/migrations/0000_schema_fixups.sql
 mysql -u <user> -p <db> < database/migrations/0001_auth_flows.sql
 mysql -u <user> -p <db> < database/migrations/0002_services.sql
 mysql -u <user> -p <db> < database/migrations/0003_newsletter_campaigns.sql
 mysql -u <user> -p <db> < database/migrations/0004_rate_limits.sql
 mysql -u <user> -p <db> < database/migrations/0005_admin_roles.sql
+mysql -u <user> -p <db> < database/migrations/0006_ad_zones.sql
 
-# 4. (Optional but recommended) generate sized image variants for
+# If you're importing through phpMyAdmin instead, use the single
+# bundled file:
+#   database/migrations_combined_phpmyadmin.sql
+# (see database/README.md)
+
+# 5. (Optional but recommended) generate sized image variants for
 #    legacy uploads so list pages serve the smaller _thumb.jpg /
 #    _medium.jpg from the start.
 php index.php cli images_backfill

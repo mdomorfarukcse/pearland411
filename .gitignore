@@ -26,6 +26,7 @@ application/cache/*
 application/cache/ci_session_*
 
 # Local config overrides (never commit secrets)
+application/config/database.php
 application/config/database.local.php
 application/config/authorize_net.local.php
 application/config/email.local.php
