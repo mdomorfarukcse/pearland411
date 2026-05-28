@@ -15,7 +15,7 @@
 				<div class="ud-cen-s2">
 					<a href="<?= base_url('admin/campaigns') ?>">&larr; All campaigns</a>
 
-					<table data-admin-table class="responsive-table bordered" style="margin-top:16px;">
+					<table class="responsive-table bordered" style="margin-top:16px;">
 						<tr><th style="width:200px;">Subject</th>
 							<td><?= e($campaign->subject) ?></td></tr>
 						<tr><th>Status</th>

@@ -12,7 +12,7 @@
 				<div class="ud-cen-s2">
 					<a href="<?= base_url('admin/service-requests') ?>">&larr; Back to all requests</a>
 
-					<table data-admin-table class="responsive-table bordered" style="margin-top:16px;">
+					<table class="responsive-table bordered" style="margin-top:16px;">
 						<tr><th style="width:200px;">Received</th>
 							<td><?= e(date('Y-m-d H:i', strtotime($request->created_at))) ?></td></tr>
 						<tr><th>Service</th>

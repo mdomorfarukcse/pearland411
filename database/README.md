@@ -16,6 +16,7 @@ mysql -u <user> -p <db_name> < database/migrations/0002_services.sql
 mysql -u <user> -p <db_name> < database/migrations/0003_newsletter_campaigns.sql
 mysql -u <user> -p <db_name> < database/migrations/0004_rate_limits.sql
 mysql -u <user> -p <db_name> < database/migrations/0005_admin_roles.sql
+mysql -u <user> -p <db_name> < database/migrations/0006_ad_zones.sql
 ```
 
 ## Why each migration exists
@@ -28,6 +29,7 @@ mysql -u <user> -p <db_name> < database/migrations/0005_admin_roles.sql
 | `0003_newsletter_campaigns.sql` | `newsletter_campaigns` + `newsletter_campaign_sends` so the admin can compose, queue, and batch-send emails to the existing subscriber list. |
 | `0004_rate_limits.sql` | `rate_limits` table backing the `Rate_limit` library. Protects login, register, password-reset, enquiry, review, newsletter signup, and service-request endpoints from brute-force / spam. |
 | `0005_admin_roles.sql` | Adds `admin.role` (`super_admin`/`editor`) + `admin.is_active`. Promotes the seeded admin (id=1) to `super_admin`. Sub-admin management, billing, and ad-sales screens are gated to super-admins; editors can manage content. |
+| `0006_ad_zones.sql` | Adds `ads_prices.slot_key` so the frontend ad-slot partial (`application/views/partials/ad_slot.php`) can request "the ad for the home-hero slot" by code rather than admin-typed name. Seeds 8 canonical slots: `home-hero`, `home-sidebar`, `listing-sidebar`, `listing-top`, `listing-inline`, `events-sidebar`, `news-sidebar`, `footer-banner`. |
 
 ## Outstanding follow-up
 

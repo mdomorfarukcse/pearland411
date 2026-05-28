@@ -4920,4 +4920,37 @@ class Usermodel extends CI_Model
 			->get()
 			->row();
 	}
+
+	/*=========================
+		Ad-slot lookup (used by application/views/partials/ad_slot.php)
+		See database/migrations/0006_ad_zones.sql for the slot list.
+		==========================*/
+
+	/**
+	 * Return one active ad for the given ad zone (e.g. 'home-hero',
+	 * 'listing-sidebar'). Rotates randomly when multiple ads target
+	 * the same slot so impressions get shared.
+	 *
+	 * Returns an object with photo / link / size / slot_key, or null
+	 * when there's nothing live for that slot.
+	 */
+	public function getAdForSlot($slot_key)
+	{
+		if (empty($slot_key) || !$this->db->table_exists('ads')) return null;
+		if (!$this->db->field_exists('slot_key', 'ads_prices')) return null;
+
+		$today = date('Y-m-d H:i:s');
+		return $this->db
+			->select('a.id, a.ad_photo, a.ad_link, ap.size, ap.slot_key')
+			->from('ads a')
+			->join('ads_prices ap', 'ap.id = a.ads_price_id', 'inner')
+			->where('ap.slot_key', $slot_key)
+			->where('a.ad_status', 1)
+			->where('a.ad_start_date <=', $today)
+			->where('a.ad_end_date >=',   $today)
+			->order_by('RAND()', '', false)
+			->limit(1)
+			->get()
+			->row();
+	}
 }
