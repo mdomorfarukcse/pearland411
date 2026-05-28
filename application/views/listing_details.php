@@ -642,11 +642,8 @@
 						</div>
 					</div>
 					<!--END LISTING DETAILS: LEFT PART 5-->
-					<!--ADS-->
-					<div class="ban-ati-com ads-det-page"> <a href=""><span>Ad</span>
-							<img src="<?= base_url() ?>assets/images/ads/3.png"></a>
-					</div>
-					<!--ADS-->
+					<?php $slot = 'listing-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
+					<?php include APPPATH . 'views/partials/web_dev_cta.php'; ?>
 					<!--RELATED PREMIUM LISTINGS-->
 					<div class="list-det-rel-pre">
 						<h2>Related listings:</h2>
@@ -876,10 +873,7 @@
 					<!--END LISTING DETAILS: LEFT PART 9-->
 
 
-					<!--ADS-->
-					<div class="ban-ati-com ads-det-page"> <a href=""><span>Ad</span><img
-								src="<?= base_url() ?>assets/images/ads/59040boat-728x90.png"></a>
-					</div>
+					<?php $slot = 'listing-inline'; include APPPATH . 'views/partials/ad_slot.php'; ?>
 					<!--ADS-->
 				</div>
 			</div>

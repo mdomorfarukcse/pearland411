@@ -2702,6 +2702,9 @@ Database Tables Required:
                 <div class="swiper-button-prev"></div>
               </div>
             </section>
+
+            <?php $slot = 'home-hero'; include APPPATH . 'views/partials/ad_slot.php'; ?>
+
             <!-- =========================
                      SECTION 2: Explore Pearland Businesses (Replaces Latest Directory)
                 ========================= -->
@@ -3020,8 +3023,7 @@ Database Tables Required:
               </div>
             </section>
 
-
-
+            <?php $cta_variant = 'banner'; include APPPATH . 'views/partials/web_dev_cta.php'; ?>
 
           </div>
           <!-- =========================
@@ -3037,6 +3039,8 @@ Database Tables Required:
               <div id="weather-current"></div>
             </div>
 
+            <?php $slot = 'home-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
+            <?php include APPPATH . 'views/partials/web_dev_cta.php'; ?>
 
             <!-- Categories Widget -->
             <div class="widget categories">

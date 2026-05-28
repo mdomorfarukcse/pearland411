@@ -265,9 +265,8 @@
 						</div>
 						<!--END-->
 						<!--START-->
-						<div class="ban-ati-com ads-det-page" style="padding: 0px !important;">
-							<a href=""><span>Ad</span><img src="<?= base_url('assets/images/AD-SAMPLE.png') ?>" alt=""></a>
-						</div>
+						<?php $slot = 'listing-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
+						<?php include APPPATH . 'views/partials/web_dev_cta.php'; ?>
 						<!--END-->
 						<div class="all-list-filt-form form-position" style="z-index: 10;" >
 							<div class="tit">
@@ -356,9 +355,7 @@
 						<!-- Web Development Card -->
 
 						<!-- END -->
-						<div class="ban-ati-com ads-det-page">
-							<a href=""><span>Ad</span><img src="<?= base_url('assets/images/AD-SAMPLE.png') ?>" alt=""></a>
-						</div>
+						<?php $slot = 'listing-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
 					</div>
 				</div>
 				<div class="col-md-9" style="margin-bottom:110px; overflow-x: hidden;">
@@ -368,10 +365,7 @@
 							<i class="material-icons ic3" title="Map view">location_on</i>
 						</div>
 					</div>
-					<div class="ban-ati-com ads-all-list" style="margin: 20px 0; overflow: hidden;">
-						<a href="#"><span>Ad</span><img src="<?= base_url('assets/images/AD-SAMPLE.png'); ?>" alt="" style="max-width: 100%; height: auto;"></a>
-					</div>
-					<!--ADS-->
+					<?php $slot = 'listing-top'; include APPPATH . 'views/partials/ad_slot.php'; ?>
 					<!-- Loader Image -->
 					<div id="loadingmessage" style="display:none">
 						<div id="loadingmessage1">&nbsp;</div>
@@ -935,11 +929,7 @@
 						</style>
 					<?php endif; ?>
 
-					<!--ADS-->
-					<div class="ban-ati-com ads-all-list">
-						<a href="#"><span>Ad</span><img src="<?= base_url('assets/images/AD-SAMPLE.png') ?>" alt=""></a>
-					</div>
-					<!--ADS-->
+					<?php $slot = 'listing-inline'; include APPPATH . 'views/partials/ad_slot.php'; ?>
 				</div>
 			</div>
 		</div>
