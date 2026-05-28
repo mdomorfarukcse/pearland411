@@ -47,6 +47,13 @@
 	</div>
 	<!-- END -->
 
+	<!-- Site-wide footer banner ad slot -->
+	<section style="background:#f9fafb;padding:24px 0;">
+		<div class="container">
+			<?php $slot = 'footer-banner'; include APPPATH . 'views/partials/ad_slot.php'; ?>
+		</div>
+	</section>
+
 	<!-- START -->
 	<section>
 		<div class="full-bot-book">

@@ -52,3 +52,5 @@
 		<?php endif; ?>
 	</div>
 </section>
+
+<?php $cta_variant = "banner"; include APPPATH . "views/partials/web_dev_cta.php"; ?>

@@ -59,6 +59,7 @@ function createSafeSlug($text)
 <!-- START -->
 <section class=" event-body">
 	<div class="container">
+		<?php $slot = 'events-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
 		<div class="us-ppg-com">
 			<ul id="intseres">
 				<?php
@@ -265,6 +266,9 @@ function createSafeSlug($text)
 	</div>
 	</ul>
 	</div>
+	</div>
+	<div class="container">
+		<?php $cta_variant = 'banner'; include APPPATH . 'views/partials/web_dev_cta.php'; ?>
 	</div>
 </section>
 
