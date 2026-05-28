@@ -51,14 +51,28 @@ DEALLOCATE PREPARE stmt;
 ALTER TABLE `user`
     MODIFY COLUMN `email_id` VARCHAR(255) DEFAULT NULL;
 
--- 4. Add UNIQUE index on user.email_id (idempotent).
-SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
-           WHERE TABLE_SCHEMA = DATABASE()
-             AND TABLE_NAME   = 'user'
-             AND INDEX_NAME   = 'user_email_id_uq');
-SET @s := IF(@c = 0,
-    'ALTER TABLE `user` ADD UNIQUE KEY `user_email_id_uq` (`email_id`)',
-    'DO 0');
+-- 4. Add UNIQUE index on user.email_id (idempotent + safe when
+--    existing data already has duplicate emails). Falls back to a
+--    plain non-unique index when duplicates are present so the rest
+--    of the migration succeeds; promote to UNIQUE manually after
+--    cleaning the dupes (see README).
+SET @uq_exists := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+                   WHERE TABLE_SCHEMA = DATABASE()
+                     AND TABLE_NAME   = 'user'
+                     AND INDEX_NAME   = 'user_email_id_uq');
+SET @idx_exists := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME   = 'user'
+                      AND INDEX_NAME   = 'user_email_id_idx');
+SET @dupe_count := (SELECT COUNT(*) FROM (
+    SELECT 1 FROM `user` WHERE email_id IS NOT NULL
+     GROUP BY email_id HAVING COUNT(*) > 1
+) AS d);
+SET @s := CASE
+    WHEN @uq_exists > 0 OR @idx_exists > 0 THEN 'DO 0'
+    WHEN @dupe_count = 0 THEN 'ALTER TABLE `user` ADD UNIQUE KEY `user_email_id_uq` (`email_id`)'
+    ELSE 'ALTER TABLE `user` ADD INDEX `user_email_id_idx` (`email_id`)'
+END;
 PREPARE stmt FROM @s;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
