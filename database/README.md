@@ -6,6 +6,24 @@ numbered SQL files (`0000_*.sql`, `0001_*.sql`, ...).
 
 ## Running migrations
 
+Two ways to run them.
+
+### Option 1 — one combined file (easiest for phpMyAdmin)
+
+`database/migrations_combined_phpmyadmin.sql` is an
+auto-generated bundle of all seven files **in the correct order**
+with the `DELIMITER //` directives stripped (some phpMyAdmin
+versions can't parse them). Import this single file via
+phpMyAdmin → **Import** → **Choose File** → Go.
+
+Re-generate the bundle whenever a new per-file migration is added:
+
+```bash
+scripts/build_combined_migration.sh
+```
+
+### Option 2 — per-file (mysql CLI or modern phpMyAdmin)
+
 Each file is safe to run **once** against the live MySQL database
 and (where MySQL allows) idempotent on re-run. Run them in order:
 

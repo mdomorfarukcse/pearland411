@@ -1,5 +1,18 @@
 <?php
-defined('BASEPATH') or exit('No direct script access allowed');
+/**
+ * NOTE: this file is intentionally NOT guarded with the standard
+ *   `defined('BASEPATH') or exit(...);`
+ * boilerplate. Unlike the other files in application/config/, this
+ * one is loaded by index.php BEFORE CodeIgniter bootstraps — so
+ * BASEPATH won't be defined yet when require_once runs. Adding the
+ * guard would make the file exit immediately and break the entire
+ * boot (HTTP 500 on every request).
+ *
+ * The file contains only loader helpers (no secrets), so direct
+ * browser access — if Apache ever served it — would just print
+ * nothing of value. As an extra defense, the repo-root .htaccess
+ * denies access to any file matching `\.env$`.
+ */
 
 /**
  * Minimal .env loader for CodeIgniter 3.
