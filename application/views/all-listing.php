@@ -1,134 +1,4 @@
 <style>
-	/* Sidebar Web Development Section */
-	.sidebar-marketing-section {
-		width: 100%;
-		position: relative;
-		top: 50px;
-		margin-bottom: 60px;
-	}
-
-	.sidebar-marketing-section .marketing-card {
-		background: linear-gradient(145deg, #2563eb 0%, #1e40af 100%);
-		border-radius: 14px;
-		padding: 40px 15px;
-		margin: 0 10px;
-		position: relative;
-		overflow: hidden;
-		/* box-shadow: 0 20px 60px rgba(37, 99, 235, 0.3); */
-	}
-
-	.sidebar-marketing-section .marketing-card::before {
-		content: '';
-		position: absolute;
-		top: -50%;
-		right: -50%;
-		width: 200%;
-		height: 200%;
-		background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-		animation: pulseEffect 8s ease-in-out infinite;
-	}
-
-	@keyframes pulseEffect {
-
-		0%,
-		100% {
-			transform: scale(1);
-			opacity: 0.5;
-		}
-
-		50% {
-			transform: scale(1.1);
-			opacity: 0.8;
-		}
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content {
-		position: relative;
-		z-index: 2;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .icon-container {
-		width: 44px;
-		height: 44px;
-		background: rgba(255, 255, 255, 0.15);
-		border-radius: 8px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		margin-bottom: 24px;
-		backdrop-filter: blur(10px);
-		border: 2px solid rgba(255, 255, 255, 0.25);
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .icon-container svg {
-		width: 26px;
-		height: 26px;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .main-heading {
-		color: white;
-		font-size: 20px;
-		font-weight: 700;
-		margin-bottom: 12px;
-		line-height: 1.3;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .description {
-		color: rgba(255, 255, 255, 0.9);
-		font-size: 15px;
-		line-height: 1.6;
-		margin-bottom: 28px;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .features-wrapper {
-		margin-bottom: 28px;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .features-wrapper .feature {
-		display: flex;
-		align-items: center;
-		color: white;
-		font-size: 12px;
-		margin-bottom: 12px;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .features-wrapper .feature:last-child {
-		margin-bottom: 0;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .features-wrapper .feature .check-icon {
-		width: 17px;
-		height: 17px;
-		margin-right: 10px;
-		flex-shrink: 0;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .primary-button {
-		background: white;
-		color: #2563eb;
-		border: none;
-		padding: 12px 22px;
-		font-size: 14px;
-		font-weight: 600;
-		border-radius: 99px;
-		cursor: pointer;
-		transition: all 0.3s ease;
-		display: block;
-		text-align: center;
-		width: 100%;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .primary-button:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
-		background: #f8fafc;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .primary-button:active {
-		transform: translateY(0);
-	}
-
 	.pg_title {
 		font-size: 40px !important;
 		font-weight: 700 !important;
@@ -136,18 +6,6 @@
 	}
 
 	@media (max-width: 480px) {
-		.sidebar-marketing-section .marketing-card {
-			padding: 32px 24px;
-		}
-
-		.sidebar-marketing-section .marketing-card .card-content .main-heading {
-			font-size: 22px;
-		}
-
-		.sidebar-marketing-section .marketing-card .card-content .description {
-			font-size: 14px;
-		}
-
 		.pg_title {
 			font-size: 30px !important;
 		}
@@ -159,8 +17,6 @@
 		background-position: top;
 		background-attachment: fixed;
 	}
-
-	/* Sidebar Web Development Section */
 </style>
 
 <!-- START -->
@@ -306,56 +162,7 @@
 							</div>
 						</div>
 
-						<!-- Web Development Card -->
-						<section class="sidebar-marketing-section">
-							<div class="marketing-card">
-								<div class="card-content">
-									<div class="icon-container">
-										<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-											<rect x="2" y="3" width="20" height="14" rx="2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-											<path d="M8 21h8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-											<path d="M12 17v4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-											<path d="M7 7h10M7 11h6" stroke="white" stroke-width="1.5" stroke-linecap="round" />
-										</svg>
-									</div>
-
-									<h2 class="main-heading">Do You Need a Website?</h2>
-									<p class="description">
-										Transform your business with a professional, modern website that drives results.
-									</p>
-
-									<div class="features-wrapper">
-										<div class="feature">
-											<svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-												<circle cx="12" cy="12" r="10" fill="rgba(255, 255, 255, 0.25)" />
-												<path d="M8 12.5l2.5 2.5 5.5-5.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-											</svg>
-											<span>Custom design tailored to your brand</span>
-										</div>
-										<div class="feature">
-											<svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-												<circle cx="12" cy="12" r="10" fill="rgba(255, 255, 255, 0.25)" />
-												<path d="M8 12.5l2.5 2.5 5.5-5.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-											</svg>
-											<span>Mobile-responsive & fast loading</span>
-										</div>
-										<div class="feature">
-											<svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-												<circle cx="12" cy="12" r="10" fill="rgba(255, 255, 255, 0.25)" />
-												<path d="M8 12.5l2.5 2.5 5.5-5.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-											</svg>
-											<span>SEO optimized for better visibility</span>
-										</div>
-									</div>
-
-									<a href="/contact-us" class="primary-button">Get Your Website</a>
-								</div>
-							</div>
-						</section>
-						<!-- Web Development Card -->
-
 						<!-- END -->
-						<?php $slot = 'listing-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
 					</div>
 				</div>
 				<div class="col-md-9" style="margin-bottom:110px; overflow-x: hidden;">
@@ -499,12 +306,24 @@
 							if (isset($allListings) && count($allListings) > 0) {
 								foreach ($allListings as $value) {
 							?>
+									<?php
+										$cat_label = !empty($value->category_name) ? $value->category_name : '';
+										$cat_link  = !empty($value->category_slug)
+											? base_url('all_listing/' . rawurlencode((string) $value->category_slug))
+											: base_url('all-category');
+										$is_new = !empty($value->created_at)
+											&& (strtotime($value->created_at) > strtotime('-30 days'));
+										$is_verified = !empty($value->featured_listing) || !empty($value->spotlight_listing);
+										$detail_url  = base_url('listing-details/' . rawurlencode((string) $value->listing_slug));
+									?>
 									<li>
 										<div class="eve-box" style="width: 100%;">
 											<!---LISTING IMAGE--->
-											<div class="al-img"> <span class="open-stat">open</span>
-												<a href="<?= base_url('user/listing-details/' . $value->listing_slug); ?>">
-
+											<div class="al-img">
+												<?php if ($cat_label !== ''): ?>
+													<a class="open-stat" href="<?= e_attr($cat_link) ?>" style="text-decoration:none;"><?= e($cat_label) ?></a>
+												<?php endif; ?>
+												<a href="<?= e_attr($detail_url) ?>">
 													<?php if (empty($value->listing_image)): ?>
 															<img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($value->listing_name ?? '') ?>" loading="lazy" decoding="async">
 														<?php else: ?>
@@ -516,8 +335,13 @@
 											<!---LISTING NAME--->
 											<div>
 												<h4>
-													<a href="<?= base_url('listing-details/' . rawurlencode((string) $value->listing_slug)); ?>"><?= e($value->listing_name); ?></a>
-													<i class="li-veri"><img src="<?= base_url('assets/images/icon/svg/verified.png'); ?>" alt=""></i>
+													<a href="<?= e_attr($detail_url) ?>"><?= e($value->listing_name); ?></a>
+													<?php if ($is_verified): ?>
+														<i class="li-veri" title="Verified business"><img src="<?= base_url('assets/images/icon/svg/verified.png'); ?>" alt="Verified"></i>
+													<?php endif; ?>
+													<?php if ($is_new && !$is_verified): ?>
+														<span class="al-badge-new" style="display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:600;letter-spacing:0.02em;">NEW</span>
+													<?php endif; ?>
 												</h4>
 
 												<?php if ($value->display_address == 1 && !empty($value->listing_address)): ?>
@@ -525,21 +349,20 @@
 												<?php endif; ?>
 
 												<?php if ($value->display_phone == 1 && !empty($value->listing_mobile)): ?>
-													<span class="pho"><?= $value->listing_mobile; ?></span>
+													<span class="pho"><?= e($value->listing_mobile); ?></span>
 												<?php endif; ?>
 
 												<?php if (!empty($value->listing_email)): ?>
-													<span class="mail"><?= $value->listing_email; ?></span>
+													<span class="mail"><?= e($value->listing_email); ?></span>
 												<?php endif; ?>
 
 												<div class="links">
-													<!-- <a href="#" data-toggle="modal" data-target="#quote" class="quo">Get quote</a> -->
-													<a href="<?= base_url('listing-details/' . $value->listing_slug); ?>">View more</a>
+													<a href="<?= e_attr($detail_url) ?>">View more</a>
 													<?php if ($value->display_phone == 1 && !empty($value->listing_mobile)): ?>
-														<a href="Tel:<?= $value->listing_mobile; ?>">Call Now</a>
+														<a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', $value->listing_mobile)); ?>">Call Now</a>
 													<?php endif; ?>
 													<?php if (!empty($value->listing_whatsapp)): ?>
-														<a href="<?= 'https://wa.me/' . $value->listing_whatsapp; ?>" class="what" target="_blank">WhatsApp</a>
+														<a href="https://wa.me/<?= e_attr(preg_replace('/[^0-9]/', '', $value->listing_whatsapp)); ?>" class="what" target="_blank" rel="noopener">WhatsApp</a>
 													<?php endif; ?>
 												</div>
 											</div>
@@ -931,83 +754,6 @@
 
 					<?php $slot = 'listing-inline'; include APPPATH . 'views/partials/ad_slot.php'; ?>
 				</div>
-			</div>
-		</div>
-	</div>
-</section>
-<!-- END -->
-<!-- START -->
-<section>
-	<div class="list-map"> <span id="map-error-box" class="map-error-box" style="display:none;">!!! Oops No Listing with the Selected Category</span>
-		<div class="list-map-resu map-view" id="map-view"></div>
-		<div class="list-map-filt">
-			<div class="map-fi-com map-fi-view">
-				<div class="vfilter"> <i class="material-icons ic-map-1" title="Grid view">apps</i>
-					<i class="material-icons ic-map-2" title="List view">format_list_bulleted</i>
-					<i class="material-icons ic-map-3 act" title="Map view">layers</i>
-				</div>
-			</div>
-			<div class="map-fi-com map-fi-cate">
-				<select onChange="SubcategoryFilter1(this.value);" name="cat_check" id="cat_check1" class="cat_check chosen-select ">
-					<option value="">Select Category</option>
-					<option value="hotels-and-resorts">Hotels And Resorts</option>
-					<option value="spa-and-facial">Spa and Facial</option>
-					<option value="digital-products">Digital Products</option>
-					<option value="pet-shop">Pet shop</option>
-					<option value="hotel---food">Hotel & Food</option>
-					<option value="wedding-halls">Wedding halls</option>
-					<option selected value="real-estate">Real Estate</option>
-					<option value="sports">Sports</option>
-					<option value="education">Education</option>
-					<option value="transportation">Transportation</option>
-					<option value="electricals">Electricals</option>
-					<option value="automobiles">Automobiles</option>
-					<option value="hospitals">Hospitals</option>
-				</select>
-			</div>
-			<div class="sub_cat_section1 map-fi-com map-fi-subcate">
-				<select name="sub_cat_check" id="sub_cat_check1" class="sub_cat_check">
-					<option value="">Select sub-category</option>
-					<option value="22">Villas</option>
-					<option value="21">Indepentant House</option>
-					<option value="20">Plots and Lands</option>
-				</select>
-			</div>
-			<!--        <div class="map-fi-com map-fi-rat">-->
-			<!--            <select id="rating_check1" name="rating_check">-->
-			<!--                <option value="">Select Rating</option>-->
-			<!--                <option value="5">5 Star</option>-->
-			<!--                <option value="4">4 Star</option>-->
-			<!--                <option value="3">3 Star</option>-->
-			<!--                <option value="2">2 Star</option>-->
-			<!--                <option value="1">1 Star</option>-->
-			<!--            </select>-->
-			<!--        </div>-->
-			<div class="map-fi-com map-fi-fea">
-				<select id="city_check1" name="city_check">
-					<option value="">Select City</option>
-					<option value="10519">Toronto</option>
-					<option value="1068">Vadodara</option>
-					<option value="11">Akkarampalle</option>
-					<option value="1131">Hisar</option>
-					<option value="26">Balapur</option>
-					<option value="114">Karnul</option>
-					<option value="706">Delhi</option>
-					<option value="707">New Delhi</option>
-					<option value="3659">Chennai</option>
-				</select>
-			</div>
-			<div class="map-fi-com map-fi-fea">
-				<select id="feature_check1" name="feature_check">
-					<option value="">Select Feature</option>
-					<option value="trusted">Trusted services provider</option>
-					<option value="premium">Premium services</option>
-					<option value="verified">Verified services</option>
-					<option value="trending">Trending services</option>
-					<option value="offers">Offers and discounts</option>
-					<option value="latest">Latest updated</option>
-					<option value="likes">Most likes</option>
-				</select>
 			</div>
 		</div>
 	</div>

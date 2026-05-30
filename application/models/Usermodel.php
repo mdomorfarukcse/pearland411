@@ -1117,15 +1117,22 @@ class Usermodel extends CI_Model
 	// Get events with search and pagination (public)
 	public function getEventsWithPagination($search = '', $limit = 10, $offset = 0)
 	{
-		$this->db->select('*')->from('events')->where('event_status', 1);
+		$this->db->select('events.*, user.name AS host_name, user.profile_image AS host_image')
+			->from('events')
+			->join('user', 'events.user_id = user.user_id', 'LEFT')
+			->where('events.event_status', 1);
 		if (!empty($search)) {
 			$this->db->group_start();
-			$this->db->like('event_name', $search);
-			$this->db->or_like('event_description', $search);
+			$this->db->like('events.event_name', $search);
+			$this->db->or_like('events.event_description', $search);
+			$this->db->or_like('events.event_address', $search);
 			$this->db->group_end();
 		}
-		$this->db->order_by('event_id', 'DESC');
-		$this->db->limit($limit, $offset); // $limit = per_page, $offset = offset
+		// Upcoming events first (ordered by start date); recently-added breaks ties.
+		$this->db->order_by('events.event_start_date IS NULL', 'ASC');
+		$this->db->order_by('events.event_start_date', 'ASC');
+		$this->db->order_by('events.event_id', 'DESC');
+		$this->db->limit($limit, $offset);
 		return $this->db->get()->result();
 	}
 
@@ -1136,6 +1143,7 @@ class Usermodel extends CI_Model
 			$this->db->group_start();
 			$this->db->like('event_name', $search);
 			$this->db->or_like('event_description', $search);
+			$this->db->or_like('event_address', $search);
 			$this->db->group_end();
 		}
 		return $this->db->count_all_results();
