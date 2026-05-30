@@ -122,6 +122,23 @@
               </div>
 
             </li>
+
+            <li class="ic-prod">
+              <a href="#" class="">Services</a>
+              <div>
+                <ol>
+                  <li>
+                    <a href="<?= base_url('admin/services') ?>">Services Catalog</a>
+                  </li>
+                  <li>
+                    <a href="<?= base_url('admin/services/add') ?>">Add new Service</a>
+                  </li>
+                  <li>
+                    <a href="<?= base_url('admin/service-requests') ?>">Service Requests</a>
+                  </li>
+                </ol>
+              </div>
+            </li>
             <li class="ic-cat">
               <a href="#" class="">Listing Category</a>
               <div>
@@ -350,11 +367,27 @@
             <li class="ic-pay">
               <a href="<?= base_url('/admin/newsletter-subscribers'); ?>">Newsletter Subscribers</a>
             </li>
+            <li class="ic-pay">
+              <a href="<?= base_url('admin/campaigns') ?>">Newsletter Campaigns</a>
+            </li>
             <li class="ic-dum">
               <a href="<?= base_url('placeholder-images'); ?>">PlaceHolder Images</a>
             </li>
             <li class="ic-set">
               <a href="<?= base_url('admin-setting'); ?>">SEO & Setting</a>
+            </li>
+
+            <?php
+              $__sidebar_admin = $this->session->userdata('logged_admin');
+              $__sidebar_role  = is_array($__sidebar_admin) ? ($__sidebar_admin['role'] ?? 'editor') : 'editor';
+            ?>
+            <?php if ($__sidebar_role === 'super_admin'): ?>
+              <li class="ic-sub">
+                <a href="<?= base_url('admin/sub-admins') ?>">Sub-Admins</a>
+              </li>
+            <?php endif; ?>
+            <li class="ic-set">
+              <a href="<?= base_url('admin/change-password') ?>">Change My Password</a>
             </li>
 
             <li class="ic-lgo">
