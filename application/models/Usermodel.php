@@ -1128,10 +1128,9 @@ class Usermodel extends CI_Model
 			$this->db->or_like('events.event_address', $search);
 			$this->db->group_end();
 		}
-		// Upcoming events first (ordered by start date); recently-added breaks ties.
-		$this->db->order_by('events.event_start_date IS NULL', 'ASC');
-		$this->db->order_by('events.event_start_date', 'ASC');
-		$this->db->order_by('events.event_id', 'DESC');
+		// Upcoming events first (NULL start dates pushed to the end);
+		// pass FALSE so CI3 doesn't try to escape the raw expression as a column.
+		$this->db->order_by('events.event_start_date IS NULL ASC, events.event_start_date DESC, events.event_id DESC', '', FALSE);
 		$this->db->limit($limit, $offset);
 		return $this->db->get()->result();
 	}
