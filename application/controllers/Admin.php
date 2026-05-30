@@ -671,7 +671,6 @@ class Admin extends CI_Controller
 		$data['title'] = "Starsfair | Dashboard";
 		$data['cart'] = $this->usermodal->getCartItem();
 		$data['qty'] = $this->usermodal->getCart();*/
-		$this->load->view('admin/header');
 		$data = array();
 		$data['user_count'] = $this->adminmodel->countAllUsers();
 		$data['listing_count'] = $this->adminmodel->countAllListings();
@@ -703,6 +702,8 @@ class Admin extends CI_Controller
 		// We return a formatted value to the view; controller keeps raw numeric value too.
 		$data['revenue'] = $this->adminmodel->getTotalSubscriptionRevenue();
 
+		$this->load->view('admin/header');
+		$this->load->view('admin/inc/left_sidebar');
 		$this->load->view('admin/dashboard', $data);
 		$this->load->view('admin/footer');
 	}
