@@ -72,7 +72,12 @@
 switch (ENVIRONMENT)
 {
 	case 'development':
-		error_reporting(-1);
+		// Show real errors but silence the deprecation noise that CI3
+		// emits constantly on PHP 8.2+ (dynamic property creation,
+		// SessionHandlerInterface return-type drift, etc.). CI3 is
+		// end-of-life and these warnings can't be fixed at the
+		// framework level without forking it.
+		error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED & ~E_STRICT);
 		ini_set('display_errors', 1);
 	break;
 
