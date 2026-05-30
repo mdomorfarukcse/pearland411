@@ -35,7 +35,7 @@
 </head>
 
 <body>
-  <?php if (isset($_SESSION['logged_user']) && !empty($_SESSION['logged_user'])) { ?>
+  <?php if (!empty($this->session->userdata('logged_admin'))) { ?>
     <!-- START -->
     <section>
       <div class="ad-head" style="display: block !important;">

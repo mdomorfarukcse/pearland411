@@ -703,7 +703,6 @@ class Admin extends CI_Controller
 		$data['revenue'] = $this->adminmodel->getTotalSubscriptionRevenue();
 
 		$this->load->view('admin/header');
-		$this->load->view('admin/inc/left_sidebar');
 		$this->load->view('admin/dashboard', $data);
 		$this->load->view('admin/footer');
 	}
