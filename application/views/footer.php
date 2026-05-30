@@ -109,16 +109,22 @@
 					</p>
 					<p>Email: <a href="mailto:sales@pearland411.com">sales@pearland411.com</a>
 					</p>
-					<a target="_blank" href="">
+					<!--
+						Social links: replace each href with the brand's real
+						profile URL once available, via admin/setting (TODO).
+						For now they point to the site homepage so clicks
+						never land on the wrong account.
+					-->
+					<a target="_blank" rel="noopener" href="<?= base_url() ?>">
 						<img src="<?= base_url() ?>assets/images/social/1.png" alt="">
 					</a>
-					<a target="_blank" href="https://twitter.com/Google?ref_src=twsrc%5Egoogle%7Ctwcamp%5Eserp%7Ctwgr%5Eauthor">
+					<a target="_blank" rel="noopener" href="<?= base_url() ?>">
 						<img src="<?= base_url() ?>assets/images/social/2.png" alt="">
 					</a>
-					<a target="_blank" href="https://www.facebook.com/Rn53themes-1956793534579530/">
+					<a target="_blank" rel="noopener" href="<?= base_url() ?>">
 						<img src="<?= base_url() ?>assets/images/social/3.png" alt="">
 					</a>
-					<a target="_blank" href="">
+					<a target="_blank" rel="noopener" href="<?= base_url() ?>">
 						<img src="<?= base_url() ?>assets/images/social/4.png" alt="">
 					</a>
 				</div>
@@ -150,7 +156,7 @@
 		<div class="cr">
 			<div class="container">
 				<div class="row">
-					<p>Copyright © 2025-2035 <a href="#" target="_blank">Pearland411</a>. Proudly powered by <a href="https://www.spacecentersystems.com/" target="_blank">Space Center Systems</a>
+					<p>Copyright © 2025-2035 <a href="<?= base_url() ?>">Pearland411</a>. Proudly powered by <a href="https://www.spacecentersystems.com/" target="_blank" rel="noopener">Space Center Systems</a>
 					</p>
 				</div>
 			</div>

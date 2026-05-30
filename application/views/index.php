@@ -2637,9 +2637,6 @@ Database Tables Required:
         <div class="main-content-flex">
           <div class="main-area">
 
-            <!-- AD Image -->
-            <img class="big_ad_image" src="/assets/images/AD-SAMPLE.png" alt="AD">
-            <!-- AD Image -->
             <!-- =========================
                      SECTION 1: Featured Businesses (Replaces Featured Stories)
                 ========================= -->
@@ -3082,22 +3079,13 @@ Database Tables Required:
                     </li>
                   <?php endforeach; ?>
                 <?php else: ?>
-                  <!-- Sample Categories -->
-                  <li><a href="#">Restaurants</a></li>
-                  <li><a href="#">Fitness & Health</a></li>
-                  <li><a href="#">Beauty & Spa</a></li>
-                  <li><a href="#">Automotive</a></li>
-                  <li><a href="#">Healthcare</a></li>
-                  <li><a href="#">Shopping</a></li>
+                  <li><a href="<?= base_url('all-category') ?>">Browse all categories</a></li>
                 <?php endif; ?>
               </ul>
 
 
             </div>
 
-            <!-- AD Image -->
-            <img class="sidebar_ad_image hide_on_phone" src="/assets/images/ad-400-150.png" alt="AD">
-            <!-- <img class="sidebar_ad_image" src="/assets/images/ad-400-300.png" alt="AD"> -->
             <!-- Web Development Card -->
             <section class="sidebar-marketing-section">
               <div class="marketing-card">
@@ -3215,8 +3203,6 @@ Database Tables Required:
                 </li>
               </ul>
             </div>
-            <!-- AD Image -->
-            <img class="sidebar_ad_image hide_on_phone" src="/assets/images/sidebar-ad.png" alt="AD">
 
 
           </div>
@@ -3545,18 +3531,17 @@ Database Tables Required:
 
         <div class="col-md-4 fot-soc">
           <h4>SOCIAL MEDIA</h4>
+          <!--
+            Social links: replace each href with the brand's real profile URL
+            once available, via admin/setting (TODO). For now they point to
+            the site homepage so clicks never land on the wrong account.
+          -->
           <ul>
-            <li><a target="_blank" href=""><img src="../assets/images/social/1.png" alt="" loading="lazy"></a>
-            </li>
-            <li><a target="_blank"
-                href="https://twitter.com/Google?ref_src=twsrc%5Egoogle%7Ctwcamp%5Eserp%7Ctwgr%5Eauthor"><img
-                  src="../assets/images/social/2.png" alt="" loading="lazy"></a></li>
-            <li><a target="_blank" href="https://www.facebook.com/pearland411-1956793534579530/"><img
-                  src="../assets/images/social/3.png" alt="" loading="lazy"></a></li>
-            <li><a target="_blank" href=""><img src="../assets/images/social/4.png" alt="" loading="lazy"></a>
-            </li>
-            <li><a target="_blank" href=""><img src="../assets/images/social/5.png" alt="" loading="lazy"></a>
-            </li>
+            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/1.png" alt="" loading="lazy"></a></li>
+            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/2.png" alt="" loading="lazy"></a></li>
+            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/3.png" alt="" loading="lazy"></a></li>
+            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/4.png" alt="" loading="lazy"></a></li>
+            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/5.png" alt="" loading="lazy"></a></li>
           </ul>
         </div>
       </div>
