@@ -17,6 +17,140 @@
 		background-position: top;
 		background-attachment: fixed;
 	}
+
+	/* ---- Sidebar polish ------------------------------------------------ */
+
+	.all-filt .filt-alist-near .tit h4,
+	.all-filt .filt-com h4 {
+		font-size: 14px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: #180f5e;
+	}
+
+	/* Top featured listing cards */
+	.all-filt .near-ser-list ul li .near-bx {
+		border: 1px solid #e6e8ee !important;
+		border-radius: 12px !important;
+		padding: 10px !important;
+		margin-bottom: 10px !important;
+		background: #fff;
+		display: flex !important;
+		align-items: center;
+		gap: 12px;
+		transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+	}
+
+	.all-filt .near-ser-list ul li .near-bx:hover {
+		transform: translateY(-2px);
+		border-color: #cdd6e3 !important;
+		box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+	}
+
+	.all-filt .near-ser-list ul li .near-bx .ne-1 {
+		width: 48px !important;
+		height: 48px !important;
+		flex-shrink: 0;
+		border-radius: 10px;
+		overflow: hidden;
+		background: #f1f5f9;
+	}
+
+	.all-filt .near-ser-list ul li .near-bx .ne-1 img {
+		width: 100% !important;
+		height: 100% !important;
+		object-fit: cover;
+		border-radius: 10px;
+	}
+
+	/* CSS letter avatar shown when the listing has no image */
+	.all-filt .near-ser-list ul li .near-bx .ne-1.is-placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #fff;
+		font-weight: 700;
+		font-size: 18px;
+		letter-spacing: 0.02em;
+	}
+
+	.all-filt .near-ser-list ul li .near-bx .ne-2 {
+		min-width: 0;
+		flex: 1;
+	}
+
+	.all-filt .near-ser-list ul li .near-bx .ne-2 h5 {
+		font-size: 14px !important;
+		font-weight: 600 !important;
+		color: #1f2937 !important;
+		margin: 0 0 2px 0 !important;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		line-height: 1.3;
+	}
+
+	.all-filt .near-ser-list ul li .near-bx .ne-2 p {
+		font-size: 12px !important;
+		color: #6b7280 !important;
+		margin: 0 !important;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	/* Categories dropdown */
+	.all-filt .lhs-cate .dropdown select.form-control {
+		height: 44px;
+		border: 1.5px solid #e2e8f0;
+		border-radius: 10px;
+		background: #fff;
+		font-size: 14px;
+		color: #1f2937;
+		padding: 0 14px;
+		transition: border-color 0.2s ease, box-shadow 0.2s ease;
+	}
+
+	.all-filt .lhs-cate .dropdown select.form-control:focus {
+		border-color: #7bb73f;
+		box-shadow: 0 0 0 3px rgba(123, 183, 63, 0.15);
+		outline: none;
+	}
+
+	/* ---- Card category chip (was the misleading "open" badge) --------- */
+
+	.eve-box .al-img .open-stat {
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		max-width: calc(100% - 20px);
+		background: rgba(15, 23, 42, 0.78) !important;
+		color: #fff !important;
+		font-size: 11px !important;
+		font-weight: 600 !important;
+		letter-spacing: 0.02em;
+		text-transform: uppercase;
+		padding: 5px 10px !important;
+		border-radius: 999px !important;
+		line-height: 1.2 !important;
+		backdrop-filter: blur(4px);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		display: inline-block;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+	}
+
+	.eve-box .al-img .open-stat:hover {
+		background: #180f5e !important;
+		color: #fff !important;
+	}
+
+	/* NEW badge alignment */
+	.eve-box .al-badge-new {
+		vertical-align: middle;
+	}
 </style>
 
 <!-- START -->
@@ -60,30 +194,39 @@
 							<div class="near-ser-list top-ser-secti-prov">
 								<ul>
 									<?php
+									// Palette for letter-avatar fallbacks; index by hash so the
+									// same listing always gets the same colour across page loads.
+									$avatar_palette = array(
+										'#180f5e', '#2563eb', '#7bb73f', '#0e7490',
+										'#b45309', '#7c3aed', '#be185d', '#0f766e',
+									);
 									if ($randListings) {
-										foreach ($randListings as $value) {
+										foreach ($randListings as $value):
+											$has_addr   = ((int) ($value->display_address ?? 0) === 1 && !empty($value->listing_address));
+											$first_char = strtoupper(mb_substr(trim((string) $value->listing_name), 0, 1) ?: '•');
+											$swatch     = $avatar_palette[crc32((string) $value->listing_name) % count($avatar_palette)];
+											$detail     = base_url('listing-details/' . rawurlencode((string) $value->listing_slug));
 									?>
 											<li>
 												<div class="near-bx">
-													<div class="ne-1">
-														<?php if (empty($value->listing_image)): ?>
-															<img src="<?= base_url('assets/images/no_photo.jpg') ?>" alt="<?= e_attr($value->listing_name ?? '') ?>" loading="lazy" decoding="async">
-														<?php else: ?>
+													<?php if (empty($value->listing_image)): ?>
+														<div class="ne-1 is-placeholder" style="background: <?= e_attr($swatch) ?>;" aria-hidden="true">
+															<?= e($first_char) ?>
+														</div>
+													<?php else: ?>
+														<div class="ne-1">
 															<?= responsive_img($value->listing_image, $value->listing_name ?? '') ?>
-														<?php endif; ?>
-													</div>
+														</div>
+													<?php endif; ?>
 													<div class="ne-2">
-														<h5><?= e($value->listing_name); ?></h5>
-														<p><?= ((int) ($value->display_address ?? 0) === 1 && !empty($value->listing_address)) ? e($value->listing_address) : '[Address hidden]'; ?></p>
+														<h5><?= e($value->listing_name) ?></h5>
+														<p><?= $has_addr ? e($value->listing_address) : 'Pearland area' ?></p>
 													</div>
-													<!--<div class="ne-3"> <span>5.0</span>-->
-													<!--</div>-->
-													<a href="<?= base_url('listing-details/' . $value->listing_slug); ?>"></a>
+													<a href="<?= e_attr($detail) ?>" aria-label="<?= e_attr($value->listing_name) ?>"></a>
 												</div>
 											</li>
-
 									<?php
-										}
+										endforeach;
 									}
 									?>
 								</ul>
