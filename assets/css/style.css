@@ -4575,7 +4575,7 @@ div#review_success {
 
   background: #191919;
 
-  padding: 40px 0px 0px 0px;
+  padding: 60px 0px 40px 0px;
 
   position: relative;
 
@@ -4590,8 +4590,6 @@ div#review_success {
   width: 100%;
 
   /* border-top: 1px solid #bed1e0; */
-
-  padding-top: 40px;
 
   /* margin-bottom: -90px; */
 
@@ -4619,7 +4617,7 @@ div#review_success {
 
   margin-bottom: 15px;
 
-  margin-top: -150px;
+  margin-top: 0;
 
   z-index: 1;
 
