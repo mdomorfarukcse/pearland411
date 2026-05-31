@@ -7,36 +7,71 @@
 		padding-bottom: 120px;
 	}
 
-	.ban-search .event-search-wrap {
-		position: relative;
-		max-width: 540px;
-		margin: 0 auto;
+	/* Bottom CTA needs a bit of breathing room so the .bot-book
+	   "Add my business" block in footer.php (which uses margin-top:-150px
+	   to deliberately overlap whatever is above it) doesn't crash into
+	   the web-dev banner. */
+	.event-page-cta {
+		margin-bottom: 180px;
 	}
 
-	.ban-search .event-search-wrap input.autocomplete {
-		padding-right: 56px;
+	/* Self-contained pill search — overrides the theme's .ban-search
+	   defaults that were leaving the input with a harsh black border
+	   and the submit button hanging off the side. */
+	.ban-search .event-search-wrap {
+		position: relative;
+		max-width: 560px;
+		margin: 0 auto;
+		background: #fff;
+		border-radius: 999px;
+		box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+		display: flex;
+		align-items: center;
+		padding: 6px;
+	}
+
+	.ban-search .event-search-wrap input.autocomplete,
+	.ban-search ul li .event-search-wrap input.autocomplete {
+		flex: 1;
+		border: 0 !important;
+		background: transparent !important;
+		padding: 14px 22px !important;
+		font-size: 15px !important;
+		color: #1f2937 !important;
+		outline: none !important;
+		box-shadow: none !important;
+		min-width: 0;
+		height: auto !important;
+		border-radius: 999px !important;
+	}
+
+	.ban-search .event-search-wrap input.autocomplete::placeholder {
+		color: #94a3b8;
 	}
 
 	.ban-search .event-search-wrap .event-search-btn {
-		position: absolute;
-		top: 50%;
-		right: 6px;
-		transform: translateY(-50%);
+		flex-shrink: 0;
 		border: 0;
 		background: #7bb73f;
 		color: #fff;
-		width: 42px;
-		height: 42px;
+		width: 46px;
+		height: 46px;
 		border-radius: 50%;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		cursor: pointer;
-		transition: background 0.2s ease;
+		transition: background 0.2s ease, transform 0.2s ease;
 	}
 
 	.ban-search .event-search-wrap .event-search-btn:hover {
 		background: #6ba532;
+		transform: scale(1.05);
+	}
+
+	.ban-search .event-search-wrap .event-search-btn .material-icons {
+		font-size: 22px;
+		line-height: 1;
 	}
 
 	.event-card-meta {
@@ -91,7 +126,8 @@ if (!function_exists('createSafeSlug')) {
 					<input type="search" name="q" id="event-search" class="autocomplete"
 						placeholder="Search events by name, description, or city…"
 						value="<?= e_attr($search_query ?? '') ?>"
-						aria-label="Search events">
+						aria-label="Search events"
+						autocomplete="off">
 					<button type="submit" class="event-search-btn" aria-label="Search">
 						<i class="material-icons" aria-hidden="true">search</i>
 					</button>
@@ -285,7 +321,9 @@ if (!function_exists('createSafeSlug')) {
 			<?php endif; ?>
 		</div>
 
-		<?php $cta_variant = 'banner'; include APPPATH . 'views/partials/web_dev_cta.php'; ?>
+		<div class="event-page-cta">
+			<?php $cta_variant = 'banner'; include APPPATH . 'views/partials/web_dev_cta.php'; ?>
+		</div>
 	</div>
 </section>
 
