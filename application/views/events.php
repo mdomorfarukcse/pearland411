@@ -7,14 +7,6 @@
 		padding-bottom: 120px;
 	}
 
-	/* Bottom CTA needs a bit of breathing room so the .bot-book
-	   "Add my business" block in footer.php (which uses margin-top:-150px
-	   to deliberately overlap whatever is above it) doesn't crash into
-	   the web-dev banner. */
-	.event-page-cta {
-		margin-bottom: 180px;
-	}
-
 	/* Self-contained pill search — overrides the theme's .ban-search
 	   defaults that were leaving the input with a harsh black border
 	   and the submit button hanging off the side. */
@@ -321,9 +313,7 @@ if (!function_exists('createSafeSlug')) {
 			<?php endif; ?>
 		</div>
 
-		<div class="event-page-cta">
-			<?php $cta_variant = 'banner'; include APPPATH . 'views/partials/web_dev_cta.php'; ?>
-		</div>
+		<?php $cta_variant = 'banner'; include APPPATH . 'views/partials/web_dev_cta.php'; ?>
 	</div>
 </section>
 
