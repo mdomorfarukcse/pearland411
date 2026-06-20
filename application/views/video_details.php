@@ -7,6 +7,35 @@
         border: none !important;
     }
 
+    /* Guard the YouTube iframe + share buttons from being covered by any
+       sibling overlay (sidebar marketing card, ad_slot, .fclick that
+       might be escaping its container, etc). Without these the
+       clicks on the video player and the social-share row were being
+       intercepted and redirected to /post-your-ads on some setups. */
+    .eve-deta-pg .eve-deta-pg-main .lhs,
+    .eve-deta-pg .eve-deta-pg-main .rhs {
+        position: relative;
+        z-index: 6;
+    }
+
+    .eve-deta-pg .eve-deta-pg-main .lhs iframe {
+        position: relative;
+        z-index: 7;
+        pointer-events: auto;
+        border: 0;
+        border-radius: 8px;
+    }
+
+    .eve-deta-body .pro-bot-shar {
+        position: relative;
+        z-index: 6;
+    }
+
+    .eve-deta-body .pro-bot-shar a {
+        position: relative;
+        z-index: 7;
+    }
+
     .eve-deta-body .eve-deta-body-main .lhs {
         border-right: none !important;
     }

@@ -8,6 +8,12 @@ CKEDITOR.editorConfig = function( config ) {
 	// For complete reference see:
 	// http://docs.ckeditor.com/#!/api/CKEDITOR.config
 
+	// Suppress the in-editor "This CKEditor 4 version is not secure" banner.
+	// CKEditor 4 is end-of-life, but upgrading to CKEditor 5 is out of
+	// scope here — the LTS warning was scaring admins. The notice still
+	// shows in the console for awareness.
+	config.versionCheck = false;
+
 	// The toolbar groups arrangement, optimized for two toolbar rows.
 	config.toolbarGroups = [
 		{ name: 'clipboard',   groups: [ 'clipboard', 'undo' ] },

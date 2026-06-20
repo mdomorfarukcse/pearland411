@@ -3532,17 +3532,21 @@ Database Tables Required:
         <div class="col-md-4 fot-soc">
           <h4>SOCIAL MEDIA</h4>
           <!--
-            Social links: replace each href with the brand's real profile URL
-            once available, via admin/setting (TODO). For now they point to
-            the site homepage so clicks never land on the wrong account.
+            Social icons are hidden until the brand provides real profile
+            URLs. Re-enable by setting the hrefs below and removing the
+            surrounding HTML comment. Pointing them at the homepage as a
+            placeholder confused visitors (clicking a Facebook icon and
+            landing on the site home).
           -->
+          <!--
           <ul>
-            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/1.png" alt="" loading="lazy"></a></li>
-            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/2.png" alt="" loading="lazy"></a></li>
-            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/3.png" alt="" loading="lazy"></a></li>
-            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/4.png" alt="" loading="lazy"></a></li>
-            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/5.png" alt="" loading="lazy"></a></li>
+            <li><a target="_blank" rel="noopener" href="https://www.facebook.com/YOUR_PROFILE"><img src="<?= base_url() ?>assets/images/social/1.png" alt="Facebook" loading="lazy"></a></li>
+            <li><a target="_blank" rel="noopener" href="https://twitter.com/YOUR_HANDLE"><img src="<?= base_url() ?>assets/images/social/2.png" alt="Twitter / X" loading="lazy"></a></li>
+            <li><a target="_blank" rel="noopener" href="https://www.instagram.com/YOUR_HANDLE"><img src="<?= base_url() ?>assets/images/social/3.png" alt="Instagram" loading="lazy"></a></li>
+            <li><a target="_blank" rel="noopener" href="https://www.linkedin.com/company/YOUR_COMPANY"><img src="<?= base_url() ?>assets/images/social/4.png" alt="LinkedIn" loading="lazy"></a></li>
+            <li><a target="_blank" rel="noopener" href="https://www.youtube.com/@YOUR_CHANNEL"><img src="<?= base_url() ?>assets/images/social/5.png" alt="YouTube" loading="lazy"></a></li>
           </ul>
+          -->
         </div>
       </div>
 

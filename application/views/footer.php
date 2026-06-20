@@ -110,23 +110,26 @@
 					<p>Email: <a href="mailto:sales@pearland411.com">sales@pearland411.com</a>
 					</p>
 					<!--
-						Social links: replace each href with the brand's real
-						profile URL once available, via admin/setting (TODO).
-						For now they point to the site homepage so clicks
-						never land on the wrong account.
+						Social icons are hidden until the brand provides real
+						profile URLs. Re-enable by setting the hrefs below and
+						removing the surrounding HTML comment. Pointing them at
+						the homepage as a placeholder confused visitors (clicking
+						a Facebook icon and landing on the site home).
 					-->
-					<a target="_blank" rel="noopener" href="<?= base_url() ?>">
-						<img src="<?= base_url() ?>assets/images/social/1.png" alt="">
+					<!--
+					<a target="_blank" rel="noopener" href="https://www.facebook.com/YOUR_PROFILE">
+						<img src="<?= base_url() ?>assets/images/social/1.png" alt="Facebook">
 					</a>
-					<a target="_blank" rel="noopener" href="<?= base_url() ?>">
-						<img src="<?= base_url() ?>assets/images/social/2.png" alt="">
+					<a target="_blank" rel="noopener" href="https://twitter.com/YOUR_HANDLE">
+						<img src="<?= base_url() ?>assets/images/social/2.png" alt="Twitter / X">
 					</a>
-					<a target="_blank" rel="noopener" href="<?= base_url() ?>">
-						<img src="<?= base_url() ?>assets/images/social/3.png" alt="">
+					<a target="_blank" rel="noopener" href="https://www.instagram.com/YOUR_HANDLE">
+						<img src="<?= base_url() ?>assets/images/social/3.png" alt="Instagram">
 					</a>
-					<a target="_blank" rel="noopener" href="<?= base_url() ?>">
-						<img src="<?= base_url() ?>assets/images/social/4.png" alt="">
+					<a target="_blank" rel="noopener" href="https://www.linkedin.com/company/YOUR_COMPANY">
+						<img src="<?= base_url() ?>assets/images/social/4.png" alt="LinkedIn">
 					</a>
+					-->
 				</div>
 				<div class="col-md-4">
 					<h4>HELP &amp; SUPPORT</h4>
