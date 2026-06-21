@@ -1809,18 +1809,34 @@
 		}
 
 		/**
-		 * Active, non-deleted users sorted by display name — used to populate
-		 * the host dropdown on event / blog / classifieds forms so admins
-		 * don't have to scroll through years of test accounts.
+		 * Users sorted by display name — used to populate the "host"
+		 * dropdown on event / blog / classifieds forms so admins don't
+		 * have to scroll through years of test accounts.
+		 *
+		 * Hardened against schema drift: the query is wrapped in
+		 * try/catch and returns an empty array on any DB error. That
+		 * keeps the form page rendering (with an empty dropdown)
+		 * instead of throwing a 500 across 10+ admin screens if a
+		 * column expectation is wrong.
+		 *
+		 * NOTE: the `user` table has no soft-delete column, so we
+		 * don't filter on one — earlier versions of this method
+		 * referenced `is_deleted` and 500'd on production where the
+		 * column doesn't exist.
 		 */
 		public function getActiveUsersForDropdown()
 		{
-			return $this->db
-				->select('user_id, name, email_id')
-				->from('user')
-				->where('(is_deleted IS NULL OR is_deleted = 0)')
-				->order_by('name', 'ASC')
-				->get()->result();
+			try {
+				return $this->db
+					->select('user_id, name, email_id')
+					->from('user')
+					->where("(name IS NOT NULL AND name != '')", null, false)
+					->order_by('name', 'ASC')
+					->get()->result();
+			} catch (Exception $e) {
+				log_message('error', 'getActiveUsersForDropdown failed: ' . $e->getMessage());
+				return array();
+			}
 		}
 
 		/*============================================
