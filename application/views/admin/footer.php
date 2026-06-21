@@ -38,16 +38,22 @@
      <table> following the legacy #pg-sear input. -->
 <script src="<?= base_url('assets/admin/js/admin-table.js') ?>"></script>
 
-<!-- CKEditor 4 — only initialised on textareas with class="js-ckeditor" -->
-<script src="https://cdn.ckeditor.com/4.16.1/standard/ckeditor.js"></script>
+<!-- CKEditor 4 (4.22.1 — last free release; suppresses the "not secure" nag). -->
+<script src="https://cdn.ckeditor.com/4.22.1/standard/ckeditor.js"></script>
 <script>
 	if (typeof CKEDITOR !== 'undefined') {
+		// Stop the CDN-served editor from rendering the red
+		// "This version is not secure" overlay. Config must be set
+		// before any CKEDITOR.replace() call.
+		CKEDITOR.config.versionCheck = false;
+
 		document.querySelectorAll('textarea.js-ckeditor').forEach(function (el) {
 			CKEDITOR.replace(el, {
 				removeButtons: 'Save,NewPage,Preview,Print,Templates,Form,Checkbox,Radio,TextField,Textarea,Select,Button,ImageButton,HiddenField,CreateDiv,Iframe,Flash,Smiley,PageBreak,About',
 				height: 320,
 				removePlugins: 'elementspath',
-				resize_enabled: true
+				resize_enabled: true,
+				versionCheck: false
 			});
 		});
 	}

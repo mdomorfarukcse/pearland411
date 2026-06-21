@@ -11,6 +11,11 @@
             <p><?= $this->session->flashdata('message') ?></p>
           </div>
         <?php } ?>
+        <?php if ($this->session->flashdata('error')) { ?>
+          <div class="alert alert-danger" style="background:#fde2e7;color:#591A2D;border:1px solid #f1b3bf;padding:12px 16px;border-radius:10px;margin-bottom:14px;">
+            <?= e($this->session->flashdata('error')) ?>
+          </div>
+        <?php } ?>
         <div class="ud-cen-s2">
 
           <h2>Listing details</h2>
