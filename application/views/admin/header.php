@@ -59,7 +59,7 @@
             <img src="<?= base_url() ?>assets/images/user/3.jpg" alt="">
             <b>Profile by</b><br>
             <h4>Admin User</h4>
-            <a href="<?= base_url() ?>admin_setting" class="fclick"></a>
+            <a href="<?= base_url('admin/setting') ?>" class="fclick"></a>
           </div>
         </div>
       </div>
@@ -375,11 +375,8 @@
             <li class="ic-pay">
               <a href="<?= base_url('admin/campaigns') ?>">Newsletter Campaigns</a>
             </li>
-            <li class="ic-dum">
-              <a href="<?= base_url('placeholder-images'); ?>">PlaceHolder Images</a>
-            </li>
             <li class="ic-set">
-              <a href="<?= base_url('admin-setting'); ?>">SEO & Setting</a>
+              <a href="<?= base_url('admin/setting') ?>">SEO &amp; Setting</a>
             </li>
 
             <?php
