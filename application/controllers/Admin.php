@@ -1271,7 +1271,15 @@ class Admin extends CI_Controller
 		$data['slug'] = $slug;
 
 		$data['listing'] 	 = $this->usermodel->getSingleValue($slug, 'listing_slug', 'listings');
-		if ($data['listing']->category_id != '') {
+
+		// Slug didn't match — bail out before the view dereferences null.
+		if (empty($data['listing'])) {
+			$this->session->set_flashdata('error', 'Listing not found.');
+			redirect('admin/all-listings');
+			return;
+		}
+
+		if (!empty($data['listing']->category_id)) {
 			$data['sub_category_listing'] = $this->adminmodel->ListingSubCategoryByCateId($data['listing']->category_id);
 		}
 
@@ -2317,6 +2325,11 @@ class Admin extends CI_Controller
 		$data['users']   = $this->adminmodel->getActiveUsersForDropdown();
 
 		$data['blog']    = $this->usermodel->getSingleValue($slug, 'blog_slug', 'blogs');
+		if (empty($data['blog'])) {
+			$this->session->set_flashdata('error', 'Blog not found.');
+			redirect('admin/blog-list');
+			return;
+		}
 		$old_image       = $data['blog']->blog_image;
 
 		if ($this->form_validation->run('blogs') == FALSE) {
@@ -2516,6 +2529,11 @@ class Admin extends CI_Controller
 		$data['users']   = $this->adminmodel->getActiveUsersForDropdown();
 
 		$data['news']    = $this->usermodel->getSingleValue($slug, 'news_slug', 'news');
+		if (empty($data['news'])) {
+			$this->session->set_flashdata('error', 'News article not found.');
+			redirect('admin/news-list');
+			return;
+		}
 		$old_image       = $data['news']->news_image;
 
 		if ($this->form_validation->run('news') == FALSE) {
@@ -3355,6 +3373,11 @@ class Admin extends CI_Controller
 	{
 		$data['users']   = $this->adminmodel->getActiveUsersForDropdown();
 		$data['classifieds']    = $this->usermodel->getSingleValue($slug, 'classifieds_slug', 'classifieds');
+		if (empty($data['classifieds'])) {
+			$this->session->set_flashdata('error', 'Classified not found.');
+			redirect('admin/classifieds-list');
+			return;
+		}
 		$old_image       = $data['classifieds']->classifieds_image;
 
 		if ($this->form_validation->run('classifieds') == FALSE) {
@@ -4269,6 +4292,11 @@ class Admin extends CI_Controller
 	public function edit_event($slug)
 	{
 		$data['event']    = $this->adminmodel->getSingleValue($slug, 'event_slug', 'events');
+		if (empty($data['event'])) {
+			$this->session->set_flashdata('error', 'Event not found.');
+			redirect('admin/all-events');
+			return;
+		}
 		$data['allUsers'] = $this->adminmodel->get_users();
 		$old_image        = $data['event']->event_image;
 
