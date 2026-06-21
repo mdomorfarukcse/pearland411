@@ -109,27 +109,25 @@
 					</p>
 					<p>Email: <a href="mailto:sales@pearland411.com">sales@pearland411.com</a>
 					</p>
-					<!--
-						Social icons are hidden until the brand provides real
-						profile URLs. Re-enable by setting the hrefs below and
-						removing the surrounding HTML comment. Pointing them at
-						the homepage as a placeholder confused visitors (clicking
-						a Facebook icon and landing on the site home).
-					-->
-					<!--
-					<a target="_blank" rel="noopener" href="https://www.facebook.com/YOUR_PROFILE">
-						<img src="<?= base_url() ?>assets/images/social/1.png" alt="Facebook">
-					</a>
-					<a target="_blank" rel="noopener" href="https://twitter.com/YOUR_HANDLE">
-						<img src="<?= base_url() ?>assets/images/social/2.png" alt="Twitter / X">
-					</a>
-					<a target="_blank" rel="noopener" href="https://www.instagram.com/YOUR_HANDLE">
-						<img src="<?= base_url() ?>assets/images/social/3.png" alt="Instagram">
-					</a>
-					<a target="_blank" rel="noopener" href="https://www.linkedin.com/company/YOUR_COMPANY">
-						<img src="<?= base_url() ?>assets/images/social/4.png" alt="LinkedIn">
-					</a>
-					-->
+					<?php
+					// Social icons render only when the env var is set.
+					// Fill SOCIAL_FACEBOOK_URL etc. in .env (or the server's
+					// environment) and the icons appear automatically. No DB
+					// migration or admin UI needed.
+					$__footer_socials = array(
+						'1.png' => array('Facebook',    getenv('SOCIAL_FACEBOOK_URL')  ?: ''),
+						'2.png' => array('Twitter / X', getenv('SOCIAL_TWITTER_URL')   ?: ''),
+						'3.png' => array('Instagram',   getenv('SOCIAL_INSTAGRAM_URL') ?: ''),
+						'4.png' => array('LinkedIn',    getenv('SOCIAL_LINKEDIN_URL')  ?: ''),
+					);
+					foreach ($__footer_socials as $icon => $row):
+						list($label, $url) = $row;
+						if ($url === '') continue;
+					?>
+						<a target="_blank" rel="noopener" href="<?= e_attr($url) ?>" aria-label="<?= e_attr($label) ?>">
+							<img src="<?= base_url() ?>assets/images/social/<?= e_attr($icon) ?>" alt="<?= e_attr($label) ?>">
+						</a>
+					<?php endforeach; unset($__footer_socials); ?>
 				</div>
 				<div class="col-md-4">
 					<h4>HELP &amp; SUPPORT</h4>
