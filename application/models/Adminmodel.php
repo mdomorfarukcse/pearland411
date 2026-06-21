@@ -1809,6 +1809,21 @@
 			return $data = $this->db->get($tableName)->result();
 		}
 
+		/**
+		 * Active, non-deleted users sorted by display name — used to populate
+		 * the host dropdown on event / blog / classifieds forms so admins
+		 * don't have to scroll through years of test accounts.
+		 */
+		public function getActiveUsersForDropdown()
+		{
+			return $this->db
+				->select('user_id, name, email_id')
+				->from('user')
+				->where('(is_deleted IS NULL OR is_deleted = 0)')
+				->order_by('name', 'ASC')
+				->get()->result();
+		}
+
 		/*============================================
 		COMMON AJAX ACTIVE/INACTIVE GET FUNCTION
 		============================================*/

@@ -1,0 +1,76 @@
+# ---------------------------------------------------------------------------
+# Pearland411 — root .htaccess
+# ---------------------------------------------------------------------------
+# Three jobs:
+#   1. Remove index.php from URLs (CodeIgniter pretty routing).
+#   2. Block direct download of secrets and config files.
+#   3. Force HTTPS + sensible security headers in production.
+# ---------------------------------------------------------------------------
+
+# Disable directory listings
+Options -Indexes
+
+# Use index.php as the default
+DirectoryIndex index.php
+
+# ---------------------------------------------------------------------------
+# 1. CodeIgniter pretty URLs
+# ---------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # If you ever install in a subfolder (e.g. /staging), change this to
+    #   RewriteBase /staging/
+    RewriteBase /
+
+    # Force HTTPS (cPanel/AutoSSL provides the cert). Comment the next two
+    # lines out if you need to test over plain HTTP for a moment.
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # Don't rewrite for real files / directories (assets, uploads, etc.)
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Hand everything else to index.php
+    RewriteRule ^(.*)$ index.php/$1 [L]
+</IfModule>
+
+# ---------------------------------------------------------------------------
+# 2. Block sensitive files
+# ---------------------------------------------------------------------------
+<FilesMatch "^\.env">
+    Require all denied
+</FilesMatch>
+<FilesMatch "\.(env|git|gitignore|gitattributes|md|sql|sh|log|lock)$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^(composer\.json|composer\.lock|package\.json|package-lock\.json|readme\.rst|license\.txt)$">
+    Require all denied
+</FilesMatch>
+
+# ---------------------------------------------------------------------------
+# 3. Security headers (no-op if mod_headers is unavailable)
+# ---------------------------------------------------------------------------
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+</IfModule>
+
+# ---------------------------------------------------------------------------
+# 4. Long cache for hashed/static assets (safe-ish defaults)
+# ---------------------------------------------------------------------------
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg              "access plus 1 year"
+    ExpiresByType image/png               "access plus 1 year"
+    ExpiresByType image/webp              "access plus 1 year"
+    ExpiresByType image/svg+xml           "access plus 1 year"
+    ExpiresByType text/css                "access plus 1 month"
+    ExpiresByType application/javascript  "access plus 1 month"
+    ExpiresByType font/woff2              "access plus 1 year"
+</IfModule>

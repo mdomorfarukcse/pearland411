@@ -347,5 +347,34 @@ SELECT * FROM (
 ) AS seed
 WHERE NOT EXISTS (SELECT 1 FROM `ads_prices` WHERE `ads_prices`.`slot_key` = seed.slot_key);
 
+-- ---------------------------------------------------------------------------
+-- 0007 — site_settings (SEO/analytics tokens, social URLs, GMaps key)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS `site_settings` (
+    `setting_key`   VARCHAR(80) NOT NULL,
+    `setting_value` TEXT        NULL,
+    `updated_at`    DATETIME    NOT NULL,
+    PRIMARY KEY (`setting_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO `site_settings` (`setting_key`, `setting_value`, `updated_at`) VALUES
+    ('site_title',                 'Pearland411 — Local Businesses, Events, Deals & News in Pearland, TX', NOW()),
+    ('site_description',           'Pearland411 is your community guide to Pearland, Texas — find local businesses, upcoming events, deals, news and jobs all in one place.', NOW()),
+    ('site_keywords',              'Pearland businesses, Pearland events, Pearland deals, Pearland news, Pearland TX directory', NOW()),
+    ('site_og_image',              '', NOW()),
+    ('contact_phone',              '281-482-2031', NOW()),
+    ('contact_email',              'sales@pearland411.com', NOW()),
+    ('google_analytics_id',        '', NOW()),
+    ('google_site_verification',   '', NOW()),
+    ('bing_site_verification',     '', NOW()),
+    ('facebook_app_id',            '', NOW()),
+    ('google_maps_api_key',        '', NOW()),
+    ('social_facebook_url',        '', NOW()),
+    ('social_twitter_url',         '', NOW()),
+    ('social_instagram_url',       '', NOW()),
+    ('social_linkedin_url',        '', NOW()),
+    ('social_youtube_url',         '', NOW());
+
 
 SET FOREIGN_KEY_CHECKS = 1;

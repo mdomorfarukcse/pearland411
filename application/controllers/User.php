@@ -187,6 +187,48 @@ class User extends CI_Controller
 			);
 		}
 
+		// --- SEO -------------------------------------------------------
+		$data['title']            = 'Pearland411 — Local Businesses, Events, Deals & News in Pearland, TX';
+		$data['meta_description'] = 'Pearland411 is your community guide to Pearland, Texas — find local businesses, upcoming events, deals, news and jobs all in one place.';
+		$data['meta_keywords']    = 'Pearland businesses, Pearland events, Pearland deals, Pearland news, Pearland TX directory, local Pearland community';
+		$data['canonical_url']    = base_url('/');
+		$data['og_image']         = base_url('assets/images/pearland-logo.png');
+		// Home-page structured data: WebSite (with SiteLinks search box)
+		// + Organization. Helps Google show the search box and the brand
+		// knowledge panel.
+		$data['structured_data']  = array(
+			'@context' => 'https://schema.org',
+			'@graph'   => array(
+				array(
+					'@type'           => 'WebSite',
+					'name'            => 'Pearland411',
+					'alternateName'   => 'Pearland 411',
+					'url'             => base_url('/'),
+					'potentialAction' => array(
+						'@type'       => 'SearchAction',
+						'target'      => array(
+							'@type'       => 'EntryPoint',
+							'urlTemplate' => base_url('search') . '?q={search_term_string}',
+						),
+						'query-input' => 'required name=search_term_string',
+					),
+				),
+				array(
+					'@type'    => 'Organization',
+					'name'     => 'Pearland411',
+					'url'      => base_url('/'),
+					'logo'     => base_url('assets/images/pearland-logo.png'),
+					'sameAs'   => array_values(array_filter(array(
+						site_setting('social_facebook_url',  '') ?: null,
+						site_setting('social_twitter_url',   '') ?: null,
+						site_setting('social_instagram_url', '') ?: null,
+						site_setting('social_linkedin_url',  '') ?: null,
+						site_setting('social_youtube_url',   '') ?: null,
+					))),
+				),
+			),
+		);
+
 		// Load the view with space in filename
 		$this->load->view('index', $data);
 	}

@@ -9,7 +9,7 @@ class Admin extends CI_Controller
 	=====================*/
 	public function add_house()
 	{
-		$data['users'] = $this->adminmodel->getAllUsers('user');
+		$data['users'] = $this->adminmodel->getActiveUsersForDropdown();
 		$data['all_house_category'] = $this->adminmodel->getAllValues('house_categories');
 		$this->form_validation->set_rules('house_title', 'Property Title', 'trim|required');
 		$this->form_validation->set_rules('house_price', 'Property Price', 'trim|required');
@@ -100,7 +100,7 @@ class Admin extends CI_Controller
 	=====================*/
 	public function edit_house($slug)
 	{
-		$data['users'] = $this->adminmodel->getAllUsers('user');
+		$data['users'] = $this->adminmodel->getActiveUsersForDropdown();
 		$data['house'] = $this->adminmodel->getSingleValue($slug, 'house_slug', 'house');
 		$data['all_house_category'] = $this->adminmodel->getAllValues('house_categories');
 		if ($this->form_validation->run('house') == FALSE) {
@@ -601,6 +601,57 @@ class Admin extends CI_Controller
 	 * left-unattended browser session can't be hijacked into a
 	 * password reset.
 	 */
+
+	/**
+	 * Site-wide settings: SEO/analytics tokens, social profile URLs,
+	 * Google Maps API key, contact info, default OG image. Persisted
+	 * to the `site_settings` table (see migration 0007) and read
+	 * everywhere via the site_setting() helper.
+	 */
+	public function admin_setting()
+	{
+		// Keys we expose in the form. Anything else in the table is
+		// left alone (and not echoed back to the page).
+		$known_keys = array(
+			// General
+			'site_title', 'site_description', 'site_keywords',
+			'site_og_image', 'contact_phone', 'contact_email',
+			// SEO / analytics
+			'google_analytics_id', 'google_site_verification',
+			'bing_site_verification', 'facebook_app_id',
+			// Maps
+			'google_maps_api_key',
+			// Social
+			'social_facebook_url', 'social_twitter_url',
+			'social_instagram_url', 'social_linkedin_url',
+			'social_youtube_url',
+		);
+
+		if ($this->input->method() === 'post') {
+			$saved = 0;
+			foreach ($known_keys as $k) {
+				$v = (string) $this->input->post($k, true);
+				if (site_setting_save($k, $v)) $saved++;
+			}
+			$this->session->set_flashdata(
+				$saved > 0 ? 'message' : 'error',
+				$saved > 0 ? "Settings saved ({$saved} updated)." : 'Could not save — has migration 0007_site_settings.sql been run?'
+			);
+			redirect('admin/setting');
+			return;
+		}
+
+		$data['settings'] = array();
+		foreach ($known_keys as $k) {
+			$data['settings'][$k] = (string) site_setting($k, '');
+		}
+		$data['has_table'] = $this->db->table_exists('site_settings');
+
+		$this->load->view('admin/header');
+		$this->load->view('admin/admin_setting', $data);
+		$this->load->view('admin/footer');
+	}
+
 	public function change_password()
 	{
 		$session = $this->session->userdata('logged_admin');
@@ -712,9 +763,12 @@ class Admin extends CI_Controller
 
 	public function all_listing_category()
 	{
+		// Categories are usually few — show 100 per page so the inline
+		// search in admin-table.js can match against the whole list
+		// without needing a server-side search round-trip.
 		$config = [
 			'base_url' => base_url('admin/all_listing_category'),
-			'per_page' => 10,
+			'per_page' => 100,
 			'total_rows' => count($this->adminmodel->allListingCategory(NULL, NULL)),
 			'uri_segment' => 3,
 		];
@@ -1087,7 +1141,7 @@ class Admin extends CI_Controller
 	public function add_listing_scratch()
 	{
 		$data['categories'] 	= $this->usermodel->getAllValues('listing_categories');
-		$data['users'] 		  	= $this->adminmodel->getAllUsers('user');
+		$data['users'] 		  	= $this->adminmodel->getActiveUsersForDropdown();
 		if (!empty($this->input->post('user_id'))) {
 			// Debug: Log form submission
 			error_log("Form submitted with user_id: " . $this->input->post('user_id'));
@@ -1213,7 +1267,7 @@ class Admin extends CI_Controller
 	public function edit_listing($slug)
 	{
 		$data['categories']  = $this->usermodel->getAllValues('listing_categories');
-		$data['users'] 		 = $this->adminmodel->getAllUsers('user');
+		$data['users'] 		 = $this->adminmodel->getActiveUsersForDropdown();
 		$data['slug'] = $slug;
 
 		$data['listing'] 	 = $this->usermodel->getSingleValue($slug, 'listing_slug', 'listings');
@@ -1376,7 +1430,7 @@ class Admin extends CI_Controller
 	public function create_duplicate_listing()
 	{
 
-		$data['users'] 		  	= $this->adminmodel->getAllUsers('user');
+		$data['users'] 		  	= $this->adminmodel->getActiveUsersForDropdown();
 		$data['listings']		= $this->adminmodel->getAllListingNames();
 		// echo "<pre>";var_dump($data['listings']);die();
 
@@ -1953,7 +2007,7 @@ class Admin extends CI_Controller
 	public function add_product()
 	{
 		$data['productCategories'] = $this->adminmodel->getAllValues('product_categories');
-		$data['users']             = $this->adminmodel->getAllUsers('user');
+		$data['users']             = $this->adminmodel->getActiveUsersForDropdown();
 
 		if ($this->form_validation->run('admin_products') == FALSE) {
 			$this->load->view('admin/header');
@@ -2026,7 +2080,7 @@ class Admin extends CI_Controller
 		}
 
 		$data['productCategories'] = $this->adminmodel->getAllValues('product_categories');
-		$data['users'] = $this->adminmodel->getAllUsers('user');
+		$data['users'] = $this->adminmodel->getActiveUsersForDropdown();
 
 		if ($data['product']->category_id != '') {
 			$data['sub_category_product'] = $this->adminmodel->ProductSubCategoryByCateId($data['product']->category_id);
@@ -2218,7 +2272,7 @@ class Admin extends CI_Controller
 	/* Add new Blog */
 	public function add_blog()
 	{
-		$data['users']             = $this->adminmodel->getAllUsers('user');
+		$data['users']             = $this->adminmodel->getActiveUsersForDropdown();
 		if ($this->form_validation->run('blogs') == false) {
 			$this->load->view('admin/header', $data);
 			//$this->load->view('admin/user_add_new_blog');
@@ -2260,7 +2314,7 @@ class Admin extends CI_Controller
 	/* Edit User Blog */
 	public function edit_blog($slug)
 	{
-		$data['users']   = $this->adminmodel->getAllUsers('user');
+		$data['users']   = $this->adminmodel->getActiveUsersForDropdown();
 
 		$data['blog']    = $this->usermodel->getSingleValue($slug, 'blog_slug', 'blogs');
 		$old_image       = $data['blog']->blog_image;
@@ -2416,7 +2470,7 @@ class Admin extends CI_Controller
 	/* Add new News */
 	public function add_news()
 	{
-		$data['users'] = $this->adminmodel->getAllUsers('user');
+		$data['users'] = $this->adminmodel->getActiveUsersForDropdown();
 		if ($this->form_validation->run('news') == false) {
 			$data['all_news_category'] = $this->adminmodel->allNewsCategory();
 			$this->load->view('admin/header', $data);
@@ -2459,7 +2513,7 @@ class Admin extends CI_Controller
 	/* Edit User News */
 	public function edit_news($slug)
 	{
-		$data['users']   = $this->adminmodel->getAllUsers('user');
+		$data['users']   = $this->adminmodel->getActiveUsersForDropdown();
 
 		$data['news']    = $this->usermodel->getSingleValue($slug, 'news_slug', 'news');
 		$old_image       = $data['news']->news_image;
@@ -2886,7 +2940,7 @@ class Admin extends CI_Controller
 	/* Add new Video */
 	public function add_video()
 	{
-		$data['users'] = $this->adminmodel->getAllUsers('user');
+		$data['users'] = $this->adminmodel->getActiveUsersForDropdown();
 		if ($this->form_validation->run('video') == false) {
 			$data['all_video_category'] = $this->adminmodel->allVideoCategory(NULL, NULL);
 			$this->load->view('admin/header', $data);
@@ -2928,7 +2982,7 @@ class Admin extends CI_Controller
 	/* Edit Video */
 	public function edit_video($slug)
 	{
-		$data['users']   = $this->adminmodel->getAllUsers('user');
+		$data['users']   = $this->adminmodel->getActiveUsersForDropdown();
 		$data['video']    = $this->usermodel->getSingleValue($slug, 'video_slug', 'video');
 		$old_image       = $data['video']->video_image;
 
@@ -3255,7 +3309,7 @@ class Admin extends CI_Controller
 	/* Add new classifieds */
 	public function add_classifieds()
 	{
-		$data['users'] = $this->adminmodel->getAllUsers('user');
+		$data['users'] = $this->adminmodel->getActiveUsersForDropdown();
 		if ($this->form_validation->run('classifieds') == false) {
 			$data['all_classifieds_category'] = $this->adminmodel->allclassifiedsCategory(NULL, NULL);
 			$this->load->view('admin/header', $data);
@@ -3299,7 +3353,7 @@ class Admin extends CI_Controller
 	/* Edit classifieds */
 	public function edit_classifieds($slug)
 	{
-		$data['users']   = $this->adminmodel->getAllUsers('user');
+		$data['users']   = $this->adminmodel->getActiveUsersForDropdown();
 		$data['classifieds']    = $this->usermodel->getSingleValue($slug, 'classifieds_slug', 'classifieds');
 		$old_image       = $data['classifieds']->classifieds_image;
 
@@ -3510,7 +3564,7 @@ class Admin extends CI_Controller
 	/* Add new marketplace */
 	public function add_marketplace()
 	{
-		$data['users'] = $this->adminmodel->getAllUsers('user');
+		$data['users'] = $this->adminmodel->getActiveUsersForDropdown();
 		if ($this->form_validation->run('marketplace') == false) {
 			$data['all_marketplace_category'] = $this->adminmodel->allmarketplaceCategory();
 			$this->load->view('admin/header', $data);
@@ -3554,7 +3608,7 @@ class Admin extends CI_Controller
 	/* Edit marketplace */
 	public function edit_marketplace($id)
 	{
-		$data['users']   = $this->adminmodel->getAllUsers('user');
+		$data['users']   = $this->adminmodel->getActiveUsersForDropdown();
 		$data['marketplace']    = $this->usermodel->getSingleValue($id, 'marketplace_id', 'marketplace');
 		$old_image       = $data['marketplace']->marketplace_image;
 
@@ -3865,7 +3919,7 @@ class Admin extends CI_Controller
 	 */
 	public function add_rental()
 	{
-		$data['users'] = $this->adminmodel->getAllUsers('user');
+		$data['users'] = $this->adminmodel->getActiveUsersForDropdown();
 		$data['all_rental_category'] = $this->adminmodel->getAllValues('rental_categories');
 
 		if ($this->input->server('REQUEST_METHOD') === 'POST') {
@@ -3946,7 +4000,7 @@ class Admin extends CI_Controller
 			return;
 		}
 
-		$data['users'] = $this->adminmodel->getAllUsers('user');
+		$data['users'] = $this->adminmodel->getActiveUsersForDropdown();
 		$data['all_rental_category'] = $this->adminmodel->getAllValues('rental_categories');
 
 		if ($this->input->server('REQUEST_METHOD') === 'POST') {
@@ -4163,7 +4217,8 @@ class Admin extends CI_Controller
 	/* Add new Event */
 	public function add_new_event()
 	{
-		$data['users'] = $this->adminmodel->getAllUsers('user');
+		// Active users, alphabetised by name — keeps the host dropdown sane.
+		$data['users'] = $this->adminmodel->getActiveUsersForDropdown();
 
 		if ($this->form_validation->run('admin_event_rules') == false) {
 			$this->load->view('admin/header');

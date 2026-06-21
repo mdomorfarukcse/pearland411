@@ -109,24 +109,24 @@
 					</p>
 					<p>Email: <a href="mailto:sales@pearland411.com">sales@pearland411.com</a>
 					</p>
-					<!--
-						Social links: replace each href with the brand's real
-						profile URL once available, via admin/setting (TODO).
-						For now they point to the site homepage so clicks
-						never land on the wrong account.
-					-->
-					<a target="_blank" rel="noopener" href="<?= base_url() ?>">
-						<img src="<?= base_url() ?>assets/images/social/1.png" alt="">
-					</a>
-					<a target="_blank" rel="noopener" href="<?= base_url() ?>">
-						<img src="<?= base_url() ?>assets/images/social/2.png" alt="">
-					</a>
-					<a target="_blank" rel="noopener" href="<?= base_url() ?>">
-						<img src="<?= base_url() ?>assets/images/social/3.png" alt="">
-					</a>
-					<a target="_blank" rel="noopener" href="<?= base_url() ?>">
-						<img src="<?= base_url() ?>assets/images/social/4.png" alt="">
-					</a>
+					<?php
+					// Social icons render only when a URL is configured.
+					// Set them via /admin/setting (preferred) — falls back
+					// to SOCIAL_*_URL env vars and finally an empty string.
+					$__footer_socials = array(
+						'1.png' => array('Facebook',    site_setting('social_facebook_url',  '')),
+						'2.png' => array('Twitter / X', site_setting('social_twitter_url',   '')),
+						'3.png' => array('Instagram',   site_setting('social_instagram_url', '')),
+						'4.png' => array('LinkedIn',    site_setting('social_linkedin_url',  '')),
+					);
+					foreach ($__footer_socials as $icon => $row):
+						list($label, $url) = $row;
+						if ($url === '') continue;
+					?>
+						<a target="_blank" rel="noopener" href="<?= e_attr($url) ?>" aria-label="<?= e_attr($label) ?>">
+							<img src="<?= base_url() ?>assets/images/social/<?= e_attr($icon) ?>" alt="<?= e_attr($label) ?>">
+						</a>
+					<?php endforeach; unset($__footer_socials); ?>
 				</div>
 				<div class="col-md-4">
 					<h4>HELP &amp; SUPPORT</h4>

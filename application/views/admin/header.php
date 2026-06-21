@@ -12,6 +12,9 @@
   <!--== FAV ICON(BROWSER TAB ICON) ==-->
   <link rel="shortcut icon" href="<?= base_url() ?>assets/images/fav.ico" type="image/x-icon">
   <!--== GOOGLE FONTS ==-->
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css?family=Oswald:700|Source+Sans+Pro:300,400,600,700&display=swap" rel="stylesheet">
   <!--== WEB ICON FONTS ==-->
 
@@ -27,6 +30,8 @@
   <link rel="stylesheet" href="<?= base_url() ?>assets/admin/css/admin-style.css">
 
   <link rel="stylesheet" href="<?= base_url() ?>assets/css/fonts.css">
+  <!-- Brand palette + typography overrides — loaded last so it wins. -->
+  <link rel="stylesheet" href="<?= base_url() ?>assets/css/pearland-brand.css?v=1">
 
   <link rel="stylesheet" href="https://cdn.datatables.net/1.10.20/css/dataTables.bootstrap4.min.css">
   <!-- Select2 CSS CDN -->

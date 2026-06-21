@@ -1,0 +1,177 @@
+/* ============================================================
+ * Pearland411 brand palette + typography overrides.
+ *
+ * Loaded AFTER assets/css/style.css so it wins on specificity ties
+ * without needing !important everywhere. The original theme stylesheet
+ * is left untouched so future theme updates don't blow this away.
+ *
+ * Brand reference (from PROJECT MANAGER's style sheet, 2025):
+ *   PRIMARY  Pear Green   #909D3E
+ *   SECONDARY Burgundy    #591A2D
+ *   NEUTRALS  Charcoal    #28282B
+ *             Light Gray  #F4F4F4
+ *             White       #FFFFFF
+ *   HEADING   Poppins Bold
+ *   BODY      Open Sans Regular
+ * ============================================================ */
+
+:root {
+	--brand-green:        #909D3E;
+	--brand-green-dark:   #788332;
+	--brand-green-soft:   #e8eed4;
+	--brand-burgundy:     #591A2D;
+	--brand-burgundy-dk:  #420f20;
+	--brand-charcoal:     #28282B;
+	--brand-gray:         #F4F4F4;
+	--brand-white:        #FFFFFF;
+}
+
+/* ---- Typography ---------------------------------------------------- */
+
+body,
+.body {
+	font-family: 'Open Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif !important;
+}
+
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6,
+.pg_title,
+.section-title,
+.svc-section-head h2,
+.svc-card h3,
+.svc-hero h1 {
+	font-family: 'Poppins', 'Open Sans', sans-serif !important;
+	font-weight: 700 !important;
+}
+
+/* ---- Color recolor: the theme used #7bb73f as its primary green
+ *      everywhere. Map it to the brand pear green. ---------------- */
+
+.btn-primary,
+.btn.btn-primary,
+input[type="submit"].btn-primary,
+button.btn-primary {
+	background: var(--brand-green) !important;
+	border-color: var(--brand-green) !important;
+	color: #fff !important;
+}
+
+.btn-primary:hover,
+.btn.btn-primary:hover,
+button.btn-primary:hover,
+input[type="submit"].btn-primary:hover {
+	background: var(--brand-green-dark) !important;
+	border-color: var(--brand-green-dark) !important;
+}
+
+.btn-outline-primary,
+.btn.btn-outline-primary {
+	color: var(--brand-green) !important;
+	border-color: var(--brand-green) !important;
+	background: transparent !important;
+}
+
+.btn-outline-primary:hover,
+.btn.btn-outline-primary:hover {
+	background: var(--brand-green) !important;
+	color: #fff !important;
+}
+
+/* Burgundy CTA used for Featured / Promotions / "Advertise with us" */
+.btn-cta,
+.btn-secondary-cta {
+	display: inline-block;
+	background: var(--brand-burgundy) !important;
+	color: #fff !important;
+	border: 1px solid var(--brand-burgundy) !important;
+	padding: 10px 22px;
+	border-radius: 999px;
+	font-weight: 600;
+	text-decoration: none;
+	transition: background 0.18s ease;
+}
+
+.btn-cta:hover,
+.btn-secondary-cta:hover {
+	background: var(--brand-burgundy-dk) !important;
+	color: #fff !important;
+}
+
+/* Header nav highlights / pagination / chips */
+.pagination .page-item.active .page-link,
+.pagination li.active a,
+.pagination li.active span,
+.pagination-wrapper .pagination li.active a,
+.pagination-wrapper .pagination li.page-item.active a,
+.pagination-wrapper .pagination li.page-item.active span {
+	background: var(--brand-green) !important;
+	border-color: var(--brand-green) !important;
+	color: #fff !important;
+}
+
+.pagination .page-link:hover,
+.pagination-wrapper .pagination li a:hover {
+	background: var(--brand-green) !important;
+	border-color: var(--brand-green) !important;
+	color: #fff !important;
+}
+
+/* Link color in body copy */
+a {
+	color: var(--brand-green);
+}
+
+a:hover {
+	color: var(--brand-green-dark);
+}
+
+/* Featured badges, "+ Add Listing" header button */
+.db-tit-btn,
+a.db-tit-btn {
+	background: var(--brand-burgundy) !important;
+	color: #fff !important;
+	border-radius: 999px !important;
+	padding: 8px 18px !important;
+	font-weight: 600 !important;
+}
+
+.db-tit-btn:hover {
+	background: var(--brand-burgundy-dk) !important;
+	color: #fff !important;
+}
+
+/* "open" status / category pill on listing cards (overridden in
+ * application/views/all-listing.php scoped CSS — but this is the
+ * fallback if that file isn't loaded). */
+.open-stat {
+	background: var(--brand-green) !important;
+	color: #fff !important;
+}
+
+/* Form focus uses brand green */
+.form-control:focus,
+select.form-control:focus,
+textarea.form-control:focus {
+	border-color: var(--brand-green) !important;
+	box-shadow: 0 0 0 3px rgba(144, 157, 62, 0.18) !important;
+}
+
+/* Featured / Sponsored highlight */
+.featured-flag,
+.featured-listing-flag {
+	background: var(--brand-burgundy) !important;
+	color: #fff !important;
+}
+
+/* Newsletter / Subscribe banner */
+.newsletter-form button[type="submit"] {
+	background: var(--brand-green) !important;
+	border-color: var(--brand-green) !important;
+}
+
+/* SVG icon defaults — favour brand green stroke for line-art glyphs */
+.brand-icon,
+.brand-icon svg {
+	stroke: var(--brand-green);
+	color: var(--brand-green);
+}

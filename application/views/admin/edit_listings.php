@@ -590,10 +590,22 @@
     updateStepDisplay();
   });
 
-  // Original functions
+  // Fetches sub-categories for the chosen parent category and rebuilds
+  // the #sub_category_id <select>. Hits the same admin endpoint that
+  // add_new_listings_start.php uses, so the two forms stay in sync.
   function getSubCategory(val) {
-    // AJAX call would go here
-    console.log('Getting subcategory for:', val);
+    $.ajax({
+      type: 'POST',
+      url:  '<?= base_url() ?>admin/get_listing_sub_category',
+      data: { category_id: val },
+      success: function (data) {
+        $('#sub_category_id').html(data);
+        $('#sub_category_id').trigger('chosen:updated');
+        if (window.jQuery && $.fn.select2) {
+          $('#sub_category_id').trigger('change.select2');
+        }
+      }
+    });
   }
 
   // CKEditor would be initialized here if available

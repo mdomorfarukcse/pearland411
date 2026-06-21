@@ -20,25 +20,28 @@ Database Tables Required:
 <html lang="en">
 
 <head>
-  <title>Home - Pearland411</title>
   <!--== META TAGS ==-->
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="theme-color" content="#76cef1" />
-  <meta property="og:image" content="../assets/images/home/16077bizbook-white.png" />
+
+  <?php include APPPATH . 'views/partials/seo_head.php'; ?>
 
   <!--== FAV ICON(BROWSER TAB ICON) ==-->
-  <link rel="shortcut icon" href="../assets/images/fav.ico" type="image/x-icon">
+  <link rel="shortcut icon" href="<?= base_url() ?>assets/images/fav.ico" type="image/x-icon">
   <!--== GOOGLE FONTS ==-->
-  <link href="https://fonts.googleapis.com/css?family=Oswald:700|Source+Sans+Pro:300,400,600,700&display=swap"
-    rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Open+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Oswald:700|Source+Sans+Pro:300,400,600,700&display=swap" rel="stylesheet">
   <!--== WEB ICON FONTS ==-->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <!--== Bootstrap CDN ==-->
   <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"> -->
   <!-- Style Path -->
-  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="stylesheet" href="<?= base_url() ?>assets/css/style.css">
+  <!-- Brand palette + typography overrides — loaded last so it wins. -->
+  <link rel="stylesheet" href="<?= base_url() ?>assets/css/pearland-brand.css?v=1">
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
 
@@ -3530,19 +3533,28 @@ Database Tables Required:
         </div>
 
         <div class="col-md-4 fot-soc">
+          <?php
+          // Social icons render only when a URL is configured. Set
+          // them via /admin/setting (preferred) — falls back to env
+          // vars and finally to empty.
+          $__home_socials = array(
+              '1.png' => array('Facebook',    site_setting('social_facebook_url',  '')),
+              '2.png' => array('Twitter / X', site_setting('social_twitter_url',   '')),
+              '3.png' => array('Instagram',   site_setting('social_instagram_url', '')),
+              '4.png' => array('LinkedIn',    site_setting('social_linkedin_url',  '')),
+              '5.png' => array('YouTube',     site_setting('social_youtube_url',   '')),
+          );
+          $__home_socials_any = false;
+          foreach ($__home_socials as $row) { if ($row[1] !== '') { $__home_socials_any = true; break; } }
+          if ($__home_socials_any):
+          ?>
           <h4>SOCIAL MEDIA</h4>
-          <!--
-            Social links: replace each href with the brand's real profile URL
-            once available, via admin/setting (TODO). For now they point to
-            the site homepage so clicks never land on the wrong account.
-          -->
           <ul>
-            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/1.png" alt="" loading="lazy"></a></li>
-            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/2.png" alt="" loading="lazy"></a></li>
-            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/3.png" alt="" loading="lazy"></a></li>
-            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/4.png" alt="" loading="lazy"></a></li>
-            <li><a target="_blank" rel="noopener" href="<?= base_url() ?>"><img src="<?= base_url() ?>assets/images/social/5.png" alt="" loading="lazy"></a></li>
+            <?php foreach ($__home_socials as $icon => $row): list($label, $url) = $row; if ($url === '') continue; ?>
+              <li><a target="_blank" rel="noopener" href="<?= e_attr($url) ?>" aria-label="<?= e_attr($label) ?>"><img src="<?= base_url() ?>assets/images/social/<?= e_attr($icon) ?>" alt="<?= e_attr($label) ?>" loading="lazy"></a></li>
+            <?php endforeach; ?>
           </ul>
+          <?php endif; unset($__home_socials, $__home_socials_any); ?>
         </div>
       </div>
 
