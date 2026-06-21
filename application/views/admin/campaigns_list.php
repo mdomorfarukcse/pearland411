@@ -11,6 +11,13 @@
 				<?php if ($this->session->flashdata('error')): ?>
 					<div class="alert alert-danger"><?= e($this->session->flashdata('error')) ?></div>
 				<?php endif; ?>
+				<?php if (!empty($needs_migration)): ?>
+					<div class="alert alert-warning" style="background:#fff7e0;color:#6b4f00;border:1px solid #ead9a0;padding:12px 16px;border-radius:10px;margin-bottom:18px;">
+						<strong>Heads up:</strong> the <code>newsletter_campaigns</code> table doesn't exist yet.
+						Run <code>database/migrations/0003_newsletter_campaigns.sql</code> via phpMyAdmin
+						(or re-import <code>migrations_combined_phpmyadmin.sql</code>) to enable this feature.
+					</div>
+				<?php endif; ?>
 
 				<div class="ud-cen-s2">
 					<p style="color:#6b7280;">

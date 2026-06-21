@@ -5656,8 +5656,9 @@ class Admin extends CI_Controller
 	public function campaigns_list()
 	{
 		$data = array();
-		$data['campaigns']   = $this->adminmodel->getAllCampaigns();
-		$data['subscribers'] = $this->adminmodel->countAllNewsletterSubscribers();
+		$data['campaigns']      = $this->adminmodel->getAllCampaigns();
+		$data['subscribers']    = $this->adminmodel->countAllNewsletterSubscribers();
+		$data['needs_migration'] = !$this->db->table_exists('newsletter_campaigns');
 		$this->load->view('admin/header');
 		$this->load->view('admin/campaigns_list', $data);
 		$this->load->view('admin/footer');

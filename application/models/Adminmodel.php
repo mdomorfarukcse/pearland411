@@ -2454,7 +2454,13 @@
 		 */
 		public function countAllNewsletterSubscribers()
 		{
-			return $this->db->from('newsletter_subscriptions')->count_all_results();
+			try {
+				if (!$this->db->table_exists('newsletter_subscriptions')) return 0;
+				return $this->db->from('newsletter_subscriptions')->count_all_results();
+			} catch (Exception $e) {
+				log_message('error', 'countAllNewsletterSubscribers failed: ' . $e->getMessage());
+				return 0;
+			}
 		}
 
 		/**
@@ -2613,9 +2619,15 @@
 
 		public function getAllCampaigns($limit = null, $offset = 0)
 		{
-			$this->db->from('newsletter_campaigns')->order_by('created_at', 'DESC');
-			if ($limit !== null) $this->db->limit((int)$limit, (int)$offset);
-			return $this->db->get()->result();
+			try {
+				if (!$this->db->table_exists('newsletter_campaigns')) return array();
+				$this->db->from('newsletter_campaigns')->order_by('created_at', 'DESC');
+				if ($limit !== null) $this->db->limit((int)$limit, (int)$offset);
+				return $this->db->get()->result();
+			} catch (Exception $e) {
+				log_message('error', 'getAllCampaigns failed: ' . $e->getMessage());
+				return array();
+			}
 		}
 
 		public function getCampaignById($id)
