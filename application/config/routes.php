@@ -95,6 +95,8 @@ $route['admin/service-requests/delete/(:num)'] = 'admin/service_request_delete/$
 
 // Admin self-service
 $route['admin/change-password']             = 'admin/change_password';
+$route['admin/setting']                     = 'admin/admin_setting';
+$route['admin-setting']                     = 'admin/admin_setting';
 
 // Listing claims
 $route['admin/claim-approve/(:num)']        = 'admin/claim_approve/$1';

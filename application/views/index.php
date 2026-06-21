@@ -3534,15 +3534,15 @@ Database Tables Required:
 
         <div class="col-md-4 fot-soc">
           <?php
-          // Social icons render only when the env var is set. Fill
-          // SOCIAL_FACEBOOK_URL etc. in .env (or the server environment)
-          // and the icons appear automatically.
+          // Social icons render only when a URL is configured. Set
+          // them via /admin/setting (preferred) — falls back to env
+          // vars and finally to empty.
           $__home_socials = array(
-              '1.png' => array('Facebook',    getenv('SOCIAL_FACEBOOK_URL')  ?: ''),
-              '2.png' => array('Twitter / X', getenv('SOCIAL_TWITTER_URL')   ?: ''),
-              '3.png' => array('Instagram',   getenv('SOCIAL_INSTAGRAM_URL') ?: ''),
-              '4.png' => array('LinkedIn',    getenv('SOCIAL_LINKEDIN_URL')  ?: ''),
-              '5.png' => array('YouTube',     getenv('SOCIAL_YOUTUBE_URL')   ?: ''),
+              '1.png' => array('Facebook',    site_setting('social_facebook_url',  '')),
+              '2.png' => array('Twitter / X', site_setting('social_twitter_url',   '')),
+              '3.png' => array('Instagram',   site_setting('social_instagram_url', '')),
+              '4.png' => array('LinkedIn',    site_setting('social_linkedin_url',  '')),
+              '5.png' => array('YouTube',     site_setting('social_youtube_url',   '')),
           );
           $__home_socials_any = false;
           foreach ($__home_socials as $row) { if ($row[1] !== '') { $__home_socials_any = true; break; } }

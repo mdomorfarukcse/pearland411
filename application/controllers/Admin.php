@@ -601,6 +601,57 @@ class Admin extends CI_Controller
 	 * left-unattended browser session can't be hijacked into a
 	 * password reset.
 	 */
+
+	/**
+	 * Site-wide settings: SEO/analytics tokens, social profile URLs,
+	 * Google Maps API key, contact info, default OG image. Persisted
+	 * to the `site_settings` table (see migration 0007) and read
+	 * everywhere via the site_setting() helper.
+	 */
+	public function admin_setting()
+	{
+		// Keys we expose in the form. Anything else in the table is
+		// left alone (and not echoed back to the page).
+		$known_keys = array(
+			// General
+			'site_title', 'site_description', 'site_keywords',
+			'site_og_image', 'contact_phone', 'contact_email',
+			// SEO / analytics
+			'google_analytics_id', 'google_site_verification',
+			'bing_site_verification', 'facebook_app_id',
+			// Maps
+			'google_maps_api_key',
+			// Social
+			'social_facebook_url', 'social_twitter_url',
+			'social_instagram_url', 'social_linkedin_url',
+			'social_youtube_url',
+		);
+
+		if ($this->input->method() === 'post') {
+			$saved = 0;
+			foreach ($known_keys as $k) {
+				$v = (string) $this->input->post($k, true);
+				if (site_setting_save($k, $v)) $saved++;
+			}
+			$this->session->set_flashdata(
+				$saved > 0 ? 'message' : 'error',
+				$saved > 0 ? "Settings saved ({$saved} updated)." : 'Could not save — has migration 0007_site_settings.sql been run?'
+			);
+			redirect('admin/setting');
+			return;
+		}
+
+		$data['settings'] = array();
+		foreach ($known_keys as $k) {
+			$data['settings'][$k] = (string) site_setting($k, '');
+		}
+		$data['has_table'] = $this->db->table_exists('site_settings');
+
+		$this->load->view('admin/header');
+		$this->load->view('admin/admin_setting', $data);
+		$this->load->view('admin/footer');
+	}
+
 	public function change_password()
 	{
 		$session = $this->session->userdata('logged_admin');

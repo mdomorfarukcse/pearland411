@@ -33,14 +33,20 @@
 
 // --- Site constants -----------------------------------------------------
 
-$__seo_site_name   = 'Pearland411';
+$__seo_site_name    = 'Pearland411';
 $__seo_site_tagline = 'Your Community. Your Connection.';
-$__seo_default_desc = 'Pearland411 is your local guide to Pearland, Texas — businesses, events, deals, news and jobs all in one place.';
-$__seo_default_img  = base_url('assets/images/pearland-logo.png');
+
+// Site-wide defaults — DB-stored settings beat hardcoded fallbacks.
+$__seo_default_title = function_exists('site_setting') ? site_setting('site_title', '') : '';
+$__seo_default_desc  = function_exists('site_setting') ? site_setting('site_description', 'Pearland411 is your local guide to Pearland, Texas — businesses, events, deals, news and jobs all in one place.') : 'Pearland411 is your local guide to Pearland, Texas — businesses, events, deals, news and jobs all in one place.';
+$__seo_default_img   = function_exists('site_setting') ? site_setting('site_og_image',   '') : '';
+if ($__seo_default_img === '') $__seo_default_img = base_url('assets/images/pearland-logo.png');
 
 // --- Resolve title ------------------------------------------------------
 
-$__seo_title_raw = isset($title) && $title !== '' ? trim($title) : $__seo_site_name;
+$__seo_title_raw = isset($title) && $title !== ''
+	? trim($title)
+	: ($__seo_default_title !== '' ? $__seo_default_title : $__seo_site_name);
 // Avoid double-branding "Pearland411 | Pearland411 — ..." titles.
 if (stripos($__seo_title_raw, $__seo_site_name) === false) {
 	$__seo_title = $__seo_title_raw . ' | ' . $__seo_site_name;
@@ -65,12 +71,12 @@ $__seo_og_image = isset($og_image) && $og_image !== '' ? $og_image : $__seo_defa
 $__seo_og_type  = isset($og_type)  && $og_type  !== '' ? $og_type  : 'website';
 $__seo_robots   = isset($robots)   && $robots   !== '' ? $robots   : 'index,follow';
 
-// --- Env-driven tokens --------------------------------------------------
+// --- Env-driven tokens (override with DB-stored settings if present) ---
 
-$__seo_ga_id        = getenv('GOOGLE_ANALYTICS_ID')      ?: '';
-$__seo_gsc_token    = getenv('GOOGLE_SITE_VERIFICATION') ?: '';
-$__seo_bing_token   = getenv('BING_SITE_VERIFICATION')   ?: '';
-$__seo_fb_app_id    = getenv('FACEBOOK_APP_ID')          ?: '';
+$__seo_ga_id      = function_exists('site_setting') ? site_setting('google_analytics_id',      getenv('GOOGLE_ANALYTICS_ID')      ?: '') : (getenv('GOOGLE_ANALYTICS_ID')      ?: '');
+$__seo_gsc_token  = function_exists('site_setting') ? site_setting('google_site_verification', getenv('GOOGLE_SITE_VERIFICATION') ?: '') : (getenv('GOOGLE_SITE_VERIFICATION') ?: '');
+$__seo_bing_token = function_exists('site_setting') ? site_setting('bing_site_verification',   getenv('BING_SITE_VERIFICATION')   ?: '') : (getenv('BING_SITE_VERIFICATION')   ?: '');
+$__seo_fb_app_id  = function_exists('site_setting') ? site_setting('facebook_app_id',          getenv('FACEBOOK_APP_ID')          ?: '') : (getenv('FACEBOOK_APP_ID')          ?: '');
 ?>
 
 <title><?= htmlspecialchars($__seo_title, ENT_QUOTES, 'UTF-8') ?></title>

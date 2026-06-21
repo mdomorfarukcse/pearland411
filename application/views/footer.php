@@ -110,15 +110,14 @@
 					<p>Email: <a href="mailto:sales@pearland411.com">sales@pearland411.com</a>
 					</p>
 					<?php
-					// Social icons render only when the env var is set.
-					// Fill SOCIAL_FACEBOOK_URL etc. in .env (or the server's
-					// environment) and the icons appear automatically. No DB
-					// migration or admin UI needed.
+					// Social icons render only when a URL is configured.
+					// Set them via /admin/setting (preferred) — falls back
+					// to SOCIAL_*_URL env vars and finally an empty string.
 					$__footer_socials = array(
-						'1.png' => array('Facebook',    getenv('SOCIAL_FACEBOOK_URL')  ?: ''),
-						'2.png' => array('Twitter / X', getenv('SOCIAL_TWITTER_URL')   ?: ''),
-						'3.png' => array('Instagram',   getenv('SOCIAL_INSTAGRAM_URL') ?: ''),
-						'4.png' => array('LinkedIn',    getenv('SOCIAL_LINKEDIN_URL')  ?: ''),
+						'1.png' => array('Facebook',    site_setting('social_facebook_url',  '')),
+						'2.png' => array('Twitter / X', site_setting('social_twitter_url',   '')),
+						'3.png' => array('Instagram',   site_setting('social_instagram_url', '')),
+						'4.png' => array('LinkedIn',    site_setting('social_linkedin_url',  '')),
 					);
 					foreach ($__footer_socials as $icon => $row):
 						list($label, $url) = $row;
