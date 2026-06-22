@@ -23,3 +23,17 @@ $hook['display_override'][] = array(
     'filepath' => 'hooks',
     'params'   => array(),
 );
+
+// PHP-8 flash-data cleanup. CI3's system/libraries/Session/Session.php
+// uses `'old' < time()` to expire flash markers, which silently fails
+// under PHP 8's stricter string/int comparison and leaves "old" flash
+// items in the session forever. This hook explicitly unsets them at
+// the end of every request — see application/hooks/Flash_cleanup.php
+// for the full write-up.
+$hook['post_controller'][] = array(
+    'class'    => '',
+    'function' => 'clear_stale_flash_markers',
+    'filename' => 'Flash_cleanup.php',
+    'filepath' => 'hooks',
+    'params'   => array(),
+);
