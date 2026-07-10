@@ -304,52 +304,90 @@
 		box-shadow: 0 6px 16px rgba(37, 211, 102, 0.3);
 	}
 
-	/* ---- Fix #1: clean, professional "Top Featured Listing" header --- */
+	/* ---- Fix #1: clean "Top Featured Listing" header + compact cards -- */
+	.all-filt .filt-alist-near {
+		padding: 16px !important;
+	}
+
 	.all-filt .filt-alist-near .tit {
 		background: transparent !important;
 		color: #180f5e !important;
-		padding: 0 0 12px 0 !important;
-		margin: 0 0 14px 0 !important;
+		padding: 0 0 10px 0 !important;
+		margin: 0 0 12px 0 !important;
 		border-radius: 0 !important;
-		border-bottom: 2px solid #f0f2f6 !important;
+		border-bottom: 1px solid #eef0f5 !important;
 	}
 
 	.all-filt .filt-alist-near .tit h4 {
 		display: flex;
 		align-items: center;
-		gap: 8px;
 		margin: 0 !important;
+		padding-left: 10px;
+		position: relative;
+		font-size: 14px !important;
+		letter-spacing: 0.06em;
 		color: #180f5e !important;
 	}
 
 	.all-filt .filt-alist-near .tit h4::before {
 		content: "";
-		display: inline-block;
+		position: absolute;
+		left: 0;
+		top: 50%;
+		transform: translateY(-50%);
 		width: 4px;
-		height: 16px;
+		height: 15px;
 		border-radius: 2px;
 		background: #7bb73f;
 	}
 
 	.all-filt .lhs-cate h4 {
-		display: flex;
-		align-items: center;
-		gap: 8px;
+		position: relative;
+		padding-left: 10px;
 	}
 
 	.all-filt .lhs-cate h4::before {
 		content: "";
-		display: inline-block;
+		position: absolute;
+		left: 0;
+		top: 50%;
+		transform: translateY(-50%);
 		width: 4px;
-		height: 16px;
+		height: 15px;
 		border-radius: 2px;
 		background: #7bb73f;
 	}
 
-	/* ---- Fix #3: tidy the web-dev CTA + enquiry form ----------------- */
+	/* Kill the double horizontal padding + <li> dividers so the three
+	   featured cards sit compactly under the heading. */
+	.all-filt .filt-alist-near .near-ser-list {
+		padding: 0 !important;
+		margin-bottom: 0 !important;
+		max-height: none !important;
+		overflow: visible !important;
+	}
+
+	.all-filt .near-ser-list ul li {
+		padding: 0 !important;
+		border-bottom: 0 !important;
+		margin-bottom: 8px !important;
+		overflow: visible !important;
+	}
+
+	.all-filt .near-ser-list ul li:last-child {
+		margin-bottom: 0 !important;
+	}
+
+	.all-filt .near-ser-list ul li .near-bx {
+		padding: 8px !important;
+		margin-bottom: 0 !important;
+	}
+
+	/* ---- Fix #2/#3: tidy web-dev CTA + enquiry form ------------------ */
 	.all-filt .web-dev-cta-sidebar {
-		padding: 20px 18px !important;
+		padding: 18px 16px !important;
 		border-radius: 14px !important;
+		margin: 0 0 18px 0 !important;
 	}
 
 	.all-filt .web-dev-cta-sidebar h4 {
@@ -357,94 +395,131 @@
 	}
 
 	.all-filt .all-list-filt-form {
-		background: #fff;
+		background: #fff !important;
 		border: 1px solid #eceef3;
 		border-radius: 14px;
-		padding: 18px 16px;
+		padding: 18px 16px !important;
 		box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
 		position: static !important;
-		margin-top: 18px;
+		margin: 0 !important;
+		float: none !important;
 	}
 
 	.all-filt .all-list-filt-form .tit {
 		background: transparent !important;
 		color: #180f5e !important;
 		padding: 0 0 12px 0 !important;
-		margin-bottom: 12px !important;
-		border-bottom: 2px solid #f0f2f6;
+		margin-bottom: 14px !important;
+		border-bottom: 1px solid #eef0f5;
 		border-radius: 0 !important;
 	}
 
 	.all-filt .all-list-filt-form .tit h3 {
-		font-size: 16px !important;
+		font-size: 17px !important;
 		font-weight: 700 !important;
 		color: #180f5e !important;
 		line-height: 1.35;
 		margin: 0 !important;
+		text-align: left !important;
 	}
 
 	.all-filt .all-list-filt-form .tit h3 span {
 		display: block;
-		font-size: 12px;
+		font-size: 12.5px;
 		font-weight: 500;
 		color: #6b7280;
-		margin-top: 2px;
+		margin-top: 3px;
+	}
+
+	/* Flatten the dark inner panel so the form is one clean card. */
+	.all-filt .all-list-filt-form .hom-col-req {
+		background: transparent !important;
+		margin: 0 !important;
+		border-radius: 0 !important;
+		box-shadow: none !important;
+	}
+
+	.all-filt .all-list-filt-form .hom-col-req form {
+		padding: 0 !important;
+	}
+
+	.all-filt .all-list-filt-form .form-group {
+		margin-bottom: 12px;
 	}
 
 	.all-filt .all-list-filt-form .form-control {
+		width: 100%;
 		height: auto;
-		min-height: 42px;
-		border: 1.5px solid #e2e8f0;
-		border-radius: 10px;
+		min-height: 46px;
+		border: 1.5px solid #e2e8f0 !important;
+		border-radius: 10px !important;
+		background: #fff !important;
 		font-size: 14px;
-		margin-bottom: 10px;
-		padding: 8px 14px;
+		color: #1f2937;
+		margin-bottom: 0;
+		padding: 10px 14px !important;
+		box-shadow: none !important;
 		transition: border-color 0.2s ease, box-shadow 0.2s ease;
 	}
 
+	.all-filt .all-list-filt-form textarea.form-control {
+		min-height: 96px;
+		resize: vertical;
+	}
+
+	.all-filt .all-list-filt-form .form-control::placeholder {
+		color: #9ca3af;
+	}
+
 	.all-filt .all-list-filt-form .form-control:focus {
-		border-color: #7bb73f;
-		box-shadow: 0 0 0 3px rgba(123, 183, 63, 0.15);
+		border-color: #7bb73f !important;
+		box-shadow: 0 0 0 3px rgba(123, 183, 63, 0.15) !important;
 		outline: none;
 	}
 
 	.all-filt .all-list-filt-form .btn-primary {
 		width: 100%;
 		border-radius: 10px;
-		padding: 11px 16px;
+		padding: 12px 16px;
+		font-size: 15px;
 		font-weight: 600;
-		background: #180f5e;
-		border: none;
+		background: #180f5e !important;
+		border: none !important;
+		margin-top: 4px;
 		transition: background 0.2s ease, box-shadow 0.2s ease;
 	}
 
 	.all-filt .all-list-filt-form .btn-primary:hover {
-		background: #241a7a;
+		background: #241a7a !important;
 		box-shadow: 0 6px 16px rgba(24, 15, 94, 0.28);
 	}
 
-	/* ---- Fix #4: remove stray "more" / kebab menu on business cards -- */
+	/* ---- Fix #4a: hide any stray "more"/kebab affordance on cards ---- */
 	.all-listing-pg .all-list-sh .eve-box .more-menu,
 	.all-listing-pg .all-list-sh .eve-box .card-menu,
 	.all-listing-pg .all-list-sh .eve-box .dropdown,
 	.all-listing-pg .all-list-sh .eve-box .three-dots,
+	.all-listing-pg .all-list-sh .eve-box .kebab,
 	.all-listing-pg .all-list-sh .eve-box .options,
 	.all-listing-pg .all-list-sh .eve-box .qvv {
 		display: none !important;
 	}
 
-	/* ---- Fix #5: consistent bottom alignment of the two columns ------ */
+	/* ---- Fix #4b: reduce empty space before the footer -------------- */
+	/* Don't let the tall sidebar stretch the row and leave a big blank
+	   band under a short result list — let each column keep its own
+	   height and cap trailing space. */
+	.all-listing-pg .container > .row {
+		align-items: flex-start;
+	}
+
 	.all-listing-pg .listing-main-col {
-		margin-bottom: 40px;
+		margin-bottom: 24px;
 		padding-bottom: 0;
 	}
 
 	.all-listing-pg .listing_col3 {
-		margin-bottom: 40px;
-	}
-
-	.all-listing-pg .row {
-		align-items: stretch;
+		margin-bottom: 24px;
 	}
 </style>
 
