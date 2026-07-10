@@ -44,7 +44,7 @@
                         <div class="col-md-12">
                           <div class="form-group">
                             <label for="">Rental Price</label>
-                            <input type="text" name="rental_price" required="required" class="form-control" placeholder="Exp - 200">
+                            <input type="text" name="rental_price" required="required" maxlength="50" class="form-control" placeholder="e.g. 2000 or $890 - $1,500">
                           </div>
                         </div>
                       </div>
