@@ -1724,6 +1724,34 @@
 				->count_all_results() > 0;
 		}
 
+		/**
+		 * Fetch every active (non-deleted) listing with the human-readable
+		 * category / sub-category names and owner email, in the exact shape
+		 * the CSV export / import template expects.
+		 */
+		public function getListingsForExport()
+		{
+			return $this->db->select(
+				'listings.listing_name, ' .
+				'categories.category_name AS category, ' .
+				'sub_categories.sub_category_name AS sub_category, ' .
+				'user.email_id AS user_email, ' .
+				'listings.listing_mobile, listings.listing_whatsapp, listings.listing_email, ' .
+				'listings.listing_website, listings.listing_address, listings.county_name, ' .
+				'listings.postal_code, listings.listing_lat, listings.listing_lng, ' .
+				'listings.listing_description, listings.service_locations, listings.service_offered, ' .
+				'listings.listing_video, listings.listing_seo_title, listings.listing_seo_keywords, ' .
+				'listings.listing_seo_description'
+			)
+				->from('listings')
+				->join('user', 'listings.user_id = user.user_id', 'left')
+				->join('listing_categories as categories', 'categories.category_id = listings.category_id', 'left')
+				->join('listing_sub_categories as sub_categories', 'sub_categories.sub_category_id = listings.sub_category_id', 'left')
+				->where('listings.is_deleted', 0)
+				->order_by('listings.listing_id', 'DESC')
+				->get()->result_array();
+		}
+
 
 		/*==============
 		LISTINGS

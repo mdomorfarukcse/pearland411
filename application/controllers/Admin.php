@@ -1449,39 +1449,93 @@ class Admin extends CI_Controller
 	}
 
 	/**
-	 * Download a ready-to-fill CSV template for the listing importer.
+	 * The ordered column list shared by the import template and the export.
+	 * Keeping it in one place means a downloaded export re-imports cleanly.
 	 */
-	public function download_listing_template()
+	private function listingImportColumns()
 	{
-		$headers = array(
+		return array(
 			'listing_name', 'category', 'sub_category', 'user_email',
 			'listing_mobile', 'listing_whatsapp', 'listing_email', 'listing_website',
 			'listing_address', 'county_name', 'postal_code', 'listing_lat', 'listing_lng',
 			'listing_description', 'service_locations', 'service_offered', 'listing_video',
 			'listing_seo_title', 'listing_seo_keywords', 'listing_seo_description',
 		);
+	}
 
-		$sample = array(
-			'Pearland Family Dentistry', 'Medical Services', 'Dentist', '',
-			'281-555-0100', '281-555-0100', 'info@example.com', 'https://example.com',
-			'123 Main St, Pearland, TX', 'Brazoria', '77584', '29.5636', '-95.2860',
-			'A friendly family dental clinic serving Pearland.', 'Pearland, Friendswood', 'Cleaning, Whitening', '',
-			'Pearland Family Dentistry', 'dentist, pearland', 'Trusted family dentist in Pearland, TX.',
-		);
-
+	/**
+	 * Stream an array of associative rows to the browser as a CSV download.
+	 * $columns fixes the column order; each row is looked up by those keys.
+	 */
+	private function streamListingsCsv($filename, $columns, $rows)
+	{
 		$this->output->set_content_type('text/csv');
-		$this->output->set_header('Content-Disposition: attachment; filename="listing_import_template.csv"');
+		$this->output->set_header('Content-Disposition: attachment; filename="' . $filename . '"');
 		$this->output->set_header('Cache-Control: no-store, no-cache, must-revalidate');
 
 		$out = fopen('php://temp', 'r+');
-		fputcsv($out, $headers);
-		fputcsv($out, $sample);
+		fputcsv($out, $columns);
+		foreach ($rows as $row) {
+			$line = array();
+			foreach ($columns as $col) {
+				$line[] = isset($row[$col]) ? $row[$col] : '';
+			}
+			fputcsv($out, $line);
+		}
 		rewind($out);
 		$csv = stream_get_contents($out);
 		fclose($out);
 
 		// Prepend a UTF-8 BOM so Excel opens accented characters correctly.
 		$this->output->set_output("\xEF\xBB\xBF" . $csv);
+	}
+
+	/**
+	 * Download a ready-to-fill CSV template (headers + one sample row) for
+	 * the listing importer.
+	 */
+	public function download_listing_template()
+	{
+		$columns = $this->listingImportColumns();
+
+		$sample = array(
+			'listing_name'            => 'Pearland Family Dentistry',
+			'category'                => 'Medical Services',
+			'sub_category'            => 'Dentist',
+			'user_email'              => '',
+			'listing_mobile'          => '281-555-0100',
+			'listing_whatsapp'        => '281-555-0100',
+			'listing_email'           => 'info@example.com',
+			'listing_website'         => 'https://example.com',
+			'listing_address'         => '123 Main St, Pearland, TX',
+			'county_name'             => 'Brazoria',
+			'postal_code'             => '77584',
+			'listing_lat'             => '29.5636',
+			'listing_lng'             => '-95.2860',
+			'listing_description'     => 'A friendly family dental clinic serving Pearland.',
+			'service_locations'       => 'Pearland, Friendswood',
+			'service_offered'         => 'Cleaning, Whitening',
+			'listing_video'           => '',
+			'listing_seo_title'       => 'Pearland Family Dentistry',
+			'listing_seo_keywords'    => 'dentist, pearland',
+			'listing_seo_description' => 'Trusted family dentist in Pearland, TX.',
+		);
+
+		$this->streamListingsCsv('listing_import_template.csv', $columns, array($sample));
+	}
+
+	/**
+	 * Export every business listing to a CSV file that uses the very same
+	 * column layout as the import template — so admins can download, edit
+	 * in Excel, and re-import.
+	 */
+	public function export_listings()
+	{
+		$columns = $this->listingImportColumns();
+		$rows = $this->adminmodel->getListingsForExport();
+
+		$filename = 'listings_export_' . date('Y-m-d') . '.csv';
+		$this->streamListingsCsv($filename, $columns, $rows);
 	}
 
 	/**
