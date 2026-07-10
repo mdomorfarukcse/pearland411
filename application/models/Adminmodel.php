@@ -1641,6 +1641,89 @@
 			}
 		}
 
+		/*=========================================
+		BULK / CSV-EXCEL LISTING IMPORT HELPERS
+		=========================================*/
+
+		/**
+		 * Resolve a listing category by its (case-insensitive) name.
+		 * Returns the category_id or null when no match is found.
+		 */
+		public function getCategoryIdByName($name)
+		{
+			$name = trim((string) $name);
+			if ($name === '') {
+				return null;
+			}
+			$row = $this->db->select('category_id')
+				->from('listing_categories')
+				->where('LOWER(category_name)', strtolower($name))
+				->get()->row();
+			return $row ? (int) $row->category_id : null;
+		}
+
+		/**
+		 * Resolve a listing sub-category by name, optionally scoped to a category.
+		 * Returns the sub_category_id or null when no match is found.
+		 */
+		public function getSubCategoryIdByName($name, $category_id = null)
+		{
+			$name = trim((string) $name);
+			if ($name === '') {
+				return null;
+			}
+			$this->db->select('sub_category_id')
+				->from('listing_sub_categories')
+				->where('LOWER(sub_category_name)', strtolower($name));
+			if (!empty($category_id)) {
+				$this->db->where('category_id', $category_id);
+			}
+			$row = $this->db->get()->row();
+			return $row ? (int) $row->sub_category_id : null;
+		}
+
+		/**
+		 * Resolve a user_id from an email address (case-insensitive).
+		 * Returns the user_id or null when no match is found.
+		 */
+		public function getUserIdByEmail($email)
+		{
+			$email = trim((string) $email);
+			if ($email === '') {
+				return null;
+			}
+			$row = $this->db->select('user_id')
+				->from('user')
+				->where('LOWER(email_id)', strtolower($email))
+				->get()->row();
+			return $row ? (int) $row->user_id : null;
+		}
+
+		/**
+		 * Return a fallback user_id to attribute imported listings to when a
+		 * row does not name a user. Falls back to the first available user.
+		 */
+		public function getDefaultImportUserId()
+		{
+			$row = $this->db->select('user_id')
+				->from('user')
+				->order_by('user_id', 'ASC')
+				->limit(1)
+				->get()->row();
+			return $row ? (int) $row->user_id : null;
+		}
+
+		/**
+		 * True when a listing slug already exists (used to keep slugs unique
+		 * on import).
+		 */
+		public function listingSlugExists($slug)
+		{
+			return $this->db->from('listings')
+				->where('listing_slug', $slug)
+				->count_all_results() > 0;
+		}
+
 
 		/*==============
 		LISTINGS

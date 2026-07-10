@@ -1262,6 +1262,302 @@ class Admin extends CI_Controller
 		$this->load->view('admin/add_new_listings_start');
 		$this->load->view('admin/footer');
 	}
+	/*==================================================
+	Import Listings from a CSV / Excel (.xlsx) file
+	==================================================*/
+	public function import_listings()
+	{
+		$this->load->helper('spreadsheet');
+
+		// Categories are shown in the on-screen reference so importers know
+		// which category names are valid.
+		$data['categories'] = $this->usermodel->getAllValues('listing_categories');
+
+		if ($this->input->post('import_submit') === null) {
+			$this->load->view('admin/header', $data);
+			$this->load->view('admin/import_listings', $data);
+			$this->load->view('admin/footer');
+			return;
+		}
+
+		// --- File presence / upload-error checks -------------------------
+		if (empty($_FILES['import_file']['name'])) {
+			$this->session->set_flashdata('error', 'Please choose a CSV or Excel (.xlsx) file to import.');
+			redirect('admin/import-listings');
+			return;
+		}
+		if ($_FILES['import_file']['error'] !== UPLOAD_ERR_OK) {
+			$this->session->set_flashdata('error', 'The file could not be uploaded. Please try again.');
+			redirect('admin/import-listings');
+			return;
+		}
+
+		$original_name = $_FILES['import_file']['name'];
+		$ext = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
+		$allowed = array('csv', 'txt', 'xlsx');
+		if (!in_array($ext, $allowed, true)) {
+			$this->session->set_flashdata('error', 'Unsupported file type ".' . $ext . '". Please upload a .csv or .xlsx file.');
+			redirect('admin/import-listings');
+			return;
+		}
+
+		list($rows, $read_error) = spreadsheet_read_rows($_FILES['import_file']['tmp_name'], $ext);
+		if ($read_error !== null) {
+			$this->session->set_flashdata('error', $read_error);
+			redirect('admin/import-listings');
+			return;
+		}
+		if (count($rows) < 2) {
+			$this->session->set_flashdata('error', 'The file has no data rows. Add at least one listing under the header row.');
+			redirect('admin/import-listings');
+			return;
+		}
+
+		// --- Map the header row to known columns -------------------------
+		$header = array_shift($rows);
+		$col_map = array();
+		foreach ($header as $index => $label) {
+			$key = $this->normalizeImportHeader($label);
+			if ($key !== '') {
+				$col_map[$key] = $index;
+			}
+		}
+
+		if (!isset($col_map['listing_name'])) {
+			$this->session->set_flashdata('error', 'The file must contain a "listing_name" column. Download the sample template for the correct format.');
+			redirect('admin/import-listings');
+			return;
+		}
+
+		// Text columns that map straight through from the sheet.
+		$text_columns = array(
+			'listing_mobile', 'listing_whatsapp', 'listing_email', 'listing_website',
+			'listing_address', 'county_name', 'postal_code', 'listing_lat', 'listing_lng',
+			'listing_description', 'service_locations', 'service_offered', 'listing_video',
+			'listing_seo_title', 'listing_seo_keywords', 'listing_seo_description',
+		);
+
+		$default_user_id = $this->adminmodel->getDefaultImportUserId();
+
+		$imported = 0;
+		$skipped = 0;
+		$errors = array();
+		$row_number = 1; // header was row 1
+
+		foreach ($rows as $row) {
+			$row_number++;
+
+			$get = function ($key) use ($row, $col_map) {
+				if (!isset($col_map[$key])) {
+					return '';
+				}
+				$idx = $col_map[$key];
+				return isset($row[$idx]) ? trim((string) $row[$idx]) : '';
+			};
+
+			$listing_name = $get('listing_name');
+			if ($listing_name === '') {
+				$skipped++;
+				$errors[] = "Row {$row_number}: skipped (empty listing_name).";
+				continue;
+			}
+
+			// Resolve category (by name or numeric id).
+			$category_id = null;
+			$category_val = $get('category');
+			if ($category_val !== '') {
+				$category_id = ctype_digit($category_val)
+					? (int) $category_val
+					: $this->adminmodel->getCategoryIdByName($category_val);
+				if ($category_id === null) {
+					$skipped++;
+					$errors[] = "Row {$row_number}: skipped (unknown category \"{$category_val}\").";
+					continue;
+				}
+			}
+
+			// Resolve sub-category (optional).
+			$sub_category_id = null;
+			$sub_val = $get('sub_category');
+			if ($sub_val !== '') {
+				$sub_category_id = ctype_digit($sub_val)
+					? (int) $sub_val
+					: $this->adminmodel->getSubCategoryIdByName($sub_val, $category_id);
+			}
+
+			// Resolve owner user (by email or numeric id), else fall back.
+			$user_id = null;
+			$user_email = $get('user_email');
+			$user_id_raw = $get('user_id');
+			if ($user_email !== '') {
+				$user_id = $this->adminmodel->getUserIdByEmail($user_email);
+			} elseif ($user_id_raw !== '' && ctype_digit($user_id_raw)) {
+				$user_id = (int) $user_id_raw;
+			}
+			if ($user_id === null) {
+				$user_id = $default_user_id;
+			}
+
+			$info = array(
+				'user_id'      => $user_id,
+				'listing_name' => $listing_name,
+				'category_id'  => $category_id,
+				'sub_category_id' => $sub_category_id,
+				'listing_slug' => $this->makeUniqueListingSlug($listing_name),
+				'listing_status' => 0,
+				'is_deleted'   => 0,
+				'created_at'   => date('Y-m-d H:i:s'),
+			);
+
+			foreach ($text_columns as $col) {
+				$val = $get($col);
+				if ($val !== '') {
+					$info[$col] = $val;
+				}
+			}
+
+			// Auto-generate the Google Map embed from lat/lng when both given.
+			if (!empty($info['listing_lat']) && !empty($info['listing_lng'])) {
+				$info['google_map'] = 'https://maps.google.com/maps?q=' . $info['listing_lat'] . ',' . $info['listing_lng'] . '&output=embed';
+			}
+
+			if ($this->adminmodel->addListing($info)) {
+				$imported++;
+			} else {
+				$skipped++;
+				$errors[] = "Row {$row_number}: database insert failed.";
+			}
+		}
+
+		$summary = "Import finished: {$imported} listing(s) added, {$skipped} skipped.";
+		if (!empty($errors)) {
+			// Keep the flash message readable — cap the detail list.
+			$shown = array_slice($errors, 0, 15);
+			$summary .= ' ' . implode(' ', $shown);
+			if (count($errors) > count($shown)) {
+				$summary .= ' …and ' . (count($errors) - count($shown)) . ' more.';
+			}
+		}
+
+		if ($imported > 0) {
+			$this->session->set_flashdata('message', $summary);
+			redirect('admin/all_listings');
+		} else {
+			$this->session->set_flashdata('error', $summary);
+			redirect('admin/import-listings');
+		}
+	}
+
+	/**
+	 * Download a ready-to-fill CSV template for the listing importer.
+	 */
+	public function download_listing_template()
+	{
+		$headers = array(
+			'listing_name', 'category', 'sub_category', 'user_email',
+			'listing_mobile', 'listing_whatsapp', 'listing_email', 'listing_website',
+			'listing_address', 'county_name', 'postal_code', 'listing_lat', 'listing_lng',
+			'listing_description', 'service_locations', 'service_offered', 'listing_video',
+			'listing_seo_title', 'listing_seo_keywords', 'listing_seo_description',
+		);
+
+		$sample = array(
+			'Pearland Family Dentistry', 'Medical Services', 'Dentist', '',
+			'281-555-0100', '281-555-0100', 'info@example.com', 'https://example.com',
+			'123 Main St, Pearland, TX', 'Brazoria', '77584', '29.5636', '-95.2860',
+			'A friendly family dental clinic serving Pearland.', 'Pearland, Friendswood', 'Cleaning, Whitening', '',
+			'Pearland Family Dentistry', 'dentist, pearland', 'Trusted family dentist in Pearland, TX.',
+		);
+
+		$this->output->set_content_type('text/csv');
+		$this->output->set_header('Content-Disposition: attachment; filename="listing_import_template.csv"');
+		$this->output->set_header('Cache-Control: no-store, no-cache, must-revalidate');
+
+		$out = fopen('php://temp', 'r+');
+		fputcsv($out, $headers);
+		fputcsv($out, $sample);
+		rewind($out);
+		$csv = stream_get_contents($out);
+		fclose($out);
+
+		// Prepend a UTF-8 BOM so Excel opens accented characters correctly.
+		$this->output->set_output("\xEF\xBB\xBF" . $csv);
+	}
+
+	/**
+	 * Normalise a spreadsheet header cell to a known internal column key.
+	 * Accepts friendly aliases (e.g. "Listing Name", "Phone", "Zip") so a
+	 * hand-made file still lines up with the importer.
+	 */
+	private function normalizeImportHeader($label)
+	{
+		$slug = strtolower(trim((string) $label));
+		$slug = preg_replace('/[^a-z0-9]+/', '_', $slug);
+		$slug = trim($slug, '_');
+
+		$aliases = array(
+			'name'            => 'listing_name',
+			'business_name'   => 'listing_name',
+			'title'           => 'listing_name',
+			'category_name'   => 'category',
+			'sub_category_name' => 'sub_category',
+			'subcategory'     => 'sub_category',
+			'email'           => 'listing_email',
+			'phone'           => 'listing_mobile',
+			'mobile'          => 'listing_mobile',
+			'whatsapp'        => 'listing_whatsapp',
+			'website'         => 'listing_website',
+			'address'         => 'listing_address',
+			'county'          => 'county_name',
+			'zip'             => 'postal_code',
+			'zip_code'        => 'postal_code',
+			'zipcode'         => 'postal_code',
+			'postal'          => 'postal_code',
+			'lat'             => 'listing_lat',
+			'latitude'        => 'listing_lat',
+			'lng'             => 'listing_lng',
+			'lon'             => 'listing_lng',
+			'longitude'       => 'listing_lng',
+			'description'     => 'listing_description',
+			'owner_email'     => 'user_email',
+			'video'           => 'listing_video',
+		);
+
+		if (isset($aliases[$slug])) {
+			return $aliases[$slug];
+		}
+
+		$known = array(
+			'listing_name', 'category', 'sub_category', 'user_email', 'user_id',
+			'listing_mobile', 'listing_whatsapp', 'listing_email', 'listing_website',
+			'listing_address', 'county_name', 'postal_code', 'listing_lat', 'listing_lng',
+			'listing_description', 'service_locations', 'service_offered', 'listing_video',
+			'listing_seo_title', 'listing_seo_keywords', 'listing_seo_description',
+		);
+
+		return in_array($slug, $known, true) ? $slug : '';
+	}
+
+	/**
+	 * Build a URL-safe, collision-free listing slug from a name.
+	 */
+	private function makeUniqueListingSlug($name)
+	{
+		$base = preg_replace('/[^A-Za-z0-9-]+/', '-', $name);
+		$base = trim($base, '-');
+		if ($base === '') {
+			$base = 'listing';
+		}
+
+		$slug = $base;
+		$suffix = 1;
+		while ($this->adminmodel->listingSlugExists($slug)) {
+			$suffix++;
+			$slug = $base . '-' . $suffix;
+		}
+		return $slug;
+	}
+
 	/*Edit Listing*/
 
 	public function edit_listing($slug)

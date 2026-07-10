@@ -22,6 +22,7 @@
           <div class="ad-int-sear">
             <input type="text" id="pg-sear" placeholder="Search this page..">
           </div>
+          <a href="<?= base_url() ?>admin/import-listings" class="db-tit-btn" style="margin-right:8px;background:#0d6efd;">Import CSV/Excel</a>
           <a href="<?= base_url() ?>admin/add-new-listing" class="db-tit-btn">Add new listing</a>
 
           <table data-admin-table class="responsive-table bordered" id="pg-resu">
