@@ -399,4 +399,20 @@ SET @s := IF(@c = 0,
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
+-- ============================================================
+-- 0009_rental_price_widen.sql
+-- rental.rental_price was too small (VARCHAR(10)) and truncated
+-- longer prices / ranges. Widen it to VARCHAR(50).
+-- ============================================================
+
+SET @len := (SELECT CHARACTER_MAXIMUM_LENGTH FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rental' AND COLUMN_NAME = 'rental_price');
+SET @typ := (SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rental' AND COLUMN_NAME = 'rental_price');
+SET @s := IF(@typ IS NOT NULL AND NOT (@typ = 'varchar' AND @len >= 50),
+    'ALTER TABLE `rental` MODIFY COLUMN `rental_price` VARCHAR(50) NULL DEFAULT NULL',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
 SET FOREIGN_KEY_CHECKS = 1;
