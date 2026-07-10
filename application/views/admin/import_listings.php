@@ -22,11 +22,25 @@
           <h2>Import Listings from CSV / Excel</h2>
 
           <div style="max-width:820px;">
-            <p style="margin-bottom:18px;color:#555;">
+            <p style="margin-bottom:16px;color:#555;">
               Upload a <strong>.csv</strong> or <strong>.xlsx</strong> file to add many listings at once.
               The first row must be a header row. Only <code>listing_name</code> is required — every
-              other column is optional. Not sure about the format?
-              <a href="<?= base_url('admin/download-listing-template') ?>" style="color:#591A2D;font-weight:600;">Download the sample template</a>.
+              other column is optional.
+            </p>
+
+            <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:24px;">
+              <a href="<?= base_url('admin/download-listing-template') ?>"
+                 class="db-tit-btn" style="position:static; top:auto; right:auto; display:inline-block;">
+                &darr; Download sample file
+              </a>
+              <a href="<?= base_url('admin/export-listings') ?>"
+                 class="db-tit-btn" style="position:static; top:auto; right:auto; display:inline-block;">
+                &darr; Export all listings (CSV)
+              </a>
+            </div>
+            <p style="margin-bottom:18px;color:#777;font-size:13px;">
+              The sample file shows the exact format. The export downloads every current listing
+              in the <em>same</em> format — edit it in Excel and re-import to bulk-update.
             </p>
 
             <form name="import_form" id="import_form" method="post"

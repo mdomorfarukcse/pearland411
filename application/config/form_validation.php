@@ -80,7 +80,7 @@ $config = [
 
       'field' => 'event_mobile',
 
-      'label' => 'Event Date',
+      'label' => 'Contact Phone Number',
 
       'rules' => 'trim|required'
 
@@ -90,7 +90,7 @@ $config = [
 
       'field' => 'event_email',
 
-      'label' => 'Event Date',
+      'label' => 'Contact Email',
 
       'rules' => 'trim|required|valid_email'
 
@@ -100,9 +100,9 @@ $config = [
 
       'field' => 'event_website',
 
-      'label' => 'Event Date',
+      'label' => 'Event Website',
 
-      'rules' => 'trim|required'
+      'rules' => 'trim'
 
     ],
 
@@ -110,7 +110,7 @@ $config = [
 
       'field' => 'isenquiry',
 
-      'label' => 'Event Date',
+      'label' => 'Enquiry',
 
       'rules' => ''
 
@@ -624,7 +624,7 @@ $config = [
 
       'field' => 'event_mobile',
 
-      'label' => 'Event Date',
+      'label' => 'Contact Phone Number',
 
       'rules' => 'trim|required'
 
@@ -634,7 +634,7 @@ $config = [
 
       'field' => 'event_email',
 
-      'label' => 'Event Date',
+      'label' => 'Contact Email',
 
       'rules' => 'trim|required|valid_email'
 
@@ -644,9 +644,9 @@ $config = [
 
       'field' => 'event_website',
 
-      'label' => 'Event Date',
+      'label' => 'Event Website',
 
-      'rules' => 'trim|required'
+      'rules' => 'trim'
 
     ],
 
@@ -654,7 +654,7 @@ $config = [
 
       'field' => 'isenquiry',
 
-      'label' => 'Event Date',
+      'label' => 'Enquiry',
 
       'rules' => ''
 
