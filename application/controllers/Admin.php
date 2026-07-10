@@ -907,6 +907,36 @@ class Admin extends CI_Controller
 		}
 	}
 
+	/*==============================
+	Delete Multiple Listing Category
+	===============================*/
+	public function delete_selected_listing_category()
+	{
+		$ids = $this->input->post('category_ids');
+
+		if (empty($ids) || !is_array($ids)) {
+			$this->session->set_flashdata('message', 'No categories were selected to delete.');
+			redirect('admin/all_listing_category', 'refresh');
+			return;
+		}
+
+		$deleted = 0;
+		foreach ($ids as $id) {
+			$id = (int) $id;
+			if ($id > 0 && $this->adminmodel->deleteCategory($id)) {
+				$deleted++;
+			}
+		}
+
+		if ($deleted > 0) {
+			$this->session->set_flashdata('message', 'Successfully deleted ' . $deleted . ' listing ' . ($deleted === 1 ? 'category' : 'categories') . '!!');
+		} else {
+			$this->session->set_flashdata('message', 'Deleting selected listing categories failed!!');
+		}
+
+		redirect('admin/all_listing_category', 'refresh');
+	}
+
 	/*====================
 	All Sub Category
 	=====================*/
