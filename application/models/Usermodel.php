@@ -1117,9 +1117,10 @@ class Usermodel extends CI_Model
 	// Get events with search and pagination (public)
 	public function getEventsWithPagination($search = '', $limit = 10, $offset = 0)
 	{
-		$this->db->select('events.*, user.name AS host_name, user.profile_image AS host_image')
+		$this->db->select('events.*, COALESCE(admin.admin_name, user.name) AS host_name, user.profile_image AS host_image', false)
 			->from('events')
 			->join('user', 'events.user_id = user.user_id', 'LEFT')
+			->join('admin', 'admin.admin_id = events.admin_id', 'LEFT')
 			->where('events.event_status', 1);
 		if (!empty($search)) {
 			$this->db->group_start();
@@ -1487,9 +1488,10 @@ class Usermodel extends CI_Model
 
 	public function getlatest_events($limit = NULL)
 	{
-		return $this->db->select('events.*,user.name')
+		return $this->db->select('events.*, COALESCE(admin.admin_name, user.name) AS name', false)
 			->from('events')
-			->join('user', 'events.user_id = user.user_id')
+			->join('user', 'events.user_id = user.user_id', 'left')
+			->join('admin', 'admin.admin_id = events.admin_id', 'left')
 			->where('event_status', 1)
 			->limit($limit)
 			->order_by('event_id', 'DESC')
@@ -3463,9 +3465,10 @@ class Usermodel extends CI_Model
 	 */
 	public function searchEvents($search_term, $limit = 15)
 	{
-		$this->db->select('events.*, user.name as organizer_name');
+		$this->db->select('events.*, COALESCE(admin.admin_name, user.name) as organizer_name', false);
 		$this->db->from('events');
 		$this->db->join('user', 'events.user_id = user.user_id', 'left');
+		$this->db->join('admin', 'admin.admin_id = events.admin_id', 'left');
 		$this->db->where('events.event_status', 1);
 		$this->db->group_start();
 		$this->db->like('events.event_name', $search_term);
@@ -3763,9 +3766,10 @@ class Usermodel extends CI_Model
 	{
 		if (empty($query) && empty($location)) return array();
 
-		$this->db->select('events.*, user.name as organizer_name');
+		$this->db->select('events.*, COALESCE(admin.admin_name, user.name) as organizer_name', false);
 		$this->db->from('events');
 		$this->db->join('user', 'events.user_id = user.user_id', 'left');
+		$this->db->join('admin', 'admin.admin_id = events.admin_id', 'left');
 		$this->db->where('events.event_status', 1);
 
 		if (!empty($query)) {

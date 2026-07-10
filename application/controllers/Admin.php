@@ -4590,8 +4590,9 @@ class Admin extends CI_Controller
 	/* Add new Event */
 	public function add_new_event()
 	{
-		// Active users, alphabetised by name — keeps the host dropdown sane.
-		$data['users'] = $this->adminmodel->getActiveUsersForDropdown();
+		// Host dropdown lists admin (staff) accounts only, so it shows our own
+		// recognisable names instead of public users.
+		$data['admins'] = $this->adminmodel->getActiveAdminsForDropdown();
 
 		if ($this->form_validation->run('admin_event_rules') == false) {
 			$this->load->view('admin/header');
@@ -4601,7 +4602,8 @@ class Admin extends CI_Controller
 			$event_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('event_name'));
 
 			$info = array(
-				'user_id'           => $this->input->post('user_id'),
+				'user_id'           => 0, // events are hosted by an admin now (see admin_id)
+				'admin_id'          => $this->input->post('admin_id'),
 				'event_name'        => $this->input->post('event_name'),
 				'event_address'     => $this->input->post('event_address'),
 				'event_start_date'  => $this->input->post('event_start_date'),
@@ -4647,7 +4649,7 @@ class Admin extends CI_Controller
 			redirect('admin/all-events');
 			return;
 		}
-		$data['allUsers'] = $this->adminmodel->get_users();
+		$data['admins']   = $this->adminmodel->getActiveAdminsForDropdown();
 		$old_image        = $data['event']->event_image;
 
 		if ($this->form_validation->run('event_rules') == FALSE) {
@@ -4657,7 +4659,7 @@ class Admin extends CI_Controller
 		} else {
 			$event_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('event_name'));
 			$info = array(
-				'user_id'           => $this->input->post('user_id'),
+				'admin_id'          => $this->input->post('admin_id'),
 				'event_name'        => $this->input->post('event_name'),
 				'event_address'     => $this->input->post('event_address'),
 				'event_start_date'  => $this->input->post('event_start_date'),

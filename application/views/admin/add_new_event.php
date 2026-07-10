@@ -45,19 +45,21 @@
                 <div class="row">
                   <div class="col-md-12">
                     <div class="form-group">
-                      <label class="field-label" for="user_id">Host user <span class="req-star">*</span></label>
-                      <select name="user_id" required="required" class="form-control" id="user_id">
-                        <option value="">Choose a user</option>
+                      <label class="field-label" for="admin_id">Host <span class="req-star">*</span>
+                        <span class="field-hint">Choose the admin hosting this event.</span>
+                      </label>
+                      <select name="admin_id" required="required" class="form-control" id="admin_id">
+                        <option value="">Choose a host</option>
                         <?php
-                        if($users){
-                          foreach($users as $user){
+                        if(!empty($admins)){
+                          foreach($admins as $admin){
                         ?>
-                        <option value="<?= $user->user_id; ?>" <?= set_select('user_id', $user->user_id); ?>><?= $user->name; ?></option>
+                        <option value="<?= $admin->admin_id; ?>" <?= set_select('admin_id', $admin->admin_id); ?>><?= e($admin->admin_name); ?></option>
 
                         <?php } } ?>
 
                       </select>
-                      <div class="formError"><?= form_error('user_id') ?></div>
+                      <div class="formError"><?= form_error('admin_id') ?></div>
                     </div>
                   </div>
                 </div>

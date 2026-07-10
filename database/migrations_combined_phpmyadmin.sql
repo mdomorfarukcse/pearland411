@@ -377,4 +377,26 @@ INSERT IGNORE INTO `site_settings` (`setting_key`, `setting_value`, `updated_at`
     ('social_youtube_url',         '', NOW());
 
 
+-- ============================================================
+-- 0008_event_admin_host.sql
+-- events.admin_id — host is now an admin (staff) account.
+-- ============================================================
+
+-- events.admin_id
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'events' AND COLUMN_NAME = 'admin_id');
+SET @s := IF(@c = 0,
+    'ALTER TABLE `events` ADD COLUMN `admin_id` INT NULL DEFAULT NULL AFTER `user_id`',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- events.admin_id index
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'events' AND INDEX_NAME = 'events_admin_id_idx');
+SET @s := IF(@c = 0,
+    'ALTER TABLE `events` ADD KEY `events_admin_id_idx` (`admin_id`)',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
 SET FOREIGN_KEY_CHECKS = 1;
