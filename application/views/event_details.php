@@ -414,18 +414,31 @@ function createSafeSlug($text)
 				<div class="sec-3 mb-3">
 					<div class="ud-lhs-s1">
 						<?php
-						// Get user information for the event host (same logic as events card)
+						// Resolve the event host. Events are now hosted by an admin
+						// (staff) account; fall back to the legacy public user for
+						// older events that predate the admin_id column.
+						$CI = &get_instance();
 						$event_user = null;
-						if (!empty($event->user_id)) {
-							$CI = &get_instance();
-							$event_user = $CI->usermodel->getSingleValue($event->user_id, 'user_id', 'user');
-						}
-						$user_name = $event_user ? $event_user->name : 'Directory Finder';
+						$user_name = 'Directory Finder';
 						$profile_image = 'https://img.freepik.com/premium-vector/user-icon-icon_1076610-59410.jpg';
-						if ($event_user && !empty($event_user->profile_image)) {
-							$profile_image = base_url($event_user->profile_image);
+						$joined_date = '';
+
+						if (!empty($event->admin_id)) {
+							$CI->load->model('adminmodel');
+							$event_admin = $CI->adminmodel->getAdminByIdRaw($event->admin_id);
+							if ($event_admin && !empty($event_admin->admin_name)) {
+								$user_name = $event_admin->admin_name;
+							}
+						} elseif (!empty($event->user_id)) {
+							$event_user = $CI->usermodel->getSingleValue($event->user_id, 'user_id', 'user');
+							if ($event_user) {
+								$user_name = $event_user->name;
+								if (!empty($event_user->profile_image)) {
+									$profile_image = base_url($event_user->profile_image);
+								}
+								$joined_date = !empty($event_user->user_created) ? date('d M, Y', strtotime($event_user->user_created)) : '';
+							}
 						}
-						$joined_date = $event_user && !empty($event_user->user_created) ? date('d M, Y', strtotime($event_user->user_created)) : '';
 						?>
 						<div style="font-weight:600; color:#333; margin-bottom:2px;">Hosted by</div>
 						<img src="<?= $profile_image; ?>" alt="<?= htmlspecialchars($user_name); ?>">

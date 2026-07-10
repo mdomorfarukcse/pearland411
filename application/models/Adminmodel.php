@@ -674,9 +674,10 @@
 		===========================*/
 		public function get_events($limit, $offset)
 		{
-			$this->db->select('events.event_id, events.user_id, events.event_start_date, events.event_name, events.event_status, events.event_slug, events.created_at, user.name');
+			$this->db->select('events.event_id, events.user_id, events.admin_id, events.event_start_date, events.event_name, events.event_status, events.event_slug, events.created_at, COALESCE(admin.admin_name, user.name) AS name', false);
 			$this->db->from('events');
 			$this->db->join('user', 'user.user_id = events.user_id', 'left');
+			$this->db->join('admin', 'admin.admin_id = events.admin_id', 'left');
 			$this->db->order_by('events.event_id', 'DESC');
 			if ($limit !== null && $offset !== null) {
 				$this->db->limit($limit, $offset);
@@ -1946,6 +1947,33 @@
 					->get()->result();
 			} catch (Exception $e) {
 				log_message('error', 'getActiveUsersForDropdown failed: ' . $e->getMessage());
+				return array();
+			}
+		}
+
+		/**
+		 * Active admin (staff) accounts for the event "Host" dropdown, so the
+		 * list only shows our own recognisable names. Excludes banned and
+		 * (where the column exists) inactive admins.
+		 */
+		public function getActiveAdminsForDropdown()
+		{
+			try {
+				$this->db
+					->select('admin_id, admin_name, admin_email')
+					->from('admin')
+					->where("(admin_name IS NOT NULL AND admin_name != '')", null, false);
+
+				if ($this->db->field_exists('banned', 'admin')) {
+					$this->db->where('banned', 0);
+				}
+				if ($this->db->field_exists('is_active', 'admin')) {
+					$this->db->where('is_active', 1);
+				}
+
+				return $this->db->order_by('admin_name', 'ASC')->get()->result();
+			} catch (Exception $e) {
+				log_message('error', 'getActiveAdminsForDropdown failed: ' . $e->getMessage());
 				return array();
 			}
 		}

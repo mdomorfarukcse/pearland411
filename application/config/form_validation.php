@@ -8,6 +8,16 @@ $config = [
 
     [
 
+      'field' => 'admin_id',
+
+      'label' => 'Host',
+
+      'rules' => 'trim|required'
+
+    ],
+
+    [
+
       'field' => 'event_name',
 
       'label' => 'Event Name',
@@ -542,9 +552,9 @@ $config = [
 
     [
 
-      'field' => 'user_id',
+      'field' => 'admin_id',
 
-      'label' => 'User',
+      'label' => 'Host',
 
       'rules' => 'trim|required'
 

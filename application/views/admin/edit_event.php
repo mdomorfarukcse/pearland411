@@ -25,13 +25,14 @@
                     <div class="row">
                       <div class="col-md-12">
                         <div class="form-group">
-                          <select name="user_id" required="required" class="form-control" id="user_id">
-                            <option value="Admin" <?= $event->user_id == 'Admin' ? 'SELECTED' : '' ?>>Admin</option>
-                            <?php 
-                            if($allUsers){
-                              foreach($allUsers as $user){
+                          <label for="admin_id" style="font-weight:600;">Host <span style="color:#d00;">*</span></label>
+                          <select name="admin_id" required="required" class="form-control" id="admin_id">
+                            <option value="">Choose a host</option>
+                            <?php
+                            if(!empty($admins)){
+                              foreach($admins as $admin){
                             ?>
-                            <option value="<?= $user->user_id; ?>" <?= $user->user_id == $event->user_id ? 'SELECTED' : '' ?>><?= $user->name; ?></option>
+                            <option value="<?= $admin->admin_id; ?>" <?= (isset($event->admin_id) && $admin->admin_id == $event->admin_id) ? 'SELECTED' : '' ?>><?= e($admin->admin_name); ?></option>
 
                             <?php } } ?>
                           </select>
