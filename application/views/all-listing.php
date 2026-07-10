@@ -29,7 +29,35 @@
 		color: #180f5e;
 	}
 
-	/* Top featured listing cards */
+	/* ---- Sidebar panels: unified card container ---------------------- */
+	.all-filt .filt-alist-near,
+	.all-filt .lhs-cate {
+		background: #fff;
+		border: 1px solid #eceef3;
+		border-radius: 14px;
+		padding: 16px;
+		margin-bottom: 18px;
+		box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+	}
+
+	.all-filt .filt-alist-near .tit,
+	.all-filt .lhs-cate h4 {
+		margin: 0 0 14px 0;
+		padding-bottom: 10px;
+		border-bottom: 1px solid #f0f2f6;
+	}
+
+	.all-filt .near-ser-list ul {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.all-filt .near-ser-list ul li {
+		list-style: none;
+	}
+
+	/* Top featured listing cards (whole card is one link) */
 	.all-filt .near-ser-list ul li .near-bx {
 		border: 1px solid #e6e8ee !important;
 		border-radius: 12px !important;
@@ -39,6 +67,9 @@
 		display: flex !important;
 		align-items: center;
 		gap: 12px;
+		text-decoration: none !important;
+		color: inherit !important;
+		cursor: pointer;
 		transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 	}
 
@@ -55,6 +86,7 @@
 		border-radius: 10px;
 		overflow: hidden;
 		background: #f1f5f9;
+		display: block;
 	}
 
 	.all-filt .near-ser-list ul li .near-bx .ne-1 img {
@@ -78,9 +110,11 @@
 	.all-filt .near-ser-list ul li .near-bx .ne-2 {
 		min-width: 0;
 		flex: 1;
+		display: flex;
+		flex-direction: column;
 	}
 
-	.all-filt .near-ser-list ul li .near-bx .ne-2 h5 {
+	.all-filt .near-ser-list ul li .near-bx .ne-2 .ne-name {
 		font-size: 14px !important;
 		font-weight: 600 !important;
 		color: #1f2937 !important;
@@ -91,13 +125,37 @@
 		line-height: 1.3;
 	}
 
-	.all-filt .near-ser-list ul li .near-bx .ne-2 p {
+	.all-filt .near-ser-list ul li .near-bx .ne-2 .ne-addr {
 		font-size: 12px !important;
 		color: #6b7280 !important;
 		margin: 0 !important;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	/* Chevron affordance so the card clearly reads as clickable */
+	.all-filt .near-ser-list ul li .near-bx .ne-go {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		border-radius: 50%;
+		background: #f1f5f9;
+		color: #64748b;
+		transition: background 0.2s ease, color 0.2s ease;
+	}
+
+	.all-filt .near-ser-list ul li .near-bx .ne-go i {
+		font-size: 18px;
+		line-height: 1;
+	}
+
+	.all-filt .near-ser-list ul li .near-bx:hover .ne-go {
+		background: #180f5e;
+		color: #fff;
 	}
 
 	/* Categories dropdown */
@@ -150,6 +208,100 @@
 	/* NEW badge alignment */
 	.eve-box .al-badge-new {
 		vertical-align: middle;
+	}
+
+	/* ---- Right-side business cards: polish -------------------------- */
+	.all-listing-pg .all-list-sh ul > li {
+		list-style: none;
+	}
+
+	.all-listing-pg .all-list-sh .eve-box {
+		border: 1px solid #eceef3;
+		border-radius: 14px;
+		overflow: hidden;
+		background: #fff;
+		box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+		transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+	}
+
+	.all-listing-pg .all-list-sh .eve-box:hover {
+		transform: translateY(-3px);
+		border-color: #d9dfea;
+		box-shadow: 0 14px 34px rgba(15, 23, 42, 0.10);
+	}
+
+	.all-listing-pg .all-list-sh .eve-box .al-img {
+		position: relative;
+		overflow: hidden;
+	}
+
+	.all-listing-pg .all-list-sh .eve-box .al-img img {
+		transition: transform 0.35s ease;
+	}
+
+	.all-listing-pg .all-list-sh .eve-box:hover .al-img img {
+		transform: scale(1.04);
+	}
+
+	.all-listing-pg .all-list-sh .eve-box h4 a {
+		transition: color 0.2s ease;
+	}
+
+	.all-listing-pg .all-list-sh .eve-box h4 a:hover {
+		color: #180f5e;
+	}
+
+	/* Action buttons (View more / Call Now / WhatsApp) */
+	.all-listing-pg .all-list-sh .eve-box .links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin-top: 12px;
+	}
+
+	.all-listing-pg .all-list-sh .eve-box .links a {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 8px 16px !important;
+		border-radius: 999px !important;
+		font-size: 13px !important;
+		font-weight: 600 !important;
+		line-height: 1.2 !important;
+		text-decoration: none !important;
+		transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+	}
+
+	/* Primary: View more */
+	.all-listing-pg .all-list-sh .eve-box .links a:first-child {
+		background: #180f5e;
+		color: #fff;
+	}
+
+	.all-listing-pg .all-list-sh .eve-box .links a:first-child:hover {
+		background: #241a7a;
+		box-shadow: 0 6px 16px rgba(24, 15, 94, 0.28);
+	}
+
+	/* Secondary: Call Now */
+	.all-listing-pg .all-list-sh .eve-box .links a:not(:first-child) {
+		background: #f1f5f9;
+		color: #1f2937;
+	}
+
+	.all-listing-pg .all-list-sh .eve-box .links a:not(:first-child):hover {
+		background: #e2e8f0;
+	}
+
+	/* WhatsApp keeps its brand colour */
+	.all-listing-pg .all-list-sh .eve-box .links a.what {
+		background: #25d366;
+		color: #fff;
+	}
+
+	.all-listing-pg .all-list-sh .eve-box .links a.what:hover {
+		background: #1ebe57;
+		box-shadow: 0 6px 16px rgba(37, 211, 102, 0.3);
 	}
 </style>
 
@@ -208,22 +360,22 @@
 											$detail     = base_url('listing-details/' . rawurlencode((string) $value->listing_slug));
 									?>
 											<li>
-												<div class="near-bx">
+												<a href="<?= e_attr($detail) ?>" class="near-bx" aria-label="View <?= e_attr($value->listing_name) ?>">
 													<?php if (empty($value->listing_image)): ?>
-														<div class="ne-1 is-placeholder" style="background: <?= e_attr($swatch) ?>;" aria-hidden="true">
+														<span class="ne-1 is-placeholder" style="background: <?= e_attr($swatch) ?>;" aria-hidden="true">
 															<?= e($first_char) ?>
-														</div>
+														</span>
 													<?php else: ?>
-														<div class="ne-1">
+														<span class="ne-1">
 															<?= responsive_img($value->listing_image, $value->listing_name ?? '') ?>
-														</div>
+														</span>
 													<?php endif; ?>
-													<div class="ne-2">
-														<h5><?= e($value->listing_name) ?></h5>
-														<p><?= $has_addr ? e($value->listing_address) : 'Pearland area' ?></p>
-													</div>
-													<a href="<?= e_attr($detail) ?>" aria-label="<?= e_attr($value->listing_name) ?>"></a>
-												</div>
+													<span class="ne-2">
+														<span class="ne-name"><?= e($value->listing_name) ?></span>
+														<span class="ne-addr"><?= $has_addr ? e($value->listing_address) : 'Pearland area' ?></span>
+													</span>
+													<span class="ne-go" aria-hidden="true"><i class="material-icons">chevron_right</i></span>
+												</a>
 											</li>
 									<?php
 										endforeach;
