@@ -303,6 +303,149 @@
 		background: #1ebe57;
 		box-shadow: 0 6px 16px rgba(37, 211, 102, 0.3);
 	}
+
+	/* ---- Fix #1: clean, professional "Top Featured Listing" header --- */
+	.all-filt .filt-alist-near .tit {
+		background: transparent !important;
+		color: #180f5e !important;
+		padding: 0 0 12px 0 !important;
+		margin: 0 0 14px 0 !important;
+		border-radius: 0 !important;
+		border-bottom: 2px solid #f0f2f6 !important;
+	}
+
+	.all-filt .filt-alist-near .tit h4 {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 0 !important;
+		color: #180f5e !important;
+	}
+
+	.all-filt .filt-alist-near .tit h4::before {
+		content: "";
+		display: inline-block;
+		width: 4px;
+		height: 16px;
+		border-radius: 2px;
+		background: #7bb73f;
+	}
+
+	.all-filt .lhs-cate h4 {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.all-filt .lhs-cate h4::before {
+		content: "";
+		display: inline-block;
+		width: 4px;
+		height: 16px;
+		border-radius: 2px;
+		background: #7bb73f;
+	}
+
+	/* ---- Fix #3: tidy the web-dev CTA + enquiry form ----------------- */
+	.all-filt .web-dev-cta-sidebar {
+		padding: 20px 18px !important;
+		border-radius: 14px !important;
+	}
+
+	.all-filt .web-dev-cta-sidebar h4 {
+		font-size: 1rem !important;
+	}
+
+	.all-filt .all-list-filt-form {
+		background: #fff;
+		border: 1px solid #eceef3;
+		border-radius: 14px;
+		padding: 18px 16px;
+		box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+		position: static !important;
+		margin-top: 18px;
+	}
+
+	.all-filt .all-list-filt-form .tit {
+		background: transparent !important;
+		color: #180f5e !important;
+		padding: 0 0 12px 0 !important;
+		margin-bottom: 12px !important;
+		border-bottom: 2px solid #f0f2f6;
+		border-radius: 0 !important;
+	}
+
+	.all-filt .all-list-filt-form .tit h3 {
+		font-size: 16px !important;
+		font-weight: 700 !important;
+		color: #180f5e !important;
+		line-height: 1.35;
+		margin: 0 !important;
+	}
+
+	.all-filt .all-list-filt-form .tit h3 span {
+		display: block;
+		font-size: 12px;
+		font-weight: 500;
+		color: #6b7280;
+		margin-top: 2px;
+	}
+
+	.all-filt .all-list-filt-form .form-control {
+		height: auto;
+		min-height: 42px;
+		border: 1.5px solid #e2e8f0;
+		border-radius: 10px;
+		font-size: 14px;
+		margin-bottom: 10px;
+		padding: 8px 14px;
+		transition: border-color 0.2s ease, box-shadow 0.2s ease;
+	}
+
+	.all-filt .all-list-filt-form .form-control:focus {
+		border-color: #7bb73f;
+		box-shadow: 0 0 0 3px rgba(123, 183, 63, 0.15);
+		outline: none;
+	}
+
+	.all-filt .all-list-filt-form .btn-primary {
+		width: 100%;
+		border-radius: 10px;
+		padding: 11px 16px;
+		font-weight: 600;
+		background: #180f5e;
+		border: none;
+		transition: background 0.2s ease, box-shadow 0.2s ease;
+	}
+
+	.all-filt .all-list-filt-form .btn-primary:hover {
+		background: #241a7a;
+		box-shadow: 0 6px 16px rgba(24, 15, 94, 0.28);
+	}
+
+	/* ---- Fix #4: remove stray "more" / kebab menu on business cards -- */
+	.all-listing-pg .all-list-sh .eve-box .more-menu,
+	.all-listing-pg .all-list-sh .eve-box .card-menu,
+	.all-listing-pg .all-list-sh .eve-box .dropdown,
+	.all-listing-pg .all-list-sh .eve-box .three-dots,
+	.all-listing-pg .all-list-sh .eve-box .options,
+	.all-listing-pg .all-list-sh .eve-box .qvv {
+		display: none !important;
+	}
+
+	/* ---- Fix #5: consistent bottom alignment of the two columns ------ */
+	.all-listing-pg .listing-main-col {
+		margin-bottom: 40px;
+		padding-bottom: 0;
+	}
+
+	.all-listing-pg .listing_col3 {
+		margin-bottom: 40px;
+	}
+
+	.all-listing-pg .row {
+		align-items: stretch;
+	}
 </style>
 
 <!-- START -->
@@ -460,13 +603,7 @@
 						<!-- END -->
 					</div>
 				</div>
-				<div class="col-md-9" style="margin-bottom:110px; overflow-x: hidden;">
-					<div class="f2">
-						<div class="vfilter"> <i class="material-icons ic1 " title="Grid view">apps</i>
-							<i class="material-icons ic2 act" title="List view">format_list_bulleted</i>
-							<i class="material-icons ic3" title="Map view">location_on</i>
-						</div>
-					</div>
+				<div class="col-md-9 listing-main-col" style="overflow-x: hidden;">
 					<?php $slot = 'listing-top'; include APPPATH . 'views/partials/ad_slot.php'; ?>
 					<!-- Loader Image -->
 					<div id="loadingmessage" style="display:none">
@@ -917,11 +1054,7 @@
 					<!-- Pagination Section -->
 					<?php if (isset($link) && !empty($link)): ?>
 						<div class="pagination-wrapper" style="margin: 40px 0; text-align: center; clear: both; width: 100%;">
-							<div class="pagination-container" style="display: inline-block; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; max-width: 100%;">
-								<div class="pagination-info" style="margin-bottom: 15px; color: #718096; font-size: 14px;">
-									<i class="material-icons" style="vertical-align: middle; font-size: 18px; margin-right: 5px;">pages</i>
-									Navigate through listings
-								</div>
+							<div class="pagination-container" style="display: inline-block; background: #fff; padding: 14px 18px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; max-width: 100%;">
 								<div class="pagination-links">
 									<?= $link; ?>
 								</div>
