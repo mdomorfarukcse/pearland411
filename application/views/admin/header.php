@@ -89,6 +89,10 @@
 
                   </li>
 
+                  <li> <a href="<?= base_url() ?>admin/import-listings">Import CSV/Excel</a>
+
+                  </li>
+
                   <li> <a href="<?= base_url() ?>admin/create_duplicate_listing">Create duplicate listings</a></li>
 
                   <li> <a href="<?= base_url() ?>admin/claimed_listings">All Claim Requests</a>
