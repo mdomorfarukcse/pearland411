@@ -39,11 +39,20 @@
 
           <a href="<?= base_url() ?>admin/add_new_listing_sub_category" class="db-tit-btn">Add new Listing sub category</a>
 
+          <form method="post" action="<?= base_url('admin/delete_selected_listing_sub_category'); ?>" id="bulk-sub-category-form">
+
+            <div class="bulk-actions" style="margin: 10px 0;">
+              <button type="submit" id="bulk-delete-sub-btn" class="db-tit-btn" style="background:#d9534f;" disabled>Delete Selected</button>
+              <span id="bulk-selected-sub-count" style="margin-left:10px;color:#666;"></span>
+            </div>
+
           <table data-admin-table class="responsive-table bordered tb_cus" id="pg-resu">
 
             <thead>
 
               <tr>
+
+                <th><input type="checkbox" id="select-all-sub-categories" title="Select all"></th>
 
                 <th>No</th>
 
@@ -76,6 +85,8 @@
               ?>
                   <tr>
 
+                    <td><input type="checkbox" class="sub-category-checkbox" name="sub_category_ids[]" value="<?= $sub_category->sub_category_id; ?>"></td>
+
                     <td><?= $i++; ?></td>
 
                     <td><b class="db-list-rat"><?= $sub_category->sub_category_name; ?></b></td>
@@ -97,6 +108,8 @@
             </tbody>
 
           </table>
+
+          </form>
           <div class="float-right" style="margin-top: 20px;">
 
             <?= $link; ?>
@@ -112,5 +125,57 @@
   </div>
 
 </section>
+
+<script>
+  (function () {
+    var selectAll   = document.getElementById('select-all-sub-categories');
+    var form        = document.getElementById('bulk-sub-category-form');
+    var deleteBtn   = document.getElementById('bulk-delete-sub-btn');
+    var countLabel  = document.getElementById('bulk-selected-sub-count');
+
+    if (!form || !deleteBtn) return;
+
+    function checkboxes() {
+      return Array.prototype.slice.call(form.querySelectorAll('.sub-category-checkbox'));
+    }
+
+    function refresh() {
+      var boxes    = checkboxes();
+      var selected = boxes.filter(function (b) { return b.checked; });
+
+      deleteBtn.disabled = selected.length === 0;
+      countLabel.textContent = selected.length ? selected.length + ' selected' : '';
+
+      if (selectAll) {
+        selectAll.checked = boxes.length > 0 && selected.length === boxes.length;
+        selectAll.indeterminate = selected.length > 0 && selected.length < boxes.length;
+      }
+    }
+
+    if (selectAll) {
+      selectAll.addEventListener('change', function () {
+        checkboxes().forEach(function (b) { b.checked = selectAll.checked; });
+        refresh();
+      });
+    }
+
+    form.addEventListener('change', function (e) {
+      if (e.target && e.target.classList.contains('sub-category-checkbox')) refresh();
+    });
+
+    form.addEventListener('submit', function (e) {
+      var selected = checkboxes().filter(function (b) { return b.checked; });
+      if (selected.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      if (!confirm('Delete the ' + selected.length + ' selected sub ' + (selected.length === 1 ? 'category' : 'categories') + '? This cannot be undone.')) {
+        e.preventDefault();
+      }
+    });
+
+    refresh();
+  })();
+</script>
 
 <!-- END -->

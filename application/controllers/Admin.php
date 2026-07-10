@@ -1080,6 +1080,36 @@ class Admin extends CI_Controller
 			redirect('admin/all_listing_sub_category', 'refresh');
 		}
 	}
+
+	/*==================================
+	Delete Multiple Listing Sub Category
+	===================================*/
+	public function delete_selected_listing_sub_category()
+	{
+		$ids = $this->input->post('sub_category_ids');
+
+		if (empty($ids) || !is_array($ids)) {
+			$this->session->set_flashdata('message', 'No sub categories were selected to delete.');
+			redirect('admin/all_listing_sub_category', 'refresh');
+			return;
+		}
+
+		$deleted = 0;
+		foreach ($ids as $id) {
+			$id = (int) $id;
+			if ($id > 0 && $this->adminmodel->deleteListingSubCategory($id)) {
+				$deleted++;
+			}
+		}
+
+		if ($deleted > 0) {
+			$this->session->set_flashdata('message', 'Successfully deleted ' . $deleted . ' sub ' . ($deleted === 1 ? 'category' : 'categories') . '!!');
+		} else {
+			$this->session->set_flashdata('message', 'Deleting selected sub categories failed!!');
+		}
+
+		redirect('admin/all_listing_sub_category', 'refresh');
+	}
 	/*====================
 	Get Listing Sub Category
 	=====================*/
