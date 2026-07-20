@@ -2245,6 +2245,12 @@ class User extends CI_Controller
 			$data['subscription_limits'] = $this->usermodel->getSubscriptionLimits($data['userInfo']->user_id);
 			$data['usage_counts'] = $this->usermodel->getAllUsageCounts($data['userInfo']->user_id);
 
+			// Manage-plan panel: available plans + Helcim front-end config.
+			$data['all_plans'] = $this->usermodel->getActivePlans();
+			$this->load->library('helcim_lib');
+			$data['helcim_configured'] = $this->helcim_lib->is_configured();
+			$data['helcimpay_js_url']  = $this->helcim_lib->helcimpay_js_url();
+
 			// Transaction history (added for account transactions tab)
 			if (method_exists($this->usermodel, 'getUserTransactions')) {
 				$data['user_transactions'] = $this->usermodel->getUserTransactions($data['userInfo']->user_id, 50);
@@ -6451,6 +6457,7 @@ class User extends CI_Controller
 
 		$plan_id     = (int) $this->input->post('plan_id');
 		$duration_id = $this->input->post('duration_id') ? (int) $this->input->post('duration_id') : null;
+		$auto_renew  = $this->input->post('auto_renew') === '1' ? 1 : 0;
 
 		$plan = $this->usermodel->getPlanByIdForPricing($plan_id);
 		if (!$plan) {
@@ -6491,6 +6498,8 @@ class User extends CI_Controller
 			'amount'        => $amount,
 			'currency'      => $this->helcim_lib->currency(),
 			'user_id'       => (int) $user['logged_id'],
+			'auto_renew'    => $auto_renew,
+			'mode'          => 'new',
 		));
 
 		return $this->output->set_output(json_encode(array(
@@ -6545,12 +6554,39 @@ class User extends CI_Controller
 		$approval_code = isset($txn['approvalCode']) ? $txn['approvalCode'] : null;
 		$card_token    = isset($txn['cardToken']) ? $txn['cardToken'] : null;
 
+		// Upgrade mode only charges the prorated difference and switches the
+		// plan in place (keeping the current term); see switch_plan().
+		if (isset($pending['mode']) && $pending['mode'] === 'upgrade') {
+			$ok = $this->usermodel->applyPlanUpgrade(
+				(int) $pending['user_id'],
+				(int) $pending['plan_id'],
+				(float) $pending['amount'],
+				$pending['currency'],
+				$helcim_txn_id,
+				$approval_code
+			);
+			if (!$ok) {
+				return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Payment verified but the upgrade could not be applied. Please contact support with transaction id ' . $helcim_txn_id . '.')));
+			}
+			$plan = $this->usermodel->getPlanByIdForPricing((int) $pending['plan_id']);
+			$this->session->unset_userdata('helcim_pending');
+			$this->session->set_userdata('checkout_success_data', array(
+				'plan_name'      => $plan ? $plan->name : 'Subscription',
+				'amount'         => (float) $pending['amount'],
+				'currency'       => $pending['currency'],
+				'transaction_id' => $helcim_txn_id,
+				'subscription_id' => null,
+			));
+			return $this->output->set_output(json_encode(array('success' => true, 'redirect' => base_url('checkout-success'))));
+		}
+
 		$sub_id = $this->usermodel->activateHelcimSubscription(array(
 			'user_id'               => (int) $pending['user_id'],
 			'plan_id'               => (int) $pending['plan_id'],
 			'duration_id'           => $pending['duration_id'] ? (int) $pending['duration_id'] : null,
 			'amount'                => (float) $pending['amount'],
 			'currency'              => $pending['currency'],
+			'auto_renew'            => !empty($pending['auto_renew']) ? 1 : 0,
 			'helcim_transaction_id' => $helcim_txn_id,
 			'helcim_approval_code'  => $approval_code,
 			'helcim_card_token'     => $card_token,
@@ -6596,9 +6632,102 @@ class User extends CI_Controller
 		}
 
 		// Signature valid — record it. Reconciliation of specific event types
-		// (recurring success/failure) is handled by the renewal job in Sprint 7.
+		// (recurring success/failure) is handled by the renewal job.
 		log_message('info', 'Helcim webhook received: ' . $raw);
 		return $this->output->set_output(json_encode(array('ok' => true)));
+	}
+
+	/**
+	 * AJAX — start a plan change from the account page. Upgrades (target price
+	 * > current) initialize a HelcimPay.js session for the PRORATED difference
+	 * and return a checkoutToken (mode=upgrade, finalized by process_checkout).
+	 * Downgrades / same price are scheduled for the next renewal.
+	 * URL: /plan-change-init (POST)
+	 */
+	public function plan_change_init()
+	{
+		$this->output->set_content_type('application/json');
+		if ($this->input->method() !== 'post' || !$this->session->userdata('logged_user')) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
+		}
+		$user    = $this->session->userdata('logged_user');
+		$user_id = (int) $user['logged_id'];
+		$target_plan_id = (int) $this->input->post('plan_id');
+
+		$current = $this->usermodel->getUserSubscription($user_id);
+		if (!$current) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'No active subscription. Please choose a plan first.')));
+		}
+		$target = $this->usermodel->getPlanByIdForPricing($target_plan_id);
+		if (!$target) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Invalid plan.')));
+		}
+		if ((int) $target->id === (int) $current->plan_id) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'You are already on this plan.')));
+		}
+
+		$current_price = (float) $current->total_amount > 0 ? (float) $current->total_amount : (float) $current->price;
+		$target_price  = (float) $target->price;
+
+		// Downgrade / same price -> schedule at renewal.
+		if ($target_price <= $current_price) {
+			$this->usermodel->scheduleDowngrade($user_id, $target_plan_id);
+			return $this->output->set_output(json_encode(array(
+				'success' => true, 'mode' => 'downgrade',
+				'message' => 'Your plan will change to ' . $target->name . ' at your next renewal.',
+			)));
+		}
+
+		// Upgrade -> charge the prorated difference for the remaining term.
+		$term_days = (int) $current->duration_days ?: 30;
+		$remaining = max(0, (int) ceil((strtotime($current->end_date) - time()) / 86400));
+		$remaining = min($remaining, $term_days);
+		$prorated  = round(($target_price - $current_price) * ($remaining / max(1, $term_days)), 2);
+
+		if ($prorated < 0.50) {
+			// Negligible difference — switch now, no charge.
+			$this->usermodel->applyPlanUpgrade($user_id, $target_plan_id, 0, ($current->currency ?: 'USD'), null, null);
+			return $this->output->set_output(json_encode(array('success' => true, 'mode' => 'switched', 'message' => 'You are now on ' . $target->name . '.')));
+		}
+
+		$this->load->library('helcim_lib');
+		$init = $this->helcim_lib->initialize_checkout($prorated, null, array(
+			'description' => 'Pearland411 upgrade to ' . $target->name,
+		));
+		if (!$init['success']) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Could not start payment. Please try again.')));
+		}
+		$this->session->set_userdata('helcim_pending', array(
+			'checkoutToken' => $init['checkoutToken'],
+			'secretToken'   => $init['secretToken'],
+			'plan_id'       => $target_plan_id,
+			'duration_id'   => null,
+			'amount'        => $prorated,
+			'currency'      => $this->helcim_lib->currency(),
+			'user_id'       => $user_id,
+			'auto_renew'    => 0,
+			'mode'          => 'upgrade',
+		));
+		return $this->output->set_output(json_encode(array(
+			'success' => true, 'mode' => 'upgrade',
+			'checkoutToken' => $init['checkoutToken'], 'amount' => $prorated,
+		)));
+	}
+
+	/** Cancel auto-renew; the plan runs to end_date. URL: /cancel-subscription (POST) */
+	public function cancel_subscription()
+	{
+		if ($this->input->method() !== 'post' || !$this->session->userdata('logged_user')) {
+			redirect('user/my_account');
+			return;
+		}
+		$user = $this->session->userdata('logged_user');
+		if ($this->usermodel->cancelAutoRenew((int) $user['logged_id'])) {
+			$this->session->set_flashdata('message', 'Auto-renew cancelled. Your plan stays active until the end of the current term.');
+		} else {
+			$this->session->set_flashdata('error', 'No active subscription to cancel.');
+		}
+		redirect('user/my_account');
 	}
 
 	/**

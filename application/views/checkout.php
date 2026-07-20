@@ -434,6 +434,10 @@
 
                     <?php if (!empty($helcim_configured)): ?>
                     <div id="helcim-pay-error" style="display:none; background:#f8d7da; border:1px solid #f5c6cb; color:#721c24; padding:12px; border-radius:8px; margin-bottom:16px;"></div>
+                    <label style="display:flex; align-items:center; gap:8px; margin-bottom:14px; font-size:14px;">
+                        <input type="checkbox" id="auto_renew" name="auto_renew" value="1">
+                        Automatically renew my plan each term (you can cancel anytime from your account)
+                    </label>
                     <button type="button" class="checkout-btn" id="helcim-pay-btn">Pay securely</button>
                     <p style="font-size:12px; color:#777; margin-top:10px;">Secured by Helcim. Your card details never touch our servers.</p>
                     <?php else: ?>
@@ -740,9 +744,11 @@
 
         var planEl = document.querySelector('[name="plan_id"]');
         var durEl  = document.getElementById('duration_id');
+        var arEl   = document.getElementById('auto_renew');
         var body   = new URLSearchParams();
         body.append('plan_id', planEl ? planEl.value : '');
         body.append('duration_id', durEl ? durEl.value : '');
+        body.append('auto_renew', (arEl && arEl.checked) ? '1' : '0');
 
         fetch('<?= base_url('helcim-init') ?>', {
             method: 'POST',

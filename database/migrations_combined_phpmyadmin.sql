@@ -483,4 +483,25 @@ SET @s := IF(@e = 0, 'ALTER TABLE `payment_cards` ADD COLUMN `helcim_customer_co
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
+-- ============================================================
+-- 0013_subscription_lifecycle.sql
+-- Recurring billing lifecycle columns on `subscriptions`.
+-- ============================================================
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='subscriptions' AND COLUMN_NAME='renewal_attempts');
+SET @s := IF(@e = 0, 'ALTER TABLE `subscriptions` ADD COLUMN `renewal_attempts` INT(11) NOT NULL DEFAULT 0 COMMENT ''Consecutive failed auto-renew charges''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='subscriptions' AND COLUMN_NAME='last_renewal_error');
+SET @s := IF(@e = 0, 'ALTER TABLE `subscriptions` ADD COLUMN `last_renewal_error` VARCHAR(255) DEFAULT NULL COMMENT ''Last gateway error on renewal''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='subscriptions' AND COLUMN_NAME='grace_until');
+SET @s := IF(@e = 0, 'ALTER TABLE `subscriptions` ADD COLUMN `grace_until` DATETIME DEFAULT NULL COMMENT ''Access kept until this time during dunning''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='subscriptions' AND COLUMN_NAME='pending_plan_id');
+SET @s := IF(@e = 0, 'ALTER TABLE `subscriptions` ADD COLUMN `pending_plan_id` INT(11) DEFAULT NULL COMMENT ''Scheduled downgrade target, applied at renewal''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
 SET FOREIGN_KEY_CHECKS = 1;
