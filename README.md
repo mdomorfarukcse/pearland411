@@ -34,6 +34,18 @@ mysql -u <user> -p <db> < database/migrations/0003_newsletter_campaigns.sql
 mysql -u <user> -p <db> < database/migrations/0004_rate_limits.sql
 mysql -u <user> -p <db> < database/migrations/0005_admin_roles.sql
 mysql -u <user> -p <db> < database/migrations/0006_ad_zones.sql
+mysql -u <user> -p <db> < database/migrations/0007_site_settings.sql
+mysql -u <user> -p <db> < database/migrations/0008_event_admin_host.sql
+mysql -u <user> -p <db> < database/migrations/0009_rental_price_widen.sql
+mysql -u <user> -p <db> < database/migrations/0010_plan_capabilities.sql
+mysql -u <user> -p <db> < database/migrations/0011_service_registry.sql
+mysql -u <user> -p <db> < database/migrations/0012_helcim_billing.sql
+mysql -u <user> -p <db> < database/migrations/0013_subscription_lifecycle.sql
+
+# Optional: give the existing Basic/Standard/Premium plans sensible
+# freemium editing capabilities (photos/map/services/video). Edit any
+# time in /admin/pricing.
+mysql -u <user> -p <db> < database/seeds/plan_capability_defaults.sql
 
 # If you're importing through phpMyAdmin instead, use the single
 # bundled file:
@@ -62,7 +74,8 @@ Every secret / per-environment value lives in `.env` (see
 | `DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME` | MySQL credentials. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_CRYPTO` | Outgoing email. For Gmail use an App Password, not the account password. |
 | `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | "From" header on transactional + newsletter email. |
-| `AUTHNET_*` | Authorize.Net credentials. While these are empty / sandbox the public `/checkout` flow refuses card input and shows a "coming soon" notice. |
+| `HELCIM_API_TOKEN` | Helcim API token (Settings ▸ Integrations ▸ API). While empty, `/checkout` shows a "being set up" notice instead of the pay button — this is the live-payments gate, so no separate feature flag is needed. |
+| `HELCIM_WEBHOOK_VERIFIER_TOKEN` | Verifier token for signing inbound Helcim webhooks (`/helcim-webhook`). |
 
 ## First sign-in
 
@@ -97,8 +110,10 @@ This branch contains the security and feature work described in
 - Rate limiting (`application/libraries/Rate_limit.php`) on
   login / register / password-reset / enquiry / review /
   newsletter signup / service-request / claim-listing.
-- Mock checkout disabled until Authorize.Net keys are wired —
-  `/checkout` no longer accepts card data or stores PAN/CVV.
+- Payments run through **Helcim** (HelcimPay.js). Card data is
+  tokenized client-side — the PAN never reaches the server; the server
+  only validates the returned transaction hash against a per-checkout
+  secret. Listing edit is ownership-guarded.
 - Real password reset + email-verification flows + Mailer
   library wrapping CI's email class around `.env` SMTP config.
 
@@ -138,7 +153,7 @@ application/
   models/            Adminmodel.php, Usermodel.php
   views/             public/* and admin/*
   helpers/           image_helper.php (safe_upload_image, thumb_url, responsive_img), view_helper.php (escaping + JSON-LD)
-  libraries/         Authorize_net_lib.php, Mailer.php, Rate_limit.php
+  libraries/         Helcim_lib.php, Mailer.php, Rate_limit.php
   hooks/             Csrf_inject.php
 assets/              CSS / JS / images (CDN-loaded JS via headers)
 database/
@@ -169,11 +184,29 @@ PROJECT_AUDIT_REPORT.md   the full audit with section-by-section findings
 The 10 seed services in `0002_services.sql` are placeholders. Edit
 or replace them at `/admin/services` to match the real catalog.
 
+## Packages, services & billing (2024 redesign)
+
+- **Freemium listings.** A claimed listing can edit name / phone / email
+  free; photos, map, services, a YouTube video and SEO details unlock per
+  the owner's package (capability flags on `plans`, set in `/admin/pricing`).
+- **Service registry.** `/admin/setting` ▸ Services turns optional
+  sections (events, real estate, classifieds, news, blogs, products,
+  videos) on/off — gating the admin sidebar, public nav and their pages.
+  They ship **off**; activate what you want live. This is also the
+  "hide a section for now" switch.
+- **Helcim billing.** `/checkout` uses HelcimPay.js. Buyers can opt into
+  **auto-renew** (the card token is vaulted). Upgrades on the account
+  page charge a prorated difference immediately; downgrades apply at the
+  next renewal; cancel turns off auto-renew and runs to term end.
+- **Renewal cron** — schedule daily:
+  ```
+  php index.php cli renew_subscriptions
+  ```
+  It charges due vaulted cards, extends the term on success, and applies
+  a 3-retry / 2-day-grace dunning policy (with email) before expiring.
+
 ## Known follow-ups
 
-- **Authorize.Net wiring** — credentials live in `.env`; once
-  populated, `/checkout` needs to be re-enabled and pointed at
-  `Authorize_net_lib`.
 - **Migrate off CodeIgniter 3** — CI3 is EOL; see
   `PROJECT_AUDIT_REPORT.md` §12 for the long-term recommendation.
 

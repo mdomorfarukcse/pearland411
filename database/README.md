@@ -35,6 +35,16 @@ mysql -u <user> -p <db_name> < database/migrations/0003_newsletter_campaigns.sql
 mysql -u <user> -p <db_name> < database/migrations/0004_rate_limits.sql
 mysql -u <user> -p <db_name> < database/migrations/0005_admin_roles.sql
 mysql -u <user> -p <db_name> < database/migrations/0006_ad_zones.sql
+mysql -u <user> -p <db_name> < database/migrations/0007_site_settings.sql
+mysql -u <user> -p <db_name> < database/migrations/0008_event_admin_host.sql
+mysql -u <user> -p <db_name> < database/migrations/0009_rental_price_widen.sql
+mysql -u <user> -p <db_name> < database/migrations/0010_plan_capabilities.sql
+mysql -u <user> -p <db_name> < database/migrations/0011_service_registry.sql
+mysql -u <user> -p <db_name> < database/migrations/0012_helcim_billing.sql
+mysql -u <user> -p <db_name> < database/migrations/0013_subscription_lifecycle.sql
+
+# Optional convenience seed (not a migration):
+mysql -u <user> -p <db_name> < database/seeds/plan_capability_defaults.sql
 ```
 
 ## Why each migration exists
