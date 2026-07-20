@@ -364,6 +364,52 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Field-level listing capabilities (freemium editing) -->
+                        <hr>
+                        <h6 class="mb-2"><strong>Listing Editing Capabilities</strong>
+                            <small class="text-muted">— what a listing owner on this plan may edit beyond name/phone/email</small></h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="photoLimit">Photo Limit</label>
+                                    <input type="number" class="form-control" name="photo_limit" id="photoLimit" placeholder="Gallery photos (-1 unlimited, 0 none)">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group"><div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" name="can_photos" id="canPhotos" value="1">
+                                    <label class="custom-control-label" for="canPhotos">Upload Photos</label>
+                                </div></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group"><div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" name="can_map" id="canMap" value="1">
+                                    <label class="custom-control-label" for="canMap">Add Map</label>
+                                </div></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group"><div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" name="can_services" id="canServices" value="1">
+                                    <label class="custom-control-label" for="canServices">Add Services</label>
+                                </div></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group"><div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" name="allow_video" id="allowVideo" value="1">
+                                    <label class="custom-control-label" for="allowVideo">Add YouTube Video</label>
+                                </div></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group"><div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" name="can_extra_details" id="canExtraDetails" value="1">
+                                    <label class="custom-control-label" for="canExtraDetails">Extra Details</label>
+                                </div></div>
+                            </div>
+                        </div>
+
                         <div class="form-group">
                             <label for="planDescription">Plan Description</label>
                             <textarea class="form-control" name="description" id="planDescription" rows="3" placeholder="Enter plan description"></textarea>
@@ -448,6 +494,15 @@
                         $('#featuredListing').prop('checked', response.featured_listing == 1);
                         $('#prioritySupport').prop('checked', response.priority_support == 1);
                         $('#analyticsAccess').prop('checked', response.analytics_access == 1);
+
+                        // Field-level listing capabilities (freemium editing)
+                        $('#photoLimit').val(response.photo_limit || 0);
+                        $('#canPhotos').prop('checked', response.can_photos == 1);
+                        $('#canMap').prop('checked', response.can_map == 1);
+                        $('#canServices').prop('checked', response.can_services == 1);
+                        $('#allowVideo').prop('checked', response.allow_video == 1);
+                        $('#canExtraDetails').prop('checked', response.can_extra_details == 1);
+
                         $('#planDescription').val(response.description || '');
 
                         // Update form for editing

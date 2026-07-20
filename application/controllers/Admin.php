@@ -5616,6 +5616,13 @@ class Admin extends CI_Controller
 				'featured_listing' => $this->input->post('featured_listing') ? 1 : 0,
 				'priority_support' => $this->input->post('priority_support') ? 1 : 0,
 				'analytics_access' => $this->input->post('analytics_access') ? 1 : 0,
+				// Field-level listing capabilities (freemium editing)
+				'can_photos' => $this->input->post('can_photos') ? 1 : 0,
+				'photo_limit' => $this->input->post('photo_limit') !== null ? (int) $this->input->post('photo_limit') : 0,
+				'can_map' => $this->input->post('can_map') ? 1 : 0,
+				'can_services' => $this->input->post('can_services') ? 1 : 0,
+				'can_extra_details' => $this->input->post('can_extra_details') ? 1 : 0,
+				'allow_video' => $this->input->post('allow_video') ? 1 : 0,
 				'is_active' => 1,
 				'sort_order' => 1,
 				'created_at' => date('Y-m-d H:i:s'),
@@ -5706,6 +5713,13 @@ class Admin extends CI_Controller
 				'featured_listing' => $this->input->post('featured_listing') ? 1 : 0,
 				'priority_support' => $this->input->post('priority_support') ? 1 : 0,
 				'analytics_access' => $this->input->post('analytics_access') ? 1 : 0,
+				// Field-level listing capabilities (freemium editing)
+				'can_photos' => $this->input->post('can_photos') ? 1 : 0,
+				'photo_limit' => $this->input->post('photo_limit') !== null ? (int) $this->input->post('photo_limit') : 0,
+				'can_map' => $this->input->post('can_map') ? 1 : 0,
+				'can_services' => $this->input->post('can_services') ? 1 : 0,
+				'can_extra_details' => $this->input->post('can_extra_details') ? 1 : 0,
+				'allow_video' => $this->input->post('allow_video') ? 1 : 0,
 				'updated_at' => date('Y-m-d H:i:s')
 			);
 

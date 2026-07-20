@@ -149,6 +149,26 @@ class User extends CI_Controller
 	}
 
 	/**
+	 * Field-level listing capabilities for a listing owner, derived from
+	 * their active plan (freemium model). With no active plan — a claimed
+	 * listing on the free tier — every rich capability is off; only
+	 * name / phone / email stay editable. `photo_limit` is -1 = unlimited,
+	 * 0 = none, N = max gallery photos.
+	 */
+	private function listingCapabilities($owner_id)
+	{
+		$sub = $this->usermodel->getUserSubscription((int) $owner_id);
+		return array(
+			'can_photos'        => (bool) ($sub && !empty($sub->can_photos)),
+			'photo_limit'       => (int)  ($sub && isset($sub->photo_limit) ? $sub->photo_limit : 0),
+			'can_map'           => (bool) ($sub && !empty($sub->can_map)),
+			'can_services'      => (bool) ($sub && !empty($sub->can_services)),
+			'can_video'         => (bool) ($sub && !empty($sub->allow_video)),
+			'can_extra_details' => (bool) ($sub && !empty($sub->can_extra_details)),
+		);
+	}
+
+	/**
 	 * Custom URL routing handler
 	 * Handles hyphenated URLs like all-category/category-search
 	 */
@@ -3479,6 +3499,11 @@ class User extends CI_Controller
 		// (Login itself is already enforced by the constructor whitelist.)
 		if (!$this->requireOwnedListing($data['listing'])) return;
 
+		// Field-level capabilities from the owner's plan (freemium gating).
+		// Exposed to the view so locked fields render disabled + "upgrade".
+		$caps = $this->listingCapabilities($data['listing']->user_id);
+		$data['caps'] = $caps;
+
 		if ($data['listing']->category_id != '') {
 			$data['sub_category_listing'] = $this->adminmodel->ListingSubCategoryByCateId($data['listing']->category_id);
 		}
@@ -3527,7 +3552,14 @@ class User extends CI_Controller
 					'listing_slug' => $listing_slug
 				);
 
-				if ($_FILES && $_FILES['listing_profile_image']['name']) {
+				// Freemium gating — drop rich fields the owner's plan does not
+				// permit so a crafted POST cannot bypass the locked inputs.
+				if (!$caps['can_map'])           { unset($info['listing_lat'], $info['listing_lng']); }
+				if (!$caps['can_services'])      { unset($info['service_offered']); }
+				if (!$caps['can_video'])         { unset($info['listing_video']); }
+				if (!$caps['can_extra_details']) { unset($info['listing_seo_title'], $info['listing_seo_keywords'], $info['listing_seo_description']); }
+
+				if ($caps['can_photos'] && $_FILES && $_FILES['listing_profile_image']['name']) {
 					$img_info = [
 						'upload_path' => 'images/listings',
 						'quality'     => '60%',
@@ -3540,9 +3572,13 @@ class User extends CI_Controller
 				}
 
 				// Handle Gallery Images Upload for User Edit
-				if ($_FILES && isset($_FILES['listing_image_gallery']['name'][0]) && !empty($_FILES['listing_image_gallery']['name'][0])) {
+				if ($caps['can_photos'] && $_FILES && isset($_FILES['listing_image_gallery']['name'][0]) && !empty($_FILES['listing_image_gallery']['name'][0])) {
 					$gallery_images = [];
 					$files_count = count($_FILES['listing_image_gallery']['name']);
+					// Cap gallery photos to the plan's photo_limit (-1 = unlimited).
+					if ($caps['photo_limit'] >= 0 && $files_count > $caps['photo_limit']) {
+						$files_count = (int) $caps['photo_limit'];
+					}
 
 					// Debug: Log gallery upload attempt
 					error_log("USER EDIT Gallery upload attempt - Files count: " . $files_count);

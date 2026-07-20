@@ -1,3 +1,21 @@
+<?php
+// Freemium field gating. $caps comes from User::edit_listing (owner's plan
+// capabilities). Default to all-unlocked if somehow absent so the form still
+// works. cap_lock_note() renders the inline "upgrade to unlock" hint.
+$caps = isset($caps) && is_array($caps) ? $caps : array(
+	'can_photos' => true, 'photo_limit' => -1, 'can_map' => true,
+	'can_services' => true, 'can_video' => true, 'can_extra_details' => true,
+);
+if (!function_exists('cap_lock_note')) {
+	function cap_lock_note($allowed)
+	{
+		if ($allowed) return '';
+		return '<small class="form-text text-warning" style="display:block;margin-top:4px;">'
+			. '&#128274; Locked on your current package. '
+			. '<a href="' . base_url('pricing-plan') . '">Upgrade to unlock</a>.</small>';
+	}
+}
+?>
 <style>
 	/* Multi-step form styles */
 	.multistep-progress-bar {
@@ -318,12 +336,13 @@
 							<div class="row">
 								<div class="col-md-6">
 									<div class="form-group">
-										<input type="text" name="listing_lat" class="form-control" placeholder="Latitude i.e 40.730610" value="<?= $listing->listing_lat ?>">
+										<input type="text" name="listing_lat" class="form-control" placeholder="Latitude i.e 40.730610" value="<?= $listing->listing_lat ?>" <?= $caps['can_map'] ? '' : 'disabled' ?>>
 									</div>
 								</div>
 								<div class="col-md-6">
 									<div class="form-group">
-										<input type="text" name="listing_lng" class="form-control" placeholder="Longitude i.e -73.935242" value="<?= $listing->listing_lng ?>">
+										<input type="text" name="listing_lng" class="form-control" placeholder="Longitude i.e -73.935242" value="<?= $listing->listing_lng ?>" <?= $caps['can_map'] ? '' : 'disabled' ?>>
+											<?= cap_lock_note($caps['can_map']) ?>
 									</div>
 								</div>
 							</div>
@@ -384,7 +403,8 @@
 								</div>
 								<div class="col-md-12">
 									<div class="form-group">
-										<textarea class="form-control" id="service_offered" name="service_offered" placeholder="Enter Offered Services ... &#10;(i.e) Car Wash, Car Service"><?= $listing->service_offered ?></textarea>
+										<textarea class="form-control" id="service_offered" name="service_offered" placeholder="Enter Offered Services ... &#10;(i.e) Car Wash, Car Service" <?= $caps['can_services'] ? '' : 'disabled' ?>><?= $listing->service_offered ?></textarea>
+											<?= cap_lock_note($caps['can_services']) ?>
 									</div>
 								</div>
 							</div>
@@ -402,7 +422,8 @@
 										<div class="col-md-12">
 											<div class="form-group">
 												<label>Upload Listing Logo</label>
-												<input type="file" name="listing_profile_image" class="form-control">
+												<input type="file" name="listing_profile_image" class="form-control" <?= $caps['can_photos'] ? '' : 'disabled' ?>>
+													<?= cap_lock_note($caps['can_photos']) ?>
 												<?php if (isset($listing) && !empty($listing->listing_image)) { ?>
 													<img src="<?= base_url($listing->listing_image) ?>" alt="Current Logo" style="max-width:120px; margin-top:10px;" />
 												<?php } ?>
@@ -414,7 +435,9 @@
 										<div class="col-md-12">
 											<div class="form-group">
 												<label>Upload Gallery Images (Multiple Images)</label>
-												<input type="file" name="listing_image_gallery[]" class="form-control" multiple accept="image/*">
+												<input type="file" name="listing_image_gallery[]" class="form-control" multiple accept="image/*" <?= $caps['can_photos'] ? '' : 'disabled' ?>>
+													<?php if ($caps['can_photos'] && $caps['photo_limit'] >= 0): ?><small class="form-text text-muted">Your package allows up to <?= (int) $caps['photo_limit'] ?> gallery photo(s).</small><?php endif; ?>
+													<?= cap_lock_note($caps['can_photos']) ?>
 												<small class="form-text text-muted">You can select multiple images for your gallery. Supported formats: JPG, PNG, GIF</small>
 												<?php if (isset($listing) && !empty($listing->listing_image_gallery)) {
 													$gallery_images = json_decode($listing->listing_image_gallery, true);
@@ -440,7 +463,8 @@
 											<div class="row">
 												<div class="col-md-12">
 													<div class="form-group">
-														<textarea id="listing_video" name="listing_video" class="form-control" placeholder="Paste Your Youtube Url here"><?= $listing->listing_video ?></textarea>
+														<textarea id="listing_video" name="listing_video" class="form-control" placeholder="Paste Your Youtube Url here" <?= $caps['can_video'] ? '' : 'disabled' ?>><?= $listing->listing_video ?></textarea>
+														<?= cap_lock_note($caps['can_video']) ?>
 													</div>
 												</div>
 											</div>
@@ -457,15 +481,16 @@
 								<div class="login add-list-map">
 									<div class="form-group">
 										<label>Page title</label>
-										<input type="text" name="listing_seo_title" placeholder="" class="form-control" value="<?= $listing->listing_seo_title ?>">
+										<input type="text" name="listing_seo_title" placeholder="" class="form-control" value="<?= $listing->listing_seo_title ?>" <?= $caps['can_extra_details'] ? '' : 'disabled' ?>>
 									</div>
 									<div class="form-group">
 										<label>Page keywords</label>
-										<input type="text" name="listing_seo_keywords" class="form-control" placeholder="i.e:wedding hall, best wedding hall" value="<?= $listing->listing_seo_keywords ?>">
+										<input type="text" name="listing_seo_keywords" class="form-control" placeholder="i.e:wedding hall, best wedding hall" value="<?= $listing->listing_seo_keywords ?>" <?= $caps['can_extra_details'] ? '' : 'disabled' ?>>
 									</div>
 									<div class="form-group">
 										<label>Page descriptions</label>
-										<input type="text" name="listing_seo_description" class="form-control" value="<?= $listing->listing_seo_description ?>">
+										<input type="text" name="listing_seo_description" class="form-control" value="<?= $listing->listing_seo_description ?>" <?= $caps['can_extra_details'] ? '' : 'disabled' ?>>
+											<?= cap_lock_note($caps['can_extra_details']) ?>
 									</div>
 								</div>
 							</div>
