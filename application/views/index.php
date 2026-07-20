@@ -3581,9 +3581,9 @@ Database Tables Required:
       <li><a href="/"><img src="../assets/images/icon/home.png">Home</a></li>
       <li><span class="mob-sear"><img src="../assets/images/icon/search1.png">Search</span></li>
       <li><a href="all-category" class="act"><img src="../assets/images/icon/shop.png">Services</a></li>
-      <li><a href="event"><img src="../assets/images/icon/calendar.png">Events</a></li>
-      <li><a href="all-products"><img src="../assets/images/icon/cart.png">Products</a></li>
-      <li><a href="all-blog"><img src="../assets/images/icon/blog1.png">Blogs</a></li>
+<?php if (site_setting('service_events_enabled','1') !== '0'): ?><li><a href="event"><img src="../assets/images/icon/calendar.png">Events</a></li><?php endif; ?>
+      <?php if (site_setting('service_products_enabled','1') !== '0'): ?><li><a href="all-products"><img src="../assets/images/icon/cart.png">Products</a></li><?php endif; ?>
+      <?php if (site_setting('service_blog_enabled','1') !== '0'): ?><li><a href="all-blog"><img src="../assets/images/icon/blog1.png">Blogs</a></li><?php endif; ?>
     </ul>
   </div>
   <!-- END -->

@@ -611,13 +611,13 @@
 
 						<li><a href="<?= base_url() ?>all-listing" class="">Directory</a></li>
 
-						<li><a href="<?= base_url() ?>event" class="">Events</a></li>
+<?php if (site_setting('service_events_enabled','1') !== '0'): ?><li><a href="<?= base_url() ?>event" class="">Events</a></li><?php endif; ?>
 
-						<li><a href="<?= base_url() ?>news" class="">News</a></li>
+<?php if (site_setting('service_news_enabled','1') !== '0'): ?><li><a href="<?= base_url() ?>news" class="">News</a></li><?php endif; ?>
 
-						<li><a href="<?= base_url() ?>videos" class="">Videos</a></li>
+<?php if (site_setting('service_videos_enabled','1') !== '0'): ?><li><a href="<?= base_url() ?>videos" class="">Videos</a></li><?php endif; ?>
 
-						<li><a href="<?= base_url() ?>classifieds" class="">Classifieds</a></li>
+<?php if (site_setting('service_classifieds_enabled','1') !== '0'): ?><li><a href="<?= base_url() ?>classifieds" class="">Classifieds</a></li><?php endif; ?>
 
 						<li><a href="<?= base_url() ?>user/all_listing/sports-clubs" class="">Sports</a></li>
 

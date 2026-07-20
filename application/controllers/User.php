@@ -149,6 +149,22 @@ class User extends CI_Controller
 	}
 
 	/**
+	 * Layer-1 service gate. Optional content sections (events / news / blog /
+	 * products / videos / classifieds / real estate) are switched on/off by the
+	 * admin via site_settings. When a section is off its public pages 404.
+	 * Defaults to '1' (visible) so a site that has not run migration 0011 keeps
+	 * its current behaviour. Callers must `return;` when this returns FALSE.
+	 */
+	private function requireService($key)
+	{
+		if (site_setting($key, '1') === '0') {
+			show_404();
+			return false;
+		}
+		return true;
+	}
+
+	/**
 	 * Field-level listing capabilities for a listing owner, derived from
 	 * their active plan (freemium model). With no active plan — a claimed
 	 * listing on the free tier — every rich capability is off; only
@@ -417,6 +433,7 @@ class User extends CI_Controller
 	// NEWS Page
 	public function news()
 	{
+		if (!$this->requireService('service_news_enabled')) return;
 		$this->load->model('usermodel');
 		$this->load->library('pagination');
 
@@ -1026,6 +1043,7 @@ class User extends CI_Controller
 	 */
 	public function blog_details($blog_slug = null)
 	{
+		if (!$this->requireService('service_blog_enabled')) return;
 		if (!$blog_slug) {
 			show_404();
 			return;
@@ -1240,6 +1258,7 @@ class User extends CI_Controller
 
 	public function all_products()
 	{
+		if (!$this->requireService('service_products_enabled')) return;
 		if ($this->session->userdata('logged_user')) {
 			$data['user'] = $this->usermodel->getUserInformation();
 		}
@@ -1343,6 +1362,7 @@ class User extends CI_Controller
 	===================*/
 	public function product_details($product_slug = null)
 	{
+		if (!$this->requireService('service_products_enabled')) return;
 		// Check if product_slug is provided
 		if (!$product_slug) {
 			show_404();
@@ -1626,6 +1646,7 @@ class User extends CI_Controller
 
 	public function all_blog()
 	{
+		if (!$this->requireService('service_blog_enabled')) return;
 		// Get search query from GET parameter
 		$search_query = $this->input->get('q');
 
@@ -1680,6 +1701,7 @@ class User extends CI_Controller
 
 	public function event()
 	{
+		if (!$this->requireService('service_events_enabled')) return;
 		$this->load->model('usermodel');
 		$this->load->library('pagination');
 
@@ -1740,6 +1762,7 @@ class User extends CI_Controller
 	 */
 	public function event_search()
 	{
+		if (!$this->requireService('service_events_enabled')) return;
 		// Get search query from GET parameter
 		$search_query = $this->input->get('q');
 
@@ -1769,6 +1792,7 @@ class User extends CI_Controller
 	// Videos Page
 	public function videos()
 	{
+		if (!$this->requireService('service_videos_enabled')) return;
 		$this->load->model('usermodel');
 		$this->load->library('pagination');
 
@@ -1826,6 +1850,7 @@ class User extends CI_Controller
 	// Classifieds Page
 	public function classifieds()
 	{
+		if (!$this->requireService('service_classifieds_enabled')) return;
 		$this->load->model('usermodel');
 		$this->load->library('pagination');
 
@@ -2496,6 +2521,7 @@ class User extends CI_Controller
 	===================*/
 	public function video_details($slug)
 	{
+		if (!$this->requireService('service_videos_enabled')) return;
 		// Get video details by slug
 		$data['video'] = $this->usermodel->getSingleValue($slug, 'video_slug', 'video');
 
@@ -2546,6 +2572,7 @@ class User extends CI_Controller
 	 */
 	public function news_details($slug_or_id)
 	{
+		if (!$this->requireService('service_news_enabled')) return;
 		// Get news details by slug or ID
 		if (is_numeric($slug_or_id)) {
 			$data['news'] = $this->usermodel->getSingleValue($slug_or_id, 'news_id', 'news');
@@ -3970,6 +3997,7 @@ class User extends CI_Controller
 
 	public function user_house_for_sale()
 	{
+		if (!$this->requireService('service_realestate_enabled')) return;
 		// Check if user is logged in
 		if (!$this->session->userdata('logged_user')) {
 			redirect('user/login');
@@ -4265,6 +4293,7 @@ class User extends CI_Controller
 	 */
 	public function house_details($house_slug = null)
 	{
+		if (!$this->requireService('service_realestate_enabled')) return;
 		if (!$house_slug) {
 			show_404();
 			return;
@@ -5172,6 +5201,7 @@ class User extends CI_Controller
 	 */
 	public function classifieds_details($classifieds_slug)
 	{
+		if (!$this->requireService('service_classifieds_enabled')) return;
 		// Get classifieds details by slug
 		$classifieds = $this->usermodel->getClassifiedsBySlug($classifieds_slug);
 		if (!$classifieds) {
@@ -5220,6 +5250,7 @@ class User extends CI_Controller
 
 	public function user_apartments_and_rental()
 	{
+		if (!$this->requireService('service_realestate_enabled')) return;
 		$data['logged_id'] = null;
 		if ($this->session->userdata('logged_user')) {
 			$session = $this->session->userdata('logged_user');
@@ -5492,6 +5523,7 @@ class User extends CI_Controller
 	 */
 	public function rental_details($rental_slug = null)
 	{
+		if (!$this->requireService('service_realestate_enabled')) return;
 		if (!$rental_slug) {
 			show_404();
 			return;
@@ -5549,6 +5581,7 @@ class User extends CI_Controller
 	 */
 	public function event_details($event_slug = null)
 	{
+		if (!$this->requireService('service_events_enabled')) return;
 		if (!$event_slug) {
 			show_404();
 			return;

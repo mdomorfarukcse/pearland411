@@ -625,6 +625,13 @@ class Admin extends CI_Controller
 			'social_facebook_url', 'social_twitter_url',
 			'social_instagram_url', 'social_linkedin_url',
 			'social_youtube_url',
+			// Service registry — master on/off per optional content section.
+			// A hidden field ships '0' when the checkbox is unticked, so the
+			// generic save loop stores '1'/'0' correctly.
+			'service_events_enabled', 'service_realestate_enabled',
+			'service_classifieds_enabled', 'service_news_enabled',
+			'service_blog_enabled', 'service_products_enabled',
+			'service_videos_enabled',
 		);
 
 		if ($this->input->method() === 'post') {

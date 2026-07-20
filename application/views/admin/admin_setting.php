@@ -219,6 +219,33 @@ $s = isset($settings) ? $settings : array();
 			</div>
 		</section>
 
+		<!-- Services --------------------------------------------------- -->
+		<section class="setting-card">
+			<h2>Services</h2>
+			<p class="hint">Turn optional content sections on or off. When a service is off it disappears from the public site and this admin's sidebar, and it can't be added to a package. The core directory, coupons and advertising are always on.</p>
+
+			<?php
+			$service_toggles = array(
+				'service_events_enabled'      => 'Events',
+				'service_realestate_enabled'  => 'Real Estate (Houses + Apartments/Rentals)',
+				'service_classifieds_enabled' => 'Classifieds',
+				'service_news_enabled'        => 'News',
+				'service_blog_enabled'        => 'Blogs',
+				'service_products_enabled'    => 'Products',
+				'service_videos_enabled'      => 'Videos',
+			);
+			foreach ($service_toggles as $skey => $slabel):
+				$son = (($s[$skey] ?? '') !== '0'); ?>
+				<div class="setting-row">
+					<label for="<?= $skey ?>"><?= $slabel ?></label>
+					<span>
+						<input type="hidden" name="<?= $skey ?>" value="0">
+						<input type="checkbox" id="<?= $skey ?>" name="<?= $skey ?>" value="1" <?= $son ? 'checked' : '' ?>>
+					</span>
+				</div>
+			<?php endforeach; ?>
+		</section>
+
 		<div class="setting-actions">
 			<button type="submit" class="btn-save">Save settings</button>
 		</div>
