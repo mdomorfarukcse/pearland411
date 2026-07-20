@@ -126,6 +126,29 @@ class User extends CI_Controller
 	}
 
 	/**
+	 * The id of the currently logged-in end-user (0 when not logged in).
+	 */
+	private function currentUserId()
+	{
+		$sess = $this->session->userdata('logged_user');
+		return (is_array($sess) && isset($sess['logged_id'])) ? (int) $sess['logged_id'] : 0;
+	}
+
+	/**
+	 * Ownership guard for listing edit endpoints. Returns TRUE when the
+	 * current user owns $listing; otherwise emits a 404 and returns FALSE.
+	 * Callers must `return;` when this returns FALSE.
+	 */
+	private function requireOwnedListing($listing)
+	{
+		if (empty($listing) || (int) $listing->user_id !== $this->currentUserId()) {
+			show_404();
+			return false;
+		}
+		return true;
+	}
+
+	/**
 	 * Custom URL routing handler
 	 * Handles hyphenated URLs like all-category/category-search
 	 */
@@ -2599,6 +2622,9 @@ class User extends CI_Controller
 
 		$data['listing'] = $this->usermodel->getSingleValue($inserted_id, 'listing_id', 'listings');
 
+		// Ownership guard — only the listing owner may edit it.
+		if (!$this->requireOwnedListing($data['listing'])) return;
+
 
 
 
@@ -2710,6 +2736,9 @@ class User extends CI_Controller
 
 		$data['listing'] = $this->usermodel->getSingleValue($inserted_id, 'listing_id', 'listings');
 
+		// Ownership guard — only the listing owner may edit it.
+		if (!$this->requireOwnedListing($data['listing'])) return;
+
 
 
 		if ($this->form_validation->run('listing_step_2') == FALSE) {
@@ -2769,6 +2798,9 @@ class User extends CI_Controller
 		$data['listing_id'] = $inserted_id;
 
 		$data['listing'] = $this->usermodel->getSingleValue($inserted_id, 'listing_id', 'listings');
+
+		// Ownership guard — only the listing owner may edit it.
+		if (!$this->requireOwnedListing($data['listing'])) return;
 
 
 
@@ -2837,6 +2869,9 @@ class User extends CI_Controller
 		$data['listing_id'] = $inserted_id;
 
 		$data['listing'] = $this->usermodel->getSingleValue($inserted_id, 'listing_id', 'listings');
+
+		// Ownership guard — only the listing owner may edit it.
+		if (!$this->requireOwnedListing($data['listing'])) return;
 
 
 
@@ -2910,6 +2945,9 @@ class User extends CI_Controller
 		$data['listing_id'] = $inserted_id;
 
 		$data['listing'] = $this->usermodel->getSingleValue($inserted_id, 'listing_id', 'listings');
+
+		// Ownership guard — only the listing owner may edit it.
+		if (!$this->requireOwnedListing($data['listing'])) return;
 
 
 
@@ -3436,6 +3474,10 @@ class User extends CI_Controller
 		$data['categories'] 	= $this->usermodel->getAllValues('listing_categories');
 		$data['listing_slug']	= $slug;
 		$data['listing'] 		= $this->usermodel->getSingleValue($slug, 'listing_slug', 'listings');
+
+		// Ownership guard — a logged-in user may only edit a listing they own.
+		// (Login itself is already enforced by the constructor whitelist.)
+		if (!$this->requireOwnedListing($data['listing'])) return;
 
 		if ($data['listing']->category_id != '') {
 			$data['sub_category_listing'] = $this->adminmodel->ListingSubCategoryByCateId($data['listing']->category_id);

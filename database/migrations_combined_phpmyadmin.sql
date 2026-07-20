@@ -415,4 +415,72 @@ SET @s := IF(@typ IS NOT NULL AND NOT (@typ = 'varchar' AND @len >= 50),
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
+-- ============================================================
+-- 0010_plan_capabilities.sql
+-- Field-level capability flags on `plans` for the freemium
+-- listing model (photos / map / services / extra details).
+-- Video reuses the existing `plans.allow_video`.
+-- ============================================================
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='plans' AND COLUMN_NAME='can_photos');
+SET @s := IF(@e = 0, 'ALTER TABLE `plans` ADD COLUMN `can_photos` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''May upload listing logo + gallery photos''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='plans' AND COLUMN_NAME='photo_limit');
+SET @s := IF(@e = 0, 'ALTER TABLE `plans` ADD COLUMN `photo_limit` INT(11) NOT NULL DEFAULT 0 COMMENT ''Max gallery photos (-1 = unlimited, 0 = none)''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='plans' AND COLUMN_NAME='can_map');
+SET @s := IF(@e = 0, 'ALTER TABLE `plans` ADD COLUMN `can_map` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''May set the Google map / lat-lng''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='plans' AND COLUMN_NAME='can_services');
+SET @s := IF(@e = 0, 'ALTER TABLE `plans` ADD COLUMN `can_services` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''May fill services offered''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='plans' AND COLUMN_NAME='can_extra_details');
+SET @s := IF(@e = 0, 'ALTER TABLE `plans` ADD COLUMN `can_extra_details` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''May add extra Q&A / SEO detail block''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
+-- ============================================================
+-- 0011_service_registry.sql
+-- Admin master on/off switches per optional content section.
+-- Seeded deactivated ('0'); admin activates from /admin/setting.
+-- ============================================================
+INSERT IGNORE INTO `site_settings` (`setting_key`, `setting_value`, `updated_at`) VALUES
+    ('service_events_enabled',      '0', NOW()),
+    ('service_realestate_enabled',  '0', NOW()),
+    ('service_classifieds_enabled', '0', NOW()),
+    ('service_news_enabled',        '0', NOW()),
+    ('service_blog_enabled',        '0', NOW()),
+    ('service_products_enabled',    '0', NOW()),
+    ('service_videos_enabled',      '0', NOW());
+
+
+-- ============================================================
+-- 0012_helcim_billing.sql
+-- Parallel Helcim columns on transactions / payment_cards.
+-- Old auth_net_* columns are left in place for history.
+-- ============================================================
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='transactions' AND COLUMN_NAME='helcim_transaction_id');
+SET @s := IF(@e = 0, 'ALTER TABLE `transactions` ADD COLUMN `helcim_transaction_id` VARCHAR(255) DEFAULT NULL COMMENT ''Helcim transactionId''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='transactions' AND COLUMN_NAME='helcim_card_token');
+SET @s := IF(@e = 0, 'ALTER TABLE `transactions` ADD COLUMN `helcim_card_token` VARCHAR(255) DEFAULT NULL COMMENT ''Card token returned by HelcimPay.js''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='transactions' AND COLUMN_NAME='helcim_approval_code');
+SET @s := IF(@e = 0, 'ALTER TABLE `transactions` ADD COLUMN `helcim_approval_code` VARCHAR(50) DEFAULT NULL COMMENT ''Gateway approval code''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='payment_cards' AND COLUMN_NAME='helcim_card_token');
+SET @s := IF(@e = 0, 'ALTER TABLE `payment_cards` ADD COLUMN `helcim_card_token` VARCHAR(255) DEFAULT NULL COMMENT ''Vaulted card token for recurring charges''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='payment_cards' AND COLUMN_NAME='helcim_customer_code');
+SET @s := IF(@e = 0, 'ALTER TABLE `payment_cards` ADD COLUMN `helcim_customer_code` VARCHAR(100) DEFAULT NULL COMMENT ''Helcim customer / vault code''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
 SET FOREIGN_KEY_CHECKS = 1;
