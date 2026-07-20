@@ -4764,6 +4764,110 @@ class Usermodel extends CI_Model
 	}
 
 	/**
+	 * Create + activate a subscription after a validated Helcim payment.
+	 * Inserts the subscription, a transaction row, and a fresh usage-tracking
+	 * window inside one DB transaction. Any currently-active subscription for
+	 * the user is expired first (upgrade/replace). Returns the new
+	 * subscription id, or FALSE on failure.
+	 *
+	 * $args keys: user_id, plan_id, duration_id?, amount, currency,
+	 *   helcim_transaction_id?, helcim_approval_code?, helcim_card_token?,
+	 *   auto_renew? (default 0)
+	 */
+	public function activateHelcimSubscription($args)
+	{
+		$user_id = (int) $args['user_id'];
+		$plan_id = (int) $args['plan_id'];
+		if (!$user_id || !$plan_id) {
+			return false;
+		}
+
+		// Resolve the term length from the chosen duration, else the plan.
+		$duration_id     = !empty($args['duration_id']) ? (int) $args['duration_id'] : null;
+		$duration_days   = 30;
+		$duration_months = 1;
+		if ($duration_id) {
+			$d = $this->getDurationById($duration_id);
+			if ($d) {
+				$duration_months = (int) $d->duration_months ?: 1;
+				$duration_days   = (int) $d->duration_days ?: ($duration_months * 30);
+			}
+		} else {
+			$plan = $this->db->select('duration_days')->from('plans')->where('id', $plan_id)->get()->row();
+			if ($plan && (int) $plan->duration_days > 0) {
+				$duration_days = (int) $plan->duration_days;
+			}
+			$duration_months = max(1, (int) round($duration_days / 30));
+		}
+
+		$now        = date('Y-m-d H:i:s');
+		$end        = date('Y-m-d H:i:s', strtotime('+' . $duration_days . ' days'));
+		$auto_renew = !empty($args['auto_renew']) ? 1 : 0;
+		$currency   = !empty($args['currency']) ? $args['currency'] : 'USD';
+		$amount     = (float) $args['amount'];
+
+		$this->db->trans_start();
+
+		// Replace any currently-active subscription (upgrade / renew).
+		$this->db->where('user_id', $user_id)
+				 ->where('status', 'active')
+				 ->update('subscriptions', array('status' => 'expired', 'updated_at' => $now));
+
+		$this->db->insert('subscriptions', array(
+			'user_id'           => $user_id,
+			'plan_id'           => $plan_id,
+			'status'            => 'active',
+			'start_date'        => $now,
+			'end_date'          => $end,
+			'next_billing_date' => $auto_renew ? $end : null,
+			'created_at'        => $now,
+			'updated_at'        => $now,
+			'duration_id'       => $duration_id,
+			'duration_days'     => $duration_days,
+			'duration_months'   => $duration_months,
+			'payment_status'    => 'paid',
+			'total_amount'      => $amount,
+			'currency'          => $currency,
+			'billing_cycle'     => $duration_months >= 12 ? 'yearly' : 'monthly',
+			'auto_renew'        => $auto_renew,
+		));
+		$subscription_id = (int) $this->db->insert_id();
+
+		$this->db->insert('transactions', array(
+			'user_id'               => $user_id,
+			'plan_id'               => $plan_id,
+			'subscription_id'       => $subscription_id,
+			'txn_ref'               => 'HLC-' . $subscription_id . '-' . substr(md5($user_id . $now), 0, 8),
+			'amount'                => $amount,
+			'currency'              => $currency,
+			'method'                => 'card',
+			'status'                => 'success',
+			'created_at'            => $now,
+			'updated_at'            => $now,
+			'helcim_transaction_id' => !empty($args['helcim_transaction_id']) ? $args['helcim_transaction_id'] : null,
+			'helcim_approval_code'  => !empty($args['helcim_approval_code']) ? $args['helcim_approval_code'] : null,
+			'helcim_card_token'     => !empty($args['helcim_card_token']) ? $args['helcim_card_token'] : null,
+		));
+		$transaction_id = (int) $this->db->insert_id();
+
+		$this->db->where('id', $subscription_id)
+				 ->update('subscriptions', array('last_transaction_id' => $transaction_id));
+
+		// Fresh 30-day-style usage window for the new subscription.
+		$this->db->insert('user_usage_tracking', array(
+			'user_id'         => $user_id,
+			'subscription_id' => $subscription_id,
+			'reset_date'      => date('Y-m-d', strtotime('+' . $duration_days . ' days')),
+			'created_at'      => $now,
+			'updated_at'      => $now,
+		));
+
+		$this->db->trans_complete();
+
+		return $this->db->trans_status() ? $subscription_id : false;
+	}
+
+	/**
 	 * Check if user has any subscription
 	 * @param int $user_id
 	 * @return boolean

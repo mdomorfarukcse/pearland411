@@ -50,10 +50,11 @@ class User extends CI_Controller
 			'classifieds', 'classifieds_details',
 			'all_products', 'product_details',
 			'house_details', 'rental_details',
-			// Checkout (currently disabled; require login is enforced
-			// at the page level — checkout() redirects to login below
-			// when no session is present).
-			'checkout', 'checkout_success', 'process_checkout',
+			// Checkout. checkout() redirects to login when no session is
+			// present; process_checkout()/helcim_init() re-check the session
+			// themselves. helcim_webhook is server-to-server (Helcim calls it)
+			// and is signature-verified instead of session-gated.
+			'checkout', 'checkout_success', 'process_checkout', 'helcim_webhook',
 			// Enquiry submission (rate-limited; anonymous OK)
 			'add_enquiry',
 			// Services catalog + quote requests
@@ -6366,6 +6367,14 @@ class User extends CI_Controller
 			return;
 		}
 
+		// A subscription belongs to a user, so checkout requires login.
+		if (!$this->session->userdata('logged_user')) {
+			$this->session->set_userdata('redirect_url', base_url('checkout?plan_id=' . (int) $plan_id));
+			$this->session->set_flashdata('error', 'Please sign in to continue to checkout.');
+			redirect('login');
+			return;
+		}
+
 		// Initialize user and billing data
 		$data['billing_info'] = array();
 		$data['stored_payment_card'] = null;
@@ -6415,6 +6424,11 @@ class User extends CI_Controller
 		// Get all durations for this plan
 		$data['plan_durations'] = $this->usermodel->getPlanDurations($plan_id);
 
+		// Helcim front-end config for the checkout view.
+		$this->load->library('helcim_lib');
+		$data['helcim_configured'] = $this->helcim_lib->is_configured();
+		$data['helcimpay_js_url']  = $this->helcim_lib->helcimpay_js_url();
+
 		// Load views
 		$this->load->view('header', $data);
 		$this->load->view('checkout', $data);
@@ -6422,58 +6436,169 @@ class User extends CI_Controller
 	}
 
 	/**
-	 * Process Checkout — handle form submission and payment processing.
+	 * AJAX — initialize a HelcimPay.js checkout session for the selected plan
+	 * + duration and return the checkoutToken. The secretToken is stashed in
+	 * the session (never sent to the browser) so process_checkout() can
+	 * validate the returned transaction hash. URL: /helcim-init (POST)
+	 */
+	public function helcim_init()
+	{
+		$this->output->set_content_type('application/json');
+
+		if ($this->input->method() !== 'post' || !$this->session->userdata('logged_user')) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
+		}
+
+		$plan_id     = (int) $this->input->post('plan_id');
+		$duration_id = $this->input->post('duration_id') ? (int) $this->input->post('duration_id') : null;
+
+		$plan = $this->usermodel->getPlanByIdForPricing($plan_id);
+		if (!$plan) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Invalid plan.')));
+		}
+
+		// Resolve the amount server-side from the plan/duration — never trust a
+		// client-supplied price.
+		$amount   = (float) $plan->price;
+		$duration = null;
+		if ($duration_id) {
+			$duration = $this->usermodel->getDurationById($duration_id);
+			if ($duration && (int) $duration->plan_id === $plan_id) {
+				$amount = (float) $duration->price;
+			} else {
+				$duration = null;
+			}
+		}
+		if ($amount <= 0) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'This plan has no payable amount configured.')));
+		}
+
+		$this->load->library('helcim_lib');
+		$init = $this->helcim_lib->initialize_checkout($amount, null, array(
+			'description' => 'Pearland411 — ' . $plan->name,
+		));
+		if (!$init['success']) {
+			log_message('error', 'Helcim init failed: ' . $init['error']);
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Could not start payment. Please try again.')));
+		}
+
+		$user = $this->session->userdata('logged_user');
+		$this->session->set_userdata('helcim_pending', array(
+			'checkoutToken' => $init['checkoutToken'],
+			'secretToken'   => $init['secretToken'],
+			'plan_id'       => $plan_id,
+			'duration_id'   => $duration_id,
+			'amount'        => $amount,
+			'currency'      => $this->helcim_lib->currency(),
+			'user_id'       => (int) $user['logged_id'],
+		));
+
+		return $this->output->set_output(json_encode(array(
+			'success'       => true,
+			'checkoutToken' => $init['checkoutToken'],
+		)));
+	}
+
+	/**
+	 * Process Checkout — validate the HelcimPay.js transaction and activate
+	 * the subscription. Called via AJAX from the checkout page's SUCCESS
+	 * handler, which posts the transaction data + hash + checkoutToken.
 	 *
-	 * SECURITY NOTE
-	 * The previous implementation mocked the payment as successful
-	 * (`$payment_successful = true`) without calling Authorize.Net,
-	 * stored the full PAN + CVV (via json_encode($_POST)) into
-	 * `transactions.response_payload`, and recorded a "success" row
-	 * the admin dashboard counted as real revenue.
+	 * Card data is tokenized by HelcimPay.js and never reaches this server.
+	 * We trust the payment only after recomputing and matching the response
+	 * hash against the secretToken we stored at initialize time. Idempotent —
+	 * a replayed post for an already-processed token is a no-op success.
 	 *
-	 * Until Authorize.Net credentials are wired (see
-	 * application/libraries/Authorize_net_lib.php +
-	 * application/config/authorize_net.php), this endpoint refuses
-	 * to accept card data and returns the user to the pricing page
-	 * with a clear message. No card number, CVV, expiry, or
-	 * cardholder name is ever read from POST in this code path.
-	 *
-	 * URL: /process-checkout (POST)
+	 * URL: /process-checkout (POST, JSON response)
 	 */
 	public function process_checkout()
 	{
-		if ($this->input->method() !== 'post') {
-			redirect('user/pricing_plan');
-			return;
+		$this->output->set_content_type('application/json');
+
+		if ($this->input->method() !== 'post' || !$this->session->userdata('logged_user')) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
 		}
 
-		// Sanity-check the plan (no money will move; we still validate
-		// so an attacker can't probe with junk).
-		$plan_id = $this->input->post('plan_id');
-		if (!$plan_id || !is_numeric($plan_id)) {
-			$this->session->set_flashdata('error', 'Invalid plan selected.');
-			redirect('user/pricing_plan');
-			return;
-		}
-		$selected_plan = $this->usermodel->getPlanByIdForPricing($plan_id);
-		if (!$selected_plan) {
-			$this->session->set_flashdata('error', 'Selected plan not found.');
-			redirect('user/pricing_plan');
-			return;
+		$pending = $this->session->userdata('helcim_pending');
+		if (!$pending || empty($pending['secretToken'])) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Your session expired. Please try again.')));
 		}
 
-		// HARD STOP. The Authorize.Net integration is not yet
-		// configured. We never read card_number / cvv / exp_* /
-		// card_name from POST — accepting them would store PCI data
-		// the application is not authorized to hold.
-		log_message('error', 'process_checkout called before live payments are wired; refusing.');
-		$this->session->set_flashdata(
-			'error',
-			'Online payments are temporarily unavailable while we finalize our payment processor. ' .
-			'Please contact support to activate your subscription.'
-		);
-		redirect('checkout?plan_id=' . (int) $plan_id);
-		return;
+		$checkout_token   = (string) $this->input->post('checkoutToken');
+		$transaction_json = (string) $this->input->post('transaction_json'); // exact JSON string that was hashed
+		$hash             = (string) $this->input->post('hash');
+
+		if ($checkout_token === '' || $checkout_token !== $pending['checkoutToken']) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Payment token mismatch.')));
+		}
+
+		$this->load->library('helcim_lib');
+		if (!$this->helcim_lib->validate_transaction($transaction_json, $hash, $pending['secretToken'])) {
+			log_message('error', 'Helcim hash validation failed for checkoutToken ' . $checkout_token);
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'We could not verify this payment. You were not charged twice — please contact support if the amount shows as taken.')));
+		}
+
+		// Pull the useful fields out of the validated transaction data.
+		$txn = json_decode($transaction_json, true);
+		$txn = is_array($txn) ? $txn : array();
+		$helcim_txn_id = isset($txn['transactionId']) ? $txn['transactionId'] : (isset($txn['id']) ? $txn['id'] : null);
+		$approval_code = isset($txn['approvalCode']) ? $txn['approvalCode'] : null;
+		$card_token    = isset($txn['cardToken']) ? $txn['cardToken'] : null;
+
+		$sub_id = $this->usermodel->activateHelcimSubscription(array(
+			'user_id'               => (int) $pending['user_id'],
+			'plan_id'               => (int) $pending['plan_id'],
+			'duration_id'           => $pending['duration_id'] ? (int) $pending['duration_id'] : null,
+			'amount'                => (float) $pending['amount'],
+			'currency'              => $pending['currency'],
+			'helcim_transaction_id' => $helcim_txn_id,
+			'helcim_approval_code'  => $approval_code,
+			'helcim_card_token'     => $card_token,
+		));
+
+		if (!$sub_id) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Payment verified but activation failed. Please contact support with your transaction id ' . $helcim_txn_id . '.')));
+		}
+
+		// One-time consume: clear the pending session so a replay can't
+		// double-activate, and hand the receipt data to checkout_success().
+		$plan = $this->usermodel->getPlanByIdForPricing((int) $pending['plan_id']);
+		$this->session->unset_userdata('helcim_pending');
+		$this->session->set_userdata('checkout_success_data', array(
+			'plan_name'      => $plan ? $plan->name : 'Subscription',
+			'amount'         => (float) $pending['amount'],
+			'currency'       => $pending['currency'],
+			'transaction_id' => $helcim_txn_id,
+			'subscription_id' => $sub_id,
+		));
+
+		return $this->output->set_output(json_encode(array(
+			'success'  => true,
+			'redirect' => base_url('checkout-success'),
+		)));
+	}
+
+	/**
+	 * Helcim webhook receiver. Verifies the signature and logs the event so
+	 * card/recurring notifications can be reconciled. Public (no login) but
+	 * signature-gated. URL: /helcim-webhook (POST)
+	 */
+	public function helcim_webhook()
+	{
+		$this->output->set_content_type('application/json');
+		$raw       = $this->input->raw_input_stream;
+		$signature = isset($_SERVER['HTTP_WEBHOOK_SIGNATURE']) ? $_SERVER['HTTP_WEBHOOK_SIGNATURE'] : '';
+
+		$this->load->library('helcim_lib');
+		if (!$this->helcim_lib->verify_webhook($raw, $signature)) {
+			$this->output->set_status_header(401);
+			return $this->output->set_output(json_encode(array('ok' => false)));
+		}
+
+		// Signature valid — record it. Reconciliation of specific event types
+		// (recurring success/failure) is handled by the renewal job in Sprint 7.
+		log_message('info', 'Helcim webhook received: ' . $raw);
+		return $this->output->set_output(json_encode(array('ok' => true)));
 	}
 
 	/**
