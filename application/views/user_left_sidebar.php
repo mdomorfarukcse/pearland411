@@ -101,30 +101,46 @@
 					<li>
 						<a href="<?= base_url('user/enquiries'); ?>" class=""><img src="<?= base_url() ?>assets/images/icon/tick.png" alt="" />Lead enquiry</a>
 					</li>
+					<?php if (site_setting('service_products_enabled','1') !== '0'): ?>
 					<li>
 						<a href="<?= base_url() ?>products" class=""><img src="<?= base_url() ?>assets/images/icon/cart.png" alt="" />All Products</a>
 					</li>
+					<?php endif; ?>
+					<?php if (site_setting('service_events_enabled','1') !== '0'): ?>
 					<li>
 						<a href="<?= base_url() ?>user-events" class=""><img src="<?= base_url() ?>assets/images/icon/calendar.png" alt="" />Events</a>
 					</li>
+					<?php endif; ?>
+					<?php if (site_setting('service_blog_enabled','1') !== '0'): ?>
 					<li>
 						<a href="<?= base_url() ?>blog-list" class=""><img src="<?= base_url() ?>assets/images/icon/blog1.png" alt="" />Blog posts</a>
 					</li>
+					<?php endif; ?>
+					<?php if (site_setting('service_news_enabled','1') !== '0'): ?>
 					<li>
 						<a href="<?= base_url() ?>user-news" class=""><img src="<?= base_url() ?>assets/images/icon/cart.png" alt="" />News</a>
 					</li>
+					<?php endif; ?>
+					<?php if (site_setting('service_videos_enabled','1') !== '0'): ?>
 					<li>
 						<a href="<?= base_url() ?>Video-list" class=""><img src="<?= base_url() ?>assets/images/icon/cart.png" alt="" />Videos</a>
 					</li>
+					<?php endif; ?>
+					<?php if (site_setting('service_classifieds_enabled','1') !== '0'): ?>
 					<li>
 						<a href="<?= base_url() ?>user-classifieds" class=""><img src="<?= base_url() ?>assets/images/icon/cart.png" alt="" />Classifieds</a>
 					</li>
+					<?php endif; ?>
+					<?php if (site_setting('service_realestate_enabled','1') !== '0'): ?>
 					<li>
 						<a href="<?= base_url() ?>user-apartments-and-rental" class=""><img src="<?= base_url() ?>assets/images/icon/cart.png" alt="" />Apartments & Rentals</a>
 					</li>
+					<?php endif; ?>
+					<?php if (site_setting('service_realestate_enabled','1') !== '0'): ?>
 					<li>
 						<a href="<?= base_url() ?>user-house-for-sale" class=""><img src="<?= base_url() ?>assets/images/icon/cart.png" alt="" />House For Sale</a>
 					</li>
+					<?php endif; ?>
 					<li>
 						<a href="<?= base_url() ?>ads-summary" class=""><img src="<?= base_url() ?>assets/images/icon/dbl11.png" alt="" />Ad Summary</a>
 					</li>

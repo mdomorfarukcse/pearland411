@@ -176,10 +176,12 @@
 				<a href="all-category.html" class="act">
 					<img src="<?= base_url() ?>assets/images/icon/shop.png">Services</a>
 			</li>
+			<?php if (site_setting('service_events_enabled','1') !== '0'): ?>
 			<li>
 				<a href="events.html">
 					<img src="<?= base_url() ?>assets/images/icon/calendar.png">Events</a>
 			</li>
+			<?php endif; ?>
 
 			<li>
 				<a href="coupons.html">

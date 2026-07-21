@@ -936,6 +936,78 @@ if (isset($user_transactions_data) && is_array($user_transactions_data)) {
                         </div>
                     </div>
 
+                    <!-- Change / manage plan -->
+                    <?php if (!empty($all_plans) && is_array($all_plans)): ?>
+                    <div style="background:#fff; border:1px solid #e9ecef; border-radius:12px; padding:24px; margin-bottom:30px;">
+                        <h3 style="margin:0 0 6px 0; color:#2c3e50;">Change your plan</h3>
+                        <p style="margin:0 0 16px 0; color:#6c757d; font-size:0.95rem;">Upgrades are prorated and take effect right away. Downgrades apply at your next renewal.</p>
+                        <div id="plan-change-msg" style="display:none; padding:12px; border-radius:8px; margin-bottom:14px;"></div>
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px;">
+                            <?php foreach ($all_plans as $p): ?>
+                                <?php $is_current = ($current_subscription && (int)$current_subscription->plan_id === (int)$p->id); ?>
+                                <div style="border:1px solid <?= $is_current ? '#21d78d' : '#e9ecef' ?>; border-radius:10px; padding:16px;">
+                                    <div style="font-weight:600; color:#2c3e50;"><?= htmlspecialchars($p->name) ?></div>
+                                    <div style="color:#495057; margin:4px 0 12px;"><?= htmlspecialchars($p->currency ?: 'USD') ?> <?= number_format((float)$p->price, 2) ?></div>
+                                    <?php if ($is_current): ?>
+                                        <span style="font-size:0.85rem; color:#21a06e;">Current plan</span>
+                                    <?php else: ?>
+                                        <button type="button" class="plan-switch-btn" data-plan="<?= (int)$p->id ?>" style="background:#667eea; color:#fff; border:none; padding:8px 16px; border-radius:20px; cursor:pointer; font-size:0.9rem;">Switch to this</button>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php if ($current_subscription && !empty($current_subscription->auto_renew)): ?>
+                        <form method="post" action="<?= base_url('cancel-subscription') ?>" onsubmit="return confirm('Cancel auto-renew? Your plan stays active until it expires.');" style="margin-top:18px;">
+                            <button type="submit" style="background:transparent; color:#c0392b; border:1px solid #c0392b; padding:8px 16px; border-radius:20px; cursor:pointer; font-size:0.9rem;">Cancel auto-renew</button>
+                        </form>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if (!empty($helcim_configured)): ?>
+                    <script type="text/javascript" src="<?= $helcimpay_js_url ?>"></script>
+                    <?php endif; ?>
+                    <script>
+                    (function () {
+                        var msg = document.getElementById('plan-change-msg');
+                        function showMsg(text, ok) { if (!msg) return; msg.textContent = text; msg.style.display = 'block'; msg.style.background = ok ? '#d4edda' : '#f8d7da'; msg.style.color = ok ? '#155724' : '#721c24'; }
+                        var btns = document.querySelectorAll('.plan-switch-btn');
+                        Array.prototype.forEach.call(btns, function (btn) {
+                            btn.addEventListener('click', function () {
+                                var planId = btn.getAttribute('data-plan');
+                                btn.disabled = true; var orig = btn.textContent; btn.textContent = 'Please wait…';
+                                var body = new URLSearchParams(); body.append('plan_id', planId);
+                                fetch('<?= base_url('plan-change-init') ?>', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: body, credentials: 'same-origin' })
+                                .then(function (r) { return r.json(); })
+                                .then(function (res) {
+                                    if (!res.success) { showMsg(res.error || 'Could not change plan.', false); btn.disabled = false; btn.textContent = orig; return; }
+                                    if (res.mode === 'downgrade' || res.mode === 'switched') { showMsg(res.message || 'Done.', true); setTimeout(function () { location.reload(); }, 1500); return; }
+                                    if (res.mode === 'upgrade') {
+                                        var token = res.checkoutToken;
+                                        var handler = function (event) {
+                                            if (!event.data || event.data.eventName !== 'helcim-pay-js-' + token) return;
+                                            if (event.data.eventStatus === 'ABORTED') { window.removeEventListener('message', handler); showMsg('Upgrade cancelled.', false); btn.disabled = false; btn.textContent = orig; return; }
+                                            if (event.data.eventStatus === 'SUCCESS') {
+                                                window.removeEventListener('message', handler);
+                                                var resp = event.data.eventMessage; if (typeof resp === 'string') { try { resp = JSON.parse(resp); } catch (e) {} }
+                                                var container = (resp && resp.data) ? resp.data : resp;
+                                                var txnData = (container && container.data) ? container.data : container;
+                                                var hash = (container && container.hash) ? container.hash : ((resp && resp.hash) ? resp.hash : '');
+                                                var cb = new URLSearchParams(); cb.append('checkoutToken', token); cb.append('transaction_json', JSON.stringify(txnData)); cb.append('hash', hash);
+                                                fetch('<?= base_url('process-checkout') ?>', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: cb, credentials: 'same-origin' })
+                                                .then(function (r) { return r.json(); }).then(function (cr) { if (cr.success) { location.href = cr.redirect; } else { showMsg(cr.error || 'Upgrade could not be finalized.', false); btn.disabled = false; btn.textContent = orig; } });
+                                            }
+                                        };
+                                        window.addEventListener('message', handler);
+                                        if (typeof appendHelcimPayIframe === 'function') { appendHelcimPayIframe(token); }
+                                        else { showMsg('Payment library failed to load.', false); btn.disabled = false; btn.textContent = orig; }
+                                    }
+                                }).catch(function () { showMsg('Network error.', false); btn.disabled = false; btn.textContent = orig; });
+                            });
+                        });
+                    })();
+                    </script>
+                    <?php endif; ?>
+
                     <!-- Detailed Usage & Limits -->
                     <h3 style="margin: 0 0 20px 0; color: #2c3e50; font-size: 1.4rem;">Usage & Limits Overview</h3>
 

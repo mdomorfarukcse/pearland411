@@ -4764,6 +4764,310 @@ class Usermodel extends CI_Model
 	}
 
 	/**
+	 * Create + activate a subscription after a validated Helcim payment.
+	 * Inserts the subscription, a transaction row, and a fresh usage-tracking
+	 * window inside one DB transaction. Any currently-active subscription for
+	 * the user is expired first (upgrade/replace). Returns the new
+	 * subscription id, or FALSE on failure.
+	 *
+	 * $args keys: user_id, plan_id, duration_id?, amount, currency,
+	 *   helcim_transaction_id?, helcim_approval_code?, helcim_card_token?,
+	 *   auto_renew? (default 0)
+	 */
+	public function activateHelcimSubscription($args)
+	{
+		$user_id = (int) $args['user_id'];
+		$plan_id = (int) $args['plan_id'];
+		if (!$user_id || !$plan_id) {
+			return false;
+		}
+
+		// Resolve the term length from the chosen duration, else the plan.
+		$duration_id     = !empty($args['duration_id']) ? (int) $args['duration_id'] : null;
+		$duration_days   = 30;
+		$duration_months = 1;
+		if ($duration_id) {
+			$d = $this->getDurationById($duration_id);
+			if ($d) {
+				$duration_months = (int) $d->duration_months ?: 1;
+				$duration_days   = (int) $d->duration_days ?: ($duration_months * 30);
+			}
+		} else {
+			$plan = $this->db->select('duration_days')->from('plans')->where('id', $plan_id)->get()->row();
+			if ($plan && (int) $plan->duration_days > 0) {
+				$duration_days = (int) $plan->duration_days;
+			}
+			$duration_months = max(1, (int) round($duration_days / 30));
+		}
+
+		$now        = date('Y-m-d H:i:s');
+		$end        = date('Y-m-d H:i:s', strtotime('+' . $duration_days . ' days'));
+		$auto_renew = !empty($args['auto_renew']) ? 1 : 0;
+		$currency   = !empty($args['currency']) ? $args['currency'] : 'USD';
+		$amount     = (float) $args['amount'];
+
+		$this->db->trans_start();
+
+		// Replace any currently-active subscription (upgrade / renew).
+		$this->db->where('user_id', $user_id)
+				 ->where('status', 'active')
+				 ->update('subscriptions', array('status' => 'expired', 'updated_at' => $now));
+
+		$this->db->insert('subscriptions', array(
+			'user_id'           => $user_id,
+			'plan_id'           => $plan_id,
+			'status'            => 'active',
+			'start_date'        => $now,
+			'end_date'          => $end,
+			'next_billing_date' => $auto_renew ? $end : null,
+			'created_at'        => $now,
+			'updated_at'        => $now,
+			'duration_id'       => $duration_id,
+			'duration_days'     => $duration_days,
+			'duration_months'   => $duration_months,
+			'payment_status'    => 'paid',
+			'total_amount'      => $amount,
+			'currency'          => $currency,
+			'billing_cycle'     => $duration_months >= 12 ? 'yearly' : 'monthly',
+			'auto_renew'        => $auto_renew,
+		));
+		$subscription_id = (int) $this->db->insert_id();
+
+		$this->db->insert('transactions', array(
+			'user_id'               => $user_id,
+			'plan_id'               => $plan_id,
+			'subscription_id'       => $subscription_id,
+			'txn_ref'               => 'HLC-' . $subscription_id . '-' . substr(md5($user_id . $now), 0, 8),
+			'amount'                => $amount,
+			'currency'              => $currency,
+			'method'                => 'card',
+			'status'                => 'success',
+			'created_at'            => $now,
+			'updated_at'            => $now,
+			'helcim_transaction_id' => !empty($args['helcim_transaction_id']) ? $args['helcim_transaction_id'] : null,
+			'helcim_approval_code'  => !empty($args['helcim_approval_code']) ? $args['helcim_approval_code'] : null,
+			'helcim_card_token'     => !empty($args['helcim_card_token']) ? $args['helcim_card_token'] : null,
+		));
+		$transaction_id = (int) $this->db->insert_id();
+
+		$this->db->where('id', $subscription_id)
+				 ->update('subscriptions', array('last_transaction_id' => $transaction_id));
+
+		// Fresh 30-day-style usage window for the new subscription.
+		$this->db->insert('user_usage_tracking', array(
+			'user_id'         => $user_id,
+			'subscription_id' => $subscription_id,
+			'reset_date'      => date('Y-m-d', strtotime('+' . $duration_days . ' days')),
+			'created_at'      => $now,
+			'updated_at'      => $now,
+		));
+
+		// Vault the Helcim card token when the buyer opted into auto-renew, so
+		// the renewal cron can charge it later. last4/exp are placeholders —
+		// we only need the token; the PAN is never stored.
+		if (!empty($args['auto_renew']) && !empty($args['helcim_card_token'])) {
+			$this->db->where('user_id', $user_id)->update('payment_cards', array('is_default' => 0));
+			$this->db->insert('payment_cards', array(
+				'user_id'           => $user_id,
+				'card_holder_name'  => 'Card on file',
+				'card_last4'        => '0000',
+				'exp_month'         => 1,
+				'exp_year'          => 2099,
+				'is_default'        => 1,
+				'created_at'        => $now,
+				'updated_at'        => $now,
+				'helcim_card_token' => $args['helcim_card_token'],
+			));
+		}
+
+		$this->db->trans_complete();
+
+		return $this->db->trans_status() ? $subscription_id : false;
+	}
+
+	/**
+	 * Vaulted Helcim card token for a user's default card (or newest), or null.
+	 */
+	public function getVaultedCardToken($user_id)
+	{
+		$row = $this->db->select('helcim_card_token')
+			->from('payment_cards')
+			->where('user_id', (int) $user_id)
+			->where('helcim_card_token IS NOT NULL', null, false)
+			->order_by('is_default', 'DESC')->order_by('id', 'DESC')
+			->limit(1)->get()->row();
+		return $row ? $row->helcim_card_token : null;
+	}
+
+	/**
+	 * Subscriptions due for an auto-renew charge (or a scheduled plan switch).
+	 * auto_renew on, active, and past their next_billing_date.
+	 */
+	public function getRenewableSubscriptions($limit = 200)
+	{
+		return $this->db->select('*')
+			->from('subscriptions')
+			->where('auto_renew', 1)
+			->where('status', 'active')
+			->where('next_billing_date IS NOT NULL', null, false)
+			->where('next_billing_date <=', date('Y-m-d H:i:s'))
+			->limit($limit)
+			->get()->result();
+	}
+
+	/**
+	 * Record a successful renewal: extend the term, log the transaction,
+	 * apply any scheduled downgrade, and reset the dunning counters.
+	 */
+	public function recordRenewalSuccess($subscription, $amount, $currency, $helcim_txn_id, $approval_code)
+	{
+		$now  = date('Y-m-d H:i:s');
+		$days = (int) $subscription->duration_days ?: 30;
+		// Extend from the later of now / current end so terms don't drift back.
+		$base = (!empty($subscription->end_date) && strtotime($subscription->end_date) > time())
+			? $subscription->end_date : $now;
+		$new_end = date('Y-m-d H:i:s', strtotime($base . ' +' . $days . ' days'));
+
+		$plan_id = !empty($subscription->pending_plan_id) ? (int) $subscription->pending_plan_id : (int) $subscription->plan_id;
+
+		$this->db->trans_start();
+
+		$this->db->insert('transactions', array(
+			'user_id'               => (int) $subscription->user_id,
+			'plan_id'               => $plan_id,
+			'subscription_id'       => (int) $subscription->id,
+			'txn_ref'               => 'HLC-R-' . $subscription->id . '-' . substr(md5($now . $subscription->id), 0, 8),
+			'amount'                => (float) $amount,
+			'currency'              => $currency,
+			'method'                => 'card',
+			'status'                => 'success',
+			'created_at'            => $now,
+			'updated_at'            => $now,
+			'helcim_transaction_id' => $helcim_txn_id,
+			'helcim_approval_code'  => $approval_code,
+		));
+		$txn_id = (int) $this->db->insert_id();
+
+		$this->db->where('id', (int) $subscription->id)->update('subscriptions', array(
+			'plan_id'            => $plan_id,
+			'pending_plan_id'    => null,
+			'end_date'           => $new_end,
+			'next_billing_date'  => $new_end,
+			'last_transaction_id' => $txn_id,
+			'renewal_attempts'   => 0,
+			'last_renewal_error' => null,
+			'grace_until'        => null,
+			'payment_status'     => 'paid',
+			'updated_at'         => $now,
+		));
+
+		$this->db->trans_complete();
+		return $this->db->trans_status();
+	}
+
+	/**
+	 * Record a failed renewal: bump the dunning counter, keep access during a
+	 * short grace window, and expire after $max_attempts consecutive failures.
+	 * Returns 'retry' or 'expired'.
+	 */
+	public function recordRenewalFailure($subscription, $error, $max_attempts = 3, $grace_days = 2)
+	{
+		$now      = date('Y-m-d H:i:s');
+		$attempts = (int) $subscription->renewal_attempts + 1;
+
+		if ($attempts >= $max_attempts) {
+			$this->db->where('id', (int) $subscription->id)->update('subscriptions', array(
+				'status'             => 'expired',
+				'renewal_attempts'   => $attempts,
+				'last_renewal_error' => substr((string) $error, 0, 255),
+				'updated_at'         => $now,
+			));
+			return 'expired';
+		}
+
+		$this->db->where('id', (int) $subscription->id)->update('subscriptions', array(
+			'renewal_attempts'   => $attempts,
+			'last_renewal_error' => substr((string) $error, 0, 255),
+			'grace_until'        => date('Y-m-d H:i:s', strtotime('+' . $grace_days . ' days')),
+			// Retry tomorrow.
+			'next_billing_date'  => date('Y-m-d H:i:s', strtotime('+1 day')),
+			'updated_at'         => $now,
+		));
+		return 'retry';
+	}
+
+	/**
+	 * Apply an immediate plan upgrade (already paid the prorated difference):
+	 * switch plan_id in place, keep the current term, log the transaction.
+	 */
+	public function applyPlanUpgrade($user_id, $new_plan_id, $amount, $currency, $helcim_txn_id, $approval_code)
+	{
+		$sub = $this->getUserSubscription((int) $user_id);
+		if (!$sub) {
+			return false;
+		}
+		$now = date('Y-m-d H:i:s');
+
+		$this->db->trans_start();
+
+		$this->db->insert('transactions', array(
+			'user_id'               => (int) $user_id,
+			'plan_id'               => (int) $new_plan_id,
+			'subscription_id'       => (int) $sub->id,
+			'txn_ref'               => 'HLC-U-' . $sub->id . '-' . substr(md5($now . $sub->id), 0, 8),
+			'amount'                => (float) $amount,
+			'currency'              => $currency,
+			'method'                => 'card',
+			'status'                => 'success',
+			'created_at'            => $now,
+			'updated_at'            => $now,
+			'helcim_transaction_id' => $helcim_txn_id,
+			'helcim_approval_code'  => $approval_code,
+		));
+
+		$this->db->where('id', (int) $sub->id)->update('subscriptions', array(
+			'plan_id'         => (int) $new_plan_id,
+			'pending_plan_id' => null,
+			'updated_at'      => $now,
+		));
+
+		$this->db->trans_complete();
+		return $this->db->trans_status();
+	}
+
+	/**
+	 * Schedule a downgrade to take effect at the next renewal.
+	 */
+	public function scheduleDowngrade($user_id, $new_plan_id)
+	{
+		$sub = $this->getUserSubscription((int) $user_id);
+		if (!$sub) {
+			return false;
+		}
+		return $this->db->where('id', (int) $sub->id)->update('subscriptions', array(
+			'pending_plan_id' => (int) $new_plan_id,
+			'updated_at'      => date('Y-m-d H:i:s'),
+		));
+	}
+
+	/**
+	 * Cancel auto-renew: the plan runs to end_date, then simply isn't renewed.
+	 */
+	public function cancelAutoRenew($user_id)
+	{
+		$sub = $this->getUserSubscription((int) $user_id);
+		if (!$sub) {
+			return false;
+		}
+		return $this->db->where('id', (int) $sub->id)->update('subscriptions', array(
+			'auto_renew'        => 0,
+			'next_billing_date' => null,
+			'pending_plan_id'   => null,
+			'updated_at'        => date('Y-m-d H:i:s'),
+		));
+	}
+
+	/**
 	 * Check if user has any subscription
 	 * @param int $user_id
 	 * @return boolean

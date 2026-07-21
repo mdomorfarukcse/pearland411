@@ -430,20 +430,23 @@
                         </select>
                     </div>
 
-                    <h3 style="margin-top: 30px;">Payment Information</h3>
+                    <h3 style="margin-top: 30px;">Payment</h3>
 
+                    <?php if (!empty($helcim_configured)): ?>
+                    <div id="helcim-pay-error" style="display:none; background:#f8d7da; border:1px solid #f5c6cb; color:#721c24; padding:12px; border-radius:8px; margin-bottom:16px;"></div>
+                    <label style="display:flex; align-items:center; gap:8px; margin-bottom:14px; font-size:14px;">
+                        <input type="checkbox" id="auto_renew" name="auto_renew" value="1">
+                        Automatically renew my plan each term (you can cancel anytime from your account)
+                    </label>
+                    <button type="button" class="checkout-btn" id="helcim-pay-btn">Pay securely</button>
+                    <p style="font-size:12px; color:#777; margin-top:10px;">Secured by Helcim. Your card details never touch our servers.</p>
+                    <?php else: ?>
                     <div style="background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
-                        <strong>Online payments are temporarily unavailable.</strong>
-                        We are finalizing our payment processor integration.
-                        To activate this subscription, please
-                        <a href="<?= base_url('contact-us') ?>">contact support</a>
-                        and we will activate your plan manually.
+                        <strong>Online payments are being set up.</strong>
+                        Please <a href="<?= base_url('contact-us') ?>">contact support</a> to activate your plan.
                     </div>
-
-                    <button type="submit" class="checkout-btn" id="submit-btn" disabled
-                            style="opacity: 0.6; cursor: not-allowed;">
-                        Online checkout coming soon
-                    </button>
+                    <button type="button" class="checkout-btn" disabled style="opacity: 0.6; cursor: not-allowed;">Online checkout coming soon</button>
+                    <?php endif; ?>
                 </form>
             </div>
 
@@ -718,3 +721,95 @@
         })();
     });
 </script>
+
+<?php if (!empty($helcim_configured)): ?>
+<!-- HelcimPay.js: initialize server-side, render the hosted modal, validate. -->
+<script type="text/javascript" src="<?= $helcimpay_js_url ?>"></script>
+<script>
+(function () {
+    var btn    = document.getElementById('helcim-pay-btn');
+    var errBox = document.getElementById('helcim-pay-error');
+    if (!btn) return;
+
+    // CSRF is auto-appended to fetch() by assets/js/csrf.js, so plain
+    // URLSearchParams bodies are enough here.
+    function showError(msg) {
+        if (errBox) { errBox.textContent = msg; errBox.style.display = 'block'; }
+    }
+    function reset() { btn.disabled = false; btn.textContent = 'Pay securely'; }
+
+    btn.addEventListener('click', function () {
+        if (errBox) errBox.style.display = 'none';
+        btn.disabled = true; btn.textContent = 'Starting…';
+
+        var planEl = document.querySelector('[name="plan_id"]');
+        var durEl  = document.getElementById('duration_id');
+        var arEl   = document.getElementById('auto_renew');
+        var body   = new URLSearchParams();
+        body.append('plan_id', planEl ? planEl.value : '');
+        body.append('duration_id', durEl ? durEl.value : '');
+        body.append('auto_renew', (arEl && arEl.checked) ? '1' : '0');
+
+        fetch('<?= base_url('helcim-init') ?>', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: body,
+            credentials: 'same-origin'
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+            if (!res.success) { showError(res.error || 'Could not start payment.'); reset(); return; }
+            var token = res.checkoutToken;
+
+            var handler = function (event) {
+                if (!event.data || event.data.eventName !== 'helcim-pay-js-' + token) return;
+                if (event.data.eventStatus === 'ABORTED') {
+                    window.removeEventListener('message', handler);
+                    showError('Payment was cancelled.'); reset();
+                    return;
+                }
+                if (event.data.eventStatus === 'SUCCESS') {
+                    window.removeEventListener('message', handler);
+                    btn.textContent = 'Finalizing…';
+
+                    var resp = event.data.eventMessage;
+                    if (typeof resp === 'string') { try { resp = JSON.parse(resp); } catch (e) {} }
+                    // Helcim nests the transaction under .data, with a sibling .hash.
+                    var container = (resp && resp.data) ? resp.data : resp;
+                    var txnData   = (container && container.data) ? container.data : container;
+                    var hash      = (container && container.hash) ? container.hash
+                                    : ((resp && resp.hash) ? resp.hash : '');
+
+                    var confirmBody = new URLSearchParams();
+                    confirmBody.append('checkoutToken', token);
+                    confirmBody.append('transaction_json', JSON.stringify(txnData));
+                    confirmBody.append('hash', hash);
+
+                    fetch('<?= base_url('process-checkout') ?>', {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                        body: confirmBody,
+                        credentials: 'same-origin'
+                    })
+                    .then(function (r) { return r.json(); })
+                    .then(function (cr) {
+                        if (cr.success) { window.location.href = cr.redirect; }
+                        else { showError(cr.error || 'Payment could not be finalized.'); reset(); }
+                    })
+                    .catch(function () { showError('Network error finalizing payment.'); reset(); });
+                }
+            };
+            window.addEventListener('message', handler);
+
+            // Render the Helcim hosted modal.
+            if (typeof appendHelcimPayIframe === 'function') {
+                appendHelcimPayIframe(token);
+            } else {
+                showError('Payment library failed to load. Please refresh and try again.'); reset();
+            }
+        })
+        .catch(function () { showError('Network error starting payment.'); reset(); });
+    });
+})();
+</script>
+<?php endif; ?>

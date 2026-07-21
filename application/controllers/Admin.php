@@ -625,6 +625,13 @@ class Admin extends CI_Controller
 			'social_facebook_url', 'social_twitter_url',
 			'social_instagram_url', 'social_linkedin_url',
 			'social_youtube_url',
+			// Service registry — master on/off per optional content section.
+			// A hidden field ships '0' when the checkbox is unticked, so the
+			// generic save loop stores '1'/'0' correctly.
+			'service_events_enabled', 'service_realestate_enabled',
+			'service_classifieds_enabled', 'service_news_enabled',
+			'service_blog_enabled', 'service_products_enabled',
+			'service_videos_enabled',
 		);
 
 		if ($this->input->method() === 'post') {
@@ -5616,6 +5623,13 @@ class Admin extends CI_Controller
 				'featured_listing' => $this->input->post('featured_listing') ? 1 : 0,
 				'priority_support' => $this->input->post('priority_support') ? 1 : 0,
 				'analytics_access' => $this->input->post('analytics_access') ? 1 : 0,
+				// Field-level listing capabilities (freemium editing)
+				'can_photos' => $this->input->post('can_photos') ? 1 : 0,
+				'photo_limit' => $this->input->post('photo_limit') !== null ? (int) $this->input->post('photo_limit') : 0,
+				'can_map' => $this->input->post('can_map') ? 1 : 0,
+				'can_services' => $this->input->post('can_services') ? 1 : 0,
+				'can_extra_details' => $this->input->post('can_extra_details') ? 1 : 0,
+				'allow_video' => $this->input->post('allow_video') ? 1 : 0,
 				'is_active' => 1,
 				'sort_order' => 1,
 				'created_at' => date('Y-m-d H:i:s'),
@@ -5706,6 +5720,13 @@ class Admin extends CI_Controller
 				'featured_listing' => $this->input->post('featured_listing') ? 1 : 0,
 				'priority_support' => $this->input->post('priority_support') ? 1 : 0,
 				'analytics_access' => $this->input->post('analytics_access') ? 1 : 0,
+				// Field-level listing capabilities (freemium editing)
+				'can_photos' => $this->input->post('can_photos') ? 1 : 0,
+				'photo_limit' => $this->input->post('photo_limit') !== null ? (int) $this->input->post('photo_limit') : 0,
+				'can_map' => $this->input->post('can_map') ? 1 : 0,
+				'can_services' => $this->input->post('can_services') ? 1 : 0,
+				'can_extra_details' => $this->input->post('can_extra_details') ? 1 : 0,
+				'allow_video' => $this->input->post('allow_video') ? 1 : 0,
 				'updated_at' => date('Y-m-d H:i:s')
 			);
 

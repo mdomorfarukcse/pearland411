@@ -50,10 +50,11 @@ class User extends CI_Controller
 			'classifieds', 'classifieds_details',
 			'all_products', 'product_details',
 			'house_details', 'rental_details',
-			// Checkout (currently disabled; require login is enforced
-			// at the page level — checkout() redirects to login below
-			// when no session is present).
-			'checkout', 'checkout_success', 'process_checkout',
+			// Checkout. checkout() redirects to login when no session is
+			// present; process_checkout()/helcim_init() re-check the session
+			// themselves. helcim_webhook is server-to-server (Helcim calls it)
+			// and is signature-verified instead of session-gated.
+			'checkout', 'checkout_success', 'process_checkout', 'helcim_webhook',
 			// Enquiry submission (rate-limited; anonymous OK)
 			'add_enquiry',
 			// Services catalog + quote requests
@@ -123,6 +124,65 @@ class User extends CI_Controller
 	private function getGetVar($key, $default = '')
 	{
 		return isset($_GET[$key]) ? $_GET[$key] : $default;
+	}
+
+	/**
+	 * The id of the currently logged-in end-user (0 when not logged in).
+	 */
+	private function currentUserId()
+	{
+		$sess = $this->session->userdata('logged_user');
+		return (is_array($sess) && isset($sess['logged_id'])) ? (int) $sess['logged_id'] : 0;
+	}
+
+	/**
+	 * Ownership guard for listing edit endpoints. Returns TRUE when the
+	 * current user owns $listing; otherwise emits a 404 and returns FALSE.
+	 * Callers must `return;` when this returns FALSE.
+	 */
+	private function requireOwnedListing($listing)
+	{
+		if (empty($listing) || (int) $listing->user_id !== $this->currentUserId()) {
+			show_404();
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Layer-1 service gate. Optional content sections (events / news / blog /
+	 * products / videos / classifieds / real estate) are switched on/off by the
+	 * admin via site_settings. When a section is off its public pages 404.
+	 * Defaults to '1' (visible) so a site that has not run migration 0011 keeps
+	 * its current behaviour. Callers must `return;` when this returns FALSE.
+	 */
+	private function requireService($key)
+	{
+		if (site_setting($key, '1') === '0') {
+			show_404();
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Field-level listing capabilities for a listing owner, derived from
+	 * their active plan (freemium model). With no active plan — a claimed
+	 * listing on the free tier — every rich capability is off; only
+	 * name / phone / email stay editable. `photo_limit` is -1 = unlimited,
+	 * 0 = none, N = max gallery photos.
+	 */
+	private function listingCapabilities($owner_id)
+	{
+		$sub = $this->usermodel->getUserSubscription((int) $owner_id);
+		return array(
+			'can_photos'        => (bool) ($sub && !empty($sub->can_photos)),
+			'photo_limit'       => (int)  ($sub && isset($sub->photo_limit) ? $sub->photo_limit : 0),
+			'can_map'           => (bool) ($sub && !empty($sub->can_map)),
+			'can_services'      => (bool) ($sub && !empty($sub->can_services)),
+			'can_video'         => (bool) ($sub && !empty($sub->allow_video)),
+			'can_extra_details' => (bool) ($sub && !empty($sub->can_extra_details)),
+		);
 	}
 
 	/**
@@ -374,6 +434,7 @@ class User extends CI_Controller
 	// NEWS Page
 	public function news()
 	{
+		if (!$this->requireService('service_news_enabled')) return;
 		$this->load->model('usermodel');
 		$this->load->library('pagination');
 
@@ -983,6 +1044,7 @@ class User extends CI_Controller
 	 */
 	public function blog_details($blog_slug = null)
 	{
+		if (!$this->requireService('service_blog_enabled')) return;
 		if (!$blog_slug) {
 			show_404();
 			return;
@@ -1197,6 +1259,7 @@ class User extends CI_Controller
 
 	public function all_products()
 	{
+		if (!$this->requireService('service_products_enabled')) return;
 		if ($this->session->userdata('logged_user')) {
 			$data['user'] = $this->usermodel->getUserInformation();
 		}
@@ -1300,6 +1363,7 @@ class User extends CI_Controller
 	===================*/
 	public function product_details($product_slug = null)
 	{
+		if (!$this->requireService('service_products_enabled')) return;
 		// Check if product_slug is provided
 		if (!$product_slug) {
 			show_404();
@@ -1583,6 +1647,7 @@ class User extends CI_Controller
 
 	public function all_blog()
 	{
+		if (!$this->requireService('service_blog_enabled')) return;
 		// Get search query from GET parameter
 		$search_query = $this->input->get('q');
 
@@ -1637,6 +1702,7 @@ class User extends CI_Controller
 
 	public function event()
 	{
+		if (!$this->requireService('service_events_enabled')) return;
 		$this->load->model('usermodel');
 		$this->load->library('pagination');
 
@@ -1697,6 +1763,7 @@ class User extends CI_Controller
 	 */
 	public function event_search()
 	{
+		if (!$this->requireService('service_events_enabled')) return;
 		// Get search query from GET parameter
 		$search_query = $this->input->get('q');
 
@@ -1726,6 +1793,7 @@ class User extends CI_Controller
 	// Videos Page
 	public function videos()
 	{
+		if (!$this->requireService('service_videos_enabled')) return;
 		$this->load->model('usermodel');
 		$this->load->library('pagination');
 
@@ -1783,6 +1851,7 @@ class User extends CI_Controller
 	// Classifieds Page
 	public function classifieds()
 	{
+		if (!$this->requireService('service_classifieds_enabled')) return;
 		$this->load->model('usermodel');
 		$this->load->library('pagination');
 
@@ -2176,6 +2245,12 @@ class User extends CI_Controller
 			$data['subscription_limits'] = $this->usermodel->getSubscriptionLimits($data['userInfo']->user_id);
 			$data['usage_counts'] = $this->usermodel->getAllUsageCounts($data['userInfo']->user_id);
 
+			// Manage-plan panel: available plans + Helcim front-end config.
+			$data['all_plans'] = $this->usermodel->getActivePlans();
+			$this->load->library('helcim_lib');
+			$data['helcim_configured'] = $this->helcim_lib->is_configured();
+			$data['helcimpay_js_url']  = $this->helcim_lib->helcimpay_js_url();
+
 			// Transaction history (added for account transactions tab)
 			if (method_exists($this->usermodel, 'getUserTransactions')) {
 				$data['user_transactions'] = $this->usermodel->getUserTransactions($data['userInfo']->user_id, 50);
@@ -2453,6 +2528,7 @@ class User extends CI_Controller
 	===================*/
 	public function video_details($slug)
 	{
+		if (!$this->requireService('service_videos_enabled')) return;
 		// Get video details by slug
 		$data['video'] = $this->usermodel->getSingleValue($slug, 'video_slug', 'video');
 
@@ -2503,6 +2579,7 @@ class User extends CI_Controller
 	 */
 	public function news_details($slug_or_id)
 	{
+		if (!$this->requireService('service_news_enabled')) return;
 		// Get news details by slug or ID
 		if (is_numeric($slug_or_id)) {
 			$data['news'] = $this->usermodel->getSingleValue($slug_or_id, 'news_id', 'news');
@@ -2598,6 +2675,9 @@ class User extends CI_Controller
 		$data['listing_id'] = $inserted_id;
 
 		$data['listing'] = $this->usermodel->getSingleValue($inserted_id, 'listing_id', 'listings');
+
+		// Ownership guard — only the listing owner may edit it.
+		if (!$this->requireOwnedListing($data['listing'])) return;
 
 
 
@@ -2710,6 +2790,9 @@ class User extends CI_Controller
 
 		$data['listing'] = $this->usermodel->getSingleValue($inserted_id, 'listing_id', 'listings');
 
+		// Ownership guard — only the listing owner may edit it.
+		if (!$this->requireOwnedListing($data['listing'])) return;
+
 
 
 		if ($this->form_validation->run('listing_step_2') == FALSE) {
@@ -2769,6 +2852,9 @@ class User extends CI_Controller
 		$data['listing_id'] = $inserted_id;
 
 		$data['listing'] = $this->usermodel->getSingleValue($inserted_id, 'listing_id', 'listings');
+
+		// Ownership guard — only the listing owner may edit it.
+		if (!$this->requireOwnedListing($data['listing'])) return;
 
 
 
@@ -2837,6 +2923,9 @@ class User extends CI_Controller
 		$data['listing_id'] = $inserted_id;
 
 		$data['listing'] = $this->usermodel->getSingleValue($inserted_id, 'listing_id', 'listings');
+
+		// Ownership guard — only the listing owner may edit it.
+		if (!$this->requireOwnedListing($data['listing'])) return;
 
 
 
@@ -2910,6 +2999,9 @@ class User extends CI_Controller
 		$data['listing_id'] = $inserted_id;
 
 		$data['listing'] = $this->usermodel->getSingleValue($inserted_id, 'listing_id', 'listings');
+
+		// Ownership guard — only the listing owner may edit it.
+		if (!$this->requireOwnedListing($data['listing'])) return;
 
 
 
@@ -3437,6 +3529,15 @@ class User extends CI_Controller
 		$data['listing_slug']	= $slug;
 		$data['listing'] 		= $this->usermodel->getSingleValue($slug, 'listing_slug', 'listings');
 
+		// Ownership guard — a logged-in user may only edit a listing they own.
+		// (Login itself is already enforced by the constructor whitelist.)
+		if (!$this->requireOwnedListing($data['listing'])) return;
+
+		// Field-level capabilities from the owner's plan (freemium gating).
+		// Exposed to the view so locked fields render disabled + "upgrade".
+		$caps = $this->listingCapabilities($data['listing']->user_id);
+		$data['caps'] = $caps;
+
 		if ($data['listing']->category_id != '') {
 			$data['sub_category_listing'] = $this->adminmodel->ListingSubCategoryByCateId($data['listing']->category_id);
 		}
@@ -3485,7 +3586,14 @@ class User extends CI_Controller
 					'listing_slug' => $listing_slug
 				);
 
-				if ($_FILES && $_FILES['listing_profile_image']['name']) {
+				// Freemium gating — drop rich fields the owner's plan does not
+				// permit so a crafted POST cannot bypass the locked inputs.
+				if (!$caps['can_map'])           { unset($info['listing_lat'], $info['listing_lng']); }
+				if (!$caps['can_services'])      { unset($info['service_offered']); }
+				if (!$caps['can_video'])         { unset($info['listing_video']); }
+				if (!$caps['can_extra_details']) { unset($info['listing_seo_title'], $info['listing_seo_keywords'], $info['listing_seo_description']); }
+
+				if ($caps['can_photos'] && $_FILES && $_FILES['listing_profile_image']['name']) {
 					$img_info = [
 						'upload_path' => 'images/listings',
 						'quality'     => '60%',
@@ -3498,9 +3606,13 @@ class User extends CI_Controller
 				}
 
 				// Handle Gallery Images Upload for User Edit
-				if ($_FILES && isset($_FILES['listing_image_gallery']['name'][0]) && !empty($_FILES['listing_image_gallery']['name'][0])) {
+				if ($caps['can_photos'] && $_FILES && isset($_FILES['listing_image_gallery']['name'][0]) && !empty($_FILES['listing_image_gallery']['name'][0])) {
 					$gallery_images = [];
 					$files_count = count($_FILES['listing_image_gallery']['name']);
+					// Cap gallery photos to the plan's photo_limit (-1 = unlimited).
+					if ($caps['photo_limit'] >= 0 && $files_count > $caps['photo_limit']) {
+						$files_count = (int) $caps['photo_limit'];
+					}
 
 					// Debug: Log gallery upload attempt
 					error_log("USER EDIT Gallery upload attempt - Files count: " . $files_count);
@@ -3892,6 +4004,7 @@ class User extends CI_Controller
 
 	public function user_house_for_sale()
 	{
+		if (!$this->requireService('service_realestate_enabled')) return;
 		// Check if user is logged in
 		if (!$this->session->userdata('logged_user')) {
 			redirect('user/login');
@@ -4187,6 +4300,7 @@ class User extends CI_Controller
 	 */
 	public function house_details($house_slug = null)
 	{
+		if (!$this->requireService('service_realestate_enabled')) return;
 		if (!$house_slug) {
 			show_404();
 			return;
@@ -5094,6 +5208,7 @@ class User extends CI_Controller
 	 */
 	public function classifieds_details($classifieds_slug)
 	{
+		if (!$this->requireService('service_classifieds_enabled')) return;
 		// Get classifieds details by slug
 		$classifieds = $this->usermodel->getClassifiedsBySlug($classifieds_slug);
 		if (!$classifieds) {
@@ -5142,6 +5257,7 @@ class User extends CI_Controller
 
 	public function user_apartments_and_rental()
 	{
+		if (!$this->requireService('service_realestate_enabled')) return;
 		$data['logged_id'] = null;
 		if ($this->session->userdata('logged_user')) {
 			$session = $this->session->userdata('logged_user');
@@ -5414,6 +5530,7 @@ class User extends CI_Controller
 	 */
 	public function rental_details($rental_slug = null)
 	{
+		if (!$this->requireService('service_realestate_enabled')) return;
 		if (!$rental_slug) {
 			show_404();
 			return;
@@ -5471,6 +5588,7 @@ class User extends CI_Controller
 	 */
 	public function event_details($event_slug = null)
 	{
+		if (!$this->requireService('service_events_enabled')) return;
 		if (!$event_slug) {
 			show_404();
 			return;
@@ -6255,6 +6373,14 @@ class User extends CI_Controller
 			return;
 		}
 
+		// A subscription belongs to a user, so checkout requires login.
+		if (!$this->session->userdata('logged_user')) {
+			$this->session->set_userdata('redirect_url', base_url('checkout?plan_id=' . (int) $plan_id));
+			$this->session->set_flashdata('error', 'Please sign in to continue to checkout.');
+			redirect('login');
+			return;
+		}
+
 		// Initialize user and billing data
 		$data['billing_info'] = array();
 		$data['stored_payment_card'] = null;
@@ -6304,6 +6430,11 @@ class User extends CI_Controller
 		// Get all durations for this plan
 		$data['plan_durations'] = $this->usermodel->getPlanDurations($plan_id);
 
+		// Helcim front-end config for the checkout view.
+		$this->load->library('helcim_lib');
+		$data['helcim_configured'] = $this->helcim_lib->is_configured();
+		$data['helcimpay_js_url']  = $this->helcim_lib->helcimpay_js_url();
+
 		// Load views
 		$this->load->view('header', $data);
 		$this->load->view('checkout', $data);
@@ -6311,58 +6442,292 @@ class User extends CI_Controller
 	}
 
 	/**
-	 * Process Checkout — handle form submission and payment processing.
+	 * AJAX — initialize a HelcimPay.js checkout session for the selected plan
+	 * + duration and return the checkoutToken. The secretToken is stashed in
+	 * the session (never sent to the browser) so process_checkout() can
+	 * validate the returned transaction hash. URL: /helcim-init (POST)
+	 */
+	public function helcim_init()
+	{
+		$this->output->set_content_type('application/json');
+
+		if ($this->input->method() !== 'post' || !$this->session->userdata('logged_user')) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
+		}
+
+		$plan_id     = (int) $this->input->post('plan_id');
+		$duration_id = $this->input->post('duration_id') ? (int) $this->input->post('duration_id') : null;
+		$auto_renew  = $this->input->post('auto_renew') === '1' ? 1 : 0;
+
+		$plan = $this->usermodel->getPlanByIdForPricing($plan_id);
+		if (!$plan) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Invalid plan.')));
+		}
+
+		// Resolve the amount server-side from the plan/duration — never trust a
+		// client-supplied price.
+		$amount   = (float) $plan->price;
+		$duration = null;
+		if ($duration_id) {
+			$duration = $this->usermodel->getDurationById($duration_id);
+			if ($duration && (int) $duration->plan_id === $plan_id) {
+				$amount = (float) $duration->price;
+			} else {
+				$duration = null;
+			}
+		}
+		if ($amount <= 0) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'This plan has no payable amount configured.')));
+		}
+
+		$this->load->library('helcim_lib');
+		$init = $this->helcim_lib->initialize_checkout($amount, null, array(
+			'description' => 'Pearland411 — ' . $plan->name,
+		));
+		if (!$init['success']) {
+			log_message('error', 'Helcim init failed: ' . $init['error']);
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Could not start payment. Please try again.')));
+		}
+
+		$user = $this->session->userdata('logged_user');
+		$this->session->set_userdata('helcim_pending', array(
+			'checkoutToken' => $init['checkoutToken'],
+			'secretToken'   => $init['secretToken'],
+			'plan_id'       => $plan_id,
+			'duration_id'   => $duration_id,
+			'amount'        => $amount,
+			'currency'      => $this->helcim_lib->currency(),
+			'user_id'       => (int) $user['logged_id'],
+			'auto_renew'    => $auto_renew,
+			'mode'          => 'new',
+		));
+
+		return $this->output->set_output(json_encode(array(
+			'success'       => true,
+			'checkoutToken' => $init['checkoutToken'],
+		)));
+	}
+
+	/**
+	 * Process Checkout — validate the HelcimPay.js transaction and activate
+	 * the subscription. Called via AJAX from the checkout page's SUCCESS
+	 * handler, which posts the transaction data + hash + checkoutToken.
 	 *
-	 * SECURITY NOTE
-	 * The previous implementation mocked the payment as successful
-	 * (`$payment_successful = true`) without calling Authorize.Net,
-	 * stored the full PAN + CVV (via json_encode($_POST)) into
-	 * `transactions.response_payload`, and recorded a "success" row
-	 * the admin dashboard counted as real revenue.
+	 * Card data is tokenized by HelcimPay.js and never reaches this server.
+	 * We trust the payment only after recomputing and matching the response
+	 * hash against the secretToken we stored at initialize time. Idempotent —
+	 * a replayed post for an already-processed token is a no-op success.
 	 *
-	 * Until Authorize.Net credentials are wired (see
-	 * application/libraries/Authorize_net_lib.php +
-	 * application/config/authorize_net.php), this endpoint refuses
-	 * to accept card data and returns the user to the pricing page
-	 * with a clear message. No card number, CVV, expiry, or
-	 * cardholder name is ever read from POST in this code path.
-	 *
-	 * URL: /process-checkout (POST)
+	 * URL: /process-checkout (POST, JSON response)
 	 */
 	public function process_checkout()
 	{
-		if ($this->input->method() !== 'post') {
-			redirect('user/pricing_plan');
-			return;
+		$this->output->set_content_type('application/json');
+
+		if ($this->input->method() !== 'post' || !$this->session->userdata('logged_user')) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
 		}
 
-		// Sanity-check the plan (no money will move; we still validate
-		// so an attacker can't probe with junk).
-		$plan_id = $this->input->post('plan_id');
-		if (!$plan_id || !is_numeric($plan_id)) {
-			$this->session->set_flashdata('error', 'Invalid plan selected.');
-			redirect('user/pricing_plan');
-			return;
-		}
-		$selected_plan = $this->usermodel->getPlanByIdForPricing($plan_id);
-		if (!$selected_plan) {
-			$this->session->set_flashdata('error', 'Selected plan not found.');
-			redirect('user/pricing_plan');
-			return;
+		$pending = $this->session->userdata('helcim_pending');
+		if (!$pending || empty($pending['secretToken'])) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Your session expired. Please try again.')));
 		}
 
-		// HARD STOP. The Authorize.Net integration is not yet
-		// configured. We never read card_number / cvv / exp_* /
-		// card_name from POST — accepting them would store PCI data
-		// the application is not authorized to hold.
-		log_message('error', 'process_checkout called before live payments are wired; refusing.');
-		$this->session->set_flashdata(
-			'error',
-			'Online payments are temporarily unavailable while we finalize our payment processor. ' .
-			'Please contact support to activate your subscription.'
-		);
-		redirect('checkout?plan_id=' . (int) $plan_id);
-		return;
+		$checkout_token   = (string) $this->input->post('checkoutToken');
+		$transaction_json = (string) $this->input->post('transaction_json'); // exact JSON string that was hashed
+		$hash             = (string) $this->input->post('hash');
+
+		if ($checkout_token === '' || $checkout_token !== $pending['checkoutToken']) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Payment token mismatch.')));
+		}
+
+		$this->load->library('helcim_lib');
+		if (!$this->helcim_lib->validate_transaction($transaction_json, $hash, $pending['secretToken'])) {
+			log_message('error', 'Helcim hash validation failed for checkoutToken ' . $checkout_token);
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'We could not verify this payment. You were not charged twice — please contact support if the amount shows as taken.')));
+		}
+
+		// Pull the useful fields out of the validated transaction data.
+		$txn = json_decode($transaction_json, true);
+		$txn = is_array($txn) ? $txn : array();
+		$helcim_txn_id = isset($txn['transactionId']) ? $txn['transactionId'] : (isset($txn['id']) ? $txn['id'] : null);
+		$approval_code = isset($txn['approvalCode']) ? $txn['approvalCode'] : null;
+		$card_token    = isset($txn['cardToken']) ? $txn['cardToken'] : null;
+
+		// Upgrade mode only charges the prorated difference and switches the
+		// plan in place (keeping the current term); see switch_plan().
+		if (isset($pending['mode']) && $pending['mode'] === 'upgrade') {
+			$ok = $this->usermodel->applyPlanUpgrade(
+				(int) $pending['user_id'],
+				(int) $pending['plan_id'],
+				(float) $pending['amount'],
+				$pending['currency'],
+				$helcim_txn_id,
+				$approval_code
+			);
+			if (!$ok) {
+				return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Payment verified but the upgrade could not be applied. Please contact support with transaction id ' . $helcim_txn_id . '.')));
+			}
+			$plan = $this->usermodel->getPlanByIdForPricing((int) $pending['plan_id']);
+			$this->session->unset_userdata('helcim_pending');
+			$this->session->set_userdata('checkout_success_data', array(
+				'plan_name'      => $plan ? $plan->name : 'Subscription',
+				'amount'         => (float) $pending['amount'],
+				'currency'       => $pending['currency'],
+				'transaction_id' => $helcim_txn_id,
+				'subscription_id' => null,
+			));
+			return $this->output->set_output(json_encode(array('success' => true, 'redirect' => base_url('checkout-success'))));
+		}
+
+		$sub_id = $this->usermodel->activateHelcimSubscription(array(
+			'user_id'               => (int) $pending['user_id'],
+			'plan_id'               => (int) $pending['plan_id'],
+			'duration_id'           => $pending['duration_id'] ? (int) $pending['duration_id'] : null,
+			'amount'                => (float) $pending['amount'],
+			'currency'              => $pending['currency'],
+			'auto_renew'            => !empty($pending['auto_renew']) ? 1 : 0,
+			'helcim_transaction_id' => $helcim_txn_id,
+			'helcim_approval_code'  => $approval_code,
+			'helcim_card_token'     => $card_token,
+		));
+
+		if (!$sub_id) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Payment verified but activation failed. Please contact support with your transaction id ' . $helcim_txn_id . '.')));
+		}
+
+		// One-time consume: clear the pending session so a replay can't
+		// double-activate, and hand the receipt data to checkout_success().
+		$plan = $this->usermodel->getPlanByIdForPricing((int) $pending['plan_id']);
+		$this->session->unset_userdata('helcim_pending');
+		$this->session->set_userdata('checkout_success_data', array(
+			'plan_name'      => $plan ? $plan->name : 'Subscription',
+			'amount'         => (float) $pending['amount'],
+			'currency'       => $pending['currency'],
+			'transaction_id' => $helcim_txn_id,
+			'subscription_id' => $sub_id,
+		));
+
+		return $this->output->set_output(json_encode(array(
+			'success'  => true,
+			'redirect' => base_url('checkout-success'),
+		)));
+	}
+
+	/**
+	 * Helcim webhook receiver. Verifies the signature and logs the event so
+	 * card/recurring notifications can be reconciled. Public (no login) but
+	 * signature-gated. URL: /helcim-webhook (POST)
+	 */
+	public function helcim_webhook()
+	{
+		$this->output->set_content_type('application/json');
+		$raw       = $this->input->raw_input_stream;
+		$signature = isset($_SERVER['HTTP_WEBHOOK_SIGNATURE']) ? $_SERVER['HTTP_WEBHOOK_SIGNATURE'] : '';
+
+		$this->load->library('helcim_lib');
+		if (!$this->helcim_lib->verify_webhook($raw, $signature)) {
+			$this->output->set_status_header(401);
+			return $this->output->set_output(json_encode(array('ok' => false)));
+		}
+
+		// Signature valid — record it. Reconciliation of specific event types
+		// (recurring success/failure) is handled by the renewal job.
+		log_message('info', 'Helcim webhook received: ' . $raw);
+		return $this->output->set_output(json_encode(array('ok' => true)));
+	}
+
+	/**
+	 * AJAX — start a plan change from the account page. Upgrades (target price
+	 * > current) initialize a HelcimPay.js session for the PRORATED difference
+	 * and return a checkoutToken (mode=upgrade, finalized by process_checkout).
+	 * Downgrades / same price are scheduled for the next renewal.
+	 * URL: /plan-change-init (POST)
+	 */
+	public function plan_change_init()
+	{
+		$this->output->set_content_type('application/json');
+		if ($this->input->method() !== 'post' || !$this->session->userdata('logged_user')) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
+		}
+		$user    = $this->session->userdata('logged_user');
+		$user_id = (int) $user['logged_id'];
+		$target_plan_id = (int) $this->input->post('plan_id');
+
+		$current = $this->usermodel->getUserSubscription($user_id);
+		if (!$current) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'No active subscription. Please choose a plan first.')));
+		}
+		$target = $this->usermodel->getPlanByIdForPricing($target_plan_id);
+		if (!$target) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Invalid plan.')));
+		}
+		if ((int) $target->id === (int) $current->plan_id) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'You are already on this plan.')));
+		}
+
+		$current_price = (float) $current->total_amount > 0 ? (float) $current->total_amount : (float) $current->price;
+		$target_price  = (float) $target->price;
+
+		// Downgrade / same price -> schedule at renewal.
+		if ($target_price <= $current_price) {
+			$this->usermodel->scheduleDowngrade($user_id, $target_plan_id);
+			return $this->output->set_output(json_encode(array(
+				'success' => true, 'mode' => 'downgrade',
+				'message' => 'Your plan will change to ' . $target->name . ' at your next renewal.',
+			)));
+		}
+
+		// Upgrade -> charge the prorated difference for the remaining term.
+		$term_days = (int) $current->duration_days ?: 30;
+		$remaining = max(0, (int) ceil((strtotime($current->end_date) - time()) / 86400));
+		$remaining = min($remaining, $term_days);
+		$prorated  = round(($target_price - $current_price) * ($remaining / max(1, $term_days)), 2);
+
+		if ($prorated < 0.50) {
+			// Negligible difference — switch now, no charge.
+			$this->usermodel->applyPlanUpgrade($user_id, $target_plan_id, 0, ($current->currency ?: 'USD'), null, null);
+			return $this->output->set_output(json_encode(array('success' => true, 'mode' => 'switched', 'message' => 'You are now on ' . $target->name . '.')));
+		}
+
+		$this->load->library('helcim_lib');
+		$init = $this->helcim_lib->initialize_checkout($prorated, null, array(
+			'description' => 'Pearland411 upgrade to ' . $target->name,
+		));
+		if (!$init['success']) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Could not start payment. Please try again.')));
+		}
+		$this->session->set_userdata('helcim_pending', array(
+			'checkoutToken' => $init['checkoutToken'],
+			'secretToken'   => $init['secretToken'],
+			'plan_id'       => $target_plan_id,
+			'duration_id'   => null,
+			'amount'        => $prorated,
+			'currency'      => $this->helcim_lib->currency(),
+			'user_id'       => $user_id,
+			'auto_renew'    => 0,
+			'mode'          => 'upgrade',
+		));
+		return $this->output->set_output(json_encode(array(
+			'success' => true, 'mode' => 'upgrade',
+			'checkoutToken' => $init['checkoutToken'], 'amount' => $prorated,
+		)));
+	}
+
+	/** Cancel auto-renew; the plan runs to end_date. URL: /cancel-subscription (POST) */
+	public function cancel_subscription()
+	{
+		if ($this->input->method() !== 'post' || !$this->session->userdata('logged_user')) {
+			redirect('user/my_account');
+			return;
+		}
+		$user = $this->session->userdata('logged_user');
+		if ($this->usermodel->cancelAutoRenew((int) $user['logged_id'])) {
+			$this->session->set_flashdata('message', 'Auto-renew cancelled. Your plan stays active until the end of the current term.');
+		} else {
+			$this->session->set_flashdata('error', 'No active subscription to cancel.');
+		}
+		redirect('user/my_account');
 	}
 
 	/**

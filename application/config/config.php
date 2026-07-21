@@ -539,4 +539,4 @@ $config['rewrite_short_tags'] = FALSE;
 */
 $config['proxy_ips'] = '';
 
-/* Authorize.Net configuration moved to application/config/authorize_net.php */
+/* Payment gateway configuration lives in application/config/helcim.php */

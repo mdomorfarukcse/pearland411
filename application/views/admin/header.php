@@ -108,6 +108,7 @@
               </div>
 
             </li>
+            <?php if (site_setting('service_products_enabled','1') !== '0'): ?>
             <li class="ic-prod">
 
               <a href="#" class="">Products</a>
@@ -132,6 +133,7 @@
 
             </li>
 
+            <?php endif; ?>
             <li class="ic-prod">
               <a href="#" class="">Services</a>
               <div>
@@ -211,6 +213,7 @@
             </li>
 
 
+            <?php if (site_setting('service_events_enabled','1') !== '0'): ?>
             <li class="ic-eve">
 
               <a href="#" class="">Events</a>
@@ -235,6 +238,8 @@
 
             </li>
 
+            <?php endif; ?>
+            <?php if (site_setting('service_blog_enabled','1') !== '0'): ?>
             <li class="ic-blo">
               <a href="#" class="">Blogs</a>
               <div>
@@ -248,6 +253,8 @@
                 </ol>
               </div>
             </li>
+            <?php endif; ?>
+            <?php if (site_setting('service_news_enabled','1') !== '0'): ?>
             <li class="ic-blo">
               <a href="#" class="">News</a>
               <div>
@@ -261,6 +268,8 @@
                 </ol>
               </div>
             </li>
+            <?php endif; ?>
+            <?php if (site_setting('service_videos_enabled','1') !== '0'): ?>
             <li class="ic-blo">
               <a href="#" class="">Video</a>
               <div>
@@ -277,6 +286,8 @@
                 </ol>
               </div>
             </li>
+            <?php endif; ?>
+            <?php if (site_setting('service_classifieds_enabled','1') !== '0'): ?>
             <li class="ic-blo">
               <a href="#" class="">Classifieds</a>
               <div>
@@ -309,6 +320,8 @@
                   </ol>
                 </div>
               </li> -->
+            <?php endif; ?>
+            <?php if (site_setting('service_realestate_enabled','1') !== '0'): ?>
             <li class="ic-blo">
               <a href="#" class="">Apartments & Rentals</a>
               <div>
@@ -341,6 +354,7 @@
                 </ol>
               </div>
             </li>
+            <?php endif; ?>
             <li class="ic-blo">
               <a href="#">Ads</a>
               <div>

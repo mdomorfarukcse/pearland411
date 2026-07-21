@@ -59,6 +59,16 @@ $route['pricing-plan'] = 'User/pricing_plan';
 $route['pricing-details'] = 'User/pricing_plan';
 $route['all-news'] = 'User/news';
 $route['post-your-ads'] = 'User/post_your_ads';
+
+// Payments (Helcim). Explicit so the method name is unambiguous — the
+// webhook is session-less and must match the __construct public whitelist,
+// and the AJAX endpoints resolve consistently regardless of _remap.
+$route['helcim-webhook']      = 'User/helcim_webhook';
+$route['helcim-init']         = 'User/helcim_init';
+$route['process-checkout']    = 'User/process_checkout';
+$route['plan-change-init']    = 'User/plan_change_init';
+$route['cancel-subscription'] = 'User/cancel_subscription';
+
 $route['(:any)'] = 'User/$1';
 $route['404_override'] = 'errors/page_missing';
 $route['translate_uri_dashes'] = TRUE;
