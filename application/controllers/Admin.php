@@ -5503,74 +5503,9 @@ class Admin extends CI_Controller
 			$data['pricing_plans'] = array(); // Empty array if database not ready
 		}
 
-		// If still empty, create some sample data for display
-		if (empty($data['pricing_plans'])) {
-			$data['pricing_plans'] = array(
-				(object) array(
-					'id' => 1,
-					'name' => 'Basic Plan',
-					'price' => 29,
-					'currency' => 'USD',
-					'billing_interval' => 'monthly',
-					'duration_days' => 30,
-					'listing_limit' => 5,
-					'product_limit' => 2,
-					'event_limit' => 1,
-					'classified_limit' => 3,
-					'blog_limit' => 2,
-					'news_limit' => 1,
-					'video_limit' => 1,
-					'rental_limit' => 2,
-					'house_limit' => 1,
-					'ad_limit' => 3,
-					'featured_listing' => 0,
-					'analytics_access' => 0,
-					'is_active' => 1
-				),
-				(object) array(
-					'id' => 2,
-					'name' => 'Standard Plan',
-					'price' => 59,
-					'currency' => 'USD',
-					'billing_interval' => 'monthly',
-					'duration_days' => 60,
-					'listing_limit' => 15,
-					'product_limit' => 10,
-					'event_limit' => 5,
-					'classified_limit' => 10,
-					'blog_limit' => 8,
-					'news_limit' => 5,
-					'video_limit' => 6,
-					'rental_limit' => 8,
-					'house_limit' => 5,
-					'ad_limit' => 10,
-					'featured_listing' => 1,
-					'analytics_access' => 0,
-					'is_active' => 1
-				),
-				(object) array(
-					'id' => 3,
-					'name' => 'Premium Plan',
-					'price' => 99,
-					'currency' => 'USD',
-					'billing_interval' => 'monthly',
-					'duration_days' => 90,
-					'listing_limit' => -1,
-					'product_limit' => -1,
-					'event_limit' => -1,
-					'classified_limit' => -1,
-					'blog_limit' => -1,
-					'news_limit' => -1,
-					'video_limit' => -1,
-					'rental_limit' => -1,
-					'house_limit' => -1,
-					'ad_limit' => -1,
-					'featured_listing' => 1,
-					'analytics_access' => 1,
-					'is_active' => 1
-				)
-			);
-		}
+		// No hardcoded placeholder fallback: the pricing catalog is data-driven.
+		// If the DB has no active plans, the view renders its own empty state and
+		// invites the admin to add one (or import the packages seed).
 
 		$this->load->view('admin/header');
 		$this->load->view('admin/pricing', $data);
@@ -5607,6 +5542,7 @@ class Admin extends CI_Controller
 				'currency' => $this->input->post('currency') !== null ? $this->input->post('currency') : 'USD',
 				'billing_interval' => $this->input->post('billing_interval') !== null ? $this->input->post('billing_interval') : 'monthly',
 				'duration_days' => $this->input->post('duration_days') !== null ? $this->input->post('duration_days') : 30,
+				'category' => $this->input->post('category') ? $this->input->post('category') : 'business-listing',
 				'description' => $this->input->post('description'),
 				'listing_limit' => $this->input->post('listing_limit'),
 				'product_limit' => $this->input->post('product_limit'),
@@ -5704,6 +5640,7 @@ class Admin extends CI_Controller
 				'currency' => $this->input->post('currency') !== null ? $this->input->post('currency') : null,
 				'billing_interval' => $this->input->post('billing_interval') !== null ? $this->input->post('billing_interval') : 'monthly',
 				'duration_days' => $this->input->post('duration_days') !== null ? $this->input->post('duration_days') : null,
+				'category' => $this->input->post('category') ? $this->input->post('category') : 'business-listing',
 				'description' => $this->input->post('description'),
 				'listing_limit' => $this->input->post('listing_limit'),
 				'product_limit' => $this->input->post('product_limit'),

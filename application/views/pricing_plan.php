@@ -158,17 +158,17 @@
             text-align: center;
         }
 
-        .ads-pricing-section .pri ul li:nth-child(3) .pri-box .c3 {
-            padding: 40px 20px 20px 20px !important;
+        .ads-pricing-section .cat-header {
+            width: 100%;
+            text-align: center;
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin: 40px 0 15px;
         }
 
-        .ads-pricing-section .pri ul li:nth-child(3) .pri-box .c2 {
-            background: var(--accent-color) !important;
-            color: white !important;
-        }
-
-        .ads-pricing-section .pri ul li:nth-child(3) .pri-box .c2 h4 {
-            color: white !important;
+        .ads-pricing-section .cat-header:first-of-type {
+            margin-top: 0;
         }
 
         .ads-pricing-section .pri-box .c5 a {
@@ -216,9 +216,31 @@
             <div class="container">
                 <div class="row">
                     <div>
-                        <ul>
                             <?php if (!empty($plans)): ?>
+                                <?php
+                                $catLabels = [
+                                    'business-listing' => 'Business Listing',
+                                    'add-ons' => 'Add-ons',
+                                    'site-wide-banners' => 'Site Wide Banners',
+                                    'category-banners' => 'Category Specific Banners',
+                                    'site-wide-videos' => 'Site Wide Videos',
+                                    'category-videos' => 'Category Specific Videos',
+                                    'special' => 'Special Package',
+                                ];
+                                $currentCategory = null;
+                                ?>
                                 <?php foreach ($plans as $index => $plan): ?>
+                                    <?php
+                                    $cat = isset($plan->category) ? $plan->category : 'business-listing';
+                                    // Listing tiers + special package show content limits; ad placements show their description.
+                                    $showLimits = in_array($cat, ['business-listing', 'special']);
+                                    ?>
+                                    <?php if ($cat !== $currentCategory): ?>
+                                        <?php if ($currentCategory !== null): ?></ul><?php endif; ?>
+                                        <?php $currentCategory = $cat; ?>
+                                        <h3 class="cat-header"><?= isset($catLabels[$cat]) ? $catLabels[$cat] : ucfirst($cat) ?></h3>
+                                        <ul>
+                                    <?php endif; ?>
                                     <li>
                                         <div class="pri-box">
                                             <div class="c2">
@@ -232,6 +254,7 @@
                                                 <p>Per <?= htmlspecialchars($plan->billing_interval) ?></p>
                                             </div>
                                             <div class="c4">
+                                                <?php if ($showLimits): ?>
                                                 <!-- Listings -->
                                                 <div class="feature-item">
                                                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -359,6 +382,14 @@
                                                         <span>Analytics Dashboard</span>
                                                     </div>
                                                 <?php endif; ?>
+                                                <?php else: ?>
+                                                    <div class="feature-item">
+                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
+                                                        </svg>
+                                                        <span><?= (int) $plan->duration_days ?> days placement</span>
+                                                    </div>
+                                                <?php endif; ?>
                                             </div>
                                             <div class="c5">
                                                 <?php
@@ -371,7 +402,11 @@
                                                 }
 
                                                 // Determine button text and URL
-                                                if ($is_logged_in && $current_user_plan_id == $plan->id): ?>
+                                                if ($plan->price <= 0): // Free package cannot be checked out ?>
+                                                    <a href="<?= $is_logged_in ? base_url('user/dashboard') : base_url('register') ?>" class="cta1">
+                                                        <?= $is_logged_in ? 'Get Started' : 'Sign Up Free' ?>
+                                                    </a>
+                                                <?php elseif ($is_logged_in && $current_user_plan_id == $plan->id): ?>
                                                     <a href="<?= base_url('user/my-account') ?>" class="cta1" style="background: #28a745 !important;">View Details</a>
                                                 <?php else: ?>
                                                     <a href="checkout?plan_id=<?= $plan->id ?>" class="cta1">
@@ -382,27 +417,29 @@
                                         </div>
                                     </li>
                                 <?php endforeach; ?>
+                                </ul>
                             <?php else: ?>
                                 <!-- Fallback if no plans found -->
-                                <li>
-                                    <div class="pri-box">
-                                        <div class="c2">
-                                            <h4>PLANS LOADING...</h4>
-                                            <p>Please wait while we load pricing plans</p>
-                                        </div>
-                                        <div class="c3">
-                                            <h2>$0</h2>
-                                            <p>Loading...</p>
-                                        </div>
-                                        <div class="c4">
-                                            <div class="feature-item">
-                                                <span>Loading plans from database...</span>
+                                <ul>
+                                    <li>
+                                        <div class="pri-box">
+                                            <div class="c2">
+                                                <h4>PLANS LOADING...</h4>
+                                                <p>Please wait while we load pricing plans</p>
+                                            </div>
+                                            <div class="c3">
+                                                <h2>$0</h2>
+                                                <p>Loading...</p>
+                                            </div>
+                                            <div class="c4">
+                                                <div class="feature-item">
+                                                    <span>Loading plans from database...</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </li>
+                                    </li>
+                                </ul>
                             <?php endif; ?>
-                        </ul>
                     </div>
                 </div>
             </div>
