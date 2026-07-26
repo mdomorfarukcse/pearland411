@@ -32,13 +32,34 @@
                             Manage pricing plans for different advertisement packages
                         </p>
 
+                        <?php
+                        $catLabels = [
+                            'business-listing' => 'Business Listing',
+                            'add-ons' => 'Add-ons',
+                            'site-wide-banners' => 'Site Wide Banners',
+                            'category-banners' => 'Category Specific Banners',
+                            'site-wide-videos' => 'Site Wide Videos',
+                            'category-videos' => 'Category Specific Videos',
+                            'special' => 'Special Package',
+                        ];
+                        $currentCategory = null;
+                        ?>
                         <div class="row">
                             <?php if (!empty($pricing_plans)): ?>
                                 <?php foreach ($pricing_plans as $index => $plan): ?>
                                     <?php
                                     $badge_colors = ['primary', 'success', 'warning', 'info'];
                                     $color = $badge_colors[$index % count($badge_colors)];
+                                    $cat = isset($plan->category) ? $plan->category : 'business-listing';
+                                    // Listing tiers + the special package advertise content limits;
+                                    // pure ad placements (banners/videos/add-ons) show their description.
+                                    $showLimits = in_array($cat, ['business-listing', 'special']);
                                     ?>
+                                    <?php if ($cat !== $currentCategory): $currentCategory = $cat; ?>
+                                        <div class="col-12">
+                                            <h4 class="mt-3 mb-2 border-bottom pb-2"><?php echo isset($catLabels[$cat]) ? $catLabels[$cat] : ucfirst($cat); ?></h4>
+                                        </div>
+                                    <?php endif; ?>
                                     <!-- <?php echo $plan->name; ?> -->
                                     <div class="col-lg-4">
                                         <div class="card border border-<?php echo $color; ?>">
@@ -51,6 +72,7 @@
                                                     </h2>
                                                 </div>
                                                 <div class="pricing-features mt-4">
+                                                    <?php if ($showLimits): ?>
                                                     <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
                                                         <?php echo ($plan->listing_limit == -1) ? 'Unlimited listings' : 'Up to ' . $plan->listing_limit . ' listings'; ?>
                                                     </p>
@@ -95,6 +117,15 @@
                                                             <i class="mdi mdi-close text-danger"></i> Analytics dashboard
                                                         <?php endif; ?>
                                                     </p>
+                                                    <?php else: ?>
+                                                    <?php if (!empty($plan->description)): ?>
+                                                        <p class="text-muted"><?php echo nl2br(htmlspecialchars($plan->description)); ?></p>
+                                                    <?php endif; ?>
+                                                    <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i> <?php echo $plan->duration_days; ?> days validity</p>
+                                                    <?php if ($plan->featured_listing): ?>
+                                                        <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i> Featured listing</p>
+                                                    <?php endif; ?>
+                                                    <?php endif; ?>
                                                 </div>
                                                 <div class="text-center mt-4">
                                                     <button class="btn btn-<?php echo $color; ?> btn-block" onclick="editPlan(<?php echo $plan->id; ?>)">Edit Plan</button>
@@ -250,6 +281,20 @@
                                         <option value="monthly">Monthly</option>
                                         <option value="yearly">Yearly</option>
                                         <option value="one-time">One Time</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="planCategory">Category</label>
+                                    <select class="form-control" name="category" id="planCategory">
+                                        <option value="business-listing">Business Listing</option>
+                                        <option value="add-ons">Add-ons</option>
+                                        <option value="site-wide-banners">Site Wide Banners</option>
+                                        <option value="category-banners">Category Specific Banners</option>
+                                        <option value="site-wide-videos">Site Wide Videos</option>
+                                        <option value="category-videos">Category Specific Videos</option>
+                                        <option value="special">Special Package</option>
                                     </select>
                                 </div>
                             </div>
@@ -475,6 +520,7 @@
                         $('#planCurrency').val(response.currency || 'USD');
                         $('#planDuration').val(response.duration_days || '');
                         $('#billingInterval').val(response.billing_interval || 'monthly');
+                        $('#planCategory').val(response.category || 'business-listing');
 
                         // Sidebar section limits
                         $('#listingsLimit').val(response.listing_limit || 0);

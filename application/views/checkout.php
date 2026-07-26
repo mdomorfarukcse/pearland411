@@ -462,7 +462,9 @@
 
                     <div class="plan-features">
                         <h4>What's Included:</h4>
+                        <?php $ck_show_limits = !isset($selected_plan->category) || in_array($selected_plan->category, ['business-listing', 'special']); ?>
                         <ul class="feature-list">
+                            <?php if ($ck_show_limits): ?>
                             <li><?= $selected_plan->listing_limit == -1 ? 'Unlimited' : $selected_plan->listing_limit ?> Listings</li>
                             <?php if ($selected_plan->product_limit > 0 || $selected_plan->product_limit == -1): ?>
                                 <li><?= $selected_plan->product_limit == -1 ? 'Unlimited' : $selected_plan->product_limit ?> Products</li>
@@ -499,6 +501,12 @@
                             <?php endif; ?>
                             <?php if ($selected_plan->analytics_access): ?>
                                 <li>Analytics Dashboard</li>
+                            <?php endif; ?>
+                            <?php else: ?>
+                            <?php if (!empty($selected_plan->description)): ?>
+                                <li><?= htmlspecialchars($selected_plan->description) ?></li>
+                            <?php endif; ?>
+                            <li><?= (int) $selected_plan->duration_days ?> days placement</li>
                             <?php endif; ?>
                         </ul>
                     </div>

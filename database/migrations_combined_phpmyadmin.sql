@@ -504,4 +504,13 @@ SET @s := IF(@e = 0, 'ALTER TABLE `subscriptions` ADD COLUMN `pending_plan_id` I
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
+-- ============================================================
+-- 0014_plan_category.sql
+-- Advertising catalog group slug on `plans`.
+-- ============================================================
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='plans' AND COLUMN_NAME='category');
+SET @s := IF(@e = 0, 'ALTER TABLE `plans` ADD COLUMN `category` VARCHAR(50) NOT NULL DEFAULT ''business-listing'' COMMENT ''Advertising catalog group''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
 SET FOREIGN_KEY_CHECKS = 1;

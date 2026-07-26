@@ -42,9 +42,15 @@ mysql -u <user> -p <db_name> < database/migrations/0010_plan_capabilities.sql
 mysql -u <user> -p <db_name> < database/migrations/0011_service_registry.sql
 mysql -u <user> -p <db_name> < database/migrations/0012_helcim_billing.sql
 mysql -u <user> -p <db_name> < database/migrations/0013_subscription_lifecycle.sql
+mysql -u <user> -p <db_name> < database/migrations/0014_plan_category.sql
 
 # Optional convenience seed (not a migration):
 mysql -u <user> -p <db_name> < database/seeds/plan_capability_defaults.sql
+
+# Advertising catalog seed — replaces the placeholder plans with the real
+# 22-package Pearland411 catalog (deletes current plans, inserts the catalog).
+# Self-contained: guard-adds `category` itself, so it can run before or after 0014.
+mysql -u <user> -p <db_name> < database/seeds/pearland411_packages.sql
 ```
 
 ## Why each migration exists
@@ -58,6 +64,7 @@ mysql -u <user> -p <db_name> < database/seeds/plan_capability_defaults.sql
 | `0004_rate_limits.sql` | `rate_limits` table backing the `Rate_limit` library. Protects login, register, password-reset, enquiry, review, newsletter signup, and service-request endpoints from brute-force / spam. |
 | `0005_admin_roles.sql` | Adds `admin.role` (`super_admin`/`editor`) + `admin.is_active`. Promotes the seeded admin (id=1) to `super_admin`. Sub-admin management, billing, and ad-sales screens are gated to super-admins; editors can manage content. |
 | `0006_ad_zones.sql` | Adds `ads_prices.slot_key` so the frontend ad-slot partial (`application/views/partials/ad_slot.php`) can request "the ad for the home-hero slot" by code rather than admin-typed name. Seeds 8 canonical slots: `home-hero`, `home-sidebar`, `listing-sidebar`, `listing-top`, `listing-inline`, `events-sidebar`, `news-sidebar`, `footer-banner`. |
+| `0014_plan_category.sql` | Adds `plans.category` — the advertising-catalog group slug (`business-listing`, `add-ons`, `site-wide-banners`, `category-banners`, `site-wide-videos`, `category-videos`, `special`). Lets the admin and public pricing pages render packages under their catalog section headings. Populated by `seeds/pearland411_packages.sql`. |
 
 ## Outstanding follow-up
 
