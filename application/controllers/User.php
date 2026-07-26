@@ -56,7 +56,7 @@ class User extends CI_Controller
 			// and is signature-verified instead of session-gated.
 			'checkout', 'checkout_success', 'process_checkout', 'helcim_webhook',
 			// Advertising cart — guests build a cart before logging in.
-			'cart_add', 'cart_remove', 'cart_get', 'cart_clear',
+			'cart_add', 'cart_remove', 'cart_get', 'cart_clear', 'buy_now',
 			// Enquiry submission (rate-limited; anonymous OK)
 			'add_enquiry',
 			// Services catalog + quote requests
@@ -6337,7 +6337,13 @@ class User extends CI_Controller
 			$user_data = $this->session->userdata('logged_user');
 			$user_id = $user_data['logged_id']; // Use logged_id based on the User model pattern
 			$data['user_subscription'] = $this->usermodel->getUserActiveSubscriptionForPricing($user_id);
+			// "My packages" strip: what they own and when each expires.
+			$data['my_packages'] = $this->usermodel->getUserPurchasedPackages($user_id);
 		}
+		if (!isset($data['my_packages'])) {
+			$data['my_packages'] = array();
+		}
+		$data['cart'] = $this->cartSummary();
 
 		// Load header categories for navigation
 		$this->loadHeaderCategories($data);
@@ -6824,6 +6830,23 @@ class User extends CI_Controller
 		$this->output->set_content_type('application/json');
 		$this->session->unset_userdata('ad_cart');
 		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
+	}
+
+	/**
+	 * GET/POST — "Buy Now": replace the cart with this single item and go
+	 * straight to checkout. URL: /buy-now?plan_id=X
+	 */
+	public function buy_now()
+	{
+		$plan_id = (int) ($this->input->post('plan_id') ?: $this->input->get('plan_id'));
+		$plan = $this->usermodel->getPlanByIdForPricing($plan_id);
+		if (!$plan || (float) $plan->price <= 0) {
+			$this->session->set_flashdata('error', 'Please choose a valid package.');
+			redirect('pricing-plan');
+			return;
+		}
+		$this->session->set_userdata('ad_cart', array($plan_id));
+		redirect('checkout');
 	}
 
 	/**

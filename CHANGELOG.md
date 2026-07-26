@@ -6,6 +6,51 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-07 — Checkout restyled to match the pricing page
+
+### Changed
+- **`views/cart_checkout.php`** now shares the pricing page's design system (same palette, card
+  radius, shadows and button treatment): gradient hero, a 3-step rail (Choose packages → Checkout →
+  You're live), order lines with right-aligned prices and category captions, a prominent
+  "Pay USD X securely" button, and a trust list (Helcim / encrypted / card details never stored).
+  Guest state gets segmented Sign in / Create account tabs with restyled inputs and focus rings.
+  Payment JS untouched — `#cco-err`, `#cco-pay`, `.cco-tab`, `.cco-pane`, `#pane-login`,
+  `#pane-register` and the `data-plan` remove buttons all preserved. Verified at 1280px and 390px
+  (no horizontal overflow), in both logged-in and guest states.
+
+### Notes
+- `views/checkout.php` is the legacy single-plan checkout and is **no longer loaded** by any
+  controller (`User::checkout()` renders `cart_checkout`). Left in place, untouched.
+
+---
+
+## 2026-07 — Pricing page redesign (professional UI/UX pass)
+
+### Fixed
+- **Nested-document bug.** `views/pricing_plan.php` emitted a full `<!DOCTYPE><html><head><body>`
+  document while being loaded *between* the `header` and `footer` views, so the site header/nav was
+  rendered a second time in the middle of the page and the layout broke. It is now a proper view
+  fragment.
+
+### Changed
+- **Rebuilt the pricing page.** Full-width gradient hero; each catalog section (Business Listing,
+  Add-ons, Site Wide / Category Banners, Site Wide / Category Videos, Special Package) gets a
+  heading + one-line explainer; packages render as an even, responsive card grid with clear
+  price/interval, readable checkmark feature lists, and "Most popular" / "Best value" / "Your plan"
+  badges. Verified at 1280px and 390px (no horizontal overflow).
+- **Buy Now on every paid card** (`/buy-now?plan_id=X` → replaces cart → `/checkout`), with a
+  secondary "+ Add to bundle" toggle for buying several things together.
+- **Floating cart box replaced** by a slim sticky bottom bar (item count, total, item names, Clear,
+  Checkout) that only appears once something is selected.
+
+### Added
+- **"Your active packages" strip** at the top of the pricing page for logged-in users — each owned
+  package with its expiry date, days remaining, an "Auto-renews" pill, and an amber highlight when
+  it expires within 14 days. Backed by `Usermodel::getUserPurchasedPackages()` (active subscriptions
+  plus paid ad placements, expiry computed from the plan's `duration_days`).
+
+---
+
 ## 2026-07 — Advertising cart & multi-item checkout
 
 Turned the single-plan pricing/checkout into a multi-item cart so customers can buy several

@@ -1,574 +1,317 @@
-<!DOCTYPE html>
-<html lang="en">
+<?php
+/**
+ * Advertising catalog / pricing page.
+ *
+ * NOTE: this is a view *fragment* — it renders between the `header` and
+ * `footer` views, so it must not emit <!DOCTYPE>/<html>/<head>/<body>.
+ *
+ * $plans        rows from plans (grouped by `category`)
+ * $my_packages  what the logged-in user owns + expiry (may be empty)
+ * $cart         current session cart summary
+ */
+$catLabels = array(
+    'business-listing'  => 'Business Listing',
+    'add-ons'           => 'Add-ons',
+    'site-wide-banners' => 'Site Wide Banners',
+    'category-banners'  => 'Category Specific Banners',
+    'site-wide-videos'  => 'Site Wide Videos',
+    'category-videos'   => 'Category Specific Videos',
+    'special'           => 'Special Package',
+);
+$catBlurbs = array(
+    'business-listing'  => 'Your core presence in the directory. Pick one tier.',
+    'add-ons'           => 'Optional boosts you can stack on any listing.',
+    'site-wide-banners' => 'Seen on every page of Pearland411.',
+    'category-banners'  => 'Targeted to shoppers browsing your category.',
+    'site-wide-videos'  => 'Your video in the right rail, site-wide.',
+    'category-videos'   => 'Your video shown inside your category.',
+    'special'           => 'Everything bundled at the best value.',
+);
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pricing Plans - Pearland</title>
-    <style>
-        /* ======= Root Variables ======= */
-        :root {
-            --primary-color: #180f5e;
-            --accent-color: #7bb73f;
-            --text-dark: #333;
-            --text-light: #666;
-            --bg-light: #f8f9fa;
-            --border-color: #e0e0e0;
+// Group the catalog by category, preserving sort order.
+$grouped = array();
+foreach ($plans as $p) {
+    $c = isset($p->category) && $p->category ? $p->category : 'business-listing';
+    $grouped[$c][] = $p;
+}
+$cartIds = array();
+if (!empty($cart['items'])) {
+    foreach ($cart['items'] as $ci) { $cartIds[] = (int) $ci['plan_id']; }
+}
+
+/** Bullet list for a card: limits for listing/special tiers, placement details otherwise. */
+function pp_features($plan, $cat)
+{
+    $f = array();
+    if (in_array($cat, array('business-listing', 'special'))) {
+        $map = array(
+            'listing_limit' => 'Listing', 'product_limit' => 'Product', 'event_limit' => 'Event',
+            'classified_limit' => 'Classified', 'rental_limit' => 'Rental', 'house_limit' => 'House',
+            'blog_limit' => 'Blog', 'video_limit' => 'Video', 'news_limit' => 'News', 'ad_limit' => 'Ad',
+        );
+        foreach ($map as $col => $label) {
+            if (!isset($plan->$col)) continue;
+            $v = (int) $plan->$col;
+            if ($v === 0) continue;
+            $f[] = ($v === -1 ? 'Unlimited' : $v) . ' ' . $label . ($v === 1 ? '' : 's');
         }
+        if (!empty($plan->featured_listing))  $f[] = 'Featured placement';
+        if (!empty($plan->priority_support))  $f[] = 'Priority support';
+        if (!empty($plan->analytics_access))  $f[] = 'Analytics dashboard';
+    } elseif (!empty($plan->duration_days)) {
+        $f[] = (int) $plan->duration_days . ' days placement';
+    }
+    return $f;
+}
+?>
 
-        /* ========================= Pricing Section Start ========================= */
-        .ads-pricing-section {
-            padding: 60px 0;
-            margin-bottom: 120px;
-            background: linear-gradient(135deg, #ffffff 0%, var(--bg-light) 100%);
-        }
+<style>
+    .pp{--ink:#1c1b4b;--ink2:#5b5b7a;--line:#e7e7f2;--brand:#180f5e;--go:#21a179;}
+    .pp{background:#f7f8fc;padding:0 0 90px;color:var(--ink);}
+    .pp *{box-sizing:border-box;}
 
-        .ads-pricing-section .section-header {
-            text-align: center;
-            margin-bottom: 40px;
-        }
+    /* Hero */
+    .pp-hero{background:linear-gradient(135deg,#180f5e 0%,#2d1f8f 100%);color:#fff;padding:56px 20px 44px;text-align:center;}
+    .pp-hero h1{font-size:34px;font-weight:800;margin:0 0 10px;color:#fff;}
+    .pp-hero h1 span{color:#7bdcb5;}
+    .pp-hero p{margin:0 auto;max-width:620px;font-size:15px;line-height:1.6;color:#cfcbe8;}
 
-        .ads-pricing-section .section-header h2 {
-            font-size: 35px;
-            font-weight: 700;
-            color: var(--text-dark);
-            margin-bottom: 12px;
-        }
+    .pp-wrap{max-width:1180px;margin:0 auto;padding:0 20px;}
 
-        .ads-pricing-section .section-header .highlight {
-            color: var(--accent-color);
-        }
+    /* My packages */
+    .pp-mine{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:-28px auto 34px;box-shadow:0 8px 26px rgba(24,15,94,.08);position:relative;}
+    .pp-mine h3{font-size:15px;font-weight:800;margin:0 0 14px;color:var(--ink);}
+    .pp-mine-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;}
+    .pp-mine-item{border:1px solid var(--line);border-left:3px solid var(--go);border-radius:10px;padding:11px 13px;background:#fbfbfe;}
+    .pp-mine-item .n{font-weight:700;font-size:14px;}
+    .pp-mine-item .e{font-size:12px;color:var(--ink2);margin-top:3px;}
+    .pp-mine-item.soon{border-left-color:#e8a33d;}
+    .pp-mine-item.soon .e{color:#b4791d;font-weight:600;}
+    .pp-mine .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#eaf7f2;color:var(--go);margin-left:6px;}
 
-        .ads-pricing-section .section-header .subtitle {
-            font-size: 16px;
-            color: var(--text-light);
-            max-width: 550px;
-            margin: 0 auto;
-            line-height: 1.5;
-        }
+    /* Section heading */
+    .pp-sec{margin:44px 0 0;}
+    .pp-sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
+    .pp-sec-head h2{font-size:23px;font-weight:800;margin:0;color:var(--ink);}
+    .pp-sec-head .hint{font-size:13px;color:var(--ink2);}
+    .pp-sec-rule{height:3px;width:54px;background:var(--go);border-radius:3px;margin:10px 0 22px;}
 
-        .ads-pricing-section .pri {
-            padding: 0px !important;
-        }
+    /* Cards */
+    .pp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:20px;}
+    .pp-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px 22px 22px;display:flex;flex-direction:column;transition:.18s;position:relative;}
+    .pp-card:hover{transform:translateY(-3px);box-shadow:0 14px 32px rgba(24,15,94,.11);border-color:#d5d5ea;}
+    .pp-card.is-selected{border-color:var(--go);box-shadow:0 0 0 2px rgba(33,161,121,.16);}
+    .pp-card.owned{border-color:#c9e6da;background:#fafffd;}
+    .pp-badge{position:absolute;top:-10px;right:16px;background:var(--go);color:#fff;font-size:11px;font-weight:700;padding:4px 11px;border-radius:20px;letter-spacing:.3px;}
+    .pp-badge.pop{background:#e8a33d;}
+    .pp-name{font-size:14px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--ink);margin:0 0 8px;line-height:1.35;}
+    .pp-desc{font-size:13px;line-height:1.6;color:var(--ink2);margin:0 0 18px;}
+    .pp-price{display:flex;align-items:baseline;gap:5px;margin-bottom:4px;}
+    .pp-price .amt{font-size:36px;font-weight:800;color:var(--ink);line-height:1;}
+    .pp-price .per{font-size:13px;color:var(--ink2);}
+    .pp-feats{list-style:none;padding:0;margin:18px 0 22px;border-top:1px solid var(--line);padding-top:16px;}
+    .pp-feats li{position:relative;padding-left:23px;font-size:13.5px;line-height:1.5;color:#43425f;margin-bottom:9px;}
+    .pp-feats li:before{content:"";position:absolute;left:0;top:4px;width:15px;height:15px;border-radius:50%;background:#eaf7f2;}
+    .pp-feats li:after{content:"";position:absolute;left:4.5px;top:8px;width:5px;height:8px;border-right:2px solid var(--go);border-bottom:2px solid var(--go);transform:rotate(42deg);}
+    .pp-cta{margin-top:auto;}
+    .pp-buy{display:block;width:100%;text-align:center;background:var(--brand);color:#fff;border:none;padding:12px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer;text-decoration:none;transition:.15s;}
+    .pp-buy:hover{background:#241596;color:#fff;}
+    .pp-buy.free{background:#fff;color:var(--brand);border:1.5px solid var(--brand);}
+    .pp-buy.ownedbtn{background:#eaf7f2;color:var(--go);cursor:default;}
+    .pp-add{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:9px;background:none;border:1.5px dashed #cfcfe4;color:#5b5b7a;padding:9px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;}
+    .pp-add:hover{border-color:var(--go);color:var(--go);}
+    .pp-add.on{background:#eaf7f2;border:1.5px solid var(--go);color:var(--go);}
 
-        .ads-pricing-section .pri ul {
-            display: flex;
-            justify-content: center;
-            align-items: start;
-            flex-wrap: wrap;
-            gap: 30px;
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
+    /* Sticky bundle bar */
+    .pp-bar{position:fixed;left:0;right:0;bottom:0;background:#161540;color:#fff;padding:13px 20px;display:none;z-index:9999;box-shadow:0 -6px 24px rgba(0,0,0,.22);}
+    .pp-bar.show{display:block;}
+    .pp-bar-in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+    .pp-bar .sum{font-size:14px;flex:1;min-width:180px;}
+    .pp-bar .sum b{font-size:19px;margin-left:6px;}
+    .pp-bar .items{font-size:12px;color:#a9a7d0;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:640px;}
+    .pp-bar a.co{background:var(--go);color:#fff;padding:11px 26px;border-radius:9px;font-weight:700;text-decoration:none;font-size:14.5px;}
+    .pp-bar button.clr{background:none;border:none;color:#a9a7d0;font-size:13px;cursor:pointer;text-decoration:underline;}
 
-        .ads-pricing-section .pri .row {
-            justify-content: center;
-        }
+    @media(max-width:640px){
+        .pp-hero h1{font-size:26px;}
+        .pp-grid{grid-template-columns:1fr;}
+        .pp-bar-in{flex-direction:column;align-items:stretch;text-align:center;gap:9px;}
+        .pp-bar a.co{display:block;}
+        .pp-bar .items{display:none;}
+    }
+</style>
 
-        .ads-pricing-section .pri ul li {
-            flex: 1;
-            max-width: 370px;
-            min-width: 280px;
-        }
+<div class="pp">
+    <div class="pp-hero">
+        <h1>Advertise on <span>Pearland411</span></h1>
+        <p>Get in front of local customers searching for businesses like yours. Choose a listing tier, then boost it with banners, videos and add-ons.</p>
+    </div>
 
-        .ads-pricing-section .pri-box {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
-        }
+    <div class="pp-wrap">
 
-        .ads-pricing-section .pri-box:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-        }
-
-        .ads-pricing-section .pri-box .c2 {
-            background: linear-gradient(135deg, var(--primary-color) 0%, #2a1a7a 100%);
-            color: white;
-            padding: 30px 20px;
-            text-align: center;
-        }
-
-        .ads-pricing-section .pri-box .c2 h4 {
-            font-size: 22px;
-            font-weight: 700;
-            margin: 0 0 8px 0;
-            color: white;
-        }
-
-        .ads-pricing-section .pri-box .c2 p {
-            font-size: 14px;
-            margin: 0;
-            opacity: 0.9;
-        }
-
-        .ads-pricing-section .pri-box .c3 {
-            padding: 30px 20px !important;
-            text-align: center;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .ads-pricing-section .pri-box .c3 h2 {
-            font-size: 42px;
-            font-weight: 800;
-            color: var(--accent-color);
-            margin: 0 0 5px 0;
-            line-height: 1;
-        }
-
-        .ads-pricing-section .pri-box .c3 p {
-            font-size: 14px;
-            color: var(--text-light);
-            margin: 0;
-            text-transform: capitalize;
-        }
-
-        .ads-pricing-section .pri-box .c4 {
-            padding: 25px 20px;
-        }
-
-        .ads-pricing-section .pri-box .c4 .feature-item {
-            display: flex;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid #f0f0f0;
-        }
-
-        .ads-pricing-section .pri-box .c4 .feature-item:last-child {
-            border-bottom: none;
-        }
-
-        .ads-pricing-section .pri-box .c4 .feature-item svg {
-            margin-right: 12px;
-            flex-shrink: 0;
-        }
-
-        .ads-pricing-section .pri-box .c4 .feature-item span {
-            font-size: 14px;
-            color: var(--text-dark);
-            font-weight: 500;
-        }
-
-        .ads-pricing-section .pri-box .c5 {
-            padding: 20px;
-            text-align: center;
-        }
-
-        .ads-pricing-section .cat-header {
-            width: 100%;
-            text-align: center;
-            font-size: 26px;
-            font-weight: 700;
-            color: var(--primary-color);
-            margin: 40px 0 15px;
-        }
-
-        .ads-pricing-section .cat-header:first-of-type {
-            margin-top: 0;
-        }
-
-        .ads-pricing-section .pri-box .c5 a {
-            background: var(--accent-color) !important;
-            color: white !important;
-            border-radius: 50px !important;
-            padding: 10px 25px !important;
-            font-size: 14px !important;
-            text-decoration: none;
-            display: inline-block;
-            transition: all 0.3s ease;
-        }
-
-        .ads-pricing-section .pri-box .c5 a:hover {
-            background: var(--primary-color) !important;
-        }
-
-        @media (max-width: 768px) {
-            .ads-pricing-section .section-header h2 {
-                font-size: 30px;
-            }
-
-            .ads-pricing-section .pri ul {
-                flex-direction: column;
-                align-items: center;
-            }
-
-            .ads-pricing-section .pri ul li {
-                max-width: 100%;
-                width: 100%;
-            }
-        }
-
-        /* --- Advertising cart: readable cards + selection + summary --- */
-        .cat-header{font-size:22px;font-weight:800;margin:34px 0 14px;color:#2b2b6b;border-bottom:2px solid #eee;padding-bottom:8px;}
-        .pri-box .c2 p{font-size:13px;line-height:1.55;color:#555;}
-        .cart-select{display:inline-flex;align-items:center;gap:8px;cursor:pointer;background:#f2f4ff;border:1px solid #d8ddff;border-radius:24px;padding:9px 16px;font-weight:600;color:#3a3a8c;transition:.15s;user-select:none;}
-        .cart-select:hover{background:#e7ebff;}
-        .cart-select input{accent-color:#21d78d;width:16px;height:16px;margin:0;}
-        .cart-select.selected{background:#21d78d;border-color:#21d78d;color:#fff;}
-
-        #adCartToggle{position:fixed;right:18px;bottom:18px;background:#2b2b6b;color:#fff;border:none;border-radius:30px;padding:12px 18px;font-weight:700;box-shadow:0 8px 22px rgba(0,0,0,.2);z-index:9998;cursor:pointer;}
-        #adCartToggle .ac-badge{background:#21d78d;border-radius:50%;padding:1px 8px;margin-left:6px;}
-        #adCart{position:fixed;right:18px;bottom:18px;width:330px;max-width:92vw;background:#fff;border:1px solid #e3e3ef;border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,.18);z-index:9999;overflow:hidden;font-size:14px;display:none;}
-        #adCart.show{display:block;}
-        #adCart .ac-head{background:#2b2b6b;color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center;}
-        #adCart .ac-head .ac-close{cursor:pointer;font-size:18px;line-height:1;}
-        #adCart .ac-body{max-height:44vh;overflow:auto;}
-        #adCart .ac-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid #f0f0f5;}
-        #adCart .ac-item .ac-name{flex:1;color:#333;}
-        #adCart .ac-item .ac-price{color:#2b2b6b;font-weight:700;}
-        #adCart .ac-item .ac-x{cursor:pointer;color:#c0392b;font-weight:700;padding:0 4px;}
-        #adCart .ac-foot{padding:12px 16px;border-top:1px solid #eee;}
-        #adCart .ac-total{display:flex;justify-content:space-between;font-weight:800;margin-bottom:10px;color:#2b2b6b;}
-        #adCart .ac-checkout{display:block;text-align:center;background:#21d78d;color:#fff;padding:11px;border-radius:24px;font-weight:700;text-decoration:none;border:none;width:100%;cursor:pointer;}
-        #adCart .ac-empty{padding:20px 16px;color:#888;text-align:center;}
-    </style>
-</head>
-
-<body>
-    <div class="ads-pricing-section">
-        <div class="section-header">
-            <div class="container">
-                <h2>Choose Your <span class="highlight">Advertisement</span> Plan</h2>
-                <p class="subtitle">Select the perfect plan for your business needs and start growing your presence today</p>
-            </div>
-        </div>
-        <section class="pri">
-            <div class="container">
-                <div class="row">
-                    <div>
-                            <?php if (!empty($plans)): ?>
-                                <?php
-                                $catLabels = [
-                                    'business-listing' => 'Business Listing',
-                                    'add-ons' => 'Add-ons',
-                                    'site-wide-banners' => 'Site Wide Banners',
-                                    'category-banners' => 'Category Specific Banners',
-                                    'site-wide-videos' => 'Site Wide Videos',
-                                    'category-videos' => 'Category Specific Videos',
-                                    'special' => 'Special Package',
-                                ];
-                                $currentCategory = null;
-                                ?>
-                                <?php foreach ($plans as $index => $plan): ?>
-                                    <?php
-                                    $cat = isset($plan->category) ? $plan->category : 'business-listing';
-                                    // Listing tiers + special package show content limits; ad placements show their description.
-                                    $showLimits = in_array($cat, ['business-listing', 'special']);
-                                    ?>
-                                    <?php if ($cat !== $currentCategory): ?>
-                                        <?php if ($currentCategory !== null): ?></ul><?php endif; ?>
-                                        <?php $currentCategory = $cat; ?>
-                                        <h3 class="cat-header"><?= isset($catLabels[$cat]) ? $catLabels[$cat] : ucfirst($cat) ?></h3>
-                                        <ul>
+        <?php if (!empty($my_packages)): ?>
+            <div class="pp-mine">
+                <h3>Your active packages</h3>
+                <div class="pp-mine-grid">
+                    <?php foreach ($my_packages as $mp):
+                        $soon = ($mp['days_left'] !== null && $mp['days_left'] <= 14); ?>
+                        <div class="pp-mine-item <?= $soon ? 'soon' : '' ?>">
+                            <div class="n"><?= htmlspecialchars($mp['name']) ?>
+                                <?php if (!empty($mp['auto_renew'])): ?><span class="pill">Auto-renews</span><?php endif; ?>
+                            </div>
+                            <div class="e">
+                                <?php if (!empty($mp['expires_at'])): ?>
+                                    <?= !empty($mp['auto_renew']) ? 'Renews' : 'Expires' ?>
+                                    <?= date('M j, Y', strtotime($mp['expires_at'])) ?>
+                                    <?php if ($mp['days_left'] !== null): ?>
+                                        · <?= (int) $mp['days_left'] ?> day<?= $mp['days_left'] == 1 ? '' : 's' ?> left
                                     <?php endif; ?>
-                                    <li>
-                                        <div class="pri-box">
-                                            <div class="c2">
-                                                <h4><?= strtoupper(htmlspecialchars($plan->name)) ?></h4>
-                                                <p><?= htmlspecialchars($plan->description) ?></p>
-                                            </div>
-                                            <div class="c3">
-                                                <h2>
-                                                    $<?= number_format($plan->price, 0) ?>
-                                                </h2>
-                                                <p>Per <?= htmlspecialchars($plan->billing_interval) ?></p>
-                                            </div>
-                                            <div class="c4">
-                                                <?php if ($showLimits): ?>
-                                                <!-- Listings -->
-                                                <div class="feature-item">
-                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                    </svg>
-                                                    <span><?= $plan->listing_limit == -1 ? 'Unlimited' : $plan->listing_limit ?> Listings</span>
-                                                </div>
-
-                                                <!-- Products -->
-                                                <?php if ($plan->product_limit > 0 || $plan->product_limit == -1): ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span><?= $plan->product_limit == -1 ? 'Unlimited' : $plan->product_limit ?> Products</span>
-                                                    </div>
-                                                <?php endif; ?>
-
-                                                <!-- Events -->
-                                                <?php if ($plan->event_limit > 0 || $plan->event_limit == -1): ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span><?= $plan->event_limit == -1 ? 'Unlimited' : $plan->event_limit ?> Events</span>
-                                                    </div>
-                                                <?php endif; ?>
-
-                                                <!-- Classifieds -->
-                                                <?php if ($plan->classified_limit > 0 || $plan->classified_limit == -1): ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span><?= $plan->classified_limit == -1 ? 'Unlimited' : $plan->classified_limit ?> Classifieds</span>
-                                                    </div>
-                                                <?php endif; ?>
-
-                                                <!-- Rentals -->
-                                                <?php if ($plan->rental_limit > 0 || $plan->rental_limit == -1): ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span><?= $plan->rental_limit == -1 ? 'Unlimited' : $plan->rental_limit ?> Rentals</span>
-                                                    </div>
-                                                <?php endif; ?>
-
-                                                <!-- Houses -->
-                                                <?php if ($plan->house_limit > 0 || $plan->house_limit == -1): ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span><?= $plan->house_limit == -1 ? 'Unlimited' : $plan->house_limit ?> Houses</span>
-                                                    </div>
-                                                <?php endif; ?>
-
-                                                <!-- Blogs -->
-                                                <?php if ($plan->blog_limit > 0 || $plan->blog_limit == -1): ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span><?= $plan->blog_limit == -1 ? 'Unlimited' : $plan->blog_limit ?> Blogs</span>
-                                                    </div>
-                                                <?php endif; ?>
-
-                                                <!-- Videos -->
-                                                <?php if ($plan->video_limit > 0 || $plan->video_limit == -1): ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span><?= $plan->video_limit == -1 ? 'Unlimited' : $plan->video_limit ?> Videos</span>
-                                                    </div>
-                                                <?php endif; ?>
-
-                                                <!-- News -->
-                                                <?php if ($plan->news_limit > 0 || $plan->news_limit == -1): ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span><?= $plan->news_limit == -1 ? 'Unlimited' : $plan->news_limit ?> News</span>
-                                                    </div>
-                                                <?php endif; ?>
-
-                                                <!-- Ads -->
-                                                <?php if ($plan->ad_limit > 0 || $plan->ad_limit == -1): ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span><?= $plan->ad_limit == -1 ? 'Unlimited' : $plan->ad_limit ?> Ads</span>
-                                                    </div>
-                                                <?php endif; ?>
-
-                                                <!-- Featured Listing -->
-                                                <?php if ($plan->featured_listing): ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span>Featured Listing</span>
-                                                    </div>
-                                                <?php endif; ?>
-
-                                                <!-- Priority Support -->
-                                                <?php if ($plan->priority_support): ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span>Priority Support</span>
-                                                    </div>
-                                                <?php endif; ?>
-
-                                                <!-- Analytics Access -->
-                                                <?php if ($plan->analytics_access): ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span>Analytics Dashboard</span>
-                                                    </div>
-                                                <?php endif; ?>
-                                                <?php else: ?>
-                                                    <div class="feature-item">
-                                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                                                        </svg>
-                                                        <span><?= (int) $plan->duration_days ?> days placement</span>
-                                                    </div>
-                                                <?php endif; ?>
-                                            </div>
-                                            <div class="c5">
-                                                <?php
-                                                // Check if user is logged in and has current plan
-                                                $is_logged_in = isset($this) && method_exists($this, 'session') && $this->session->userdata('logged_user');
-                                                $current_user_plan_id = null;
-
-                                                if ($is_logged_in && isset($user_subscription) && $user_subscription) {
-                                                    $current_user_plan_id = $user_subscription->plan_id;
-                                                }
-
-                                                // Free tier -> sign up. Paid -> add to the advertising cart:
-                                                // a radio for the single Business Listing tier, a checkbox for
-                                                // every other category (add-ons, banners, videos, special).
-                                                if ($plan->price <= 0): ?>
-                                                    <a href="<?= $is_logged_in ? base_url('user/dashboard') : base_url('register') ?>" class="cta1">
-                                                        <?= $is_logged_in ? 'Get Started' : 'Sign Up Free' ?>
-                                                    </a>
-                                                <?php else: ?>
-                                                    <label class="cart-select">
-                                                        <input type="<?= $cat === 'business-listing' ? 'radio' : 'checkbox' ?>"
-                                                               class="cart-input"
-                                                               <?= $cat === 'business-listing' ? 'name="listing_tier"' : '' ?>
-                                                               data-plan="<?= (int) $plan->id ?>"
-                                                               data-cat="<?= htmlspecialchars($cat) ?>"
-                                                               data-name="<?= htmlspecialchars($plan->name) ?>"
-                                                               data-price="<?= number_format($plan->price, 2, '.', '') ?>">
-                                                        <span class="cart-select-label">Add&nbsp;—&nbsp;$<?= number_format($plan->price, 2) ?></span>
-                                                    </label>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                    </li>
-                                <?php endforeach; ?>
-                                </ul>
-                            <?php else: ?>
-                                <!-- Fallback if no plans found -->
-                                <ul>
-                                    <li>
-                                        <div class="pri-box">
-                                            <div class="c2">
-                                                <h4>PLANS LOADING...</h4>
-                                                <p>Please wait while we load pricing plans</p>
-                                            </div>
-                                            <div class="c3">
-                                                <h2>$0</h2>
-                                                <p>Loading...</p>
-                                            </div>
-                                            <div class="c4">
-                                                <div class="feature-item">
-                                                    <span>Loading plans from database...</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </li>
-                                </ul>
-                            <?php endif; ?>
-                    </div>
+                                <?php else: ?>
+                                    Active
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
             </div>
-        </section>
-    </div>
-    <!-- ================ Pricing Section ================z -->
+        <?php endif; ?>
 
-    <!-- Advertising cart summary (session-backed; guests welcome) -->
-    <button id="adCartToggle" type="button" style="display:none;">🛒 Cart <span class="ac-badge" id="adCartBadge">0</span></button>
-    <div id="adCart" aria-live="polite">
-        <div class="ac-head"><span>Your selection (<span id="adCartCount">0</span>)</span><span class="ac-close" id="adCartClose">&times;</span></div>
-        <div class="ac-body" id="adCartBody"></div>
-        <div class="ac-foot">
-            <div class="ac-total"><span>Total</span><span id="adCartTotal">$0.00</span></div>
-            <a href="<?= base_url('checkout') ?>" class="ac-checkout" id="adCartCheckout">Proceed to Checkout</a>
+        <?php if (empty($plans)): ?>
+            <div class="pp-sec"><p style="color:#5b5b7a;">Packages are being updated — please check back shortly.</p></div>
+        <?php endif; ?>
+
+        <?php foreach ($catLabels as $catKey => $catLabel): ?>
+            <?php if (empty($grouped[$catKey])) continue; ?>
+            <section class="pp-sec">
+                <div class="pp-sec-head">
+                    <h2><?= htmlspecialchars($catLabel) ?></h2>
+                    <span class="hint"><?= isset($catBlurbs[$catKey]) ? htmlspecialchars($catBlurbs[$catKey]) : '' ?></span>
+                </div>
+                <div class="pp-sec-rule"></div>
+
+                <div class="pp-grid">
+                    <?php foreach ($grouped[$catKey] as $plan):
+                        $price    = (float) $plan->price;
+                        $isFree   = $price <= 0;
+                        $inCart   = in_array((int) $plan->id, $cartIds);
+                        $isOwned  = (isset($user_subscription) && $user_subscription && (int) $user_subscription->plan_id === (int) $plan->id);
+                        $feats    = pp_features($plan, $catKey);
+                        $per      = $catKey === 'business-listing' || $catKey === 'special'
+                                    ? 'per ' . htmlspecialchars($plan->billing_interval)
+                                    : 'one-time';
+                        ?>
+                        <div class="pp-card <?= $inCart ? 'is-selected' : '' ?> <?= $isOwned ? 'owned' : '' ?>" data-card="<?= (int) $plan->id ?>">
+                            <?php if ($isOwned): ?>
+                                <span class="pp-badge">Your plan</span>
+                            <?php elseif (!empty($plan->featured_listing) && $catKey === 'business-listing'): ?>
+                                <span class="pp-badge pop">Most popular</span>
+                            <?php elseif ($catKey === 'special'): ?>
+                                <span class="pp-badge pop">Best value</span>
+                            <?php endif; ?>
+
+                            <h3 class="pp-name"><?= htmlspecialchars($plan->name) ?></h3>
+                            <?php if (!empty($plan->description)): ?>
+                                <p class="pp-desc"><?= htmlspecialchars($plan->description) ?></p>
+                            <?php endif; ?>
+
+                            <div class="pp-price">
+                                <span class="amt">$<?= number_format($price, ($price - floor($price)) > 0 ? 2 : 0) ?></span>
+                                <span class="per"><?= $isFree ? '' : $per ?></span>
+                            </div>
+
+                            <?php if (!empty($feats)): ?>
+                                <ul class="pp-feats">
+                                    <?php foreach ($feats as $f): ?><li><?= htmlspecialchars($f) ?></li><?php endforeach; ?>
+                                </ul>
+                            <?php else: ?>
+                                <div style="margin:18px 0 22px;border-top:1px solid var(--line);"></div>
+                            <?php endif; ?>
+
+                            <div class="pp-cta">
+                                <?php if ($isFree): ?>
+                                    <a class="pp-buy free" href="<?= !empty($user_subscription) ? base_url('user/dashboard') : base_url('register') ?>">Get started free</a>
+                                <?php elseif ($isOwned): ?>
+                                    <a class="pp-buy ownedbtn" href="<?= base_url('user/my-account') ?>">Active — manage</a>
+                                <?php else: ?>
+                                    <a class="pp-buy" href="<?= base_url('buy-now?plan_id=' . (int) $plan->id) ?>">Buy Now</a>
+                                    <button type="button" class="pp-add <?= $inCart ? 'on' : '' ?>"
+                                            data-plan="<?= (int) $plan->id ?>"
+                                            data-cat="<?= htmlspecialchars($catKey) ?>">
+                                        <span class="t"><?= $inCart ? '✓ Added to bundle' : '+ Add to bundle' ?></span>
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<!-- Sticky bundle bar: appears only when 2+ things are combined -->
+<div class="pp-bar" id="ppBar">
+    <div class="pp-bar-in">
+        <div class="sum">
+            <span id="ppBarCount">0 items</span> · Total <b id="ppBarTotal">$0.00</b>
+            <span class="items" id="ppBarItems"></span>
         </div>
+        <button type="button" class="clr" id="ppBarClear">Clear</button>
+        <a class="co" href="<?= base_url('checkout') ?>">Checkout →</a>
     </div>
-    <script>
-    (function () {
-        var base = '<?= base_url() ?>';
-        var toggle = document.getElementById('adCartToggle');
-        var panel = document.getElementById('adCart');
-        var body = document.getElementById('adCartBody');
-        var totalEl = document.getElementById('adCartTotal');
-        var badge = document.getElementById('adCartBadge');
-        var countEl = document.getElementById('adCartCount');
-        var checkoutBtn = document.getElementById('adCartCheckout');
-        var inputs = Array.prototype.slice.call(document.querySelectorAll('.cart-input'));
+</div>
 
-        function money(n) { return '$' + Number(n || 0).toFixed(2); }
-        function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
-        function fmtCat(c) {
-            return ({ 'business-listing': 'Business Listing', 'add-ons': 'Add-on', 'site-wide-banners': 'Site-wide Banner',
-                'category-banners': 'Category Banner', 'site-wide-videos': 'Site-wide Video', 'category-videos': 'Category Video',
-                'special': 'Special Package' })[c] || '';
-        }
+<script>
+(function () {
+    var base = '<?= base_url() ?>';
+    var bar = document.getElementById('ppBar');
+    var elCount = document.getElementById('ppBarCount');
+    var elTotal = document.getElementById('ppBarTotal');
+    var elItems = document.getElementById('ppBarItems');
 
-        function render(cart, open) {
-            var items = (cart && cart.items) || [];
-            var count = items.length;
-            badge.textContent = count; countEl.textContent = count;
-            totalEl.textContent = money(cart && cart.total);
-            checkoutBtn.style.opacity = count ? '1' : '.5';
-            checkoutBtn.style.pointerEvents = count ? 'auto' : 'none';
+    function money(n) { return '$' + Number(n || 0).toFixed(2); }
 
-            body.innerHTML = count
-                ? items.map(function (it) {
-                    return '<div class="ac-item"><span class="ac-name">' + esc(it.name) +
-                        '<br><small style="color:#999;">' + fmtCat(it.category) + '</small></span>' +
-                        '<span class="ac-price">' + money(it.price) + '</span>' +
-                        '<span class="ac-x" data-plan="' + it.plan_id + '" title="Remove">&times;</span></div>';
-                }).join('')
-                : '<div class="ac-empty">No items yet. Tick a package above to add it.</div>';
+    function paint(cart) {
+        var items = (cart && cart.items) || [];
+        var ids = items.map(function (i) { return String(i.plan_id); });
 
-            var ids = items.map(function (i) { return String(i.plan_id); });
-            inputs.forEach(function (inp) {
-                var on = ids.indexOf(inp.getAttribute('data-plan')) !== -1;
-                inp.checked = on;
-                var wrap = inp.closest('.cart-select');
-                if (wrap) wrap.classList.toggle('selected', on);
-            });
-
-            if (count === 0) { panel.classList.remove('show'); toggle.style.display = 'none'; }
-            else if (open) { panel.classList.add('show'); toggle.style.display = 'none'; }
-            else if (!panel.classList.contains('show')) { toggle.style.display = 'inline-block'; }
-
-            Array.prototype.forEach.call(body.querySelectorAll('.ac-x'), function (x) {
-                x.addEventListener('click', function () { post('cart-remove', x.getAttribute('data-plan')); });
-            });
-        }
-
-        function post(path, planId) {
-            var b = new URLSearchParams();
-            if (planId != null) b.append('plan_id', planId);
-            return fetch(base + path, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: b, credentials: 'same-origin' })
-                .then(function (r) { return r.json(); })
-                .then(function (res) { if (res && res.cart) render(res.cart, true); return res; })
-                .catch(function () {});
-        }
-
-        inputs.forEach(function (inp) {
-            inp.addEventListener('change', function () {
-                post(inp.checked ? 'cart-add' : 'cart-remove', inp.getAttribute('data-plan'));
-            });
-        });
-        toggle.addEventListener('click', function () { panel.classList.add('show'); toggle.style.display = 'none'; });
-        document.getElementById('adCartClose').addEventListener('click', function () {
-            panel.classList.remove('show');
-            if (inputs.some(function (i) { return i.checked; })) toggle.style.display = 'inline-block';
+        document.querySelectorAll('.pp-add').forEach(function (b) {
+            var on = ids.indexOf(b.getAttribute('data-plan')) !== -1;
+            b.classList.toggle('on', on);
+            b.querySelector('.t').textContent = on ? '✓ Added to bundle' : '+ Add to bundle';
+            var card = document.querySelector('.pp-card[data-card="' + b.getAttribute('data-plan') + '"]');
+            if (card) card.classList.toggle('is-selected', on);
         });
 
-        // Load the persisted cart on page load (collapsed).
-        fetch(base + 'cart-get', { credentials: 'same-origin' })
+        if (items.length) {
+            elCount.textContent = items.length + (items.length === 1 ? ' item' : ' items');
+            elTotal.textContent = money(cart.total);
+            elItems.textContent = items.map(function (i) { return i.name; }).join(' · ');
+            bar.classList.add('show');
+            document.body.style.paddingBottom = bar.offsetHeight + 'px';
+        } else {
+            bar.classList.remove('show');
+            document.body.style.paddingBottom = '';
+        }
+    }
+
+    function send(path, planId) {
+        var b = new URLSearchParams();
+        if (planId != null) b.append('plan_id', planId);
+        return fetch(base + path, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: b, credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
-            .then(function (res) { if (res && res.cart) render(res.cart, false); })
+            .then(function (res) { if (res && res.cart) paint(res.cart); })
             .catch(function () {});
-    })();
-    </script>
-</body>
+    }
 
-</html>
+    document.querySelectorAll('.pp-add').forEach(function (b) {
+        b.addEventListener('click', function () {
+            send(b.classList.contains('on') ? 'cart-remove' : 'cart-add', b.getAttribute('data-plan'));
+        });
+    });
+    document.getElementById('ppBarClear').addEventListener('click', function () { send('cart-clear', null); });
+
+    // Paint the persisted cart on load.
+    paint(<?= json_encode(isset($cart) ? $cart : array('items' => array(), 'total' => 0)) ?>);
+})();
+</script>
