@@ -4886,6 +4886,59 @@ class Usermodel extends CI_Model
 	}
 
 	/**
+	 * Fulfill a paid multi-item cart. The business-listing item (if any)
+	 * activates the capability subscription; every other item (add-ons,
+	 * banners, videos, special) is recorded as a paid transaction for admin
+	 * fulfillment. One Helcim charge already covered the whole cart total.
+	 * Returns TRUE on success.
+	 */
+	public function recordCartPurchase($user_id, $items, $total, $currency, $helcim_txn_id, $approval_code)
+	{
+		$user_id = (int) $user_id;
+		if (!$user_id || empty($items)) {
+			return false;
+		}
+		$now = date('Y-m-d H:i:s');
+
+		$this->db->trans_start();
+
+		foreach ($items as $it) {
+			$plan_id = (int) $it['plan_id'];
+			$cat     = isset($it['category']) ? $it['category'] : '';
+			$price   = (float) $it['price'];
+
+			if ($cat === 'business-listing') {
+				// Activates the plan's capabilities (subscription + its own txn row).
+				$this->activateHelcimSubscription(array(
+					'user_id'               => $user_id,
+					'plan_id'               => $plan_id,
+					'amount'                => $price,
+					'currency'              => $currency,
+					'helcim_transaction_id' => $helcim_txn_id,
+					'helcim_approval_code'  => $approval_code,
+				));
+			} else {
+				$this->db->insert('transactions', array(
+					'user_id'               => $user_id,
+					'plan_id'               => $plan_id,
+					'txn_ref'               => 'HLC-C-' . $plan_id . '-' . substr(md5($now . $user_id . $plan_id), 0, 8),
+					'amount'                => $price,
+					'currency'              => $currency,
+					'method'                => 'card',
+					'status'                => 'success',
+					'created_at'            => $now,
+					'updated_at'            => $now,
+					'helcim_transaction_id' => $helcim_txn_id,
+					'helcim_approval_code'  => $approval_code,
+				));
+			}
+		}
+
+		$this->db->trans_complete();
+		return $this->db->trans_status();
+	}
+
+	/**
 	 * Vaulted Helcim card token for a user's default card (or newest), or null.
 	 */
 	public function getVaultedCardToken($user_id)

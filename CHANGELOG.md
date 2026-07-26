@@ -6,6 +6,30 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-07 — Advertising cart & multi-item checkout
+
+Turned the single-plan pricing/checkout into a multi-item cart so customers can buy several
+things at once (a listing tier + add-ons + banners + videos + the special package).
+
+### Added
+- **Session-backed cart.** `User::cart_add/remove/get/clear/cart_pay_init` + explicit routes
+  (guests may build a cart before logging in). Business-listing is single-select (radio); every
+  other category is multi-select (checkbox).
+- **Selectable pricing page.** `pricing_plan.php` — per-package radio/checkbox wired to the cart via
+  AJAX + a sticky cart summary (items, total, per-item remove, Proceed to Checkout); persists across
+  reloads.
+- **Cart-aware checkout.** `User::checkout` now renders `views/cart_checkout.php` (line items +
+  remove + total). Guests get inline **login / register** tabs (no forced redirect); logged-in
+  users pay the whole cart total via HelcimPay.js. `Usermodel::recordCartPurchase` fulfills the
+  cart — the listing tier activates the capability subscription, other items are recorded as paid
+  transactions for admin fulfillment; `process_checkout` gained a `cart` mode.
+
+### Changed
+- `/checkout` no longer forces login or requires `?plan_id` — it is cart-driven (old `?plan_id=X`
+  links still work by folding that plan into the cart).
+
+---
+
 ## 2026-07 — Packages, Payments & Freemium redesign
 
 Reworked monetization: freemium capability-gated listing editing, an admin service registry, a
