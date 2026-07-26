@@ -78,6 +78,9 @@ function pp_features($plan, $cat)
 
     .pp-wrap{max-width:1180px;margin:0 auto;padding:0 20px;}
 
+    /* Inline error (CSRF expiry, network, server) */
+    .pp-err{display:none;background:#fdeceb;border:1px solid #f3c3bf;color:#8c2f26;padding:13px 16px;border-radius:11px;margin:-14px auto 22px;font-size:14px;font-weight:600;position:relative;}
+
     /* My packages */
     .pp-mine{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:-28px auto 34px;box-shadow:0 8px 26px rgba(24,15,94,.08);position:relative;}
     .pp-mine h3{font-size:15px;font-weight:800;margin:0 0 14px;color:var(--ink);}
@@ -148,6 +151,8 @@ function pp_features($plan, $cat)
     </div>
 
     <div class="pp-wrap">
+
+        <div class="pp-err" id="ppErr"></div>
 
         <?php if (!empty($my_packages)): ?>
             <div class="pp-mine">
@@ -261,6 +266,7 @@ function pp_features($plan, $cat)
     </div>
 </div>
 
+<script src="<?= base_url() ?>assets/js/pp_post.js"></script>
 <script>
 (function () {
     var base = '<?= base_url() ?>';
@@ -295,21 +301,36 @@ function pp_features($plan, $cat)
         }
     }
 
-    function send(path, planId) {
-        var b = new URLSearchParams();
-        if (planId != null) b.append('plan_id', planId);
-        return fetch(base + path, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: b, credentials: 'same-origin' })
-            .then(function (r) { return r.json(); })
-            .then(function (res) { if (res && res.cart) paint(res.cart); })
-            .catch(function () {});
+    function flash(msg) {
+        var e = document.getElementById('ppErr');
+        e.textContent = msg;
+        e.style.display = 'block';
+        clearTimeout(flash._t);
+        flash._t = setTimeout(function () { e.style.display = 'none'; }, 6000);
+    }
+
+    function send(path, planId, btn) {
+        if (btn) btn.disabled = true;
+        ppPost(
+            base + path,
+            planId != null ? { plan_id: planId } : {},
+            function (res) {
+                if (btn) btn.disabled = false;
+                if (res && res.cart) paint(res.cart);
+            },
+            function (msg) {
+                if (btn) btn.disabled = false;
+                flash(msg);
+            }
+        );
     }
 
     document.querySelectorAll('.pp-add').forEach(function (b) {
         b.addEventListener('click', function () {
-            send(b.classList.contains('on') ? 'cart-remove' : 'cart-add', b.getAttribute('data-plan'));
+            send(b.classList.contains('on') ? 'cart-remove' : 'cart-add', b.getAttribute('data-plan'), b);
         });
     });
-    document.getElementById('ppBarClear').addEventListener('click', function () { send('cart-clear', null); });
+    document.getElementById('ppBarClear').addEventListener('click', function () { send('cart-clear', null, null); });
 
     // Paint the persisted cart on load.
     paint(<?= json_encode(isset($cart) ? $cart : array('items' => array(), 'total' => 0)) ?>);
