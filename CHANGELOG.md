@@ -27,11 +27,28 @@ and nothing needs rotating**. Two gaps around it did need closing.
   environment, so the parent file wins and the fallback backfills; call order is significant.
   Existing installs keep booting untouched. On cPanel: `mv ~/public_html/.env ~/.env && chmod 600 ~/.env`.
 
+### Added
+- **`Helcim_lib::health_check()`** — a live credential check. `is_configured()` only tests that the
+  token string is non-empty, so a token missing the checkout scope still rendered a working-looking
+  "Pay securely" button (`checkout.php:435-442`) that failed only when a real customer clicked it.
+  `health_check()` calls `/helcim-pay/initialize` (nothing is charged; the session is never
+  redeemed) and maps the outcome to an actionable message — naming the specific dashboard control
+  to fix on `401`/`403`, distinguishing network/TLS failure, and passing other HTTP statuses
+  through. Reuses the existing private `request()` helper.
+- **Payments panel on `/admin/setting`** — read-only, deliberately outside the settings form since
+  credentials live in `.env` and not in `site_settings`. Always shows the cheap
+  Configured / Not-configured state; the live check runs only behind an explicit
+  "Test connection" link (`?payments_check=1`) so an outbound API round-trip is not added to every
+  page load. Notes that a green result proves the *checkout* scope only — auto-renewal charges go
+  through `/payment/purchase`, gated separately by "Transaction Processing", which is verified by
+  running `Cli::renew_subscriptions`.
+
 ### Changed
 - `README.md` — new "Where to put `.env`" subsection under **Environment**, including why Apache
   `SetEnv` is the wrong place for secrets here (`.htaccess` is tracked in git).
 
-Key files: `.htaccess`, `index.php`, `README.md`. No migration.
+Key files: `.htaccess`, `index.php`, `README.md`, `application/libraries/Helcim_lib.php`,
+`application/controllers/Admin.php`, `application/views/admin/admin_setting.php`. No migration.
 
 ---
 

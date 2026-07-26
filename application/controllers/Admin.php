@@ -654,6 +654,17 @@ class Admin extends CI_Controller
 		}
 		$data['has_table'] = $this->db->table_exists('site_settings');
 
+		// Payments status. is_configured() is a cheap local check and always
+		// runs; health_check() makes a live API call, so it only runs when the
+		// operator asks for it (?payments_check=1) rather than adding round-trip
+		// latency to every load of this page.
+		$this->load->library('helcim_lib');
+		$data['helcim_configured'] = $this->helcim_lib->is_configured();
+		$data['helcim_currency']   = $this->helcim_lib->currency();
+		$data['helcim_health']     = ($data['helcim_configured'] && $this->input->get('payments_check'))
+			? $this->helcim_lib->health_check()
+			: null;
+
 		$this->load->view('admin/header');
 		$this->load->view('admin/admin_setting', $data);
 		$this->load->view('admin/footer');
