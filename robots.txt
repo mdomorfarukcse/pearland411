@@ -12,4 +12,4 @@ Disallow: /system/
 Disallow: /uploads/
 Allow: /
 
-Sitemap: https://new.pearland411.com/sitemap.xml
+Sitemap: https://pearland411.com/sitemap.xml
