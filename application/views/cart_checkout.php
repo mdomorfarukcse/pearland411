@@ -11,35 +11,88 @@ function cc_cat_label($c)
 }
 ?>
 <style>
-    .cco-wrap{max-width:1050px;margin:30px auto;padding:0 16px;display:grid;grid-template-columns:1.4fr 1fr;gap:26px;}
-    @media(max-width:820px){.cco-wrap{grid-template-columns:1fr;}}
-    .cco-card{background:#fff;border:1px solid #e6e6ef;border-radius:14px;padding:22px;box-shadow:0 6px 20px rgba(0,0,0,.05);}
-    .cco-card h2{font-size:20px;font-weight:800;color:#2b2b6b;margin:0 0 16px;}
-    .cco-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #f0f0f5;}
-    .cco-item:last-child{border-bottom:none;}
-    .cco-item .n{font-weight:600;color:#333;}
-    .cco-item .c{font-size:12px;color:#999;}
-    .cco-item .p{font-weight:700;color:#2b2b6b;white-space:nowrap;}
-    .cco-item .x{cursor:pointer;color:#c0392b;font-weight:700;border:none;background:none;font-size:18px;line-height:1;}
-    .cco-total{display:flex;justify-content:space-between;font-size:18px;font-weight:800;color:#2b2b6b;margin-top:16px;padding-top:14px;border-top:2px solid #eee;}
-    .cco-btn{display:block;width:100%;text-align:center;background:#21d78d;color:#fff;border:none;padding:13px;border-radius:26px;font-weight:800;font-size:15px;cursor:pointer;margin-top:18px;}
+    /* Shares the pricing page's design system (see views/pricing_plan.php). */
+    .cco{--ink:#1c1b4b;--ink2:#5b5b7a;--line:#e7e7f2;--brand:#180f5e;--go:#21a179;
+         background:#f7f8fc;padding:0 0 70px;color:var(--ink);}
+    .cco *{box-sizing:border-box;}
+
+    .cco-hero{background:linear-gradient(135deg,#180f5e 0%,#2d1f8f 100%);color:#fff;padding:40px 20px 52px;text-align:center;}
+    .cco-hero h1{font-size:28px;font-weight:800;margin:0 0 6px;color:#fff;}
+    .cco-hero p{margin:0;font-size:14px;color:#cfcbe8;}
+
+    /* Step rail */
+    .cco-steps{display:flex;justify-content:center;gap:8px;margin-top:20px;flex-wrap:wrap;}
+    .cco-steps span{font-size:12px;font-weight:700;color:#b9b4de;display:flex;align-items:center;gap:7px;}
+    .cco-steps span:not(:last-child):after{content:"";width:26px;height:1px;background:#5a4fa8;display:inline-block;}
+    .cco-steps span.on{color:#fff;}
+    .cco-steps i{width:19px;height:19px;border-radius:50%;background:#3a2f8f;color:#cfcbe8;font-style:normal;font-size:11px;display:inline-flex;align-items:center;justify-content:center;font-weight:800;}
+    .cco-steps span.on i{background:#7bdcb5;color:#123f30;}
+
+    .cco-wrap{max-width:1050px;margin:-32px auto 0;padding:0 16px;display:grid;grid-template-columns:1.35fr 1fr;gap:24px;align-items:start;}
+    @media(max-width:860px){.cco-wrap{grid-template-columns:1fr;}}
+
+    .cco-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px;box-shadow:0 8px 26px rgba(24,15,94,.08);}
+    .cco-card h2{font-size:17px;font-weight:800;color:var(--ink);margin:0 0 18px;}
+
+    .cco-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);}
+    .cco-item:last-of-type{border-bottom:none;}
+    .cco-item .n{font-weight:700;color:var(--ink);font-size:14.5px;}
+    .cco-item .c{font-size:11.5px;color:var(--ink2);margin-top:2px;text-transform:uppercase;letter-spacing:.4px;}
+    .cco-item>div:first-child{flex:1;min-width:0;}
+    .cco-item .p{font-weight:800;color:var(--ink);white-space:nowrap;font-size:15px;text-align:right;}
+    .cco-item .x{cursor:pointer;color:#b9b4c8;border:none;background:none;font-size:20px;line-height:1;padding:2px 4px;border-radius:6px;transition:.15s;}
+    .cco-item .x:hover{color:#c0392b;background:#fdeceb;}
+
+    .cco-total{display:flex;justify-content:space-between;align-items:baseline;font-weight:800;color:var(--ink);margin-top:18px;padding-top:16px;border-top:2px solid var(--line);}
+    .cco-total span:first-child{font-size:15px;}
+    .cco-total span:last-child{font-size:24px;}
+
+    .cco-charge{background:#f7f8fc;border:1px solid var(--line);border-radius:10px;padding:13px 15px;font-size:13.5px;color:var(--ink2);line-height:1.55;margin-bottom:4px;}
+    .cco-charge strong{color:var(--ink);}
+
+    .cco-btn{display:block;width:100%;text-align:center;background:var(--go);color:#fff;border:none;padding:14px;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;margin-top:16px;transition:.15s;}
+    .cco-btn:hover{background:#1c8c68;color:#fff;}
     .cco-btn[disabled]{opacity:.55;cursor:not-allowed;}
-    .cco-note{background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:12px;border-radius:8px;font-size:13px;margin-top:14px;}
-    .cco-err{display:none;background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;padding:11px;border-radius:8px;margin-bottom:12px;}
-    .cco-field{margin-bottom:12px;}
-    .cco-field label{display:block;font-size:13px;color:#555;margin-bottom:4px;}
-    .cco-field input{width:100%;padding:10px 12px;border:1px solid #d5d5e2;border-radius:8px;font-size:14px;}
-    .cco-tabs{display:flex;gap:8px;margin-bottom:16px;}
-    .cco-tab{flex:1;text-align:center;padding:10px;border-radius:24px;background:#eef0fb;color:#3a3a8c;font-weight:700;cursor:pointer;border:none;}
-    .cco-tab.active{background:#2b2b6b;color:#fff;}
+
+    /* Trust cues */
+    .cco-trust{list-style:none;padding:16px 0 0;margin:16px 0 0;border-top:1px solid var(--line);}
+    .cco-trust li{position:relative;padding-left:22px;font-size:12.5px;color:var(--ink2);line-height:1.5;margin-bottom:8px;}
+    .cco-trust li:last-child{margin-bottom:0;}
+    .cco-trust li:before{content:"";position:absolute;left:0;top:3px;width:14px;height:14px;border-radius:50%;background:#eaf7f2;}
+    .cco-trust li:after{content:"";position:absolute;left:4.2px;top:6.5px;width:4.5px;height:7.5px;border-right:2px solid var(--go);border-bottom:2px solid var(--go);transform:rotate(42deg);}
+
+    .cco-note{background:#fff8e6;border:1px solid #f2dfab;color:#8a6d1f;padding:13px;border-radius:10px;font-size:13px;margin-top:14px;line-height:1.55;}
+    .cco-err{display:none;background:#fdeceb;border:1px solid #f3c3bf;color:#8c2f26;padding:12px;border-radius:10px;margin-bottom:14px;font-size:13.5px;}
+
+    .cco-field{margin-bottom:13px;}
+    .cco-field label{display:block;font-size:12.5px;font-weight:600;color:var(--ink2);margin-bottom:5px;}
+    .cco-field input{width:100%;padding:11px 13px;border:1px solid #d9d9e8;border-radius:9px;font-size:14px;color:var(--ink);background:#fff;transition:.15s;}
+    .cco-field input:focus{outline:none;border-color:var(--go);box-shadow:0 0 0 3px rgba(33,161,121,.13);}
+
+    .cco-tabs{display:flex;gap:6px;margin-bottom:18px;background:#f1f1f8;padding:4px;border-radius:11px;}
+    .cco-tab{flex:1;text-align:center;padding:10px;border-radius:8px;background:none;color:var(--ink2);font-weight:700;font-size:13.5px;cursor:pointer;border:none;transition:.15s;}
+    .cco-tab.active{background:#fff;color:var(--ink);box-shadow:0 2px 6px rgba(24,15,94,.1);}
     .cco-pane{display:none;} .cco-pane.active{display:block;}
-    .cco-muted{font-size:12px;color:#999;text-align:center;margin-top:10px;}
+
+    .cco-muted{font-size:12.5px;color:var(--ink2);text-align:center;margin-top:12px;}
+    .cco-muted a{color:var(--brand);font-weight:600;}
 </style>
 
-<div class="cco-wrap">
+<div class="cco">
+  <div class="cco-hero">
+    <h1>Complete your order</h1>
+    <p>You're one step away from going live on Pearland411.</p>
+    <div class="cco-steps">
+        <span><i>&#10003;</i> Choose packages</span>
+        <span class="on"><i>2</i> Checkout</span>
+        <span><i>3</i> You're live</span>
+    </div>
+  </div>
+
+  <div class="cco-wrap">
     <!-- Cart -->
     <div class="cco-card">
-        <h2>Your order</h2>
+        <h2>Your order &middot; <?= (int) $cart['count'] ?> item<?= (int) $cart['count'] === 1 ? '' : 's' ?></h2>
         <?php foreach ($cart['items'] as $it): ?>
             <div class="cco-item">
                 <div>
@@ -61,8 +114,15 @@ function cc_cat_label($c)
         <?php if ($is_logged_in): ?>
             <h2>Payment</h2>
             <?php if (!empty($helcim_configured)): ?>
-                <p style="font-size:13px;color:#555;">You'll be charged <strong><?= htmlspecialchars($cur) ?> <?= number_format($cart['total'], 2) ?></strong> securely via Helcim. Your card details never touch our servers.</p>
-                <button id="cco-pay" class="cco-btn" type="button">Pay securely</button>
+                <div class="cco-charge">
+                    You'll be charged <strong><?= htmlspecialchars($cur) ?> <?= number_format($cart['total'], 2) ?></strong> today.
+                </div>
+                <button id="cco-pay" class="cco-btn" type="button">Pay <?= htmlspecialchars($cur) ?> <?= number_format($cart['total'], 2) ?> securely</button>
+                <ul class="cco-trust">
+                    <li>Processed by Helcim over an encrypted connection</li>
+                    <li>Your card details never touch our servers</li>
+                    <li>Your packages activate as soon as payment clears</li>
+                </ul>
             <?php else: ?>
                 <div class="cco-note"><strong>Online payments are being set up.</strong> Please <a href="<?= base_url('contact-us') ?>">contact support</a> to complete your order.</div>
             <?php endif; ?>
@@ -97,6 +157,7 @@ function cc_cat_label($c)
             </div>
         <?php endif; ?>
     </div>
+  </div>
 </div>
 
 <script>
