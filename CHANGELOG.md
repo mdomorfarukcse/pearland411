@@ -6,6 +6,35 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-07-26 — Security: block `.git/` from the web, allow `.env` above the webroot
+
+Prompted by a review of secret handling before live Helcim credentials were added. The `.env`
+mechanism itself checked out — gitignored, `.htaccess`-denied, and every config file has read
+through `env()` since the first commit (`499a926`), so **no credential has ever been committed
+and nothing needs rotating**. Two gaps around it did need closing.
+
+### Security
+- **`.git/` was served over HTTP.** Deployment is `git pull` on the server, so `.git/` sits in
+  the webroot. The existing `<FilesMatch>` rules match file *names* ending in `.git`, which
+  `.git/config`, `.git/HEAD` and `.git/index` do not — and the `RewriteCond %{REQUEST_FILENAME} -f`
+  passthrough served them directly. Anyone could reconstruct the full source from
+  `https://<site>/.git/`. Added two `RewriteRule`s in the root **`.htaccess`**, placed *before*
+  the passthrough, denying `.git/` and dot-paths generally, with a `.well-known/` carve-out so
+  cPanel/AutoSSL ACME renewal keeps working. Impact was source disclosure only.
+- **`.env` can now live above the webroot.** `index.php` calls `pearland411_load_env()` twice —
+  `dirname(__DIR__) . '/.env'` first, then the repo-root path as a fallback. Safe because the
+  loader (`application/config/env.php:62`) only sets a key when it is not already in the
+  environment, so the parent file wins and the fallback backfills; call order is significant.
+  Existing installs keep booting untouched. On cPanel: `mv ~/public_html/.env ~/.env && chmod 600 ~/.env`.
+
+### Changed
+- `README.md` — new "Where to put `.env`" subsection under **Environment**, including why Apache
+  `SetEnv` is the wrong place for secrets here (`.htaccess` is tracked in git).
+
+Key files: `.htaccess`, `index.php`, `README.md`. No migration.
+
+---
+
 ## 2026-07 — Fix: cart AJAX dead in production (broken fetch + missing CSRF token)
 
 ### Fixed
