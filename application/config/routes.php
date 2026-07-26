@@ -69,6 +69,12 @@ $route['process-checkout']    = 'User/process_checkout';
 $route['plan-change-init']    = 'User/plan_change_init';
 $route['cancel-subscription'] = 'User/cancel_subscription';
 
+// Advertising cart (session-backed; guests allowed)
+$route['cart-add']    = 'User/cart_add';
+$route['cart-remove'] = 'User/cart_remove';
+$route['cart-get']    = 'User/cart_get';
+$route['cart-clear']  = 'User/cart_clear';
+
 $route['(:any)'] = 'User/$1';
 $route['404_override'] = 'errors/page_missing';
 $route['translate_uri_dashes'] = TRUE;

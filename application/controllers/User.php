@@ -55,6 +55,8 @@ class User extends CI_Controller
 			// themselves. helcim_webhook is server-to-server (Helcim calls it)
 			// and is signature-verified instead of session-gated.
 			'checkout', 'checkout_success', 'process_checkout', 'helcim_webhook',
+			// Advertising cart — guests build a cart before logging in.
+			'cart_add', 'cart_remove', 'cart_get', 'cart_clear',
 			// Enquiry submission (rate-limited; anonymous OK)
 			'add_enquiry',
 			// Services catalog + quote requests
@@ -6728,6 +6730,101 @@ class User extends CI_Controller
 			$this->session->set_flashdata('error', 'No active subscription to cancel.');
 		}
 		redirect('user/my_account');
+	}
+
+	/* ===================================================================
+	 * Advertising cart (session-backed). Guests can build a cart without
+	 * logging in; login/register happens at checkout. Business-listing is
+	 * single-select (radio); every other category is multi-select.
+	 * =================================================================== */
+
+	/** Build the cart summary from the session's plan-id list. */
+	private function cartSummary()
+	{
+		$ids = $this->session->userdata('ad_cart');
+		$ids = is_array($ids) ? $ids : array();
+		$items = array();
+		$total = 0.0;
+		$currency = 'USD';
+		foreach ($ids as $pid) {
+			$p = $this->usermodel->getPlanByIdForPricing((int) $pid);
+			if (!$p) continue;
+			$currency = $p->currency ?: 'USD';
+			$items[] = array(
+				'plan_id'  => (int) $p->id,
+				'name'     => $p->name,
+				'price'    => (float) $p->price,
+				'category' => isset($p->category) ? $p->category : '',
+				'currency' => $currency,
+			);
+			$total += (float) $p->price;
+		}
+		return array('items' => $items, 'total' => round($total, 2), 'count' => count($items), 'currency' => $currency);
+	}
+
+	/** GET/POST — return the current cart as JSON. URL: /cart-get */
+	public function cart_get()
+	{
+		$this->output->set_content_type('application/json');
+		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
+	}
+
+	/** POST — add a plan to the cart. URL: /cart-add */
+	public function cart_add()
+	{
+		$this->output->set_content_type('application/json');
+		if ($this->input->method() !== 'post') {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
+		}
+		$plan_id = (int) $this->input->post('plan_id');
+		$plan = $this->usermodel->getPlanByIdForPricing($plan_id);
+		if (!$plan) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Invalid item.')));
+		}
+		if ((float) $plan->price <= 0) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'This is a free option — nothing to buy.')));
+		}
+		$ids = $this->session->userdata('ad_cart');
+		$ids = is_array($ids) ? $ids : array();
+		$cat = isset($plan->category) ? $plan->category : '';
+
+		// Business-listing tier is single-select — drop any other tier first.
+		if ($cat === 'business-listing') {
+			$ids = array_filter($ids, function ($pid) {
+				$p = $this->usermodel->getPlanByIdForPricing((int) $pid);
+				return $p && (isset($p->category) ? $p->category : '') !== 'business-listing';
+			});
+		}
+		if (!in_array($plan_id, $ids)) {
+			$ids[] = $plan_id;
+		}
+		$this->session->set_userdata('ad_cart', array_values($ids));
+		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
+	}
+
+	/** POST — remove a plan from the cart. URL: /cart-remove */
+	public function cart_remove()
+	{
+		$this->output->set_content_type('application/json');
+		if ($this->input->method() !== 'post') {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
+		}
+		$plan_id = (int) $this->input->post('plan_id');
+		$ids = $this->session->userdata('ad_cart');
+		$ids = is_array($ids) ? $ids : array();
+		$ids = array_values(array_filter($ids, function ($pid) use ($plan_id) {
+			return (int) $pid !== $plan_id;
+		}));
+		$this->session->set_userdata('ad_cart', $ids);
+		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
+	}
+
+	/** POST — empty the cart. URL: /cart-clear */
+	public function cart_clear()
+	{
+		$this->output->set_content_type('application/json');
+		$this->session->unset_userdata('ad_cart');
+		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
 	}
 
 	/**

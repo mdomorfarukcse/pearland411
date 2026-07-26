@@ -201,6 +201,30 @@
                 width: 100%;
             }
         }
+
+        /* --- Advertising cart: readable cards + selection + summary --- */
+        .cat-header{font-size:22px;font-weight:800;margin:34px 0 14px;color:#2b2b6b;border-bottom:2px solid #eee;padding-bottom:8px;}
+        .pri-box .c2 p{font-size:13px;line-height:1.55;color:#555;}
+        .cart-select{display:inline-flex;align-items:center;gap:8px;cursor:pointer;background:#f2f4ff;border:1px solid #d8ddff;border-radius:24px;padding:9px 16px;font-weight:600;color:#3a3a8c;transition:.15s;user-select:none;}
+        .cart-select:hover{background:#e7ebff;}
+        .cart-select input{accent-color:#21d78d;width:16px;height:16px;margin:0;}
+        .cart-select.selected{background:#21d78d;border-color:#21d78d;color:#fff;}
+
+        #adCartToggle{position:fixed;right:18px;bottom:18px;background:#2b2b6b;color:#fff;border:none;border-radius:30px;padding:12px 18px;font-weight:700;box-shadow:0 8px 22px rgba(0,0,0,.2);z-index:9998;cursor:pointer;}
+        #adCartToggle .ac-badge{background:#21d78d;border-radius:50%;padding:1px 8px;margin-left:6px;}
+        #adCart{position:fixed;right:18px;bottom:18px;width:330px;max-width:92vw;background:#fff;border:1px solid #e3e3ef;border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,.18);z-index:9999;overflow:hidden;font-size:14px;display:none;}
+        #adCart.show{display:block;}
+        #adCart .ac-head{background:#2b2b6b;color:#fff;padding:12px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center;}
+        #adCart .ac-head .ac-close{cursor:pointer;font-size:18px;line-height:1;}
+        #adCart .ac-body{max-height:44vh;overflow:auto;}
+        #adCart .ac-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid #f0f0f5;}
+        #adCart .ac-item .ac-name{flex:1;color:#333;}
+        #adCart .ac-item .ac-price{color:#2b2b6b;font-weight:700;}
+        #adCart .ac-item .ac-x{cursor:pointer;color:#c0392b;font-weight:700;padding:0 4px;}
+        #adCart .ac-foot{padding:12px 16px;border-top:1px solid #eee;}
+        #adCart .ac-total{display:flex;justify-content:space-between;font-weight:800;margin-bottom:10px;color:#2b2b6b;}
+        #adCart .ac-checkout{display:block;text-align:center;background:#21d78d;color:#fff;padding:11px;border-radius:24px;font-weight:700;text-decoration:none;border:none;width:100%;cursor:pointer;}
+        #adCart .ac-empty{padding:20px 16px;color:#888;text-align:center;}
     </style>
 </head>
 
@@ -401,17 +425,24 @@
                                                     $current_user_plan_id = $user_subscription->plan_id;
                                                 }
 
-                                                // Determine button text and URL
-                                                if ($plan->price <= 0): // Free package cannot be checked out ?>
+                                                // Free tier -> sign up. Paid -> add to the advertising cart:
+                                                // a radio for the single Business Listing tier, a checkbox for
+                                                // every other category (add-ons, banners, videos, special).
+                                                if ($plan->price <= 0): ?>
                                                     <a href="<?= $is_logged_in ? base_url('user/dashboard') : base_url('register') ?>" class="cta1">
                                                         <?= $is_logged_in ? 'Get Started' : 'Sign Up Free' ?>
                                                     </a>
-                                                <?php elseif ($is_logged_in && $current_user_plan_id == $plan->id): ?>
-                                                    <a href="<?= base_url('user/my-account') ?>" class="cta1" style="background: #28a745 !important;">View Details</a>
                                                 <?php else: ?>
-                                                    <a href="checkout?plan_id=<?= $plan->id ?>" class="cta1">
-                                                        <?= ($is_logged_in && $current_user_plan_id) ? 'Upgrade Plan' : 'Get Started' ?>
-                                                    </a>
+                                                    <label class="cart-select">
+                                                        <input type="<?= $cat === 'business-listing' ? 'radio' : 'checkbox' ?>"
+                                                               class="cart-input"
+                                                               <?= $cat === 'business-listing' ? 'name="listing_tier"' : '' ?>
+                                                               data-plan="<?= (int) $plan->id ?>"
+                                                               data-cat="<?= htmlspecialchars($cat) ?>"
+                                                               data-name="<?= htmlspecialchars($plan->name) ?>"
+                                                               data-price="<?= number_format($plan->price, 2, '.', '') ?>">
+                                                        <span class="cart-select-label">Add&nbsp;—&nbsp;$<?= number_format($plan->price, 2) ?></span>
+                                                    </label>
                                                 <?php endif; ?>
                                             </div>
                                         </div>
@@ -446,6 +477,98 @@
         </section>
     </div>
     <!-- ================ Pricing Section ================z -->
+
+    <!-- Advertising cart summary (session-backed; guests welcome) -->
+    <button id="adCartToggle" type="button" style="display:none;">🛒 Cart <span class="ac-badge" id="adCartBadge">0</span></button>
+    <div id="adCart" aria-live="polite">
+        <div class="ac-head"><span>Your selection (<span id="adCartCount">0</span>)</span><span class="ac-close" id="adCartClose">&times;</span></div>
+        <div class="ac-body" id="adCartBody"></div>
+        <div class="ac-foot">
+            <div class="ac-total"><span>Total</span><span id="adCartTotal">$0.00</span></div>
+            <a href="<?= base_url('checkout') ?>" class="ac-checkout" id="adCartCheckout">Proceed to Checkout</a>
+        </div>
+    </div>
+    <script>
+    (function () {
+        var base = '<?= base_url() ?>';
+        var toggle = document.getElementById('adCartToggle');
+        var panel = document.getElementById('adCart');
+        var body = document.getElementById('adCartBody');
+        var totalEl = document.getElementById('adCartTotal');
+        var badge = document.getElementById('adCartBadge');
+        var countEl = document.getElementById('adCartCount');
+        var checkoutBtn = document.getElementById('adCartCheckout');
+        var inputs = Array.prototype.slice.call(document.querySelectorAll('.cart-input'));
+
+        function money(n) { return '$' + Number(n || 0).toFixed(2); }
+        function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : s); return d.innerHTML; }
+        function fmtCat(c) {
+            return ({ 'business-listing': 'Business Listing', 'add-ons': 'Add-on', 'site-wide-banners': 'Site-wide Banner',
+                'category-banners': 'Category Banner', 'site-wide-videos': 'Site-wide Video', 'category-videos': 'Category Video',
+                'special': 'Special Package' })[c] || '';
+        }
+
+        function render(cart, open) {
+            var items = (cart && cart.items) || [];
+            var count = items.length;
+            badge.textContent = count; countEl.textContent = count;
+            totalEl.textContent = money(cart && cart.total);
+            checkoutBtn.style.opacity = count ? '1' : '.5';
+            checkoutBtn.style.pointerEvents = count ? 'auto' : 'none';
+
+            body.innerHTML = count
+                ? items.map(function (it) {
+                    return '<div class="ac-item"><span class="ac-name">' + esc(it.name) +
+                        '<br><small style="color:#999;">' + fmtCat(it.category) + '</small></span>' +
+                        '<span class="ac-price">' + money(it.price) + '</span>' +
+                        '<span class="ac-x" data-plan="' + it.plan_id + '" title="Remove">&times;</span></div>';
+                }).join('')
+                : '<div class="ac-empty">No items yet. Tick a package above to add it.</div>';
+
+            var ids = items.map(function (i) { return String(i.plan_id); });
+            inputs.forEach(function (inp) {
+                var on = ids.indexOf(inp.getAttribute('data-plan')) !== -1;
+                inp.checked = on;
+                var wrap = inp.closest('.cart-select');
+                if (wrap) wrap.classList.toggle('selected', on);
+            });
+
+            if (count === 0) { panel.classList.remove('show'); toggle.style.display = 'none'; }
+            else if (open) { panel.classList.add('show'); toggle.style.display = 'none'; }
+            else if (!panel.classList.contains('show')) { toggle.style.display = 'inline-block'; }
+
+            Array.prototype.forEach.call(body.querySelectorAll('.ac-x'), function (x) {
+                x.addEventListener('click', function () { post('cart-remove', x.getAttribute('data-plan')); });
+            });
+        }
+
+        function post(path, planId) {
+            var b = new URLSearchParams();
+            if (planId != null) b.append('plan_id', planId);
+            return fetch(base + path, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: b, credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (res) { if (res && res.cart) render(res.cart, true); return res; })
+                .catch(function () {});
+        }
+
+        inputs.forEach(function (inp) {
+            inp.addEventListener('change', function () {
+                post(inp.checked ? 'cart-add' : 'cart-remove', inp.getAttribute('data-plan'));
+            });
+        });
+        toggle.addEventListener('click', function () { panel.classList.add('show'); toggle.style.display = 'none'; });
+        document.getElementById('adCartClose').addEventListener('click', function () {
+            panel.classList.remove('show');
+            if (inputs.some(function (i) { return i.checked; })) toggle.style.display = 'inline-block';
+        });
+
+        // Load the persisted cart on page load (collapsed).
+        fetch(base + 'cart-get', { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (res) { if (res && res.cart) render(res.cart, false); })
+            .catch(function () {});
+    })();
+    </script>
 </body>
 
 </html>
