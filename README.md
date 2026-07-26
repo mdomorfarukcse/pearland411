@@ -66,6 +66,23 @@ Point your webserver at the repo root. The application boots through
 Every secret / per-environment value lives in `.env` (see
 `.env.example` for the full list). Required at minimum:
 
+### Where to put `.env`
+
+`index.php` looks for `.env` **above the webroot first**, then falls back to
+the repo root. On cPanel (where the repo root is `public_html/`) put it in the
+account home directory so it is not in a web-servable path at all:
+
+```
+mv ~/public_html/.env ~/.env
+chmod 600 ~/.env
+```
+
+The repo-root location still works — it is denied by `.htaccess` — but
+above-webroot survives a lost or overridden `.htaccess`. If both exist, the
+above-webroot file wins and the repo-root one only fills in missing keys.
+`.env` is gitignored; never commit it. Do not use Apache `SetEnv` for secrets:
+`.htaccess` **is** tracked in git.
+
 | Key | Purpose |
 |---|---|
 | `CI_ENV` | `production` on prod, `development` locally. Drives error display + DB query log. |
