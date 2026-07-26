@@ -55,6 +55,8 @@ class User extends CI_Controller
 			// themselves. helcim_webhook is server-to-server (Helcim calls it)
 			// and is signature-verified instead of session-gated.
 			'checkout', 'checkout_success', 'process_checkout', 'helcim_webhook',
+			// Advertising cart — guests build a cart before logging in.
+			'cart_add', 'cart_remove', 'cart_get', 'cart_clear',
 			// Enquiry submission (rate-limited; anonymous OK)
 			'add_enquiry',
 			// Services catalog + quote requests
@@ -6355,89 +6357,61 @@ class User extends CI_Controller
 	 */
 	public function checkout()
 	{
-		// Get plan ID from GET parameter
+		// Old single-plan links (?plan_id=X) still work — fold that plan into
+		// the cart, then everything below is cart-driven.
 		$plan_id = $this->input->get('plan_id');
+		if ($plan_id && is_numeric($plan_id)) {
+			$p = $this->usermodel->getPlanByIdForPricing((int) $plan_id);
+			if ($p && (float) $p->price > 0) {
+				$ids = $this->session->userdata('ad_cart');
+				$ids = is_array($ids) ? $ids : array();
+				if ((isset($p->category) ? $p->category : '') === 'business-listing') {
+					$ids = array_filter($ids, function ($pid) {
+						$x = $this->usermodel->getPlanByIdForPricing((int) $pid);
+						return $x && (isset($x->category) ? $x->category : '') !== 'business-listing';
+					});
+				}
+				if (!in_array((int) $plan_id, $ids)) $ids[] = (int) $plan_id;
+				$this->session->set_userdata('ad_cart', array_values($ids));
+			}
+		}
 
-		if (!$plan_id || !is_numeric($plan_id)) {
-			$this->session->set_flashdata('error', 'Please select a valid plan to continue.');
-			redirect('user/pricing_plan');
+		$data['cart'] = $this->cartSummary();
+		if (empty($data['cart']['items'])) {
+			$this->session->set_flashdata('error', 'Your cart is empty — please choose a package.');
+			redirect('pricing-plan');
 			return;
 		}
 
-		// Get selected plan details
-		$data['selected_plan'] = $this->usermodel->getPlanByIdForPricing($plan_id);
-
-		if (!$data['selected_plan']) {
-			$this->session->set_flashdata('error', 'Selected plan not found.');
-			redirect('user/pricing_plan');
-			return;
+		// No forced login: guests review the cart and sign in / register right
+		// on this page. Bring them back to checkout after they authenticate.
+		$data['is_logged_in'] = (bool) $this->session->userdata('logged_user');
+		if (!$data['is_logged_in']) {
+			$this->session->set_userdata('redirect_url', base_url('checkout'));
 		}
 
-		// A subscription belongs to a user, so checkout requires login.
-		if (!$this->session->userdata('logged_user')) {
-			$this->session->set_userdata('redirect_url', base_url('checkout?plan_id=' . (int) $plan_id));
-			$this->session->set_flashdata('error', 'Please sign in to continue to checkout.');
-			redirect('login');
-			return;
-		}
-
-		// Initialize user and billing data
+		// Billing prefill for logged-in users.
 		$data['billing_info'] = array();
-		$data['stored_payment_card'] = null;
-		$data['is_upgrade'] = false;
-		$data['existing_subscription'] = null;
-
-		// Get user information if logged in
-		if ($this->session->userdata('logged_user')) {
-			$user_data = $this->session->userdata('logged_user');
-			$user_id = $user_data['logged_id'];
-
-			// Get user billing information
+		if ($data['is_logged_in']) {
 			$user_info = $this->usermodel->getUserInformation();
 			if ($user_info) {
 				$data['billing_info'] = array(
-					'first_name' => isset($user_info->name) ? explode(' ', $user_info->name)[0] : '',
-					'last_name' => isset($user_info->name) ? (count(explode(' ', $user_info->name)) > 1 ? explode(' ', $user_info->name)[1] : '') : '',
-					'email' => $user_info->email_id,
-					'address' => isset($user_info->user_address) ? $user_info->user_address : '',
-					'city' => '',
-					'state' => isset($user_info->user_state) ? $user_info->user_state : '',
-					'zip' => isset($user_info->user_zip_code) ? $user_info->user_zip_code : '',
-					'country' => 'US'
+					'name'  => isset($user_info->name) ? $user_info->name : '',
+					'email' => isset($user_info->email_id) ? $user_info->email_id : '',
 				);
-			}
-
-			// Check for existing subscription (upgrade scenario)
-			$existing_subscription = $this->usermodel->getUserActiveSubscriptionForPricing($user_id);
-			if ($existing_subscription) {
-				$data['is_upgrade'] = true;
-				$data['existing_subscription'] = $existing_subscription;
-			}
-
-			// Get stored payment cards
-			$payment_cards = $this->usermodel->getUserPaymentCards($user_id);
-			if (!empty($payment_cards)) {
-				$data['stored_payment_card'] = $payment_cards[0]; // Use first card
 			}
 		}
 
-		// Load header categories
 		$this->loadHeaderCategories($data);
+		$data['title'] = 'Checkout';
 
-		// Page title
-		$data['title'] = 'Checkout - ' . $data['selected_plan']->name;
-
-		// Get all durations for this plan
-		$data['plan_durations'] = $this->usermodel->getPlanDurations($plan_id);
-
-		// Helcim front-end config for the checkout view.
+		// Helcim front-end config.
 		$this->load->library('helcim_lib');
 		$data['helcim_configured'] = $this->helcim_lib->is_configured();
 		$data['helcimpay_js_url']  = $this->helcim_lib->helcimpay_js_url();
 
-		// Load views
 		$this->load->view('header', $data);
-		$this->load->view('checkout', $data);
+		$this->load->view('cart_checkout', $data);
 		$this->load->view('footer');
 	}
 
@@ -6553,6 +6527,33 @@ class User extends CI_Controller
 		$helcim_txn_id = isset($txn['transactionId']) ? $txn['transactionId'] : (isset($txn['id']) ? $txn['id'] : null);
 		$approval_code = isset($txn['approvalCode']) ? $txn['approvalCode'] : null;
 		$card_token    = isset($txn['cardToken']) ? $txn['cardToken'] : null;
+
+		// Cart mode: fulfill every purchased item (listing tier activates the
+		// capability subscription; other items are recorded for admin fulfillment).
+		if (isset($pending['mode']) && $pending['mode'] === 'cart') {
+			$ok = $this->usermodel->recordCartPurchase(
+				(int) $pending['user_id'],
+				isset($pending['cart_items']) ? $pending['cart_items'] : array(),
+				(float) $pending['amount'],
+				$pending['currency'],
+				$helcim_txn_id,
+				$approval_code
+			);
+			if (!$ok) {
+				return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Payment verified but recording failed. Contact support with transaction id ' . $helcim_txn_id . '.')));
+			}
+			$count = count($pending['cart_items']);
+			$this->session->unset_userdata('helcim_pending');
+			$this->session->unset_userdata('ad_cart');
+			$this->session->set_userdata('checkout_success_data', array(
+				'plan_name'       => 'Your order (' . $count . ' item' . ($count === 1 ? '' : 's') . ')',
+				'amount'          => (float) $pending['amount'],
+				'currency'        => $pending['currency'],
+				'transaction_id'  => $helcim_txn_id,
+				'subscription_id' => null,
+			));
+			return $this->output->set_output(json_encode(array('success' => true, 'redirect' => base_url('checkout-success'))));
+		}
 
 		// Upgrade mode only charges the prorated difference and switches the
 		// plan in place (keeping the current term); see switch_plan().
@@ -6728,6 +6729,135 @@ class User extends CI_Controller
 			$this->session->set_flashdata('error', 'No active subscription to cancel.');
 		}
 		redirect('user/my_account');
+	}
+
+	/* ===================================================================
+	 * Advertising cart (session-backed). Guests can build a cart without
+	 * logging in; login/register happens at checkout. Business-listing is
+	 * single-select (radio); every other category is multi-select.
+	 * =================================================================== */
+
+	/** Build the cart summary from the session's plan-id list. */
+	private function cartSummary()
+	{
+		$ids = $this->session->userdata('ad_cart');
+		$ids = is_array($ids) ? $ids : array();
+		$items = array();
+		$total = 0.0;
+		$currency = 'USD';
+		foreach ($ids as $pid) {
+			$p = $this->usermodel->getPlanByIdForPricing((int) $pid);
+			if (!$p) continue;
+			$currency = $p->currency ?: 'USD';
+			$items[] = array(
+				'plan_id'  => (int) $p->id,
+				'name'     => $p->name,
+				'price'    => (float) $p->price,
+				'category' => isset($p->category) ? $p->category : '',
+				'currency' => $currency,
+			);
+			$total += (float) $p->price;
+		}
+		return array('items' => $items, 'total' => round($total, 2), 'count' => count($items), 'currency' => $currency);
+	}
+
+	/** GET/POST — return the current cart as JSON. URL: /cart-get */
+	public function cart_get()
+	{
+		$this->output->set_content_type('application/json');
+		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
+	}
+
+	/** POST — add a plan to the cart. URL: /cart-add */
+	public function cart_add()
+	{
+		$this->output->set_content_type('application/json');
+		if ($this->input->method() !== 'post') {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
+		}
+		$plan_id = (int) $this->input->post('plan_id');
+		$plan = $this->usermodel->getPlanByIdForPricing($plan_id);
+		if (!$plan) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Invalid item.')));
+		}
+		if ((float) $plan->price <= 0) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'This is a free option — nothing to buy.')));
+		}
+		$ids = $this->session->userdata('ad_cart');
+		$ids = is_array($ids) ? $ids : array();
+		$cat = isset($plan->category) ? $plan->category : '';
+
+		// Business-listing tier is single-select — drop any other tier first.
+		if ($cat === 'business-listing') {
+			$ids = array_filter($ids, function ($pid) {
+				$p = $this->usermodel->getPlanByIdForPricing((int) $pid);
+				return $p && (isset($p->category) ? $p->category : '') !== 'business-listing';
+			});
+		}
+		if (!in_array($plan_id, $ids)) {
+			$ids[] = $plan_id;
+		}
+		$this->session->set_userdata('ad_cart', array_values($ids));
+		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
+	}
+
+	/** POST — remove a plan from the cart. URL: /cart-remove */
+	public function cart_remove()
+	{
+		$this->output->set_content_type('application/json');
+		if ($this->input->method() !== 'post') {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
+		}
+		$plan_id = (int) $this->input->post('plan_id');
+		$ids = $this->session->userdata('ad_cart');
+		$ids = is_array($ids) ? $ids : array();
+		$ids = array_values(array_filter($ids, function ($pid) use ($plan_id) {
+			return (int) $pid !== $plan_id;
+		}));
+		$this->session->set_userdata('ad_cart', $ids);
+		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
+	}
+
+	/** POST — empty the cart. URL: /cart-clear */
+	public function cart_clear()
+	{
+		$this->output->set_content_type('application/json');
+		$this->session->unset_userdata('ad_cart');
+		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
+	}
+
+	/**
+	 * AJAX (login required) — start a HelcimPay.js session for the whole cart
+	 * total and stash the cart snapshot for process_checkout. URL: /cart-pay-init
+	 */
+	public function cart_pay_init()
+	{
+		$this->output->set_content_type('application/json');
+		if ($this->input->method() !== 'post' || !$this->session->userdata('logged_user')) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Please sign in to pay.')));
+		}
+		$cart = $this->cartSummary();
+		if (empty($cart['items']) || $cart['total'] <= 0) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Your cart is empty.')));
+		}
+		$this->load->library('helcim_lib');
+		$init = $this->helcim_lib->initialize_checkout($cart['total'], null, array(
+			'description' => 'Pearland411 order — ' . $cart['count'] . ' item(s)',
+		));
+		if (!$init['success']) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Could not start payment. Please try again.')));
+		}
+		$user = $this->session->userdata('logged_user');
+		$this->session->set_userdata('helcim_pending', array(
+			'checkoutToken' => $init['checkoutToken'],
+			'secretToken'   => $init['secretToken'],
+			'user_id'       => (int) $user['logged_id'],
+			'amount'        => $cart['total'],
+			'currency'      => $this->helcim_lib->currency(),
+			'mode'          => 'cart',
+			'cart_items'    => $cart['items'],
+		));
+		return $this->output->set_output(json_encode(array('success' => true, 'checkoutToken' => $init['checkoutToken'])));
 	}
 
 	/**
