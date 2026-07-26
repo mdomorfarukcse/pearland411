@@ -43,6 +43,19 @@ and nothing needs rotating**. Two gaps around it did need closing.
   through `/payment/purchase`, gated separately by "Transaction Processing", which is verified by
   running `Cli::renew_subscriptions`.
 
+### Fixed
+- **Canonical domain corrected to `https://pearland411.com`** (was `new.pearland411.com`, a
+  staging hostname). Updated the `base_url` fallback in `application/config/config.php`, the
+  `Sitemap:` line in `robots.txt`, `BASE_URL` in `.env.example`, the OG-image placeholder on
+  `/admin/setting`, and the note in `REVIEW_AND_ISSUES.md`. The `robots.txt` sitemap URL mattered
+  most — it was pointing crawlers at the wrong host.
+- **Three hardcoded absolute logo URLs in `application/views/listing_details.php`** (listing
+  header, review avatars, related listings) now call `base_url('assets/images/pearland-logo.png')`
+  like the rest of the file, so the fallback image follows `BASE_URL` instead of pinning a domain.
+
+Not changed: `application/views/error_log` still names `new.pearland411.com`, but those are
+filesystem paths in a historical log (the cPanel docroot is literally named that), not URLs.
+
 ### Changed
 - `README.md` — new "Where to put `.env`" subsection under **Environment**, including why Apache
   `SetEnv` is the wrong place for secrets here (`.htaccess` is tracked in git).

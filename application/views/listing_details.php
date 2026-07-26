@@ -5,7 +5,7 @@
 			<div class="row">
 				<div class="list-det-fix-inn">
 					<div class="list-fix-pro">
-						<img src="<?= (empty($listing->listing_image)) ? 'https://new.pearland411.com/assets/images/pearland-logo.png' :  base_url($listing->listing_image); ?>" alt="">
+						<img src="<?= (empty($listing->listing_image)) ? base_url('assets/images/pearland-logo.png') :  base_url($listing->listing_image); ?>" alt="">
 					</div>
 					<div class="list-fix-tit">
 						<h3><?= e($listing->listing_name); ?></h3>
@@ -609,7 +609,7 @@
 										<?php foreach ($listing_reviews as $review) { ?>
 											<li>
 												<div class="lr-user-wr-img">
-													<img src="<?= !empty($review->profile_image) ? base_url($review->profile_image) : 'https://new.pearland411.com/assets/images/pearland-logo.png'; ?>" alt="<?= e($review->reviewer_name); ?>">
+													<img src="<?= !empty($review->profile_image) ? base_url($review->profile_image) : base_url('assets/images/pearland-logo.png'); ?>" alt="<?= e($review->reviewer_name); ?>">
 												</div>
 												<div class="lr-user-wr-con">
 													<h6><?= e($review->reviewer_name); ?></h6>
@@ -653,7 +653,7 @@
 									<li>
 										<div class="land-pack-grid">
 											<div class="land-pack-grid-img">
-												<img src="<?= (empty($RelatedList->listing_image)) ? 'https://new.pearland411.com/assets/images/pearland-logo.png' : base_url($RelatedList->listing_image); ?>" alt="">
+												<img src="<?= (empty($RelatedList->listing_image)) ? base_url('assets/images/pearland-logo.png') : base_url($RelatedList->listing_image); ?>" alt="">
 											</div>
 											<div class="land-pack-grid-text">
 												<h4><?= $RelatedList->listing_name ?></h4>

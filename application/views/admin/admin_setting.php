@@ -191,7 +191,7 @@ $s = isset($settings) ? $settings : array();
 			</div>
 			<div class="setting-row">
 				<label for="site_og_image">Default share image<small>Absolute URL. Used as og:image when a page doesn't set its own.</small></label>
-				<input type="url" id="site_og_image" name="site_og_image" value="<?= e_attr($s['site_og_image'] ?? '') ?>" placeholder="https://new.pearland411.com/assets/images/og-default.jpg">
+				<input type="url" id="site_og_image" name="site_og_image" value="<?= e_attr($s['site_og_image'] ?? '') ?>" placeholder="https://pearland411.com/assets/images/og-default.jpg">
 			</div>
 			<div class="setting-row">
 				<label for="contact_phone">Contact phone<small>Footer + tel: links</small></label>
