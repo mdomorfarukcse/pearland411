@@ -4886,6 +4886,70 @@ class Usermodel extends CI_Model
 	}
 
 	/**
+	 * Everything a user currently owns, for the "My packages" strip on the
+	 * pricing page: the active listing subscription plus any paid ad
+	 * placements (banners/videos/add-ons), each with a computed expiry.
+	 * Returns a list of ['name','category','expires_at','days_left','auto_renew'].
+	 */
+	public function getUserPurchasedPackages($user_id)
+	{
+		$user_id = (int) $user_id;
+		$out = array();
+		if (!$user_id) {
+			return $out;
+		}
+
+		// Active listing subscription(s).
+		$subs = $this->db->select('s.end_date, s.auto_renew, p.name, p.category')
+			->from('subscriptions s')
+			->join('plans p', 's.plan_id = p.id', 'left')
+			->where('s.user_id', $user_id)
+			->where('s.status', 'active')
+			->order_by('s.end_date', 'DESC')
+			->get()->result();
+		foreach ($subs as $s) {
+			$out[] = array(
+				'name'       => $s->name,
+				'category'   => $s->category,
+				'expires_at' => $s->end_date,
+				'auto_renew' => (int) $s->auto_renew,
+			);
+		}
+
+		// Paid ad placements — expiry = purchase date + the plan's duration_days.
+		if ($this->db->table_exists('transactions')) {
+			$txns = $this->db->select('t.created_at, p.name, p.category, p.duration_days')
+				->from('transactions t')
+				->join('plans p', 't.plan_id = p.id', 'inner')
+				->where('t.user_id', $user_id)
+				->where('t.status', 'success')
+				->where('p.category !=', 'business-listing')
+				->where('p.duration_days >', 0)
+				->order_by('t.created_at', 'DESC')
+				->get()->result();
+			foreach ($txns as $t) {
+				$exp = date('Y-m-d H:i:s', strtotime($t->created_at . ' +' . (int) $t->duration_days . ' days'));
+				if (strtotime($exp) < time()) {
+					continue; // lapsed placement
+				}
+				$out[] = array(
+					'name'       => $t->name,
+					'category'   => $t->category,
+					'expires_at' => $exp,
+					'auto_renew' => 0,
+				);
+			}
+		}
+
+		foreach ($out as $i => $row) {
+			$out[$i]['days_left'] = $row['expires_at']
+				? max(0, (int) floor((strtotime($row['expires_at']) - time()) / 86400))
+				: null;
+		}
+		return $out;
+	}
+
+	/**
 	 * Fulfill a paid multi-item cart. The business-listing item (if any)
 	 * activates the capability subscription; every other item (add-ons,
 	 * banners, videos, special) is recorded as a paid transaction for admin

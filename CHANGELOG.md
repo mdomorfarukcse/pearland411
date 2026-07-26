@@ -6,6 +6,33 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-07 — Pricing page redesign (professional UI/UX pass)
+
+### Fixed
+- **Nested-document bug.** `views/pricing_plan.php` emitted a full `<!DOCTYPE><html><head><body>`
+  document while being loaded *between* the `header` and `footer` views, so the site header/nav was
+  rendered a second time in the middle of the page and the layout broke. It is now a proper view
+  fragment.
+
+### Changed
+- **Rebuilt the pricing page.** Full-width gradient hero; each catalog section (Business Listing,
+  Add-ons, Site Wide / Category Banners, Site Wide / Category Videos, Special Package) gets a
+  heading + one-line explainer; packages render as an even, responsive card grid with clear
+  price/interval, readable checkmark feature lists, and "Most popular" / "Best value" / "Your plan"
+  badges. Verified at 1280px and 390px (no horizontal overflow).
+- **Buy Now on every paid card** (`/buy-now?plan_id=X` → replaces cart → `/checkout`), with a
+  secondary "+ Add to bundle" toggle for buying several things together.
+- **Floating cart box replaced** by a slim sticky bottom bar (item count, total, item names, Clear,
+  Checkout) that only appears once something is selected.
+
+### Added
+- **"Your active packages" strip** at the top of the pricing page for logged-in users — each owned
+  package with its expiry date, days remaining, an "Auto-renews" pill, and an amber highlight when
+  it expires within 14 days. Backed by `Usermodel::getUserPurchasedPackages()` (active subscriptions
+  plus paid ad placements, expiry computed from the plan's `duration_days`).
+
+---
+
 ## 2026-07 — Advertising cart & multi-item checkout
 
 Turned the single-plan pricing/checkout into a multi-item cart so customers can buy several
