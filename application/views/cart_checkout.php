@@ -160,6 +160,7 @@ function cc_cat_label($c)
   </div>
 </div>
 
+<script src="<?= base_url() ?>assets/js/pp_post.js"></script>
 <script>
 (function () {
     var base = '<?= base_url() ?>';
@@ -169,9 +170,13 @@ function cc_cat_label($c)
     // Remove item -> reload (checkout() re-renders / redirects if empty).
     Array.prototype.forEach.call(document.querySelectorAll('.cco-item .x'), function (x) {
         x.addEventListener('click', function () {
-            var b = new URLSearchParams(); b.append('plan_id', x.getAttribute('data-plan'));
-            fetch(base + 'cart-remove', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: b, credentials: 'same-origin' })
-                .then(function () { location.reload(); });
+            x.disabled = true;
+            ppPost(
+                base + 'cart-remove',
+                { plan_id: x.getAttribute('data-plan') },
+                function () { location.reload(); },
+                function (msg) { x.disabled = false; showErr(msg); }
+            );
         });
     });
 
@@ -188,34 +193,55 @@ function cc_cat_label($c)
     // Pay (logged-in) via HelcimPay.js.
     var payBtn = document.getElementById('cco-pay');
     if (payBtn) {
+        // The button label carries the amount ("Pay USD 70.00 securely"),
+        // so remember it rather than hard-coding a reset string.
+        var payLabel = payBtn.textContent;
+        function payReset(msg) {
+            if (msg) showErr(msg);
+            payBtn.disabled = false;
+            payBtn.textContent = payLabel;
+        }
+
         payBtn.addEventListener('click', function () {
             payBtn.disabled = true; payBtn.textContent = 'Starting…';
-            fetch(base + 'cart-pay-init', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: new URLSearchParams(), credentials: 'same-origin' })
-                .then(function (r) { return r.json(); })
-                .then(function (res) {
-                    if (!res.success) { showErr(res.error || 'Could not start payment.'); payBtn.disabled = false; payBtn.textContent = 'Pay securely'; return; }
-                    var token = res.checkoutToken;
-                    var handler = function (event) {
-                        if (!event.data || event.data.eventName !== 'helcim-pay-js-' + token) return;
-                        if (event.data.eventStatus === 'ABORTED') { window.removeEventListener('message', handler); showErr('Payment cancelled.'); payBtn.disabled = false; payBtn.textContent = 'Pay securely'; return; }
-                        if (event.data.eventStatus === 'SUCCESS') {
-                            window.removeEventListener('message', handler);
-                            payBtn.textContent = 'Finalizing…';
-                            var resp = event.data.eventMessage; if (typeof resp === 'string') { try { resp = JSON.parse(resp); } catch (e) {} }
-                            var container = (resp && resp.data) ? resp.data : resp;
-                            var txnData = (container && container.data) ? container.data : container;
-                            var hash = (container && container.hash) ? container.hash : ((resp && resp.hash) ? resp.hash : '');
-                            var cb = new URLSearchParams(); cb.append('checkoutToken', token); cb.append('transaction_json', JSON.stringify(txnData)); cb.append('hash', hash);
-                            fetch(base + 'process-checkout', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: cb, credentials: 'same-origin' })
-                                .then(function (r) { return r.json(); })
-                                .then(function (cr) { if (cr.success) { location.href = cr.redirect; } else { showErr(cr.error || 'Could not finalize.'); payBtn.disabled = false; payBtn.textContent = 'Pay securely'; } });
-                        }
-                    };
-                    window.addEventListener('message', handler);
-                    if (typeof appendHelcimPayIframe === 'function') { appendHelcimPayIframe(token); }
-                    else { showErr('Payment library failed to load.'); payBtn.disabled = false; payBtn.textContent = 'Pay securely'; }
-                })
-                .catch(function () { showErr('Network error.'); payBtn.disabled = false; payBtn.textContent = 'Pay securely'; });
+            ppPost(base + 'cart-pay-init', {}, function (res) {
+                var token = res.checkoutToken;
+                var handler = function (event) {
+                    if (!event.data || event.data.eventName !== 'helcim-pay-js-' + token) return;
+                    if (event.data.eventStatus === 'ABORTED') {
+                        window.removeEventListener('message', handler);
+                        payReset('Payment cancelled.');
+                        return;
+                    }
+                    if (event.data.eventStatus === 'SUCCESS') {
+                        window.removeEventListener('message', handler);
+                        payBtn.textContent = 'Finalizing…';
+                        var resp = event.data.eventMessage; if (typeof resp === 'string') { try { resp = JSON.parse(resp); } catch (e) {} }
+                        var container = (resp && resp.data) ? resp.data : resp;
+                        var txnData = (container && container.data) ? container.data : container;
+                        var hash = (container && container.hash) ? container.hash : ((resp && resp.hash) ? resp.hash : '');
+                        ppPost(
+                            base + 'process-checkout',
+                            { checkoutToken: token, transaction_json: JSON.stringify(txnData), hash: hash },
+                            function (cr) {
+                                if (cr.success) { location.href = cr.redirect; }
+                                else { payReset(cr.error || 'Could not finalize.'); }
+                            },
+                            // Payment already went through Helcim here — never
+                            // imply the card wasn't charged.
+                            function () {
+                                showErr('Your payment went through but we could not finish setting up your packages. Please contact support before paying again.');
+                                payBtn.textContent = 'Contact support';
+                            }
+                        );
+                    }
+                };
+                window.addEventListener('message', handler);
+                if (typeof appendHelcimPayIframe === 'function') { appendHelcimPayIframe(token); }
+                else { payReset('Payment library failed to load.'); }
+            }, function (msg) {
+                payReset(msg);
+            });
         });
     }
 })();

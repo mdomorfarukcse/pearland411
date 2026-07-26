@@ -6,6 +6,39 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-07 — Fix: cart AJAX dead in production (broken fetch + missing CSRF token)
+
+### Fixed
+- **"Add to bundle" threw `Cannot read properties of undefined (reading 'then')`.** `assets/js/csrf.js`
+  (and potentially other third-party scripts) replace `window.fetch` with a wrapper; when a wrapper
+  returns `undefined`, every `fetch(...).then(...)` caller dies. The cart and checkout both called
+  `fetch` directly, so **the entire payment path — `cart-pay-init` and `process-checkout` — failed the
+  same way**, not just the bundle button.
+- **No CSRF token on any cart POST.** `csrf_protection` is TRUE and `cookie_httponly` is TRUE, so JS
+  cannot read the token cookie — the cart's POSTs would 403 in production regardless of the fetch bug.
+
+### Added
+- **`assets/js/pp_post.js`** — `window.ppPost(url, params, onOk, onErr)`, the single way the cart and
+  checkout talk to the server. Uses `XMLHttpRequest` (not monkey-patched by our own code, and no
+  dependency on jQuery, which `footer.php` loads *after* view markup), reads the token from the
+  `<meta name="csrf-token">` tag that `hooks/Csrf_inject.php` already injects, and appends it to the
+  body where `Security::csrf_verify()` looks. Re-stores a rotated token into the meta tag and every
+  hidden form input, and maps failures to readable messages (403 → "Your session expired…").
+
+### Changed
+- `pricing_plan.php` and `cart_checkout.php` now call `ppPost` instead of `fetch`; buttons disable
+  during flight. Pricing page gained an inline error banner; checkout's pay button keeps its
+  amount-bearing label ("Pay USD 70.00 securely") on reset instead of being overwritten with a
+  hard-coded string. A `process-checkout` failure *after* Helcim approved now says the payment went
+  through and to contact support, rather than inviting a second charge.
+
+### Verified
+- Browser test against a stub that mimics CI's CSRF gate **with `window.fetch` deliberately sabotaged
+  to return `undefined`**: add and clear both work, the token rides in every POST body, and a 403
+  surfaces the expiry message instead of failing silently.
+
+---
+
 ## 2026-07 — Checkout restyled to match the pricing page
 
 ### Changed
