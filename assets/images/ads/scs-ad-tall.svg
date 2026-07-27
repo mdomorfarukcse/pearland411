@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 600" width="300" height="600"
+     role="img" aria-label="Space Center Systems — website design, hosting and local SEO">
+  <title>Space Center Systems — websites, hosting and local SEO</title>
+  <defs>
+    <linearGradient id="stBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1E2430"/>
+      <stop offset="0.62" stop-color="#2B3545"/>
+      <stop offset="1" stop-color="#3A4759"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="300" height="600" fill="url(#stBg)"/>
+  <g opacity="0.16"><circle cx="276" cy="64" r="118" fill="#8CC63F"/></g>
+  <g stroke="#8CC63F" stroke-width="1" opacity="0.13">
+    <path d="M0 150h300M0 300h300M0 450h300"/>
+  </g>
+
+  <g transform="translate(150 148) scale(1.25)" fill="none" stroke="#8CC63F" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="-38" y="-30" width="76" height="52" rx="6"/>
+    <path d="M-14 34h28M0 22v12"/>
+    <path d="M-18-12l-8 8 8 8M18-12l8 8-8 8M6-16l-12 24" stroke-width="4"/>
+  </g>
+
+  <text x="150" y="262" text-anchor="middle"
+        font-family="'Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+        font-size="12" font-weight="600" letter-spacing="2.2" fill="#8CC63F">SPACE CENTER SYSTEMS</text>
+  <text x="150" y="308" text-anchor="middle"
+        font-family="'Poppins','Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+        font-size="31" font-weight="700" letter-spacing="-0.6" fill="#FFFFFF">Websites</text>
+  <text x="150" y="344" text-anchor="middle"
+        font-family="'Poppins','Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+        font-size="31" font-weight="700" letter-spacing="-0.6" fill="#FFFFFF">that work</text>
+
+  <path d="M100 372h100" stroke="#8CC63F" stroke-width="2" opacity="0.5"/>
+
+  <text x="150" y="410" text-anchor="middle" font-family="'Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif" font-size="17" fill="#B9C3D2">Web design</text>
+  <text x="150" y="438" text-anchor="middle" font-family="'Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif" font-size="17" fill="#B9C3D2">Hosting</text>
+  <text x="150" y="466" text-anchor="middle" font-family="'Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif" font-size="17" fill="#B9C3D2">Local SEO</text>
+
+  <g transform="translate(48 518)">
+    <rect width="204" height="54" rx="27" fill="#8CC63F"/>
+    <text x="102" y="35" text-anchor="middle"
+          font-family="'Poppins','Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+          font-size="19" font-weight="700" fill="#16202C">Get a quote</text>
+  </g>
+</svg>

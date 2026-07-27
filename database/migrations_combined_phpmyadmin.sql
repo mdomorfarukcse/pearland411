@@ -513,4 +513,30 @@ SET @s := IF(@e = 0, 'ALTER TABLE `plans` ADD COLUMN `category` VARCHAR(50) NOT 
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
+-- ============================================================
+-- 0015_home_ad_slots.sql
+-- Five extra ad zones for the redesigned homepage.
+-- DATA ONLY (0006 already added slot_key/size), so this block is
+-- byte-identical to database/migrations/0015_home_ad_slots.sql.
+-- Idempotent: NOT EXISTS skips any slot_key already present.
+-- ============================================================
+INSERT INTO `ads_prices` (`name`, `slot_key`, `size`, `cost`, `status`, `created_at`, `updated_at`)
+SELECT * FROM (
+    SELECT 'Homepage top leaderboard'      AS name,
+           'home-top-leaderboard'          AS slot_key,
+           '970x90'                        AS size,
+           120.00                          AS cost,
+           1                               AS status,
+           NOW()                           AS created_at,
+           NOW()                           AS updated_at
+    UNION ALL SELECT 'Homepage sidebar — top',        'home-sidebar-top',        '300x250',  69.00, 1, NOW(), NOW()
+    UNION ALL SELECT 'Homepage in-content billboard', 'home-inline-billboard',   '728x250',  79.00, 1, NOW(), NOW()
+    UNION ALL SELECT 'Homepage sidebar skyscraper',   'home-sidebar-skyscraper', '300x600',  89.00, 1, NOW(), NOW()
+    UNION ALL SELECT 'Homepage footer billboard',     'home-footer-billboard',   '970x250',  59.00, 1, NOW(), NOW()
+) AS seed
+WHERE NOT EXISTS (
+    SELECT 1 FROM `ads_prices` WHERE `ads_prices`.`slot_key` = seed.slot_key
+);
+
+
 SET FOREIGN_KEY_CHECKS = 1;

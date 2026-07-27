@@ -227,27 +227,52 @@ class User extends CI_Controller
 		// Initialize data array
 		$data = array();
 
-		// Load required data for home page with exact variable names used in template
+		// --- Optional sections -----------------------------------------
+		// Each content type has an admin switch. When a service is off its
+		// page 404s via requireService(), so the homepage must not link to
+		// it either.
+		$data['show_news']   = site_setting('service_news_enabled',   '1') !== '0';
+		$data['show_videos'] = site_setting('service_videos_enabled', '1') !== '0';
+		$data['show_events'] = site_setting('service_events_enabled', '1') !== '0';
 
-		$data['latest_listings'] = $this->usermodel->getLatestListings(6);
-		$data['latest_videos'] = $this->usermodel->getLatestVideos(3);
-		$data['latest_news'] = $this->usermodel->getLatestNews(3);
-		// Always use listing_categories for all_listing_categories and header_categories
+		// --- Directory content -----------------------------------------
+		// getFeaturedListings() was never wired up, which is why the hero
+		// carousel only ever rendered its "coming soon" fallback slide.
+		$data['featured_listings'] = $this->usermodel->getFeaturedListings(6);
+		$data['latest_listings']   = $this->usermodel->getLatestListings(9);
+
+		$data['latest_videos'] = $data['show_videos'] ? $this->usermodel->getLatestVideos(3) : array();
+		$data['latest_news']   = $data['show_news']   ? $this->usermodel->getLatestNews(3)   : array();
+		$data['home_events']   = $data['show_events'] ? $this->usermodel->getUpcomingEvents(3) : array();
+
+		// Real coupons, replacing the four invented "hot deals".
+		$data['home_deals'] = $this->usermodel->getActiveCoupons(4);
+
+		// Categories: stable, count-ordered for the strip and the sidebar.
+		$data['home_categories']        = $this->usermodel->getCategoriesWithCounts(12);
 		$data['all_listing_categories'] = $this->usermodel->getHeaderNavigationCategories(50);
-		$data['random_listing_categories'] = $this->usermodel->getRandomTenCategory(10);
-		$data['header_categories'] = $data['all_listing_categories'];
+		$data['header_categories']      = $data['all_listing_categories'];
 
-		// Debug mode - uncomment the line below to enable debugging
-		// $data['debug_categories'] = true;
-
-		// Optional: Add debug info to check data flow
-		if (isset($_GET['debug']) && $_GET['debug'] == '1') {
-			$data['debug_info'] = array(
-				'all_listing_categories_count' => is_array($data['all_listing_categories']) ? count($data['all_listing_categories']) : 0,
-				'header_categories_count' => isset($data['header_categories']) && is_array($data['header_categories']) ? count($data['header_categories']) : 0,
-				'debug_enabled' => true
-			);
+		// --- Advertising ------------------------------------------------
+		// Prime every zone the view renders in ONE query; without this each
+		// ad_slot include fires its own ORDER BY RAND().
+		$data['home_ad_slots'] = array(
+			'home-top-leaderboard',
+			'home-hero',
+			'home-inline-billboard',
+			'home-sidebar-top',
+			'home-sidebar',
+			'home-sidebar-skyscraper',
+			'home-footer-billboard',
+		);
+		if (method_exists($this->usermodel, 'primeAdSlots')) {
+			$this->usermodel->primeAdSlots($data['home_ad_slots']);
 		}
+
+		// Real prices for the "Advertise with us" block, so the page can't
+		// drift from the catalog the way the hard-coded $29/$59/$99 did.
+		$data['ad_rate_card'] = $this->usermodel->getAdSlotRateCard(4);
+		$data['listing_plans'] = $this->usermodel->getActivePlans();
 
 		// --- SEO -------------------------------------------------------
 		$data['title']            = 'Pearland411 — Local Businesses, Events, Deals & News in Pearland, TX';
