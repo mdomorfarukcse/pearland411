@@ -532,52 +532,18 @@ class User extends CI_Controller
 		URL: /user/listing_details_global/slug
 		This handles /listing-details/slug via routing
 	===================*/
+	/**
+	 * Legacy alias for /listing-details/<slug>.
+	 *
+	 * It used to be a second, thinner copy of listing_details(): no reviews,
+	 * no review stats, no owner socials, no SEO tags and no ad zones, so the
+	 * same business rendered a visibly poorer page depending on which URL you
+	 * arrived through — and the view had to guard every one of those missing
+	 * variables. One code path now serves both.
+	 */
 	public function listing_details_global($slug)
 	{
-		// Get listing details by slug
-		$data['listing'] = $this->usermodel->getSingleValue($slug, 'listing_slug', 'listings');
-
-		if (!$data['listing']) {
-			show_404();
-			return;
-		}
-
-		// Debug: Check if service fields are present
-		if (empty($data['listing']->service_offered)) {
-			$data['listing']->service_offered = null; // Ensure it's properly set as null if empty
-		}
-		if (empty($data['listing']->service_locations)) {
-			$data['listing']->service_locations = null; // Ensure it's properly set as null if empty
-		}
-
-		// Get logged user ID for form prefilling
-		$logged_id = NULL;
-		$data['user'] = NULL;
-		if ($this->session->userdata('logged_user')) {
-			$session = $this->session->userdata('logged_user');
-			$logged_id = $session['logged_id'];
-			$data['user'] = $this->usermodel->getSingleValue($logged_id, 'user_id', 'user');
-		}
-		$data['logged_id'] = $logged_id;
-
-		// Get related listings (same category)
-		$data['RelatedListing'] = array();
-		if (!empty($data['listing']->category_id)) {
-			$data['RelatedListing'] = $this->usermodel->getRelatedListing('listings', $data['listing']->listing_slug, $data['listing']->category_id);
-		}
-
-		// Get listing likes (if you have this functionality)
-		$data['listing_likes'] = array();
-		// Uncomment below if you have listing likes functionality
-		// $data['listing_likes'] = $this->usermodel->getListingLikes($data['listing']->listing_id);
-
-		// Load categories for header display - Professional approach
-		$this->loadHeaderCategories($data);
-
-		// Load views
-		$this->load->view('header', $data);
-		$this->load->view('listing_details', $data);
-		$this->load->view('footer');
+		$this->listing_details($slug);
 	}
 
 	/*Search Page*/
@@ -1588,96 +1554,132 @@ class User extends CI_Controller
 			$data['user'] = $this->usermodel->getUserInformation();
 		}
 
-		// $data['allListings'] = $this->usermodel->getListingByCategory($cat_slug);
+		// Sort is a query string, not a URI segment, so it can't collide with
+		// the category/offset segments parsed above.
+		$sort = (string) $this->input->get('sort');
+		if (!in_array($sort, array('featured', 'newest', 'name', 'rating'), true)) {
+			$sort = 'featured';
+		}
 
-		// Determine the correct URI segment for pagination offset
-		// URL Structure: 
-		// /user/all_listing -> segment 3 is offset (if numeric)
-		// /user/all_listing/category_slug -> segment 4 is offset (if numeric)
-		// /user/all_listing/10 -> segment 3 is offset
-		// /user/all_listing/category_slug/10 -> segment 4 is offset
-
-		// Current offset is already set in the URL parsing above
-		// No additional logic needed here
-
-		// Manual pagination setup for better URL control
-		$per_page = 10;
+		// Manual pagination. The URL shape is positional and long-standing:
+		//   /all_listing                    /all_listing/20
+		//   /all_listing/<category>         /all_listing/<category>/20
+		$per_page       = 10;
 		$total_listings = $this->usermodel->countListingsByCategory($cat_slug);
-		$total_pages = ceil($total_listings / $per_page);
-		$current_page = floor($current_offset / $per_page) + 1;
+		$total_pages    = (int) ceil($total_listings / $per_page);
 
-		// Clean code - debug info removed for production		// Build manual pagination
+		// Clamp: a hand-typed offset past the end used to render an empty
+		// results list with no explanation. Snap back to the last real page.
+		if ($total_listings > 0 && $current_offset >= $total_listings) {
+			$current_offset = max(0, ($total_pages - 1) * $per_page);
+		}
+		$current_page = (int) floor($current_offset / $per_page) + 1;
+
+		$query_suffix = ($sort !== 'featured') ? '?sort=' . $sort : '';
+		$page_url = function ($offset) use ($cat_slug, $query_suffix) {
+			$path = 'all_listing';
+			if ($cat_slug)   $path .= '/' . rawurlencode($cat_slug);
+			if ($offset > 0) $path .= '/' . (int) $offset;
+			return base_url($path) . $query_suffix;
+		};
+
 		$pagination_html = '';
 		if ($total_pages > 1) {
 			$pagination_html = '<ul class="pagination justify-content-center">';
 
-			// Previous link
 			if ($current_page > 1) {
-				$prev_offset = ($current_page - 2) * $per_page;
-				if ($cat_slug) {
-					$prev_url = base_url('user/all_listing/' . $cat_slug . ($prev_offset > 0 ? '/' . $prev_offset : ''));
-				} else {
-					$prev_url = base_url('user/all_listing' . ($prev_offset > 0 ? '/' . $prev_offset : ''));
-				}
-				$pagination_html .= '<li class="page-item"><a class="page-link" href="' . $prev_url . '">&laquo; Prev</a></li>';
+				$pagination_html .= '<li class="page-item"><a class="page-link" href="'
+					. html_escape($page_url(($current_page - 2) * $per_page)) . '" rel="prev">&laquo; Prev</a></li>';
 			}
 
-			// Page numbers
 			$start_page = max(1, $current_page - 2);
-			$end_page = min($total_pages, $current_page + 2);
+			$end_page   = min($total_pages, $current_page + 2);
+
+			if ($start_page > 1) {
+				$pagination_html .= '<li class="page-item"><a class="page-link" href="' . html_escape($page_url(0)) . '">1</a></li>';
+				if ($start_page > 2) $pagination_html .= '<li class="page-item"><span class="page-link">&hellip;</span></li>';
+			}
 
 			for ($i = $start_page; $i <= $end_page; $i++) {
-				$page_offset = ($i - 1) * $per_page;
-				if ($cat_slug) {
-					$page_url = base_url('user/all_listing/' . $cat_slug . ($page_offset > 0 ? '/' . $page_offset : ''));
-				} else {
-					$page_url = base_url('user/all_listing' . ($page_offset > 0 ? '/' . $page_offset : ''));
-				}
-
 				if ($i == $current_page) {
-					$pagination_html .= '<li class="page-item active"><span class="page-link">' . $i . '</span></li>';
+					$pagination_html .= '<li class="page-item active"><span class="page-link" aria-current="page">' . $i . '</span></li>';
 				} else {
-					$pagination_html .= '<li class="page-item"><a class="page-link" href="' . $page_url . '">' . $i . '</a></li>';
+					$pagination_html .= '<li class="page-item"><a class="page-link" href="'
+						. html_escape($page_url(($i - 1) * $per_page)) . '">' . $i . '</a></li>';
 				}
 			}
 
-			// Next link
+			if ($end_page < $total_pages) {
+				if ($end_page < $total_pages - 1) $pagination_html .= '<li class="page-item"><span class="page-link">&hellip;</span></li>';
+				$pagination_html .= '<li class="page-item"><a class="page-link" href="'
+					. html_escape($page_url(($total_pages - 1) * $per_page)) . '">' . $total_pages . '</a></li>';
+			}
+
 			if ($current_page < $total_pages) {
-				$next_offset = $current_page * $per_page;
-				if ($cat_slug) {
-					$next_url = base_url('user/all_listing/' . $cat_slug . '/' . $next_offset);
-				} else {
-					$next_url = base_url('user/all_listing/' . $next_offset);
-				}
-				$pagination_html .= '<li class="page-item"><a class="page-link" href="' . $next_url . '">Next &raquo;</a></li>';
+				$pagination_html .= '<li class="page-item"><a class="page-link" href="'
+					. html_escape($page_url($current_page * $per_page)) . '" rel="next">Next &raquo;</a></li>';
 			}
 
 			$pagination_html .= '</ul>';
 		}
 
-		$config = array(); // Keep for compatibility but we'll use manual pagination
-
-		// No need to initialize CI pagination anymore
-		// $this->pagination->initialize($config);
-
-		$data['allListings']   = $this->usermodel->getListingByCategory($cat_slug, $per_page, $current_offset);
-		$data['link'] 		   = $pagination_html;
-		$data['total_pages']   = $total_pages;
-		$data['current_page']  = $current_page;
+		$data['allListings']    = $this->usermodel->getListingByCategory($cat_slug, $per_page, $current_offset, $sort);
+		$data['link']           = $pagination_html;
+		$data['total_pages']    = $total_pages;
+		$data['current_page']   = $current_page;
 		$data['total_listings'] = $total_listings;
+		$data['current_offset'] = $current_offset;
+		$data['per_page']       = $per_page;
+		$data['sort']           = $sort;
 
 		// Set page title based on category
+		$category_name = $cat_slug ? $this->usermodel->getCategoryNameBySlug($cat_slug) : '';
 		if ($cat_slug) {
-			$category_name = $this->usermodel->getCategoryNameBySlug($cat_slug);
-			$data['title'] = "Pearland | " . ucfirst($category_name) . " Listings";
+			$data['title']            = ucfirst($category_name ?: str_replace('-', ' ', $cat_slug)) . ' in Pearland, TX — Pearland411 Directory';
+			$data['meta_description'] = 'Browse ' . ($total_listings ? $total_listings . ' ' : '')
+				. strtolower($category_name ?: str_replace('-', ' ', $cat_slug))
+				. ' businesses in Pearland, Texas. Phone numbers, addresses, reviews and directions on Pearland411.';
+			$data['canonical_url']    = base_url('all_listing/' . rawurlencode($cat_slug));
 		} else {
-			$data['title'] = "Pearland | All Listings";
+			$data['title']            = 'Pearland Business Directory — Pearland411';
+			$data['meta_description'] = 'The Pearland, TX business directory: '
+				. ($total_listings ? number_format($total_listings) . ' local ' : 'local ')
+				. 'businesses with phone numbers, addresses, reviews and directions.';
+			$data['canonical_url']    = base_url('all_listing');
 		}
-		$data['randListings']  = $this->usermodel->getRandFiveFeatureListing();
+
 		$data['current_category_slug'] = $cat_slug;
+		$data['current_category_name'] = $category_name;
+
+		// Featured rail — prefers the category being browsed, tops up site-wide.
+		$data['randListings']       = $this->usermodel->getFeaturedListingsForDirectory($cat_slug, 3);
+		$data['categoriesWithCounts'] = $this->usermodel->getCategoriesWithCounts(12);
+
+		// Ad zones. Priming means the six placements below cost one query
+		// rather than six. Every key is a `plans.slug` from /pricing-plan, so
+		// buying the package fills the position (see migrations 0017 + 0019).
+		$data['ad_slots'] = array(
+			'top'      => 'top-banner-site-wide',
+			'inline'   => 'middle-banner-category',
+			'side_1'   => 'right-side-banner-1',
+			'side_2'   => 'right-banner-1',
+			'side_sky' => 'right-panel-skyscraper',
+			'bottom'   => $cat_slug ? 'bottom-banner-category' : 'bottom-banner-site-wide',
+		);
+		// The 0006 zones this page used to render ('listing-top', 'listing-inline',
+		// 'listing-sidebar') match no package, so nothing could be bought for
+		// them — but an operator may have booked one by hand in /admin. They stay
+		// primed and are passed to the views as $slot_alias, so any live ad on
+		// them keeps running in the equivalent new position.
+		$this->usermodel->primeAdSlots(array_merge(
+			array_values($data['ad_slots']),
+			array('listing-top', 'listing-inline', 'listing-sidebar')
+		));
+
+		$data['page_css'] = 'assets/css/directory.css?v=1';
 
 		$this->load->view('header', $data);
-		$this->load->view('all-listing');
+		$this->load->view('all-listing', $data);
 		$this->load->view('footer');
 	}
 
@@ -2480,8 +2482,35 @@ class User extends CI_Controller
 		// Get listing reviews
 		$data['listing_reviews'] = $this->usermodel->getListingReviews($data['listing']->listing_id, 10);
 
-		// Get review statistics for rating breakdown
+		// Get review statistics for rating breakdown: [5 => n, 4 => n, …]
 		$data['review_stats'] = $this->usermodel->getReviewStats($data['listing']->listing_id);
+
+		// Totals derived once here rather than recomputed in the view. The
+		// listings row caches average_rating/total_reviews, but it is only
+		// refreshed by updateListingRating(), so fall back to the breakdown.
+		$review_total = array_sum($data['review_stats']);
+		$review_avg   = 0.0;
+		if ($review_total > 0) {
+			$weighted = 0;
+			foreach ($data['review_stats'] as $stars => $count) $weighted += ($stars * $count);
+			$review_avg = $weighted / $review_total;
+		} elseif (!empty($data['listing']->total_reviews)) {
+			$review_total = (int) $data['listing']->total_reviews;
+			$review_avg   = (float) ($data['listing']->average_rating ?? 0);
+		}
+		$data['review_total']   = $review_total;
+		$data['review_average'] = $review_avg;
+
+		// Category, for the breadcrumb and the "more like this" links.
+		$data['listing_category'] = null;
+		if (!empty($data['listing']->category_id)) {
+			$data['listing_category'] = $this->db
+				->select('category_id, category_name, category_slug')
+				->where('category_id', (int) $data['listing']->category_id)
+				->limit(1)
+				->get('listing_categories')
+				->row();
+		}
 
 		// Owner social-profile lookup so the "Company badge" block
 		// can render real per-listing social links instead of the
@@ -2545,15 +2574,35 @@ class User extends CI_Controller
 				'longitude' => (float) $listing->listing_lng,
 			);
 		}
-		$rs = $data['review_stats'] ?? null;
-		if (is_object($rs) && !empty($rs->total_reviews) && (int) $rs->total_reviews > 0) {
+		// getReviewStats() returns an ARRAY keyed 5..1, so the old
+		// is_object()/->total_reviews test could never be true and no listing
+		// ever emitted an aggregateRating. Use the totals derived above.
+		if ($review_total > 0 && $review_avg > 0) {
 			$ld['aggregateRating'] = array(
 				'@type'       => 'AggregateRating',
-				'ratingValue' => (float) $rs->average_rating,
-				'reviewCount' => (int) $rs->total_reviews,
+				'ratingValue' => round($review_avg, 1),
+				'reviewCount' => (int) $review_total,
 			);
 		}
 		$data['json_ld'] = json_ld($ld);
+
+		// Ad zones — same `plans.slug` vocabulary as the rest of the site, so
+		// a purchased package renders here too (migrations 0017 + 0019).
+		$data['ad_slots'] = array(
+			'top'      => 'top-banner-site-wide',
+			'inline'   => 'middle-banner-category',
+			'side_1'   => 'right-side-banner-1',
+			'side_2'   => 'right-side-banner-2',
+			'side_sky' => 'right-panel-skyscraper',
+			'bottom'   => 'bottom-banner-site-wide',
+		);
+		// Legacy 0006 zones kept alive as aliases — see all_listing().
+		$this->usermodel->primeAdSlots(array_merge(
+			array_values($data['ad_slots']),
+			array('listing-top', 'listing-inline', 'listing-sidebar')
+		));
+
+		$data['page_css'] = 'assets/css/directory.css?v=1';
 
 		// Load views
 		$this->load->view('header', $data);

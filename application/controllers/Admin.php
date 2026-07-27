@@ -1841,9 +1841,35 @@ class Admin extends CI_Controller
 		} else {
 			$data['RelatedListing'] = []; // Empty array if no related listings
 		}
-		//var_dump($data['RelatedListing']);
 
-		$this->load->view('header');
+		// The preview shares the public view, so give it the same data the
+		// public controller does — otherwise an admin previews a page with no
+		// reviews, no category breadcrumb and (because $page_css never reached
+		// the header) no stylesheet.
+		$data['user']             = null;
+		$data['listing_reviews']  = array();
+		$data['review_stats']     = array();
+		$data['listing_category'] = null;
+		$data['owner_socials']    = array('facebook' => '', 'twitter' => '', 'youtube' => '', 'website' => '');
+
+		if (!empty($data['listing'])) {
+			$data['listing_reviews'] = $this->usermodel->getListingReviews($data['listing']->listing_id, 10);
+			$data['review_stats']    = $this->usermodel->getReviewStats($data['listing']->listing_id);
+
+			if (!empty($data['listing']->category_id)) {
+				$data['listing_category'] = $this->db
+					->select('category_id, category_name, category_slug')
+					->where('category_id', (int) $data['listing']->category_id)
+					->limit(1)
+					->get('listing_categories')
+					->row();
+			}
+		}
+
+		$data['title']    = 'Preview: ' . (!empty($data['listing']->listing_name) ? $data['listing']->listing_name : 'listing');
+		$data['page_css'] = 'assets/css/directory.css?v=1';
+
+		$this->load->view('header', $data);
 		$this->load->view('listing_details', $data);
 		$this->load->view('footer');
 	}

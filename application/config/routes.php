@@ -83,7 +83,14 @@ $route['404_override'] = 'errors/page_missing';
 $route['translate_uri_dashes'] = TRUE;
 
 $route['listing-details/(:any)'] = 'user/listing_details/$1';
+// CI3's (:any) is [^/]+, so the paginated form needs its own rule and it must
+// come first — without it /all_listing/<category>/<offset> matches nothing and
+// falls through to a 404, which is why pagination links used to be written as
+// the long /user/all_listing/... form.
+$route['all_listing/(:any)/(:num)'] = 'user/all_listing/$1/$2';
 $route['all_listing/(:any)'] = 'user/all_listing/$1';
+$route['all-listing/(:any)/(:num)'] = 'user/all_listing/$1/$2';
+$route['all-listing/(:any)'] = 'user/all_listing/$1';
 
 // Auth flows
 $route['forgot-password']           = 'user/forgot_password';

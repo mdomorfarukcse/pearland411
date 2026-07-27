@@ -12,10 +12,17 @@
  *   3. Nothing at all, when the includer sets $slot_fallback = false.
  *
  * Variables consumed (the includer sets them; only $slot is required):
- *   $slot          (string) — slot_key. See migrations 0006 + 0017.
+ *   $slot          (string) — slot_key. See migrations 0006 + 0017 + 0019.
  *   $slot_class    (string) — extra CSS class on the wrapper.
  *   $slot_label    (string) — override the "Sponsored" microlabel.
  *   $slot_fallback (bool)   — false = render nothing when no ad is sold.
+ *   $slot_alias    (string|array) — older slot_key(s) this position replaced.
+ *                  Only consulted when nothing is sold on $slot, so inventory
+ *                  booked against a retired zone keeps running.
+ *   $slot_creative (string) — force which house creative fills an unsold zone
+ *                  ('house-ad' | 'scs-ad' | 'banner-design'), overriding the
+ *                  per-slot map below. Used where the page already carries a
+ *                  permanent web-services block and would otherwise repeat it.
  *
  * The zone's pixel size comes from ads_prices.size and is emitted as
  * width/height so the browser reserves the box before the image loads.
@@ -28,7 +35,7 @@ if (!isset($slot) || $slot === '') return;
 // Global off-switch. Deliberately unseeded — the helper's default keeps
 // advertising on unless an operator turns it off in /admin/setting.
 if (site_setting('service_ads_enabled', '1') === '0') {
-	unset($slot_class, $slot_label, $slot_fallback);
+	unset($slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative);
 	return;
 }
 
@@ -40,9 +47,20 @@ $__ci = get_instance();
 $__ad   = method_exists($__ci->usermodel, 'getAdForSlot')  ? $__ci->usermodel->getAdForSlot($slot)  : null;
 $__meta = method_exists($__ci->usermodel, 'getAdSlotMeta') ? $__ci->usermodel->getAdSlotMeta($slot) : null;
 
+// Nothing sold on this zone? Fall through to any zone it superseded, so an
+// ad an operator booked against a retired slot_key still gets its impressions
+// instead of silently disappearing when a page is re-cut.
+if (!$__ad && !empty($slot_alias) && method_exists($__ci->usermodel, 'getAdForSlot')) {
+	foreach ((array) $slot_alias as $__alias_key) {
+		if (empty($__alias_key)) continue;
+		$__ad = $__ci->usermodel->getAdForSlot($__alias_key);
+		if ($__ad) break;
+	}
+}
+
 $__fallback = isset($slot_fallback) ? (bool) $slot_fallback : true;
 if (!$__ad && !$__fallback) {
-	unset($slot_class, $slot_label, $slot_fallback);
+	unset($slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative);
 	return;
 }
 
@@ -80,6 +98,9 @@ $__house_map = array(
 	'news-sidebar'        => 'banner-design',
 );
 $__creative = isset($__house_map[$slot]) ? $__house_map[$slot] : 'house-ad';
+if (!empty($slot_creative) && in_array($slot_creative, array('house-ad', 'scs-ad', 'banner-design'), true)) {
+	$__creative = $slot_creative;
+}
 $__default  = 'assets/images/ads/' . $__creative . '-' . $__shape . '.svg';
 
 switch ($__creative) {
@@ -160,9 +181,9 @@ if ($__need_css) define('PEARLAND411_AD_SLOT_CSS', 1);
 unset(
 	$__ci, $__ad, $__meta, $__fallback, $__w, $__h, $__size, $__m, $__ratio,
 	$__shape, $__creative, $__house_map, $__default, $__external, $__href, $__alt,
-	$__label, $__cls, $__style, $__need_css,
+	$__label, $__cls, $__style, $__need_css, $__alias_key,
 	// Per-include options must not leak into the next include on the page.
-	$slot_class, $slot_label, $slot_fallback
+	$slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative
 );
 // Don't unset $slot — the includer owns it.
 ?>
