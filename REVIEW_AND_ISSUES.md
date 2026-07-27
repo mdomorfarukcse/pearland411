@@ -177,7 +177,7 @@ permissive `[0-9+()\- ]{7,20}` or drop the pattern.
 |---|---|---|
 | Medium | `application/views/event_details.php` | Per-page meta_description is set, but `event_map` is rendered raw HTML (admin can paste an iframe). Browsers index that as content; switch to a `lat/lng` field + server-rendered map iframe. |
 | Medium | `Sitemap::index` | Always declares `priority=1.0` for `/`, which is the convention but most search engines ignore. Low impact. |
-| Low | `robots.txt` | The `Sitemap:` line hardcodes `https://new.pearland411.com/sitemap.xml`. If you move domains, update. |
+| Low | `robots.txt` | The `Sitemap:` line hardcodes `https://pearland411.com/sitemap.xml` (it is a static file, so it cannot use `base_url()`). If you move domains, update it by hand. |
 
 ## 12. Newsletter signup is dead (combined finding)
 

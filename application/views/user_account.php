@@ -801,7 +801,8 @@ if (isset($user_transactions_data) && is_array($user_transactions_data)) {
                             <?php endif; ?>
                             <?php if ($plan_end_date): ?>
                                 <div class="account-info-item">
-                                    <span class="account-info-label"><?= $plan_status === 'Active' ? 'Next Billing' : 'Expires On' ?></span>
+                                    <?php // "Next Billing" only if it will actually bill again. ?>
+                                    <span class="account-info-label"><?= ($plan_status === 'Active' && !empty($current_subscription->auto_renew)) ? 'Next Billing' : 'Expires On' ?></span>
                                     <span class="account-info-value"><?= $plan_end_date ?></span>
                                 </div>
                             <?php endif; ?>
@@ -910,7 +911,7 @@ if (isset($user_transactions_data) && is_array($user_transactions_data)) {
                                 </p>
                                 <?php if ($plan_end_date): ?>
                                     <p style="margin: 10px 0 0 0; opacity: 0.8; font-size: 0.95rem;">
-                                        <?= $plan_status === 'Active' ? 'Renews on' : 'Expires on' ?>: <?= $plan_end_date ?>
+                                        <?= ($plan_status === 'Active' && !empty($current_subscription->auto_renew)) ? 'Renews on' : 'Expires on' ?>: <?= $plan_end_date ?>
                                     </p>
                                 <?php endif; ?>
                             </div>
@@ -966,6 +967,7 @@ if (isset($user_transactions_data) && is_array($user_transactions_data)) {
                     <?php if (!empty($helcim_configured)): ?>
                     <script type="text/javascript" src="<?= $helcimpay_js_url ?>"></script>
                     <?php endif; ?>
+                    <script src="<?= base_url() ?>assets/js/pp_post.js"></script>
                     <script>
                     (function () {
                         var msg = document.getElementById('plan-change-msg');
@@ -975,11 +977,7 @@ if (isset($user_transactions_data) && is_array($user_transactions_data)) {
                             btn.addEventListener('click', function () {
                                 var planId = btn.getAttribute('data-plan');
                                 btn.disabled = true; var orig = btn.textContent; btn.textContent = 'Please wait…';
-                                var body = new URLSearchParams(); body.append('plan_id', planId);
-                                fetch('<?= base_url('plan-change-init') ?>', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: body, credentials: 'same-origin' })
-                                .then(function (r) { return r.json(); })
-                                .then(function (res) {
-                                    if (!res.success) { showMsg(res.error || 'Could not change plan.', false); btn.disabled = false; btn.textContent = orig; return; }
+                                ppPost('<?= base_url('plan-change-init') ?>', { plan_id: planId }, function (res) {
                                     if (res.mode === 'downgrade' || res.mode === 'switched') { showMsg(res.message || 'Done.', true); setTimeout(function () { location.reload(); }, 1500); return; }
                                     if (res.mode === 'upgrade') {
                                         var token = res.checkoutToken;
@@ -992,16 +990,24 @@ if (isset($user_transactions_data) && is_array($user_transactions_data)) {
                                                 var container = (resp && resp.data) ? resp.data : resp;
                                                 var txnData = (container && container.data) ? container.data : container;
                                                 var hash = (container && container.hash) ? container.hash : ((resp && resp.hash) ? resp.hash : '');
-                                                var cb = new URLSearchParams(); cb.append('checkoutToken', token); cb.append('transaction_json', JSON.stringify(txnData)); cb.append('hash', hash);
-                                                fetch('<?= base_url('process-checkout') ?>', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: cb, credentials: 'same-origin' })
-                                                .then(function (r) { return r.json(); }).then(function (cr) { if (cr.success) { location.href = cr.redirect; } else { showMsg(cr.error || 'Upgrade could not be finalized.', false); btn.disabled = false; btn.textContent = orig; } });
+                                                ppPost('<?= base_url('process-checkout') ?>',
+                                                    { checkoutToken: token, transaction_json: JSON.stringify(txnData), hash: hash },
+                                                    function (cr) {
+                                                        if (cr.success) { location.href = cr.redirect; }
+                                                        else { showMsg(cr.error || 'Upgrade could not be finalized.', false); btn.disabled = false; btn.textContent = orig; }
+                                                    },
+                                                    // The card was already charged by Helcim at this point.
+                                                    function () {
+                                                        showMsg('Your payment went through but we could not finish the upgrade. Please contact support before paying again.', false);
+                                                        btn.textContent = 'Contact support';
+                                                    });
                                             }
                                         };
                                         window.addEventListener('message', handler);
                                         if (typeof appendHelcimPayIframe === 'function') { appendHelcimPayIframe(token); }
                                         else { showMsg('Payment library failed to load.', false); btn.disabled = false; btn.textContent = orig; }
                                     }
-                                }).catch(function () { showMsg('Network error.', false); btn.disabled = false; btn.textContent = orig; });
+                                }, function (m) { showMsg(m || 'Could not change plan.', false); btn.disabled = false; btn.textContent = orig; });
                             });
                         });
                     })();

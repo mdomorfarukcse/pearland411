@@ -4743,6 +4743,8 @@ class Usermodel extends CI_Model
 	// Get all durations for a plan
 	public function getPlanDurations($plan_id)
 	{
+		// Older databases predate migration 0015 and have no such table.
+		if (!$this->db->table_exists('plan_durations')) return array();
 		$this->db->select('*');
 		$this->db->from('plan_durations');
 		$this->db->where('plan_id', $plan_id);
@@ -4786,7 +4788,13 @@ class Usermodel extends CI_Model
 		$duration_id     = !empty($args['duration_id']) ? (int) $args['duration_id'] : null;
 		$duration_days   = 30;
 		$duration_months = 1;
-		if ($duration_id) {
+		if (!empty($args['duration_days']) && (int) $args['duration_days'] > 0) {
+			// Explicit term from the cart (e.g. a 12-month or 2-year purchase),
+			// which may be a multiple of the plan's base period rather than a
+			// configured plan_durations row.
+			$duration_days   = (int) $args['duration_days'];
+			$duration_months = max(1, (int) round($duration_days / 30));
+		} elseif ($duration_id) {
 			$d = $this->getDurationById($duration_id);
 			if ($d) {
 				$duration_months = (int) $d->duration_months ?: 1;
@@ -4886,13 +4894,87 @@ class Usermodel extends CI_Model
 	}
 
 	/**
+	 * Everything a user currently owns, for the "My packages" strip on the
+	 * pricing page: the active listing subscription plus any paid ad
+	 * placements (banners/videos/add-ons), each with a computed expiry.
+	 * Returns a list of ['name','category','expires_at','days_left','auto_renew'].
+	 */
+	public function getUserPurchasedPackages($user_id)
+	{
+		$user_id = (int) $user_id;
+		$out = array();
+		if (!$user_id) {
+			return $out;
+		}
+
+		// Active listing subscription(s).
+		$subs = $this->db->select('s.end_date, s.auto_renew, p.name, p.category')
+			->from('subscriptions s')
+			->join('plans p', 's.plan_id = p.id', 'left')
+			->where('s.user_id', $user_id)
+			->where('s.status', 'active')
+			->order_by('s.end_date', 'DESC')
+			->get()->result();
+		foreach ($subs as $s) {
+			$out[] = array(
+				'name'       => $s->name,
+				'category'   => $s->category,
+				'expires_at' => $s->end_date,
+				'auto_renew' => (int) $s->auto_renew,
+			);
+		}
+
+		// Paid ad placements. Prefer the term actually purchased (migration
+		// 0016); fall back to the plan's base period on older databases.
+		if ($this->db->table_exists('transactions')) {
+			$has_term = $this->db->field_exists('expires_at', 'transactions');
+			$select = 't.created_at, p.name, p.category, p.duration_days';
+			if ($has_term) $select .= ', t.expires_at, t.term_days';
+
+			$txns = $this->db->select($select)
+				->from('transactions t')
+				->join('plans p', 't.plan_id = p.id', 'inner')
+				->where('t.user_id', $user_id)
+				->where('t.status', 'success')
+				->where('p.category !=', 'business-listing')
+				->order_by('t.created_at', 'DESC')
+				->get()->result();
+			foreach ($txns as $t) {
+				if ($has_term && !empty($t->expires_at)) {
+					$exp = $t->expires_at;
+				} elseif ((int) $t->duration_days > 0) {
+					$exp = date('Y-m-d H:i:s', strtotime($t->created_at . ' +' . (int) $t->duration_days . ' days'));
+				} else {
+					continue;
+				}
+				if (strtotime($exp) < time()) {
+					continue; // lapsed placement
+				}
+				$out[] = array(
+					'name'       => $t->name,
+					'category'   => $t->category,
+					'expires_at' => $exp,
+					'auto_renew' => 0,
+				);
+			}
+		}
+
+		foreach ($out as $i => $row) {
+			$out[$i]['days_left'] = $row['expires_at']
+				? max(0, (int) floor((strtotime($row['expires_at']) - time()) / 86400))
+				: null;
+		}
+		return $out;
+	}
+
+	/**
 	 * Fulfill a paid multi-item cart. The business-listing item (if any)
 	 * activates the capability subscription; every other item (add-ons,
 	 * banners, videos, special) is recorded as a paid transaction for admin
 	 * fulfillment. One Helcim charge already covered the whole cart total.
 	 * Returns TRUE on success.
 	 */
-	public function recordCartPurchase($user_id, $items, $total, $currency, $helcim_txn_id, $approval_code)
+	public function recordCartPurchase($user_id, $items, $total, $currency, $helcim_txn_id, $approval_code, $auto_renew = 0)
 	{
 		$user_id = (int) $user_id;
 		if (!$user_id || empty($items)) {
@@ -4903,22 +4985,29 @@ class Usermodel extends CI_Model
 		$this->db->trans_start();
 
 		foreach ($items as $it) {
-			$plan_id = (int) $it['plan_id'];
-			$cat     = isset($it['category']) ? $it['category'] : '';
-			$price   = (float) $it['price'];
+			$plan_id     = (int) $it['plan_id'];
+			$cat         = isset($it['category']) ? $it['category'] : '';
+			$price       = (float) $it['price'];
+			$duration_id = !empty($it['duration_id']) ? (int) $it['duration_id'] : null;
+			// The term the customer actually bought — a 12-month banner must
+			// not be filed with the plan's 30-day base period.
+			$term_days   = !empty($it['term_days']) ? (int) $it['term_days'] : 0;
 
 			if ($cat === 'business-listing') {
 				// Activates the plan's capabilities (subscription + its own txn row).
 				$this->activateHelcimSubscription(array(
 					'user_id'               => $user_id,
 					'plan_id'               => $plan_id,
+					'duration_id'           => $duration_id,
+					'duration_days'         => $term_days,
+					'auto_renew'            => $auto_renew,
 					'amount'                => $price,
 					'currency'              => $currency,
 					'helcim_transaction_id' => $helcim_txn_id,
 					'helcim_approval_code'  => $approval_code,
 				));
 			} else {
-				$this->db->insert('transactions', array(
+				$row = array(
 					'user_id'               => $user_id,
 					'plan_id'               => $plan_id,
 					'txn_ref'               => 'HLC-C-' . $plan_id . '-' . substr(md5($now . $user_id . $plan_id), 0, 8),
@@ -4930,7 +5019,18 @@ class Usermodel extends CI_Model
 					'updated_at'            => $now,
 					'helcim_transaction_id' => $helcim_txn_id,
 					'helcim_approval_code'  => $approval_code,
-				));
+					'duration_id'           => $duration_id,
+					'term_days'             => $term_days ?: null,
+					'expires_at'            => $term_days
+						? date('Y-m-d H:i:s', strtotime($now . ' +' . $term_days . ' days'))
+						: null,
+				);
+				// term_days/expires_at/duration_id arrive with migration 0016;
+				// drop them on databases that have not run it yet.
+				foreach (array('duration_id', 'term_days', 'expires_at') as $col) {
+					if (!$this->db->field_exists($col, 'transactions')) unset($row[$col]);
+				}
+				$this->db->insert('transactions', $row);
 			}
 		}
 

@@ -200,7 +200,7 @@
 
 	
 
-	<script src="http://harvesthq.github.io/chosen/chosen.jquery.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/chosen/1.8.7/chosen.jquery.min.js"></script>
 
 
 

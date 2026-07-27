@@ -619,7 +619,14 @@ jQuery(document).ready(function ($) {
 
 $(function() {
 
-    $('.chosen-select').chosen();
+    // Guarded: the Chosen script is third-party and was loaded over http://
+    // on an https:// page, so browsers blocked it — and this call then threw
+    // "$(...).chosen is not a function", which aborted the rest of this
+    // ready handler and broke unrelated admin UI (the pricing modal included).
+    // A missing widget must degrade to a plain <select>, never break the page.
+    if ($.fn.chosen) {
+        $('.chosen-select').chosen();
+    }
 
 });
 

@@ -125,6 +125,51 @@ $s = isset($settings) ? $settings : array();
 		</div>
 	<?php endif; ?>
 
+	<!-- Payments — read-only status, deliberately outside the form ------ -->
+	<section class="setting-card">
+		<h2>Payments (Helcim)</h2>
+		<p class="hint">
+			Payment credentials live in <code>.env</code>, never in this form or the database
+			(see <code>README.md</code> &rarr; Environment). This panel only reports what the
+			server currently sees.
+		</p>
+
+		<?php if (empty($helcim_configured)): ?>
+			<div class="alert alert-warn">
+				<strong>Not configured.</strong> <code>HELCIM_API_TOKEN</code> is empty, so
+				<code>/checkout</code> shows an &ldquo;online payments are being set up&rdquo;
+				notice instead of the pay button. No one can subscribe until this is set.
+			</div>
+		<?php else: ?>
+			<div class="alert alert-ok">
+				<strong>Token present.</strong> Charging in <?= e($helcim_currency ?? 'USD') ?>.
+			</div>
+
+			<?php if (($helcim_health ?? null) === null): ?>
+				<p class="hint">
+					A token being present doesn&rsquo;t prove it has the right permissions — a
+					wrongly-scoped token still shows a working-looking pay button and only fails
+					when a customer clicks it. Run the live check to be sure.
+				</p>
+				<p><a href="<?= base_url('admin/setting?payments_check=1') ?>">Test connection to Helcim &rarr;</a></p>
+			<?php elseif (!empty($helcim_health['success'])): ?>
+				<div class="alert alert-ok">
+					<strong>Connection OK.</strong> Helcim accepted the token for checkout.
+				</div>
+				<p class="hint">
+					This confirms the checkout permission only. Auto-renewal charges use a
+					different permission (&ldquo;Transaction Processing&rdquo;) — verify it by
+					running <code>php index.php cli renew_subscriptions</code>, otherwise a
+					scope problem there stays hidden until the first renewal falls due.
+				</p>
+			<?php else: ?>
+				<div class="alert alert-err">
+					<strong>Connection failed.</strong> <?= e($helcim_health['error']) ?>
+				</div>
+			<?php endif; ?>
+		<?php endif; ?>
+	</section>
+
 	<form method="post" action="<?= base_url('admin/setting') ?>" autocomplete="off">
 
 		<!-- General ----------------------------------------------------- -->
@@ -146,7 +191,7 @@ $s = isset($settings) ? $settings : array();
 			</div>
 			<div class="setting-row">
 				<label for="site_og_image">Default share image<small>Absolute URL. Used as og:image when a page doesn't set its own.</small></label>
-				<input type="url" id="site_og_image" name="site_og_image" value="<?= e_attr($s['site_og_image'] ?? '') ?>" placeholder="https://new.pearland411.com/assets/images/og-default.jpg">
+				<input type="url" id="site_og_image" name="site_og_image" value="<?= e_attr($s['site_og_image'] ?? '') ?>" placeholder="https://pearland411.com/assets/images/og-default.jpg">
 			</div>
 			<div class="setting-row">
 				<label for="contact_phone">Contact phone<small>Footer + tel: links</small></label>

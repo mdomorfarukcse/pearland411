@@ -55,6 +55,14 @@
  */
 	// Load .env (if present) before defining ENVIRONMENT so CI_ENV can be set there.
 	require_once __DIR__ . '/application/config/env.php';
+
+	// Prefer a .env stored ABOVE the webroot (on cPanel the repo root is
+	// public_html/, so ~/.env is not web-servable at all). The in-webroot copy
+	// is kept as a fallback so existing installs keep booting during the move.
+	// pearland411_load_env() only sets a key when it isn't already in the
+	// environment, so the parent file wins and the fallback merely backfills —
+	// the call order below is significant.
+	pearland411_load_env(dirname(__DIR__) . '/.env');
 	pearland411_load_env(__DIR__ . '/.env');
 
 	// Default to PRODUCTION. Set CI_ENV=development in .env (or in the webserver

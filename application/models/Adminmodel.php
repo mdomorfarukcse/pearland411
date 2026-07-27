@@ -2159,17 +2159,100 @@
 		public function getPlanDurations($plan_id)
 		{
 			if (!$plan_id) return [];
+			if (!$this->db->table_exists('plan_durations')) return [];
 			return $this->db->select('*')->from('plan_durations')->where('plan_id', $plan_id)->order_by('duration_months', 'ASC')->get()->result();
+		}
+
+		public function getPlanDurationById($id)
+		{
+			if (!$id || !$this->db->table_exists('plan_durations')) return null;
+			return $this->db->where('id', (int) $id)->limit(1)->get('plan_durations')->row();
+		}
+
+		/**
+		 * Add a term to a plan (e.g. a discounted 12-month option). Without
+		 * this the admin could only re-price the terms that already existed,
+		 * so longer terms could never be offered.
+		 */
+		public function addPlanDuration($plan_id, $months, $days, $price, $currency = 'USD')
+		{
+			$plan_id = (int) $plan_id;
+			if (!$plan_id || !$this->db->table_exists('plan_durations')) return false;
+
+			$months = max(0, (int) $months);
+			$days   = max(0, (int) $days);
+			if (!$days && $months) $days = $months * 30;
+			if (!$days) return false;
+
+			$row = array(
+				'plan_id'         => $plan_id,
+				'duration_months' => $months,
+				'duration_days'   => $days,
+				'price'           => floatval($price),
+				'currency'        => strtoupper(substr(trim($currency) ?: 'USD', 0, 10)),
+				'is_active'       => 1,
+				'created_at'      => date('Y-m-d H:i:s'),
+				'updated_at'      => date('Y-m-d H:i:s'),
+			);
+			foreach (array_keys($row) as $col) {
+				if (!$this->db->field_exists($col, 'plan_durations')) unset($row[$col]);
+			}
+			return $this->db->insert('plan_durations', $row) ? $this->db->insert_id() : false;
+		}
+
+		public function deletePlanDuration($id)
+		{
+			if (!$id || !$this->db->table_exists('plan_durations')) return false;
+			return $this->db->where('id', (int) $id)->delete('plan_durations');
 		}
 
 		/**
 		 * Update a pricing duration price by id
 		 */
-		public function updatePricingDuration($id, $price)
+		/**
+		 * Update one plan_durations row.
+		 *
+		 * Only writes columns that actually exist: older databases predate
+		 * `currency`/`updated_at` (see migration 0015), and blindly setting a
+		 * missing column made the UPDATE fail — which is why saving a duration
+		 * price silently did nothing.
+		 *
+		 * @param int   $id
+		 * @param float $price
+		 * @param array $extra optional duration_months / duration_days / currency / is_active
+		 */
+		public function updatePricingDuration($id, $price, $extra = array())
 		{
 			if (!$id) return false;
-			$price = floatval($price);
-			return $this->db->where('id', $id)->update('plan_durations', ['price' => $price, 'updated_at' => date('Y-m-d H:i:s')]);
+
+			$data = array('price' => floatval($price));
+
+			if (isset($extra['duration_months']) && $extra['duration_months'] !== '') {
+				$data['duration_months'] = max(0, (int) $extra['duration_months']);
+			}
+			if (isset($extra['duration_days']) && $extra['duration_days'] !== '') {
+				$data['duration_days'] = max(0, (int) $extra['duration_days']);
+			} elseif (isset($data['duration_months']) && $data['duration_months'] > 0) {
+				// Keep the day count — which drives every expiry calculation —
+				// in step when only the month count was edited.
+				$data['duration_days'] = $data['duration_months'] * 30;
+			}
+			if (isset($extra['currency']) && $extra['currency'] !== '') {
+				$data['currency'] = strtoupper(substr(trim($extra['currency']), 0, 10));
+			}
+			if (isset($extra['is_active'])) {
+				$data['is_active'] = (int) $extra['is_active'] ? 1 : 0;
+			}
+			$data['updated_at'] = date('Y-m-d H:i:s');
+
+			foreach (array_keys($data) as $col) {
+				if (!$this->db->field_exists($col, 'plan_durations')) {
+					unset($data[$col]);
+				}
+			}
+			if (empty($data)) return false;
+
+			return $this->db->where('id', (int) $id)->update('plan_durations', $data);
 		}
 
 		/*====================
