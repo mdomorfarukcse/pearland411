@@ -6,6 +6,60 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-07-27 — Plan terms: buy for 12 months / 2 years, fix admin duration saves
+
+### Fixed
+- **Saving a plan duration in admin did nothing.** `plan_durations` was never created by a
+  migration — it existed only in the production database, and there it lacks `currency` and
+  `updated_at`. `Adminmodel::updatePricingDuration()` wrote `updated_at` on every save, so the
+  UPDATE errored and the admin screen discarded the change while looking like it worked. Added
+  migration **`0015_plan_durations_columns.sql`** (creates the table when missing, back-fills the
+  missing columns when present) and made the model write only columns that exist. The endpoint now
+  reports the real DB error instead of a bare "DB update failed".
+- **The billing area's upgrade/downgrade payment had the same broken-`fetch` + missing-CSRF bug**
+  fixed for the cart last change — `user_account.php` called `plan-change-init` and
+  `process-checkout` via `fetch`. Both now go through `ppPost`.
+- **Every admin plan card looked identical.** Presence/absence of a feature was conveyed only by an
+  icon, so when the icon font did not render, Basic Listing appeared to include "Featured listing"
+  and "Analytics dashboard". Absent features are now muted and struck through, and `Up to 0 …` rows
+  for unused content types are no longer printed.
+- **"Next Billing" / "Renews on"** in the account page were shown for any active plan, including
+  ones with auto-renew off. They now say "Expires On" unless the subscription actually renews.
+
+### Added
+- **Term selection at checkout.** Each cart line gets a "Buy for" dropdown — 1 / 3 / 6 / 12 / 24
+  periods — priced from the plan's configured `plan_durations` rows when an admin has set them
+  (so long-term discounts apply), otherwise from multiples of the plan's base period. The line
+  shows **"Runs until <date>"** and the total re-prices server-side. New endpoint
+  `POST /cart-set-term`; the term is validated against what the plan actually offers rather than
+  trusted from the request.
+- **Auto-renew opt-in restored at checkout.** `cart_checkout.php` had no checkbox (the legacy
+  `checkout.php` did), so every purchase was one-off regardless of the plan being recurring. It is
+  shown when the cart holds a recurring tier and flows through `cart_pay_init` →
+  `recordCartPurchase` → `activateHelcimSubscription`.
+- **Admin can add and delete plan terms**, not just re-price existing ones — previously there was
+  no way to offer a 12- or 24-month option at all. Months/days are editable per row.
+- Migration **`0016_transaction_term.sql`** — `term_days`, `expires_at`, `duration_id` on
+  `transactions`, so a 12-month banner records its real expiry instead of being reported against the
+  plan's 30-day base period. Existing rows are back-filled.
+
+### Changed
+- The session cart now carries the chosen term per line (`plan_id` + `duration_id`/`multiplier`).
+  Old flat `[plan_id, ...]` carts are still accepted, so a cart built before this change keeps
+  working.
+- `getUserPurchasedPackages()` reads the purchased expiry when present, falling back to the plan's
+  base period on databases that have not run 0016.
+
+### Verified
+- Browser test through `ppPost` against a stub CSRF gate: add → change term posts
+  `plan_id=7&multiplier=12` with the token and re-prices, no page errors.
+- Checkout rendered with mixed terms (12-month listing + 3-month banner): dropdowns, per-line
+  "Runs until", auto-renew box and the recomputed total all correct at 1280px and 390px.
+
+### Not verified
+- No MySQL in this environment, so migrations 0015/0016 are **unrun**. Until 0015 is applied the
+  admin duration save will still fail — the model guard keeps it from erroring, but the columns must
+  exist for the value to persist.
 ## 2026-07-26 — Security: block `.git/` from the web, allow `.env` above the webroot
 
 Prompted by a review of secret handling before live Helcim credentials were added. The `.env`

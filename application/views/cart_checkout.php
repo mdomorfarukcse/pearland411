@@ -43,6 +43,20 @@ function cc_cat_label($c)
     .cco-item .x{cursor:pointer;color:#b9b4c8;border:none;background:none;font-size:20px;line-height:1;padding:2px 4px;border-radius:6px;transition:.15s;}
     .cco-item .x:hover{color:#c0392b;background:#fdeceb;}
 
+    /* Per-line term picker + expiry */
+    .cco-term{margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+    .cco-term label{font-size:12px;color:var(--ink2);font-weight:600;}
+    .cco-term select{padding:7px 10px;border:1px solid #d9d9e8;border-radius:8px;font-size:13px;color:var(--ink);background:#fff;max-width:100%;}
+    .cco-term select:focus{outline:none;border-color:var(--go);box-shadow:0 0 0 3px rgba(33,161,121,.13);}
+    .cco-term-static{margin-top:8px;font-size:12.5px;color:var(--ink2);}
+    .cco-exp{margin-top:6px;font-size:12.5px;color:var(--ink2);}
+    .cco-exp strong{color:var(--ink);}
+
+    /* Auto-renew opt-in */
+    .cco-renew{display:flex;gap:10px;align-items:flex-start;background:#f7f8fc;border:1px solid var(--line);border-radius:10px;padding:13px 15px;margin-top:14px;font-size:13px;line-height:1.55;color:var(--ink2);cursor:pointer;}
+    .cco-renew input{margin-top:2px;flex-shrink:0;width:16px;height:16px;accent-color:var(--go);}
+    .cco-renew strong{color:var(--ink);}
+
     .cco-total{display:flex;justify-content:space-between;align-items:baseline;font-weight:800;color:var(--ink);margin-top:18px;padding-top:16px;border-top:2px solid var(--line);}
     .cco-total span:first-child{font-size:15px;}
     .cco-total span:last-child{font-size:24px;}
@@ -98,6 +112,26 @@ function cc_cat_label($c)
                 <div>
                     <div class="n"><?= htmlspecialchars($it['name']) ?></div>
                     <div class="c"><?= cc_cat_label($it['category']) ?></div>
+                    <?php if (!empty($it['terms']) && count($it['terms']) > 1): ?>
+                        <div class="cco-term">
+                            <label for="term-<?= (int) $it['plan_id'] ?>">Buy for</label>
+                            <select class="cco-term-sel" id="term-<?= (int) $it['plan_id'] ?>"
+                                    data-plan="<?= (int) $it['plan_id'] ?>">
+                                <?php foreach ($it['terms'] as $t):
+                                    $val = $t['duration_id'] ? 'd:' . $t['duration_id'] : 'm:' . $t['multiplier'];
+                                    $sel = ($t['duration_id'] && (int) $t['duration_id'] === (int) $it['duration_id'])
+                                        || (!$t['duration_id'] && !$it['duration_id'] && (int) $t['multiplier'] === (int) $it['multiplier']);
+                                    ?>
+                                    <option value="<?= htmlspecialchars($val) ?>" <?= $sel ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($t['label']) ?> — <?= htmlspecialchars($cur) ?> <?= number_format($t['price'], 2) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    <?php else: ?>
+                        <div class="cco-term-static"><?= htmlspecialchars($it['term_label']) ?></div>
+                    <?php endif; ?>
+                    <div class="cco-exp">Runs until <strong><?= date('M j, Y', strtotime($it['expires_at'])) ?></strong></div>
                 </div>
                 <div class="p"><?= htmlspecialchars($cur) ?> <?= number_format($it['price'], 2) ?></div>
                 <button class="x" type="button" data-plan="<?= (int) $it['plan_id'] ?>" title="Remove">&times;</button>
@@ -117,6 +151,18 @@ function cc_cat_label($c)
                 <div class="cco-charge">
                     You'll be charged <strong><?= htmlspecialchars($cur) ?> <?= number_format($cart['total'], 2) ?></strong> today.
                 </div>
+
+                <?php if (!empty($cart['recurring'])): ?>
+                    <label class="cco-renew" for="cco-auto-renew">
+                        <input type="checkbox" id="cco-auto-renew" name="auto_renew" value="1">
+                        <span>
+                            <strong>Renew automatically</strong> at the end of each term so your listing
+                            never lapses. We'll save your card securely with Helcim — cancel anytime from
+                            your account.
+                        </span>
+                    </label>
+                <?php endif; ?>
+
                 <button id="cco-pay" class="cco-btn" type="button">Pay <?= htmlspecialchars($cur) ?> <?= number_format($cart['total'], 2) ?> securely</button>
                 <ul class="cco-trust">
                     <li>Processed by Helcim over an encrypted connection</li>
@@ -180,6 +226,24 @@ function cc_cat_label($c)
         });
     });
 
+    // Term picker -> re-price the line, then reload so totals/expiry agree
+    // with what the server will actually charge.
+    Array.prototype.forEach.call(document.querySelectorAll('.cco-term-sel'), function (sel) {
+        sel.addEventListener('change', function () {
+            var v = sel.value || '';
+            var params = { plan_id: sel.getAttribute('data-plan') };
+            if (v.indexOf('d:') === 0) { params.duration_id = v.slice(2); }
+            else { params.multiplier = v.slice(2); }
+            sel.disabled = true;
+            ppPost(
+                base + 'cart-set-term',
+                params,
+                function () { location.reload(); },
+                function (msg) { sel.disabled = false; showErr(msg); }
+            );
+        });
+    });
+
     // Guest auth tabs.
     Array.prototype.forEach.call(document.querySelectorAll('.cco-tab'), function (t) {
         t.addEventListener('click', function () {
@@ -204,7 +268,8 @@ function cc_cat_label($c)
 
         payBtn.addEventListener('click', function () {
             payBtn.disabled = true; payBtn.textContent = 'Starting…';
-            ppPost(base + 'cart-pay-init', {}, function (res) {
+            var renew = document.getElementById('cco-auto-renew');
+            ppPost(base + 'cart-pay-init', { auto_renew: (renew && renew.checked) ? 1 : 0 }, function (res) {
                 var token = res.checkoutToken;
                 var handler = function (event) {
                     if (!event.data || event.data.eventName !== 'helcim-pay-js-' + token) return;

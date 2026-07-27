@@ -5628,9 +5628,63 @@ class Admin extends CI_Controller
 			echo json_encode(['success' => false, 'error' => 'Missing id']);
 			return;
 		}
-		$ok = $this->adminmodel->updatePricingDuration($id, $price);
-		if ($ok) echo json_encode(['success' => true]);
-		else echo json_encode(['success' => false, 'error' => 'DB update failed']);
+		$extra = array(
+			'duration_months' => $this->input->post('duration_months'),
+			'duration_days'   => $this->input->post('duration_days'),
+			'currency'        => $this->input->post('currency'),
+		);
+		$ok = $this->adminmodel->updatePricingDuration($id, $price, $extra);
+		if ($ok) {
+			echo json_encode(['success' => true, 'duration' => $this->adminmodel->getPlanDurationById($id)]);
+			return;
+		}
+		// Surface the actual DB error — "DB update failed" on its own sent us
+		// hunting for a UI bug when the cause was a missing column.
+		$err = $this->db->error();
+		echo json_encode([
+			'success' => false,
+			'error'   => !empty($err['message'])
+				? 'Database: ' . $err['message'] . ' (run migration 0015_plan_durations_columns.sql)'
+				: 'Nothing was saved. Check that the duration still exists.',
+		]);
+	}
+
+	/*====================
+		Add / delete a plan term (AJAX)
+	=====================*/
+	public function add_pricing_duration()
+	{
+		$plan_id = (int) $this->input->post('plan_id');
+		$months  = $this->input->post('duration_months');
+		$days    = $this->input->post('duration_days');
+		$price   = $this->input->post('price');
+
+		if (!$plan_id) {
+			echo json_encode(['success' => false, 'error' => 'Choose a plan first.']);
+			return;
+		}
+		$new_id = $this->adminmodel->addPlanDuration($plan_id, $months, $days, $price, $this->input->post('currency') ?: 'USD');
+		if ($new_id) {
+			echo json_encode(['success' => true, 'id' => $new_id]);
+			return;
+		}
+		$err = $this->db->error();
+		echo json_encode([
+			'success' => false,
+			'error'   => !empty($err['message'])
+				? 'Database: ' . $err['message'] . ' (run migration 0015_plan_durations_columns.sql)'
+				: 'Enter a term length greater than zero.',
+		]);
+	}
+
+	public function delete_pricing_duration()
+	{
+		$id = (int) $this->input->post('id');
+		if (!$id) {
+			echo json_encode(['success' => false, 'error' => 'Missing id']);
+			return;
+		}
+		echo json_encode(['success' => (bool) $this->adminmodel->deletePlanDuration($id)]);
 	}
 
 	/*====================

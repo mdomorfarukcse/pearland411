@@ -292,7 +292,9 @@ function pp_features($plan, $cat)
         if (items.length) {
             elCount.textContent = items.length + (items.length === 1 ? ' item' : ' items');
             elTotal.textContent = money(cart.total);
-            elItems.textContent = items.map(function (i) { return i.name; }).join(' · ');
+            elItems.textContent = items.map(function (i) {
+                return i.term_label ? i.name + ' (' + i.term_label + ')' : i.name;
+            }).join(' · ');
             bar.classList.add('show');
             document.body.style.paddingBottom = bar.offsetHeight + 'px';
         } else {
