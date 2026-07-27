@@ -6797,8 +6797,11 @@ class User extends CI_Controller
 	{
 		$days = (int) $days;
 		$months = (int) $months;
-		if (!$months && $days >= 28) {
-			$months = (int) round($days / 30);
+		// Only call it "months" when the term really is a whole number of them.
+		// Rounding turned a 42-day placement into "1 month", which misstates
+		// what the customer is buying.
+		if (!$months && $days >= 30 && $days % 30 === 0) {
+			$months = (int) ($days / 30);
 		}
 		if ($months >= 12 && $months % 12 === 0) {
 			$years = $months / 12;
@@ -6819,18 +6822,19 @@ class User extends CI_Controller
 	 */
 	private function planTermOptions($plan)
 	{
-		$out = array();
 		$base_days = (int) $plan->duration_days > 0 ? (int) $plan->duration_days : 30;
+		$by_days = array();
 
+		// Terms an admin configured explicitly. These win, because they may
+		// carry a long-term discount rather than a plain multiple.
 		$rows = method_exists($this->usermodel, 'getPlanDurations')
 			? $this->usermodel->getPlanDurations((int) $plan->id)
 			: array();
-
 		foreach ($rows as $d) {
 			$months = (int) $d->duration_months;
 			$days   = (int) $d->duration_days ?: ($months * 30);
 			if ($days <= 0) continue;
-			$out[] = array(
+			$by_days[$days] = array(
 				'duration_id' => (int) $d->id,
 				'multiplier'  => null,
 				'days'        => $days,
@@ -6840,20 +6844,25 @@ class User extends CI_Controller
 			);
 		}
 
-		if (empty($out)) {
-			foreach (array(1, 3, 6, 12, 24) as $m) {
-				$days = $base_days * $m;
-				$out[] = array(
-					'duration_id' => null,
-					'multiplier'  => $m,
-					'days'        => $days,
-					'months'      => $base_days >= 28 ? (int) round($days / 30) : 0,
-					'price'       => round((float) $plan->price * $m, 2),
-					'label'       => $this->termLabel($days, $base_days >= 28 ? (int) round($days / 30) : 0),
-				);
-			}
+		// Then fill in the standard multiples. Every plan is seeded with a
+		// single 1-month row, so relying on configured rows alone left exactly
+		// one option and no way to buy a longer term at all.
+		foreach (array(1, 3, 6, 12, 24) as $m) {
+			$days = $base_days * $m;
+			if (isset($by_days[$days])) continue;
+			$months = $base_days >= 28 ? (int) round($days / 30) : 0;
+			$by_days[$days] = array(
+				'duration_id' => null,
+				'multiplier'  => $m,
+				'days'        => $days,
+				'months'      => $months,
+				'price'       => round((float) $plan->price * $m, 2),
+				'label'       => $this->termLabel($days, $months),
+			);
 		}
-		return $out;
+
+		ksort($by_days);
+		return array_values($by_days);
 	}
 
 	/** Pick the option a line refers to, falling back to the shortest term. */

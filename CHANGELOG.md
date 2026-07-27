@@ -6,6 +6,47 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-07-27 — Fix admin pricing page (blocked script, duplicate jQuery, unreachable Save) + term dropdown
+
+### Fixed
+- **Mixed content killed the admin JS.** 30 views loaded Chosen from
+  `http://harvesthq.github.io/chosen/chosen.jquery.js` — plain HTTP on an HTTPS page, so browsers
+  blocked it. `admin-custom.js` then called `$('.chosen-select').chosen()`, which threw
+  `$(...).chosen is not a function` and aborted the rest of that ready handler, taking unrelated
+  admin UI down with it. All 30 references now use the HTTPS cdnjs build, and the call is guarded so
+  a missing widget degrades to a plain `<select>` instead of breaking the page.
+- **`admin/pricing.php` loaded a second copy of jQuery (3.6.0) and Bootstrap (4.6.0)** mid-page,
+  on top of the jQuery 3.4.1 / Bootstrap 4.3.1 that `admin/footer.php` loads after the view. That
+  replaced `window.jQuery` halfway down the document, so plugins and handlers registered against one
+  instance were invisible to the other — leaving the Edit Pricing Plan modal and the duration editor
+  unreliable. The duplicates are gone; a small `ppAdminReady()` shim defers this page's two inline
+  blocks until the footer's jQuery exists.
+- **The Save Plan button was unreachable.** The plan form is long enough that the modal grew past
+  the viewport, putting the footer below the fold with no way to scroll to it — edits could be typed
+  but never saved. `.modal-body` is now height-capped and scrolls, with the footer sticky. A direct
+  cap is used rather than Bootstrap's `.modal-dialog-scrollable` because a `<form>` sits between
+  `.modal-content` and `.modal-body`, which breaks that rule's flex assumptions.
+- **Checkout showed no term choice.** `planTermOptions()` used the configured `plan_durations` rows
+  *instead of* the standard multiples, and the seed gives every plan exactly one row (1 month) — so
+  there was one option and the dropdown was hidden. Configured rows and multiples are now merged,
+  keyed by term length: an admin-configured term wins (keeping its discount) and 3/6/12/24 are
+  always offered.
+- **A 42-day term was labelled "1 month."** `termLabel()` rounded any span of 28+ days to months.
+  It now converts to months only for exact multiples of 30, so day-based placements read in days.
+
+### Verified
+- Term logic extracted from the shipped source and exercised directly: a $15/month plan with one
+  configured 1-month row yields 5 options (1 month $15 configured, 3 months $45, 6 months $90,
+  1 year $180, 2 years $360), no duplicate term lengths, legacy flat carts still resolve to the base
+  term, and a 7-day plan labels in days (7 / 21 / 42 / 84 / 168).
+- Checkout re-rendered for that exact case: the "Buy for" dropdown now renders with 5 options where
+  it previously showed static "1 month" text.
+- Admin modal markup rendered headless at 800px and 1000px viewport heights: the Save Plan button is
+  fully visible in both and `.modal-body` scrolls. (Bootstrap's CSS is CDN-blocked in the build
+  environment, so the harness inlines the modal rules being relied on.)
+
+---
+
 ## 2026-07-27 — Plan terms: buy for 12 months / 2 years, fix admin duration saves
 
 ### Fixed
