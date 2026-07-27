@@ -6,13 +6,13 @@
  *
  * Three states, in order of preference:
  *   1. A live ad targeting this zone (ads.ad_status = 1, inside its date window).
- *   2. A built-in default creative — either the "advertise here" house ad or the
- *      Space Center Systems services ad, picked deterministically per zone so a
- *      given slot always shows the same one.
+ *   2. A built-in default creative — "advertise here", the Space Center Systems
+ *      web-development ad, or the ad/banner-design ad. Which one is fixed per
+ *      zone (see $__house_map below), so a slot always shows the same thing.
  *   3. Nothing at all, when the includer sets $slot_fallback = false.
  *
  * Variables consumed (the includer sets them; only $slot is required):
- *   $slot          (string) — slot_key. See migrations 0006 + 0015.
+ *   $slot          (string) — slot_key. See migrations 0006 + 0017.
  *   $slot_class    (string) — extra CSS class on the wrapper.
  *   $slot_label    (string) — override the "Sponsored" microlabel.
  *   $slot_fallback (bool)   — false = render nothing when no ad is sold.
@@ -70,18 +70,34 @@ elseif ($__ratio >= 2.0) $__shape = 'wide';
 elseif ($__ratio <= 0.9) $__shape = 'tall';
 else                     $__shape = 'box';
 
-// Alternate the two default creatives down the page. An explicit map beats
-// hashing the key: crc32 happened to give 5 house ads to 2 Space Center ones
-// on the homepage set. Anything not listed falls back to the house ad.
-$__scs_slots = array('home-hero', 'home-sidebar-top', 'home-sidebar-skyscraper', 'listing-sidebar', 'news-sidebar');
-$__creative  = in_array($slot, $__scs_slots, true) ? 'scs-ad' : 'house-ad';
-$__default   = 'assets/images/ads/' . $__creative . '-' . $__shape . '.svg';
+// Which house creative fills an unsold zone. Explicit per slot rather than
+// hashed: the sidebar deliberately carries one web-development ad and one
+// ad-design ad, and every other zone sells the space itself.
+$__house_map = array(
+	'right-side-banner-1' => 'scs-ad',        // website development
+	'right-side-banner-2' => 'banner-design', // ad / banner artwork
+	'listing-sidebar'     => 'scs-ad',
+	'news-sidebar'        => 'banner-design',
+);
+$__creative = isset($__house_map[$slot]) ? $__house_map[$slot] : 'house-ad';
+$__default  = 'assets/images/ads/' . $__creative . '-' . $__shape . '.svg';
 
-$__is_house  = ($__creative === 'house-ad');
-$__href      = $__is_house ? base_url('post-your-ads') : 'https://www.spacecentersystems.com/website-development/';
-$__alt       = $__is_house
-	? 'Advertise your business on Pearland411'
-	: 'Space Center Systems — website design, hosting and local SEO';
+switch ($__creative) {
+	case 'scs-ad':
+		$__href = 'https://www.spacecentersystems.com/website-development/';
+		$__alt  = 'Space Center Systems — website design, hosting and local SEO';
+		break;
+	case 'banner-design':
+		$__href = base_url('request-service');
+		$__alt  = 'Need a banner designed? Pearland411 designs your ad artwork';
+		break;
+	default:
+		$__href = base_url('post-your-ads');
+		$__alt  = 'Advertise your business on Pearland411';
+}
+
+// Only scs-ad leaves the site, so only it gets target/rel.
+$__external = ($__creative === 'scs-ad');
 
 $__label = isset($slot_label) ? $slot_label : 'Sponsored';
 
@@ -91,7 +107,29 @@ if (!$__ad)              $__cls .= ' ad-slot--default';
 
 // Reserve the box so the page doesn't jump when the creative paints.
 $__style = ($__w && $__h) ? 'max-width:' . $__w . 'px;aspect-ratio:' . $__w . ' / ' . $__h . ';' : '';
+
+// This partial is included by eight different views. Rather than ask each of
+// them to load a stylesheet — which would mean touching pages that are not
+// part of this work — it ships its own CSS and emits it once per request.
+$__need_css = !defined('PEARLAND411_AD_SLOT_CSS');
+if ($__need_css) define('PEARLAND411_AD_SLOT_CSS', 1);
 ?>
+
+<?php if ($__need_css): ?>
+	<style>
+		.ad-slot { margin: 18px 0; text-align: center; }
+		.ad-slot__label {
+			display: block; font-size: 10px; line-height: 1.4; text-transform: uppercase;
+			letter-spacing: .14em; color: #9aa09a; margin-bottom: 5px;
+		}
+		.ad-slot__link {
+			display: block; margin: 0 auto; max-width: 100%; border-radius: 8px;
+			overflow: hidden; border: 1px solid #e4e7de; background: #fafbf7; line-height: 0;
+		}
+		.ad-slot__link:hover { border-color: #cfe3a8; }
+		.ad-slot__link img { display: block; width: 100%; height: 100%; object-fit: cover; }
+	</style>
+<?php endif; ?>
 
 <aside class="<?= e_attr($__cls) ?>" data-ad-slot="<?= e_attr($slot) ?>" aria-label="Sponsored placement">
 	<span class="ad-slot__label"><?= e($__label) ?></span>
@@ -108,7 +146,7 @@ $__style = ($__w && $__h) ? 'max-width:' . $__w . 'px;aspect-ratio:' . $__w . ' 
 		</a>
 	<?php else: ?>
 		<a class="ad-slot__link" href="<?= e_url($__href) ?>"
-			<?= $__is_house ? '' : 'target="_blank" rel="nofollow sponsored noopener"' ?>
+			<?= $__external ? 'target="_blank" rel="nofollow sponsored noopener"' : '' ?>
 		   style="<?= e_attr($__style) ?>">
 			<img src="<?= base_url($__default) ?>" alt="<?= e_attr($__alt) ?>"
 				<?= $__w ? 'width="' . (int) $__w . '"' : '' ?>
@@ -121,8 +159,8 @@ $__style = ($__w && $__h) ? 'max-width:' . $__w . 'px;aspect-ratio:' . $__w . ' 
 <?php
 unset(
 	$__ci, $__ad, $__meta, $__fallback, $__w, $__h, $__size, $__m, $__ratio,
-	$__shape, $__creative, $__default, $__is_house, $__href, $__alt,
-	$__label, $__cls, $__style,
+	$__shape, $__creative, $__house_map, $__default, $__external, $__href, $__alt,
+	$__label, $__cls, $__style, $__need_css,
 	// Per-include options must not leak into the next include on the page.
 	$slot_class, $slot_label, $slot_fallback
 );

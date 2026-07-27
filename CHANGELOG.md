@@ -6,6 +6,87 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-07 — Homepage reorganised on the existing design
+
+Follow-up to the previous entry. That attempt replaced the whole theme, which
+was not the ask — the homepage needed **organising**, not a new design. The
+original `views/index.php` was restored and its **body** reorganised in place,
+on the theme's own classes.
+
+### Fixed
+- **The 500 on the homepage was a regression introduced here.** `GROUP BY
+  c.coupon_id` had been added to `getActiveCoupons()` to fix its row fan-out,
+  but the select list carries `l.listing_name`, `l.listing_slug` and `u.name` —
+  columns from joined tables that are not functionally dependent on
+  `coupons.coupon_id`. Under `ONLY_FULL_GROUP_BY` (MySQL 5.7+ default) that is
+  error 1055, the query returns false, and the page dies. Nothing appeared in
+  the PHP error log because CI3 traps database errors itself via `show_error()`,
+  so it never became a PHP fatal. `getActiveCoupons()` is back to its original
+  SQL; the new `getDistinctActiveCoupons()` de-dupes in PHP instead.
+- **Mobile showed the sidebar before the content.** `@media (max-width:768px)`
+  set `flex-direction: column-reverse`, contradicting the `991.98px` rule above
+  it, so phone visitors met the weather widget before a single business.
+- Four sidebar widgets carried `hide_on_phone`, so phones lost weather, deals,
+  the newsletter and events outright.
+- Sideways scroll on phones, from the theme's `.pop-menu` (5px over) and the
+  `position:fixed` `.mob-me-all` off-canvas panel. Contained on `<body>`, since
+  a fixed element ignores an ancestor's overflow.
+- The category strip inherited `.category-tabs`, which the theme hides below
+  768px with `!important`; it now has its own class and stays visible.
+- Dropped a 404 for the non-existent `assets/js/new.js`, and the CDN copies of
+  jQuery (**3.3.1 slim — no `$.ajax`, which the newsletter needs**), Popper and
+  Bootstrap 4.1.3 that were loading *after*, and therefore overriding, the local
+  full builds. Swiper and FullCalendar removed with the widgets they drove
+  (~400 KB). 20 relative `../assets/` paths switched to `base_url()`.
+- `style.css:2050` points `.hom-head` at `images/banner4.jpg`, which does not
+  exist — neutralised for the homepage only.
+- Markup is now tag-balanced; the original carried four stray `</div>`.
+
+### Added
+- **Business Hotspot** and **Business of the Week** sections. Both packages were
+  already on sale (`business-hotspot` $25/30d, `business-of-the-week` $20/7d) and
+  both promise homepage placement, but `listings` had only `featured_listing` and
+  `spotlight_listing` — no field could record either, so neither could ever
+  render. Migration `0018_homepage_promos.sql` adds `hotspot_until` and
+  `week_until` as **dates**, so a placement expires on its own at the end of the
+  paid term. Model: `getHotspotListings()`, `getBusinessOfTheWeek()`.
+- `assets/css/home-sections.css` — only the genuinely new pieces. Every selector
+  is prefixed `.p411-home` and no other view links it, so the shared `style.css`
+  and the other ~200 views are untouched.
+- Third house creative, `banner-design-*` (ad/banner artwork), joining
+  `house-ad-*` and `scs-ad-*` in strip/wide/box/tall. The sidebar carries one
+  web-development ad and one ad-design ad; every other zone sells itself.
+
+### Changed
+- **Ad zones now use the catalogue's own slugs.** `0017_home_ad_slots.sql` seeds
+  `top-banner-site-wide`, `bottom-banner-site-wide`, `middle-banner-category`,
+  `right-side-banner-1/2/3` and `right-panel-skyscraper` — each `slot_key`
+  identical to the `plans.slug` a customer buys on `/pricing-plan`. Previously
+  ad zones and sellable packages were two unrelated vocabularies, so nothing
+  connected a purchase to a position on the page.
+- Sizes: the pricing page lists most banners as `900x100`, including both
+  skyscrapers, which cannot be right. Right-side banners are seeded at `300x250`
+  and the skyscraper at `295x600`. **The pricing page copy still needs
+  correcting to match.**
+- Section count cut from ~16 to 12. Deals + events merged into **What's On**;
+  videos + news merged into **Community Highlights**; the services band and
+  "How It Works" merged into one owner band. Each paid tier now has a distinct
+  shape — Hotspot is a slim logo rail, Business of the Week is a single wide
+  spotlight, Featured is a 3-up row — rather than four near-identical card rows.
+- `ad_slot.php` ships its own CSS, emitted once per request, so the eight views
+  that include it need no stylesheet changes.
+- The strip creative is drawn at 8:1 (was 10.8:1) because the live zones are 7:1
+  and 9:1, and the wider artwork cropped its own text off.
+
+### Still to do
+- `Admin::create_ads_price()` / `ads_price_edit()` still drop `slot_key`/`size`
+  and reference an undefined `$uploaded_image_path`, so new zones need SQL.
+- No admin UI yet for `hotspot_until` / `week_until` — set them with SQL for now
+  (`database/seeds/homepage_ad_zones_only.sql` has the statements).
+- `/all-listing` and `/listing-details` are unchanged.
+
+---
+
 ## 2026-07 — Homepage redesign (brand-logo palette, real data, ad zones)
 
 Rebuilt `views/index.php` on the actual logo colours (pear green `#8CC63F` + wordmark gray),

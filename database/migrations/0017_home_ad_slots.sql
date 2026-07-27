@@ -1,49 +1,57 @@
 -- ---------------------------------------------------------------------------
 -- 0017_home_ad_slots.sql
 -- ---------------------------------------------------------------------------
--- Five extra ad zones for the redesigned homepage.
+-- Ad zones for the reorganised homepage.
 --
--- DATA ONLY — no DDL. `ads_prices.slot_key` and `ads_prices.size` are both
--- added by 0006, so there is nothing to ALTER here and therefore no stored
--- procedure and no DELIMITER. That means this file and the block appended to
--- database/migrations_combined_phpmyadmin.sql are byte-identical.
+-- KEY POINT: every slot_key below is the SAME STRING as the `plans.slug` of
+-- the package a customer actually buys on /pricing-plan. Before this, ad zones
+-- ("home-hero", "home-sidebar") and sellable packages ("top-banner-site-wide")
+-- were two unrelated vocabularies, so nothing connected a purchase to a
+-- position on the page. Now they line up one-to-one.
 --
--- Idempotent: the correlated NOT EXISTS skips any slot_key already present,
--- so re-running is a no-op.
+--   plans.slug              ads_prices.slot_key      where it renders
+--   ----------------------  -----------------------  ----------------------
+--   top-banner-site-wide    top-banner-site-wide     under the hero
+--   middle-banner-category  middle-banner-category   mid-content
+--   bottom-banner-site-wide bottom-banner-site-wide  above the footer
+--   right-side-banner-1     right-side-banner-1      sidebar, top
+--   right-side-banner-2     right-side-banner-2      sidebar, middle
+--   right-side-banner-3     right-side-banner-3      sidebar, lower
+--   right-panel-skyscraper  right-panel-skyscraper   sidebar, bottom (sticky)
+--
+-- SIZES: the pricing page currently lists most of these as "900px X 100px",
+-- including both skyscrapers, which cannot be right — a skyscraper is tall.
+-- The right-side banners are set to 300x250 here and the skyscraper to 295x600
+-- (the one figure on that page that looks deliberate). Update the pricing page
+-- copy to match, or edit these rows — the homepage reads the size from here and
+-- reserves the box accordingly, so the two can never drift apart on-screen.
+--
+-- DATA ONLY: 0006 already added ads_prices.slot_key and size, so there is no
+-- DDL, no stored procedure and no DELIMITER. This file and the block appended
+-- to database/migrations_combined_phpmyadmin.sql are byte-identical.
+--
+-- Idempotent: the correlated NOT EXISTS skips any slot_key already present.
 --
 -- Depends on: 0006_ad_zones.sql
---
 -- Run once after 0016:
 --   mysql -u <user> -p <db> < database/migrations/0017_home_ad_slots.sql
---
--- Zones added (all rendered by application/views/partials/ad_slot.php):
---   home-top-leaderboard      970x90   under the hero, above the fold
---   home-sidebar-top          300x250  first unit in the sidebar
---   home-inline-billboard     728x250  between the video and news rows
---   home-sidebar-skyscraper   300x600  sticky, bottom of the sidebar
---   home-footer-billboard     970x250  last unit before the footer
---
--- The last two are included on the homepage with $slot_fallback = false, so
--- they stay invisible until an ad is actually sold against them.
---
--- Costs are a starting point — edit them in /admin ▸ Ads ▸ Ad Pricing, or with
--- a plain UPDATE. The homepage rate card reads these rows directly, so the
--- page can never advertise a price that disagrees with the catalog.
 -- ---------------------------------------------------------------------------
 
 INSERT INTO `ads_prices` (`name`, `slot_key`, `size`, `cost`, `status`, `created_at`, `updated_at`)
 SELECT * FROM (
-    SELECT 'Homepage top leaderboard'      AS name,
-           'home-top-leaderboard'          AS slot_key,
-           '970x90'                        AS size,
-           120.00                          AS cost,
-           1                               AS status,
-           NOW()                           AS created_at,
-           NOW()                           AS updated_at
-    UNION ALL SELECT 'Homepage sidebar — top',        'home-sidebar-top',        '300x250',  69.00, 1, NOW(), NOW()
-    UNION ALL SELECT 'Homepage in-content billboard', 'home-inline-billboard',   '728x250',  79.00, 1, NOW(), NOW()
-    UNION ALL SELECT 'Homepage sidebar skyscraper',   'home-sidebar-skyscraper', '300x600',  89.00, 1, NOW(), NOW()
-    UNION ALL SELECT 'Homepage footer billboard',     'home-footer-billboard',   '970x250',  59.00, 1, NOW(), NOW()
+    SELECT 'Top Banner (Site Wide)'  AS name,
+           'top-banner-site-wide'    AS slot_key,
+           '700x100'                 AS size,
+           75.00                     AS cost,
+           1                         AS status,
+           NOW()                     AS created_at,
+           NOW()                     AS updated_at
+    UNION ALL SELECT 'Bottom Banner (Site Wide)', 'bottom-banner-site-wide', '900x100', 45.00, 1, NOW(), NOW()
+    UNION ALL SELECT 'Middle Banner (Category)',  'middle-banner-category',  '900x100', 25.00, 1, NOW(), NOW()
+    UNION ALL SELECT '#1 Right Side Banner',      'right-side-banner-1',     '300x250', 25.00, 1, NOW(), NOW()
+    UNION ALL SELECT '#2 Right Side Banner',      'right-side-banner-2',     '300x250', 25.00, 1, NOW(), NOW()
+    UNION ALL SELECT '#3 Right Side Banner',      'right-side-banner-3',     '300x250', 20.00, 1, NOW(), NOW()
+    UNION ALL SELECT 'Right Panel Skyscraper',    'right-panel-skyscraper',  '295x600', 20.00, 1, NOW(), NOW()
 ) AS seed
 WHERE NOT EXISTS (
     SELECT 1 FROM `ads_prices` WHERE `ads_prices`.`slot_key` = seed.slot_key

@@ -42,6 +42,9 @@ Database Tables Required:
   <link rel="stylesheet" href="<?= base_url() ?>assets/css/style.css">
   <!-- Brand palette + typography overrides — loaded last so it wins. -->
   <link rel="stylesheet" href="<?= base_url() ?>assets/css/pearland-brand.css?v=1">
+  <!-- Homepage-only sections. Every selector is scoped to .p411-home and no
+       other view loads this file, so it cannot affect the rest of the site. -->
+  <link rel="stylesheet" href="<?= base_url() ?>assets/css/home-sections.css?v=1">
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
 
@@ -50,10 +53,7 @@ Database Tables Required:
   <!-- Font Awesome Free CDN -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
     crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <!-- Swiper CSS -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Swiper/8.4.7/swiper-bundle.min.css">
   <!-- Calendar -->
-  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 
 
   <style>
@@ -1447,7 +1447,11 @@ Database Tables Required:
 
     @media (max-width: 768px) {
       .main-content-flex {
-        flex-direction: column-reverse;
+        /* Was column-reverse, which fought the 991.98px rule above and put the
+           sidebar ABOVE the businesses on phones — visitors met the weather
+           widget before a single listing. .main-area is first in the DOM, so
+           plain `column` is all that's needed. */
+        flex-direction: column;
         gap: 0;
       }
 
@@ -2271,7 +2275,7 @@ Database Tables Required:
         transform: translateY(10%) !important;
       }
 
-      .hide_on_phone {
+      . {
         display: none;
       }
 
@@ -2287,7 +2291,7 @@ Database Tables Required:
 
 </head>
 
-<body>
+<body class="p411-home">
 
   <div class="full_wrapper">
     <!-- START HEADER -->
@@ -2313,18 +2317,18 @@ Database Tables Required:
                         <div class="pmenu-spri">
                           <ul>
                             <li><a href="all-category" class="act"><img
-                                  src="../assets/images/icon/shop.png" loading="lazy">All
+                                  src="<?= base_url() ?>assets/images/icon/shop.png" loading="lazy">All
                                 Services
                               </a></li>
 
-                            <li><a href="news"><img src="../assets/images/icon/news.png"
+                            <li><a href="news"><img src="<?= base_url() ?>assets/images/icon/news.png"
                                   loading="lazy">News & Magazines </a></li>
-                            <li><a href="event"><img src="../assets/images/icon/calendar.png"
+                            <li><a href="event"><img src="<?= base_url() ?>assets/images/icon/calendar.png"
                                   loading="lazy">Events </a></li>
-                            <li><a href="all-products"><img src="../assets/images/icon/cart.png"
+                            <li><a href="all-products"><img src="<?= base_url() ?>assets/images/icon/cart.png"
                                   loading="lazy">Products </a></li>
 
-                            <li><a href="all-blog"><img src="../assets/images/icon/blog1.png"
+                            <li><a href="all-blog"><img src="<?= base_url() ?>assets/images/icon/blog1.png"
                                   loading="lazy">Blogs </a></li>
 
                           </ul>
@@ -2550,890 +2554,563 @@ Database Tables Required:
     </section>
     <!-- END HEADER -->
 
+    <?php
+    /* ==================================================================
+       HOMEPAGE BODY
+       ------------------------------------------------------------------
+       Reorganised from the original. The header above and the footer
+       below are untouched; so are the theme's card classes
+       (.lst-com-box, .blog-box, .video-box, .widget, .section-title).
+       Only genuinely new pieces carry `p411-` classes, styled in
+       assets/css/home-sections.css, which no other view loads.
 
+       Data comes from User::index(). Every block below hides itself or
+       shows a message when its query returns nothing.
+       ================================================================== */
 
-    <!-- Category Navigation -->
-    <section class="category-tabs new_category">
-      <div class="container px-10">
-        <ul class="nav nav-pills justify-content-center">
-          <li class="nav-item">
-            <a class="nav-link" data-index="0">
-              <!-- Globe SVG -->
-              <svg width="18" height="18" fill="currentColor"
-                style="vertical-align:middle;margin-right:6px;" viewBox="0 0 16 16">
-                <path
-                  d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm8-7a7 7 0 0 0 0 14V1zm1 0v14a7 7 0 0 0 0-14z" />
-              </svg>
-              All News
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" data-index="1">
-              <!-- Chart Line SVG -->
-              <svg width="18" height="18" fill="currentColor"
-                style="vertical-align:middle;margin-right:6px;" viewBox="0 0 16 16">
-                <path
-                  d="M0 0h1v15h15v1H0V0zm14.293 4.707l-4.147 4.146-3-3L1.5 11.5l.707.707 5-5 3 3 4.854-4.853-.707-.707z" />
-              </svg>
-              Business
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" data-index="2">
-              <!-- Laptop SVG -->
-              <svg width="18" height="18" fill="currentColor"
-                style="vertical-align:middle;margin-right:6px;" viewBox="0 0 16 16">
-                <path
-                  d="M2.5 3A1.5 1.5 0 0 0 1 4.5v7A1.5 1.5 0 0 0 2.5 13h11a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 13.5 3h-11zm0 1h11A.5.5 0 0 1 14 4.5v7a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-7A.5.5 0 0 1 2.5 4z" />
-              </svg>
-              Technology
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" data-index="3">
-              <!-- Heartbeat SVG -->
-              <svg width="18" height="18" fill="currentColor"
-                style="vertical-align:middle;margin-right:6px;" viewBox="0 0 16 16">
-                <path
-                  d="M8 2.748-.717 9.737c-.329.326-.329.855 0 1.181.329.326.86.326 1.189 0l6.528-6.326 6.528 6.326c.329.326.86.326 1.189 0 .329-.326.329-.855 0-1.181L8 2.748zM8 15C-7.333 4.868 3.279-3.04 7.824 1.143c.06.055.119.112.176.171a3.12 3.12 0 0 1 .176-.17C12.721-3.042 23.333 4.867 8 15z" />
-              </svg>
-              Health
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" data-index="4">
-              <!-- Futbol/Soccer SVG -->
-              <svg width="18" height="18" fill="currentColor"
-                style="vertical-align:middle;margin-right:6px;" viewBox="0 0 16 16">
-                <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1" fill="none" />
-                <path
-                  d="M8 1v2M8 13v2M1 8h2M13 8h2M3.5 3.5l1.5 1.5M11 11l1.5 1.5M3.5 12.5l1.5-1.5M11 5l1.5-1.5"
-                  stroke="currentColor" stroke-width="1" />
-                <circle cx="8" cy="8" r="2.5" fill="currentColor" />
-              </svg>
-              Sports
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" data-index="5">
-              <!-- Film SVG -->
-              <svg width="18" height="18" fill="currentColor"
-                style="vertical-align:middle;margin-right:6px;" viewBox="0 0 16 16">
-                <path
-                  d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1V1zm15 0H1v14h14V1zM2 2v2h2V2H2zm10 0v2h2V2h-2zM2 12v2h2v-2H2zm10 0v2h2v-2h-2z" />
-              </svg>
-              Entertainment
-            </a>
-          </li>
-        </ul>
-      </div>
-    </section>
+    $p411_placeholder = base_url('assets/images/placeholder-listing.svg');
 
+    // URL for a category row, tolerating a missing category_slug.
+    $p411_cat_url = function ($cat) {
+      $raw = !empty($cat->category_slug) ? $cat->category_slug
+           : (isset($cat->category_name) ? $cat->category_name : '');
+      return base_url('all_listing/' . pearland_slug($raw));
+    };
 
-    <!-- ============
-         START MAIN CONTENT
-         ================ -->
+    // Trim a description without splitting a word or a multibyte character.
+    $p411_excerpt = function ($text, $len = 105) {
+      $text = trim(strip_tags(html_entity_decode((string) $text)));
+      if ($text === '') return '';
+      return function_exists('mb_strimwidth')
+        ? mb_strimwidth($text, 0, $len, '…')
+        : (strlen($text) > $len ? substr($text, 0, $len - 1) . '…' : $text);
+    };
 
+    // Icons, not emoji — inline SVG paths keyed by a word in the category name.
+    $p411_icons = array(
+      'home'         => '<path d="M3 21h18M5 21V9l7-5 7 5v12M10 21v-6h4v6"/>',
+      'health'       => '<path d="M3 12h4l2-6 4 12 2-6h6"/>',
+      'fitness'      => '<path d="M3 12h4l2-6 4 12 2-6h6"/>',
+      'medical'      => '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/>',
+      'dental'       => '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/>',
+      'auto'         => '<path d="M5 17a2 2 0 1 0 4 0 2 2 0 1 0-4 0M15 17a2 2 0 1 0 4 0 2 2 0 1 0-4 0"/><path d="M3 17V10h12l4 4v3"/>',
+      'real'         => '<path d="M3 21h8V3H3zM11 21h10v-9H11z"/><path d="M6 7h2M6 11h2M6 15h2M15 16h2"/>',
+      'food'         => '<path d="M7 3v8a3 3 0 0 0 6 0V3M10 11v10"/><path d="M17 3c-1.5 2-2 4-2 6s.5 3 2 3v9"/>',
+      'restaurant'   => '<path d="M7 3v8a3 3 0 0 0 6 0V3M10 11v10"/><path d="M17 3c-1.5 2-2 4-2 6s.5 3 2 3v9"/>',
+      'beauty'       => '<path d="M8 3v6a4 4 0 0 0 8 0V3M12 13v8"/>',
+      'professional' => '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
+      'business'     => '<path d="M5 18h14M6 18V8h12v10"/><path d="M9 8V5h6v3"/>',
+      'financial'    => '<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+      'insurance'    => '<path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+      'legal'        => '<path d="M12 3v18M7 21h10M5 8h14M8 8l-3 6h6zM16 8l-3 6h6z"/>',
+      'attorney'     => '<path d="M12 3v18M7 21h10M5 8h14M8 8l-3 6h6zM16 8l-3 6h6z"/>',
+      'education'    => '<path d="m3 9 9-5 9 5-9 5z"/><path d="M7 11v5c0 1.5 2.2 3 5 3s5-1.5 5-3v-5"/>',
+      'pet'          => '<circle cx="8" cy="7" r="2"/><circle cx="16" cy="7" r="2"/><circle cx="5" cy="13" r="2"/><circle cx="19" cy="13" r="2"/><path d="M12 12c-3 0-5 2.5-5 5a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3c0-2.5-2-5-5-5z"/>',
+      'pest'         => '<ellipse cx="12" cy="12" rx="4" ry="7"/><path d="M12 4v16M8 8l-4-2M16 8l4-2M8 14l-4 2M16 14l4 2"/>',
+      'art'          => '<path d="M4 6h16v12H4z"/><path d="m9 10 6 2-6 2z"/>',
+      'entertain'    => '<path d="M4 6h16v12H4z"/><path d="m9 10 6 2-6 2z"/>',
+      'construct'    => '<path d="M3 21h18M5 21V11h14v10"/><path d="m4 11 8-7 8 7"/>',
+      'clean'        => '<path d="M7 21h10l-1-9H8z"/><path d="M12 12V3M9 6h6"/>',
+      'tech'         => '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+      '_default'     => '<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>',
+    );
+    $p411_icon = function ($name) use ($p411_icons) {
+      $n = strtolower((string) $name);
+      foreach ($p411_icons as $k => $path) {
+        if ($k !== '_default' && strpos($n, $k) !== false) return $path;
+      }
+      return $p411_icons['_default'];
+    };
+    ?>
+
+    <!-- ============================================ TOP BANNER AD == -->
+    <div class="container px-10" style="padding-top:22px;">
+      <?php $slot = 'top-banner-site-wide';
+      include APPPATH . 'views/partials/ad_slot.php'; ?>
+    </div>
+
+    <!-- =========================================== CATEGORY STRIP == -->
+    <?php if (!empty($home_categories)): ?>
+      <?php // Deliberately NOT .category-tabs — the theme hides that class on
+            // mobile with !important (it was built for the old fake topic tabs).
+            // This strip is a responsive grid and should stay visible. ?>
+      <section class="p411-catstrip" aria-label="Browse by category">
+        <div class="container px-10">
+          <div class="p411-cats">
+            <?php foreach (array_slice($home_categories, 0, 8) as $cat): ?>
+              <a href="<?= e_url($p411_cat_url($cat)) ?>">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><?= $p411_icon($cat->category_name) ?></svg>
+                <b><?= e($cat->category_name) ?></b>
+                <?php if (isset($cat->listing_count)): ?>
+                  <span><?= (int) $cat->listing_count ?> listing<?= ((int) $cat->listing_count === 1 ? '' : 's') ?></span>
+                <?php endif; ?>
+              </a>
+            <?php endforeach; ?>
+          </div>
+        </div>
+      </section>
+    <?php endif; ?>
+
+    <!-- ============================================== MAIN CONTENT == -->
     <section class="main-content new_style py-5">
       <div class="container px-10">
-
         <div class="main-content-flex">
+
+          <!-- ======================================== MAIN COLUMN == -->
           <div class="main-area">
 
-            <!-- =========================
-                     SECTION 1: Featured Businesses (Replaces Featured Stories)
-                ========================= -->
-            <section class="featured-section">
-              <h2 class="section-title">Featured Businesses</h2>
-              <div class="swiper mySwiper">
-                <div class="swiper-wrapper">
-                  <?php if (!empty($featured_listings)): ?>
-                    <?php foreach ($featured_listings as $index => $listing): ?>
-                      <?php
-                      // Get category name
-                      $categoryName = $this->usermodel->getCategoryName($listing->category_id, 'listing_categories', 'category_id');
-
-                      // Dynamic background images
-                      $backgroundImages = [
-                        'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80',
-                        'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=800&q=80',
-                        'https://images.unsplash.com/photo-1464983953574-0892a716854b?auto=format&fit=crop&w=800&q=80',
-                        'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=800&q=80'
-                      ];
-                      $bgImage = $backgroundImages[$index % count($backgroundImages)];
-
-                      // Always prioritize listing image, fallback to curated images
-                      $slideBackground = !empty($listing->listing_image)
-                        ? "linear-gradient(45deg, rgba(24,15,94,0.85), #7bb73f9d), url('" . base_url($listing->listing_image) . "') center center/cover no-repeat"
-                        : "linear-gradient(45deg, rgba(24,15,94,0.85), #7bb73f9d), url('" . $bgImage . "') center center/cover no-repeat";
-                      ?>
-                      <div class="swiper-slide"
-                        style="background: <?php echo $slideBackground; ?>;">
-                        <div class="slide-content">
-                          <h3 class="slide-title"><?php echo !empty($listing->listing_name) ? htmlspecialchars($listing->listing_name) . " – " . htmlspecialchars($categoryName) : "Featured Business in " . htmlspecialchars($categoryName); ?></h3>
-                          <div class="slide-meta">
-                            <?php echo date('M Y'); ?> | <?php echo htmlspecialchars($categoryName); ?> |
-                            <?php echo isset($listing->spotlight_listing) && $listing->spotlight_listing == 1 ? 'Spotlight Business' : 'Featured Business'; ?>
-                          </div>
-                          <p><?php echo !empty($listing->listing_description) ? htmlspecialchars(substr($listing->listing_description, 0, 120)) . '...' : 'Discover this amazing local business in Pearland.'; ?></p>
-                          <a href="<?php echo base_url('listing-details/' . $listing->listing_slug); ?>" class="btn btn-sm btn-primary mt-2">
-                            <?php echo isset($listing->spotlight_listing) && $listing->spotlight_listing == 1 ? 'Spotlight Business' : 'Featured Listing'; ?>
-                          </a>
-                        </div>
-                      </div>
+            <!-- Business Hotspot — a slim logo rail, deliberately not
+                 another card row. Sold as plans.slug = business-hotspot. -->
+            <?php if (!empty($home_hotspot)): ?>
+              <section class="p411-sec">
+                <div class="p411-hotspot">
+                  <div class="p411-hotspot__head">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 2s5 4.5 5 9a5 5 0 0 1-10 0c0-4.5 5-9 5-9z"/><path d="M12 22a7 7 0 0 0 7-7"/></svg>
+                    <h2>Business Hotspot</h2>
+                    <a class="p411-more" href="<?= base_url('all_listing') ?>">All businesses &rarr;</a>
+                  </div>
+                  <div class="p411-hotspot__rail">
+                    <?php foreach ($home_hotspot as $spot): ?>
+                      <a class="p411-hotspot__item" href="<?= base_url('listing-details/' . rawurlencode($spot->listing_slug)) ?>">
+                        <img src="<?= !empty($spot->listing_image) ? base_url($spot->listing_image) : e_attr($p411_placeholder) ?>"
+                             alt="<?= e_attr($spot->listing_name) ?>" loading="lazy" decoding="async">
+                        <b><?= e($spot->listing_name) ?></b>
+                        <?php if (!empty($spot->category_name)): ?><span><?= e($spot->category_name) ?></span><?php endif; ?>
+                      </a>
                     <?php endforeach; ?>
-                  <?php else: ?>
-                    <!-- Fallback: Show default slide if no featured listings -->
-                    <div class="swiper-slide"
-                      style="background: linear-gradient(45deg, rgba(24,15,94,0.85), #7bb73f9d), url('https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80') center center/cover no-repeat;">
-                      <div class="slide-content">
-                        <h3 class="slide-title">Featured Businesses Coming Soon</h3>
-                        <div class="slide-meta">
-                          <?php echo date('M Y'); ?> | Business Directory
-                        </div>
-                        <p>Discover amazing local businesses in Pearland. Featured listings coming soon!</p>
-                        <a href="<?php echo base_url('all_listing'); ?>" class="btn btn-sm btn-primary mt-2">Explore All Businesses</a>
-                      </div>
-                    </div>
-                  <?php endif; ?>
+                  </div>
                 </div>
-                <div class="swiper-pagination"></div>
-                <div class="swiper-button-next"></div>
-                <div class="swiper-button-prev"></div>
+              </section>
+            <?php endif; ?>
+
+            <!-- Business of the Week — one wide spotlight. Being the only
+                 one is what the customer is paying for. -->
+            <?php if (!empty($home_week)): ?>
+              <section class="p411-sec">
+                <div class="p411-week">
+                  <div class="p411-week__media">
+                    <img src="<?= !empty($home_week->listing_image) ? base_url($home_week->listing_image) : e_attr($p411_placeholder) ?>"
+                         alt="<?= e_attr($home_week->listing_name) ?>" loading="lazy" decoding="async">
+                    <span class="p411-week__flag">Business of the Week</span>
+                  </div>
+                  <div class="p411-week__body">
+                    <?php if (!empty($home_week->category_name)): ?>
+                      <span class="p411-week__cat"><?= e($home_week->category_name) ?></span>
+                    <?php endif; ?>
+                    <h3><?= e($home_week->listing_name) ?></h3>
+                    <?php if (!empty($home_week->listing_description)): ?>
+                      <p><?= e($p411_excerpt($home_week->listing_description, 220)) ?></p>
+                    <?php endif; ?>
+                    <div class="p411-week__foot">
+                      <a class="p411-btn" href="<?= base_url('listing-details/' . rawurlencode($home_week->listing_slug)) ?>">Visit this business</a>
+                      <?php if (!empty($home_week->week_until) && strtotime($home_week->week_until)): ?>
+                        <span class="p411-week__until">Featured until <?= e(date('M j', strtotime($home_week->week_until))) ?></span>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            <?php endif; ?>
+
+            <!-- Featured Businesses -->
+            <section class="p411-sec">
+              <div class="p411-sec__head">
+                <h2>Featured Businesses</h2>
+                <a class="p411-more" href="<?= base_url('all_listing') ?>">See all businesses &rarr;</a>
               </div>
-            </section>
 
-            <?php $slot = 'home-hero'; include APPPATH . 'views/partials/ad_slot.php'; ?>
-
-            <!-- =========================
-                     SECTION 2: Explore Pearland Businesses (Replaces Latest Directory)
-                ========================= -->
-            <section>
-              <h2 class="section-title mb-4">Explore Pearland Businesses</h2>
-              <div id="business-list">
-                <?php if (!empty($latest_listings)): ?>
-                  <?php foreach ($latest_listings as $row): ?>
-                    <?php
-                    $categoryName = $this->usermodel->getCategoryName($row->category_id);
-                    ?>
-                    <div class=" fade-in business-item lst-com-box" data-category="<?php echo htmlspecialchars($categoryName); ?>">
-
+              <?php if (!empty($featured_listings)): ?>
+                <div class="p411-grid3">
+                  <?php foreach (array_slice($featured_listings, 0, 3) as $item): ?>
+                    <?php $url = base_url('listing-details/' . rawurlencode($item->listing_slug)); ?>
+                    <div class="lst-com-box">
                       <div class="list-com-img">
-                        <?php if (!empty($row->listing_image)): ?>
-                          <?= responsive_img($row->listing_image, $row->listing_name) ?>
-                        <?php else: ?>
-                          <img src="<?= base_url('assets/images/pearland-logo.png') ?>" alt="<?= e_attr($row->listing_name) ?>" loading="lazy" decoding="async">
-                        <?php endif; ?>
-                        <span class="list-com-cat"><?php echo htmlspecialchars($categoryName); ?></span>
-                        <?php
-                        // Show "NEW" badge for listings created in the last 7 days
-                        if (isset($row->created_at) && strtotime($row->created_at) > strtotime('-7 days')):
-                        ?>
-                          <span class="new-badge" style="position: absolute; top: 10px; left: 10px; background: #28a745; color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600;">NEW</span>
+                        <a href="<?= $url ?>">
+                          <?php if (!empty($item->listing_image)): ?>
+                            <?= responsive_img($item->listing_image, $item->listing_name) ?>
+                          <?php else: ?>
+                            <img src="<?= e_attr($p411_placeholder) ?>" alt="<?= e_attr($item->listing_name) ?>" loading="lazy" decoding="async">
+                          <?php endif; ?>
+                        </a>
+                        <?php if (!empty($item->category_name)): ?>
+                          <span class="list-com-cat"><?= e($item->category_name) ?></span>
                         <?php endif; ?>
                       </div>
                       <div class="list-com-con p-3">
                         <div>
-                          <h3 class="list-com-title" style="font-size:1rem;"><?php echo htmlspecialchars($row->listing_name); ?></h3>
-                          <p class="list-com-desc" style="font-size:0.92rem;">
-                            <?php echo nl2br(htmlspecialchars(substr($row->listing_description, 0, 100) . '...')); ?>
-                          </p>
+                          <h3 class="list-com-title" style="font-size:1rem;"><a href="<?= $url ?>"><?= e($item->listing_name) ?></a></h3>
+                          <?php if (!empty($item->listing_description)): ?>
+                            <p class="list-com-desc" style="font-size:0.92rem;"><?= e($p411_excerpt($item->listing_description, 100)) ?></p>
+                          <?php endif; ?>
                         </div>
-                        <a href="<?php echo base_url('listing-details/' . $row->listing_slug); ?>" class="list-enq-btn">Read More →</a>
+                        <a href="<?= $url ?>" class="list-enq-btn">Read More &rarr;</a>
                       </div>
-
                     </div>
                   <?php endforeach; ?>
-                <?php else: ?>
-                  <div class="col-12">
-                    <div class="alert alert-light" style="background:#f9fafb;border:1px solid #e5e7eb;">
-                      No featured listings yet.
-                      <a href="<?= base_url('all_listing') ?>">Browse the directory</a>
-                      or
-                      <a href="<?= base_url('register') ?>">add your business</a>.
-                    </div>
-                  </div>
-                <?php endif; ?>
-              </div>
-              <div class="text-center mt-3">
-                <a href="<?= base_url('all_listing') ?>" class="btn btn-view-more mt-3 m1-5">View More</a>
-              </div>
+                </div>
+              <?php else: ?>
+                <div class="p411-empty">
+                  <h3>No featured businesses yet</h3>
+                  <p>Featured placement puts a business at the top of the homepage. Nothing is currently marked as featured or spotlight.</p>
+                  <a class="p411-btn" href="<?= base_url('pricing-plan') ?>">See featured packages</a>
+                </div>
+              <?php endif; ?>
             </section>
-            <!-- =========================
-                     SECTION 4: Video Business Highlights (Replaces Live & Video News Highlights)
-                ========================= -->
-            <section class="video-section">
-              <div class="container">
-                <div class="row">
-                  <div class="col-lg-12">
-                    <h2 class="section-title">Community Highlights</h2>
-                    <div class="row">
-                      <?php if (!empty($latest_videos)): ?>
-                        <?php foreach (array_slice($latest_videos, 0, 4) as $video): ?>
-                          <div class="col-md-4 col-sm-12">
-                            <div class="video-box">
-                              <div class="video-img" style="position:relative;">
-                                <?php
-                                $fallbackImg = 'https://www.techsmith.com/wp-content/uploads/2023/08/What-are-High-Resolution-Images.png';
-                                $imgSrc = !empty($video->video_image) ? htmlspecialchars($video->video_image) : $fallbackImg;
-                                ?>
-                                <img src="<?php echo $imgSrc; ?>" alt="<?php echo htmlspecialchars($video->video_title); ?>">
-                                <a href="/video_details/<?php echo htmlspecialchars($video->video_slug); ?>" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(24,15,94,0.7);border-radius:50%;padding:18px;display:inline-block;">
-                                  <svg width="32" height="32" viewBox="0 0 32 32" fill="#fff">
-                                    <circle cx="16" cy="16" r="16" fill="rgba(0,0,0,0.2)" />
-                                    <polygon points="13,10 23,16 13,22" fill="#fff" />
-                                  </svg>
-                                </a>
-                              </div>
-                              <div class="video-con">
-                                <a href="/video_details/<?php echo htmlspecialchars($video->video_slug); ?>" class="video-title"><?php echo htmlspecialchars($video->video_title); ?></a>
-                                <p class="video-desc"><?php echo strip_tags(html_entity_decode($video->video_description)) . '...'; ?></p>
-                              </div>
-                            </div>
-                          </div>
-                        <?php endforeach; ?>
-                      <?php endif; ?>
-                      <div class="col-md-12">
-                        <div class="text-center mb-3">
-                          <a href="/videos" class="btn btn-view-more mt-3 m1-5">View More Videos</a>
+
+            <!-- Newest businesses -->
+            <section class="p411-sec">
+              <div class="p411-sec__head">
+                <h2>Explore Pearland Businesses</h2>
+                <a class="p411-more" href="<?= base_url('all_listing') ?>">View all listings &rarr;</a>
+              </div>
+
+              <?php if (!empty($latest_listings)): ?>
+                <div id="business-list">
+                  <?php foreach ($latest_listings as $row): ?>
+                    <?php
+                    $url = base_url('listing-details/' . rawurlencode($row->listing_slug));
+                    $is_new = !empty($row->created_at) && strtotime($row->created_at) > strtotime('-7 days');
+                    ?>
+                    <div class="fade-in business-item lst-com-box">
+                      <div class="list-com-img">
+                        <a href="<?= $url ?>">
+                          <?php if (!empty($row->listing_image)): ?>
+                            <?= responsive_img($row->listing_image, $row->listing_name) ?>
+                          <?php else: ?>
+                            <img src="<?= e_attr($p411_placeholder) ?>" alt="<?= e_attr($row->listing_name) ?>" loading="lazy" decoding="async">
+                          <?php endif; ?>
+                        </a>
+                        <?php if (!empty($row->category_name)): ?>
+                          <span class="list-com-cat"><?= e($row->category_name) ?></span>
+                        <?php endif; ?>
+                        <?php if ($is_new): ?>
+                          <span class="new-badge" style="position:absolute;top:10px;left:10px;background:#4E8A28;color:#fff;padding:3px 8px;border-radius:12px;font-size:0.7rem;font-weight:600;">NEW</span>
+                        <?php endif; ?>
+                      </div>
+                      <div class="list-com-con p-3">
+                        <div>
+                          <h3 class="list-com-title" style="font-size:1rem;"><a href="<?= $url ?>"><?= e($row->listing_name) ?></a></h3>
+                          <?php if (!empty($row->listing_description)): ?>
+                            <p class="list-com-desc" style="font-size:0.92rem;"><?= e($p411_excerpt($row->listing_description, 100)) ?></p>
+                          <?php endif; ?>
                         </div>
+                        <a href="<?= $url ?>" class="list-enq-btn">Read More &rarr;</a>
                       </div>
                     </div>
-                  </div>
+                  <?php endforeach; ?>
                 </div>
-              </div>
+              <?php else: ?>
+                <div class="p411-empty">
+                  <h3>No businesses listed yet</h3>
+                  <p>Once businesses are added to the directory they&rsquo;ll appear here, newest first.</p>
+                  <a class="p411-btn" href="<?= base_url('register') ?>">Add the first business</a>
+                </div>
+              <?php endif; ?>
             </section>
 
-            <!--====================
-				   NEWS & BLOG
-				=====================-->
-            <section class="blog">
-              <div class="container">
-                <div class="row">
-                  <div class="col-lg-12">
-                    <h2 class="section-title">Local Announcements & Updates</h2>
-                    <div class="row">
-                      <?php if (!empty($latest_news)): ?>
-                        <?php foreach ($latest_news as $i => $news): ?>
-                          <?php $colClass = 'col-md-4 col-sm-6'; ?>
-                          <div class="<?php echo $colClass; ?>">
-                            <div class="blog-box">
-                              <div class="blog-img">
-                                <?php if (!empty($news->news_image)): ?>
-                                  <?= responsive_img($news->news_image, $news->news_title) ?>
-                                <?php else: ?>
-                                  <img src="<?= base_url('assets/images/pearland-logo.png') ?>" alt="<?= e_attr($news->news_title) ?>" loading="lazy" decoding="async">
-                                <?php endif; ?>
-                              </div>
-                              <div class="blog-con">
-                                <span class="blog-cat">News</span>
-                                <div>
-                                  <h4><?php echo htmlspecialchars($news->news_title); ?></h4>
-                                  <p><?php echo strip_tags(html_entity_decode($news->news_description)) . '...'; ?></p>
-                                </div>
-                                <a href="<?php echo base_url('news_details/' . $news->news_id); ?>" class="blog-read">
-                                  Read More
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-                                    viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
-                                    stroke-linecap="round" stroke-linejoin="round">
-                                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                                    <polyline points="12 5 19 12 12 19"></polyline>
-                                  </svg>
-                                </a>
-                              </div>
-                            </div>
-                          </div>
+            <!-- ==================================== MIDDLE BANNER AD == -->
+            <div class="p411-adrow">
+              <?php $slot = 'middle-banner-category';
+              include APPPATH . 'views/partials/ad_slot.php'; ?>
+            </div>
+
+            <!-- What's On — deals and events share one band -->
+            <?php if (!empty($home_deals) || (!empty($show_events) && !empty($home_events))): ?>
+              <section class="p411-sec">
+                <div class="p411-sec__head">
+                  <h2>What&rsquo;s On in Pearland</h2>
+                </div>
+                <div class="p411-split">
+
+                  <div>
+                    <h3>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 12V7H4v5a2 2 0 0 1 0 4v1h16v-1a2 2 0 0 1 0-4z"/><path d="M12 7v10"/></svg>
+                      Deals &amp; Coupons
+                      <a class="p411-more" href="<?= base_url('coupons') ?>">All &rarr;</a>
+                    </h3>
+                    <?php if (!empty($home_deals)): ?>
+                      <div class="p411-stack">
+                        <?php foreach (array_slice($home_deals, 0, 3) as $deal): ?>
+                          <a class="p411-deal" href="<?= base_url('coupons/' . (int) $deal->coupon_id) ?>">
+                            <?php if (!empty($deal->coupon_code)): ?>
+                              <span class="p411-deal__off"><?= e($deal->coupon_code) ?></span>
+                            <?php endif; ?>
+                            <span class="p411-deal__name"><?= e($deal->coupon_name) ?></span>
+                            <span class="p411-deal__meta">
+                              <?= e(!empty($deal->listing_name) ? $deal->listing_name : (!empty($deal->owner_name) ? $deal->owner_name : 'Pearland411')) ?><?php
+                              if (!empty($deal->coupon_end_date) && strtotime($deal->coupon_end_date)):
+                                ?> &middot; ends <?= e(date('M j', strtotime($deal->coupon_end_date))) ?><?php endif; ?>
+                            </span>
+                          </a>
                         <?php endforeach; ?>
+                      </div>
+                    <?php else: ?>
+                      <div class="p411-empty">
+                        <h3>No live coupons right now</h3>
+                        <p>Deals posted by Pearland businesses show here while they&rsquo;re running.</p>
+                      </div>
+                    <?php endif; ?>
+                  </div>
+
+                  <?php if (!empty($show_events)): ?>
+                    <div>
+                      <h3>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg>
+                        Upcoming Events
+                        <a class="p411-more" href="<?= base_url('event') ?>">All &rarr;</a>
+                      </h3>
+                      <?php if (!empty($home_events)): ?>
+                        <div class="p411-stack">
+                          <?php foreach (array_slice($home_events, 0, 3) as $event): ?>
+                            <?php
+                            $ets  = !empty($event->event_start_date) ? strtotime($event->event_start_date) : false;
+                            $eurl = !empty($event->event_slug)
+                              ? base_url('event-details/' . rawurlencode($event->event_slug))
+                              : base_url('event');
+                            ?>
+                            <a class="p411-event" href="<?= $eurl ?>">
+                              <?php if ($ets): ?>
+                                <span class="p411-event__date">
+                                  <i><?= e(date('M', $ets)) ?></i>
+                                  <b><?= e(date('j', $ets)) ?></b>
+                                </span>
+                              <?php endif; ?>
+                              <span class="p411-event__body">
+                                <b><?= e($event->event_name) ?></b>
+                                <?php if (!empty($event->event_address)): ?>
+                                  <span><?= e($event->event_address) ?></span>
+                                <?php endif; ?>
+                                <?php if (!empty($event->event_time)): ?>
+                                  <span><?= e($event->event_time) ?></span>
+                                <?php endif; ?>
+                              </span>
+                            </a>
+                          <?php endforeach; ?>
+                        </div>
+                      <?php else: ?>
+                        <div class="p411-empty">
+                          <h3>No upcoming events</h3>
+                          <p>Events scheduled for today or later are listed here.</p>
+                        </div>
                       <?php endif; ?>
                     </div>
-                    <div class="text-center mt-3">
-                      <a href="/all-news" class="btn btn-view-more mb-3 m1-5">View More News</a>
-                    </div>
-                  </div>
+                  <?php endif; ?>
+
                 </div>
-              </div>
-            </section>
+              </section>
+            <?php endif; ?>
 
-            <!-- Website Development Section -->
-            <section id="web-services" class="web-dev-section">
-              <div class="container">
-                <h2 class="section-title">Grow Your Business Online</h2>
-                <p class="section-subtitle">
-                  Professional website development services for Pearland businesses
-                </p>
-
-                <div class="row mb-5">
-                  <div class="col-lg-3 col-md-6 mb-4">
-                    <div class="feature-box">
-                      <div class="feature-icon">
-                        <!-- Laptop Code SVG -->
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
-                          xmlns="http://www.w3.org/2000/svg">
-                          <path d="M3 4H21V15H3V4Z" stroke="#4F46E5" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
-                          <path d="M2 20H22" stroke="#4F46E5" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
-                          <path d="M8 20H16" stroke="#4F46E5" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
-                        </svg>
-                      </div>
-                      <h4 class="feature-title">Custom Websites</h4>
-                      <p class="feature-description">
-                        Beautiful, responsive websites tailored to your business needs
-                      </p>
-                    </div>
-                  </div>
-
-                  <div class="col-lg-3 col-md-6 mb-4">
-                    <div class="feature-box">
-                      <div class="feature-icon">
-                        <!-- Mobile Device SVG -->
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
-                          xmlns="http://www.w3.org/2000/svg">
-                          <rect x="6" y="2" width="12" height="20" rx="2" stroke="#10B981" stroke-width="2" />
-                          <circle cx="12" cy="18" r="1" fill="#10B981" />
-                        </svg>
-                      </div>
-                      <h4 class="feature-title">Mobile-First Design</h4>
-                      <p class="feature-description">
-                        Websites that look perfect on any device or screen size
-                      </p>
-                    </div>
-                  </div>
-
-                  <div class="col-lg-3 col-md-6 mb-4">
-                    <div class="feature-box">
-                      <div class="feature-icon">
-                        <!-- Search/SEO SVG -->
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
-                          xmlns="http://www.w3.org/2000/svg">
-                          <circle cx="11" cy="11" r="7" stroke="#F59E0B" stroke-width="2" />
-                          <line x1="16.65" y1="16.65" x2="21" y2="21" stroke="#F59E0B" stroke-width="2"
-                            stroke-linecap="round" />
-                        </svg>
-                      </div>
-                      <h4 class="feature-title">SEO Optimization</h4>
-                      <p class="feature-description">
-                        Get found on Google and attract more local customers
-                      </p>
-                    </div>
-                  </div>
-
-                  <div class="col-lg-3 col-md-6 mb-4">
-                    <div class="feature-box">
-                      <div class="feature-icon">
-                        <!-- Support Headset SVG -->
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
-                          xmlns="http://www.w3.org/2000/svg">
-                          <path d="M12 2C6.48 2 2 6.48 2 12V16H6V12H4C4 7.58 7.58 4 12 4C16.42 4 20 7.58 20 12H18V16H22V12C22 6.48 17.52 2 12 2Z"
-                            stroke="#6366F1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                          <rect x="9" y="16" width="6" height="6" rx="1" stroke="#6366F1" stroke-width="2"
-                            stroke-linejoin="round" />
-                        </svg>
-                      </div>
-                      <h4 class="feature-title">24/7 Support</h4>
-                      <p class="feature-description">
-                        Ongoing maintenance and support whenever you need it
-                      </p>
-                    </div>
-                  </div>
+            <!-- Community — videos and news share one band -->
+            <?php if ((!empty($show_videos) && !empty($latest_videos)) || (!empty($show_news) && !empty($latest_news))): ?>
+              <section class="p411-sec">
+                <div class="p411-sec__head">
+                  <h2>Community Highlights</h2>
                 </div>
+                <div class="p411-split">
 
-                <div class="row align-items-center">
-
-                  <div class="col-lg-12" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; padding: 30px; color: white;">
-                    <div class="text-center">
-                      <div>
-                        <!-- Chart Line SVG -->
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
-                          xmlns="http://www.w3.org/2000/svg" style="margin-bottom:20px;">
-                          <path d="M3 17L9 11L13 15L21 7" stroke="white" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
-                          <path d="M21 10V7H18" stroke="white" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
-                        </svg>
-                        <h2 class="mb-3">Special Offer for Listed Businesses</h2>
-                        <p style="font-size: 1.1rem;">
-                          List your business for FREE and get 20% off website development
-                        </p>
-                      </div>
+                  <?php if (!empty($show_videos)): ?>
+                    <div>
+                      <h3>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></svg>
+                        Videos
+                        <a class="p411-more" href="<?= base_url('videos') ?>">All &rarr;</a>
+                      </h3>
+                      <?php if (!empty($latest_videos)): ?>
+                        <div class="p411-stack">
+                          <?php foreach (array_slice($latest_videos, 0, 3) as $video): ?>
+                            <a class="p411-media" href="<?= base_url('video_details/' . rawurlencode($video->video_slug)) ?>">
+                              <span class="p411-media__thumb">
+                                <img src="<?= !empty($video->video_image) ? base_url($video->video_image) : e_attr($p411_placeholder) ?>"
+                                     alt="<?= e_attr($video->video_title) ?>" loading="lazy" decoding="async">
+                                <span class="p411-media__play">
+                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+                                </span>
+                              </span>
+                              <span class="p411-media__body">
+                                <b><?= e($video->video_title) ?></b>
+                                <?php if (!empty($video->video_description)): ?>
+                                  <span><?= e($p411_excerpt($video->video_description, 78)) ?></span>
+                                <?php endif; ?>
+                              </span>
+                            </a>
+                          <?php endforeach; ?>
+                        </div>
+                      <?php else: ?>
+                        <div class="p411-empty"><h3>No videos yet</h3><p>Community videos appear here once they&rsquo;re added.</p></div>
+                      <?php endif; ?>
                     </div>
-                  </div>
-                  <div class="col-md-12 mt-4">
-                    <h3 class="mb-4 fw-bold" style="font-weight: 700;">Why Your Business Needs a Professional Website</h3>
-                  </div>
-                  <div class="col-lg-12">
-                    <ul class="list-unstyled">
-                      <li class="mb-3">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          style="vertical-align:middle; margin-right:6px;">
-                          <path d="M5 13L9 17L19 7" stroke="#10B981" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
-                        </svg>
-                        <strong>Increase Visibility:</strong> Be found by customers searching online
-                      </li>
-                      <li class="mb-3">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          style="vertical-align:middle; margin-right:6px;">
-                          <path d="M5 13L9 17L19 7" stroke="#10B981" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
-                        </svg>
-                        <strong>Build Credibility:</strong> Professional website builds trust with customers
-                      </li>
-                      <li class="mb-3">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          style="vertical-align:middle; margin-right:6px;">
-                          <path d="M5 13L9 17L19 7" stroke="#10B981" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
-                        </svg>
-                        <strong>24/7 Availability:</strong> Your business works even when you're closed
-                      </li>
-                      <li class="mb-3">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          style="vertical-align:middle; margin-right:6px;">
-                          <path d="M5 13L9 17L19 7" stroke="#10B981" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
-                        </svg>
-                        <strong>Cost-Effective Marketing:</strong> Reach more customers for less than traditional ads
-                      </li>
-                      <li class="mb-3">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                          style="vertical-align:middle; margin-right:6px;">
-                          <path d="M5 13L9 17L19 7" stroke="#10B981" stroke-width="2" stroke-linecap="round"
-                            stroke-linejoin="round" />
-                        </svg>
-                        <strong>Stay Competitive:</strong> Keep up with competitors who are already online
-                      </li>
-                    </ul>
-                  </div>
+                  <?php endif; ?>
 
+                  <?php if (!empty($show_news)): ?>
+                    <div>
+                      <h3>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 5h13v14H4z"/><path d="M17 9h3v8a2 2 0 0 1-4 0"/><path d="M7 9h7M7 13h7"/></svg>
+                        Local News
+                        <a class="p411-more" href="<?= base_url('all-news') ?>">All &rarr;</a>
+                      </h3>
+                      <?php if (!empty($latest_news)): ?>
+                        <div class="p411-stack">
+                          <?php foreach (array_slice($latest_news, 0, 3) as $news): ?>
+                            <a class="p411-media" href="<?= base_url('news_details/' . (int) $news->news_id) ?>">
+                              <span class="p411-media__thumb">
+                                <img src="<?= !empty($news->news_image) ? base_url($news->news_image) : e_attr($p411_placeholder) ?>"
+                                     alt="<?= e_attr($news->news_title) ?>" loading="lazy" decoding="async">
+                              </span>
+                              <span class="p411-media__body">
+                                <b><?= e($news->news_title) ?></b>
+                                <?php if (!empty($news->news_description)): ?>
+                                  <span><?= e($p411_excerpt($news->news_description, 78)) ?></span>
+                                <?php endif; ?>
+                              </span>
+                            </a>
+                          <?php endforeach; ?>
+                        </div>
+                      <?php else: ?>
+                        <div class="p411-empty"><h3>No news yet</h3><p>Local announcements appear here once they&rsquo;re posted.</p></div>
+                      <?php endif; ?>
+                    </div>
+                  <?php endif; ?>
 
-
-                  <div class="col-md-12 mt-4">
-                    <a href="/contact-us" class="btn btn-primary btn-get-started btn-lg">
-                      Get Your Website Started Today
-                    </a>
-                  </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            <?php endif; ?>
 
-            <?php $cta_variant = 'banner'; include APPPATH . 'views/partials/web_dev_cta.php'; ?>
+          </div><!-- /.main-area -->
 
-          </div>
-          <!-- =========================
-					SIDEBAR
-					========================= -->
+          <!-- ============================================= SIDEBAR == -->
           <div class="sidebar">
-            <!-- Sidebar: Weather Widget -->
-            <div class="widget hide_on_phone">
-              <h3 class="widget-title">
-                Pearland Weather
-              </h3>
+
+            <div class="p411-sidebar-ad">
+              <?php $slot = 'right-side-banner-1';
+              include APPPATH . 'views/partials/ad_slot.php'; ?>
+            </div>
+
+            <!-- Weather (live, via the Weather::proxy endpoint) -->
+            <div class="widget">
+              <h3 class="widget-title">Pearland Weather</h3>
               <div id="weather-forecast" style="margin-bottom:10px;"></div>
               <div id="weather-current"></div>
             </div>
 
-            <?php $slot = 'home-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
-            <?php include APPPATH . 'views/partials/web_dev_cta.php'; ?>
-
-            <!-- Categories Widget -->
+            <!-- Business categories -->
             <div class="widget categories">
               <h3 class="widget-title">Business Categories</h3>
-              <ul class="category-list">
-                <?php if (!empty($random_listing_categories)): ?>
-                  <?php
-                  // Function to create safe URL slug (defined again for sidebar)
-                  if (!function_exists('createSafeSlug')) {
-                    function createSafeSlug($text)
-                    {
-                      // Convert to lowercase
-                      $slug = strtolower($text);
-                      // Replace spaces with hyphens
-                      $slug = str_replace(' ', '-', $slug);
-                      // Remove special characters (keep only letters, numbers, and hyphens)
-                      $slug = preg_replace('/[^a-z0-9\-]/', '', $slug);
-                      // Remove multiple consecutive hyphens
-                      $slug = preg_replace('/-+/', '-', $slug);
-                      // Remove leading and trailing hyphens
-                      $slug = trim($slug, '-');
-                      return $slug;
-                    }
-                  }
-
-                  // Randomize the category order
-                  shuffle($random_listing_categories);
-
-                  // Limit to 10 random categories
-                  $random_categories = array_slice($random_listing_categories, 0, 10);
-
-                  foreach ($random_categories as $cat):
-                    $slug = createSafeSlug(!empty($cat->category_slug) ? $cat->category_slug : $cat->category_name);
-                  ?>
+              <?php if (!empty($home_categories)): ?>
+                <ul class="category-list">
+                  <?php foreach (array_slice($home_categories, 0, 10) as $cat): ?>
                     <li>
-                      <a href="<?php echo base_url('all_listing/' . $slug); ?>">
-                        <?php echo htmlspecialchars($cat->category_name); ?>
-                      </a>
+                      <a href="<?= e_url($p411_cat_url($cat)) ?>"><?= e($cat->category_name) ?></a>
                     </li>
                   <?php endforeach; ?>
-                <?php else: ?>
+                </ul>
+              <?php else: ?>
+                <ul class="category-list">
                   <li><a href="<?= base_url('all-category') ?>">Browse all categories</a></li>
-                <?php endif; ?>
-              </ul>
-
-
+                </ul>
+              <?php endif; ?>
             </div>
 
-            <!-- Web Development Card -->
-            <section class="sidebar-marketing-section">
-              <div class="marketing-card">
-                <div class="card-content">
-                  <div class="icon-container">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="2" y="3" width="20" height="14" rx="2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                      <path d="M8 21h8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                      <path d="M12 17v4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                      <path d="M7 7h10M7 11h6" stroke="white" stroke-width="1.5" stroke-linecap="round" />
-                    </svg>
-                  </div>
-
-                  <h2 class="main-heading">Do You Need a Website?</h2>
-                  <p class="description">
-                    Transform your business with a professional, modern website that drives results.
-                  </p>
-
-                  <div class="features-wrapper">
-                    <div class="feature">
-                      <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="12" cy="12" r="10" fill="rgba(255, 255, 255, 0.25)" />
-                        <path d="M8 12.5l2.5 2.5 5.5-5.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                      </svg>
-                      <span>Custom design tailored to your brand</span>
-                    </div>
-                    <div class="feature">
-                      <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="12" cy="12" r="10" fill="rgba(255, 255, 255, 0.25)" />
-                        <path d="M8 12.5l2.5 2.5 5.5-5.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                      </svg>
-                      <span>Mobile-responsive & fast loading</span>
-                    </div>
-                    <div class="feature">
-                      <svg class="check-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="12" cy="12" r="10" fill="rgba(255, 255, 255, 0.25)" />
-                        <path d="M8 12.5l2.5 2.5 5.5-5.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                      </svg>
-                      <span>SEO optimized for better visibility</span>
-                    </div>
-                  </div>
-
-                  <a href="/contact-us" class="primary-button">Get Your Website</a>
-                </div>
-              </div>
-            </section>
-            <!-- Web Development Card -->
-            <!-- AD Image -->
-
-            <!-- Hot Deals Widget -->
-            <div class="widget hide_on_phone">
-              <h3 class="widget-title">Hot Deals & Trending Offers</h3>
-              <div class="trending-item">
-                <div class="trending-number">1</div>
-                <div class="trending-content">
-                  <h6>20% Off First Visit – Luxe Hair Salon</h6>
-                  <div class="trending-meta">Diamond Plan Deal of the Day</div>
-                </div>
-              </div>
-              <div class="trending-item">
-                <div class="trending-number">2</div>
-                <div class="trending-content">
-                  <h6>Buy 1 Get 1 Pizza – Tony's Pizzeria</h6>
-                  <div class="trending-meta">Coupon promotion</div>
-                </div>
-              </div>
-              <div class="trending-item">
-                <div class="trending-number">3</div>
-                <div class="trending-content">
-                  <h6>Free Consultation – Pearland Tax Experts</h6>
-                  <div class="trending-meta">Service offer</div>
-                </div>
-              </div>
-              <div class="trending-item">
-                <div class="trending-number">4</div>
-                <div class="trending-content">
-                  <h6>Hot Spot: Tidy Garage Pearland</h6>
-                  <div class="trending-meta">Premium listing</div>
-                </div>
-              </div>
+            <div class="p411-sidebar-ad">
+              <?php $slot = 'right-side-banner-2';
+              include APPPATH . 'views/partials/ad_slot.php'; ?>
             </div>
 
-            <!-- Newsletter Widget -->
-            <div class="widget hide_on_phone">
+            <!-- Latest deals — real coupons, replacing the invented list -->
+            <?php if (!empty($home_deals)): ?>
+              <div class="widget">
+                <h3 class="widget-title">Latest Deals</h3>
+                <div class="p411-stack">
+                  <?php foreach (array_slice($home_deals, 0, 3) as $deal): ?>
+                    <a class="p411-deal" href="<?= base_url('coupons/' . (int) $deal->coupon_id) ?>">
+                      <?php if (!empty($deal->coupon_code)): ?>
+                        <span class="p411-deal__off"><?= e($deal->coupon_code) ?></span>
+                      <?php endif; ?>
+                      <span class="p411-deal__name"><?= e($deal->coupon_name) ?></span>
+                      <span class="p411-deal__meta"><?= e(!empty($deal->listing_name) ? $deal->listing_name : 'Pearland411') ?></span>
+                    </a>
+                  <?php endforeach; ?>
+                </div>
+              </div>
+            <?php endif; ?>
+
+            <!-- Newsletter -->
+            <div class="widget">
               <h3 class="widget-title">Subscribe for Local Deals</h3>
-              <p>Get the best local deals, new openings, and events in Pearland — direct to your inbox.</p>
-              <form id="newsletterForm" class="newsletter-form" method="post" action="<?= base_url('user/subscribe_newsletter') ?>">
-                <label for="newsletterEmail" style="position:absolute;left:-9999px;">Email</label>
+              <p style="font-size:0.88rem;color:#5D6469;margin-bottom:10px;">Get the best local deals, new openings and events in Pearland &mdash; straight to your inbox.</p>
+              <form id="newsletterForm" class="newsletter-form">
+                <label class="sr-only" for="newsletterEmail">Email address</label>
                 <input type="email" id="newsletterEmail" name="email" class="newsletter-input" placeholder="Your email address" required>
-                <button type="submit" id="newsletterSubmit" class="newsletter-btn">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-                    viewBox="0 0 24 24" fill="white">
-                    <path d="M2 21l21-9L2 3v7l15 2-15 2z" />
-                  </svg>
-                </button>
+                <button type="submit" id="newsletterSubmit" class="newsletter-btn">Join</button>
               </form>
-              <div id="newsletterMessage" style="margin-top:12px;display:none;padding:10px;border-radius:6px;font-size:14px;"></div>
+              <div id="newsletterMessage"></div>
             </div>
 
-            <!-- Sidebar: Local Business Events Calendar -->
-            <div class="widget hide_on_phone">
-              <h3 class="widget-title">
-                Local Business Events Calendar
-              </h3>
-              <div id="sidebar-calendar"></div>
-              <ul class="list-group list-group-flush mt-3">
-                <li class="list-group-item">
-                  <strong>June 24:</strong> Free Health Check-up Camp by Care+ Clinic
-                </li>
-                <li class="list-group-item">
-                  <strong>June 30:</strong> Live Music at Pearl’s Diner
-                </li>
-                <li class="list-group-item">
-                  <strong>July 5:</strong> Small Biz Networking Breakfast
-                </li>
-              </ul>
+            <div class="p411-sidebar-ad">
+              <?php $slot = 'right-side-banner-3';
+              include APPPATH . 'views/partials/ad_slot.php'; ?>
             </div>
 
+            <!-- 295x600. Held back until sold: an unsold half-page house ad
+                 is more harm than the zone is worth. -->
+            <div class="p411-sidebar-ad">
+              <?php $slot = 'right-panel-skyscraper';
+              $slot_fallback = false;
+              include APPPATH . 'views/partials/ad_slot.php'; ?>
+            </div>
 
-          </div>
+          </div><!-- /.sidebar -->
 
-
-
-        </div>
-
-      </div>
-  </div>
-  </div>
-  </section>
-
-  </div>
-
-
-  </div>
-
-  <!-- ================ Pricing Section ================z -->
-  <div class="ads-pricing-section">
-    <div class="container">
-      <div class="section-header">
-        <h2>Choose Your <span class="highlight">Advertisement</span> Plan</h2>
-        <p class="subtitle">Get your business discovered with flexible pricing designed to fit your needs and drive results.</p>
-      </div>
-    </div>
-    <section class="pri">
-      <div class="container">
-        <div class="row">
-          <div>
-            <ul>
-              <li>
-                <div class="pri-box">
-                  <div class="c2">
-                    <h4>Basic PLAN</h4>
-                    <p>Business with logo display</p>
-                  </div>
-                  <div class="c3">
-                    <h2>
-                      $29
-                    </h2>
-                    <p>Per month</p>
-                  </div>
-                  <div class="c4">
-                    <div class="feature-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                      </svg>
-                      <span>Business logo display</span>
-                    </div>
-                    <div class="feature-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                      </svg>
-                      <span>Basic listing</span>
-                    </div>
-                    <div class="feature-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                      </svg>
-                      <span>Company name visible</span>
-                    </div>
-                  </div>
-                  <div class="c5">
-                    <a href="checkout?plan_id=1" class="cta1">Get Start</a>
-                  </div>
-                </div>
-              </li>
-              <li>
-                <div class="pri-box">
-                  <div class="c2">
-                    <h4>Standard PLAN</h4>
-                    <p>Location & address included</p>
-                  </div>
-                  <div class="c3">
-                    <h2>
-                      $59
-                    </h2>
-                    <p>Per month</p>
-                  </div>
-                  <div class="c4">
-                    <div class="feature-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                      </svg>
-                      <span>Everything in Basic</span>
-                    </div>
-                    <div class="feature-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                      </svg>
-                      <span>Full address/location</span>
-                    </div>
-                    <div class="feature-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                      </svg>
-                      <span>Map integration</span>
-                    </div>
-                  </div>
-                  <div class="c5">
-                    <a href="checkout?plan_id=2" class="cta1">Get Start</a>
-                  </div>
-                </div>
-              </li>
-              <li>
-                <div class="pri-box">
-                  <div class="c2">
-                    <h4>Premium PLAN</h4>
-                    <p>Full package with video</p>
-                  </div>
-                  <div class="c3">
-                    <h2>
-                      $99
-                    </h2>
-                    <p>Per month</p>
-                  </div>
-                  <div class="c4">
-                    <div class="feature-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                      </svg>
-                      <span>Everything in Standard</span>
-                    </div>
-                    <div class="feature-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                      </svg>
-                      <span>Video showcase</span>
-                    </div>
-                    <div class="feature-item">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" fill="#22c55e" />
-                      </svg>
-                      <span>Priority listing</span>
-                    </div>
-                  </div>
-                  <div class="c5">
-                    <a href="checkout?plan_id=3" class="cta1">Get Start</a>
-                  </div>
-                </div>
-              </li>
-            </ul>
-          </div>
         </div>
       </div>
     </section>
-  </div>
-  <!-- ================ Pricing Section ================z -->
 
-
-  <!-- ================ How Works Section ================z -->
-  <section>
-    <div class="str count">
-      <div class="container">
-        <div class="row">
-          <div class="how-wrks">
-            <div class="home-tit">
-              <h2>
-                <span>How It Works</span>
-              </h2>
-              <p>Explore some of the best tips from around the world from our
-                <br>partners and friends.lacinia viverra lectus.
-              </p>
-            </div>
-            <div class="how-wrks-inn row">
-              <div class="col-lg-3 col-md-6 col-sm-6">
-                <div>
-
-                  <img src="/assets/images/icon/how1.png" class="b-lazy b-loaded" alt="">
-                  <h4>Create an account</h4>
-                  <p>Quickly register to unlock access to powerful business tools and features.</p>
-                </div>
-              </div>
-              <div class="col-lg-3 col-md-6 col-sm-6">
-                <div>
-
-                  <img src="/assets/images/icon/how2.png" class="b-lazy b-loaded" alt="">
-                  <h4>Add your business</h4>
-                  <p>List your company details to boost visibility and attract potential customers.</p>
-                </div>
-              </div>
-              <div class="col-lg-3 col-md-6 col-sm-6">
-                <div>
-
-                  <img src="/assets/images/icon/how3.png" class="b-lazy b-loaded" alt="">
-                  <h4>Get more leads</h4>
-                  <p>Connect with interested clients and grow your business through targeted exposure.</p>
-                </div>
-              </div>
-              <div class="col-lg-3 col-md-6 col-sm-6">
-                <div>
-
-                  <img src="/assets/images/icon/how4.png" class="b-lazy b-loaded" alt="">
-                  <h4>Achieve goles</h4>
-                  <p>Easily manage, track, and store your achieved milestones for future reference.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-  <!-- ================ How Works Section ================z -->
-
-  <!-- ============
-         END MAIN CONTENT
-         ================ -->
-
-
-  <section>
-
-    <div class="CTA">
-      <div class="container">
-        <div class="row">
-          <div class="col-md-12 bb-text">
-            <h4>List your business for FREE</h4>
-            <p>There are many variations of passages of Lorem Ipsum available, but the majority have <br>
-              suffered alteration in some form, by injected humour.</p>
-            <a href="/pricing-plan">Add my business <i
-                class="material-icons">arrow_forward</i></a>
-          </div>
-        </div>
-      </div>
+    <!-- ========================================= BOTTOM BANNER AD == -->
+    <div class="container px-10">
+      <?php $slot = 'bottom-banner-site-wide';
+      include APPPATH . 'views/partials/ad_slot.php'; ?>
     </div>
 
-  </section>
+    <!-- ============================================== OWNER BAND == -->
+    <!-- "Grow Your Business Online" and "How It Works" merged: three
+         separate sales blocks at the foot of the page was more than the
+         message needed. -->
+    <section class="p411-owner">
+      <div class="container px-10">
+        <div class="p411-owner__head">
+          <h2>Grow Your Business in Pearland</h2>
+          <p>List free in the directory, then add a website, local SEO and homepage placement when you&rsquo;re ready.</p>
+        </div>
+
+        <div class="p411-feat4">
+          <div>
+            <i><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M10 21v-6h4v6"/></svg></i>
+            <h3>List your business</h3>
+            <p>A free listing puts you in search and on your category page.</p>
+          </div>
+          <div>
+            <i><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.6 5.6 6.4.8-4.6 4.3 1.1 6.3L12 17l-5.5 3 1.1-6.3L3 9.4l6.4-.8z"/></svg></i>
+            <h3>Get seen on the homepage</h3>
+            <p>Featured, Hotspot and Business of the Week placements, right here.</p>
+          </div>
+          <div>
+            <i><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8M12 18v4"/></svg></i>
+            <h3>Websites &amp; local SEO</h3>
+            <p>Fast, mobile-first sites built for Pearland businesses.</p>
+          </div>
+          <div>
+            <i><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h10M7 11h6"/></svg></i>
+            <h3>Advertise on Pearland411</h3>
+            <p>Banner positions across the site, from $20 a month.</p>
+          </div>
+        </div>
+
+        <div class="p411-owner__cta">
+          <a class="p411-btn" href="<?= base_url('register') ?>">Add my business &mdash; free</a>
+          <a class="p411-btn p411-btn--ghost" href="<?= base_url('pricing-plan') ?>">See all packages</a>
+        </div>
+      </div>
+    </section>
   </div>
   <!-- START FOOTER -->
   <section class="wed-hom-footer">
@@ -3578,342 +3255,27 @@ Database Tables Required:
   <!-- START -->
   <div class="fqui-menu">
     <ul>
-      <li><a href="/"><img src="../assets/images/icon/home.png">Home</a></li>
-      <li><span class="mob-sear"><img src="../assets/images/icon/search1.png">Search</span></li>
-      <li><a href="all-category" class="act"><img src="../assets/images/icon/shop.png">Services</a></li>
-<?php if (site_setting('service_events_enabled','1') !== '0'): ?><li><a href="event"><img src="../assets/images/icon/calendar.png">Events</a></li><?php endif; ?>
-      <?php if (site_setting('service_products_enabled','1') !== '0'): ?><li><a href="all-products"><img src="../assets/images/icon/cart.png">Products</a></li><?php endif; ?>
-      <?php if (site_setting('service_blog_enabled','1') !== '0'): ?><li><a href="all-blog"><img src="../assets/images/icon/blog1.png">Blogs</a></li><?php endif; ?>
+      <li><a href="/"><img src="<?= base_url() ?>assets/images/icon/home.png">Home</a></li>
+      <li><span class="mob-sear"><img src="<?= base_url() ?>assets/images/icon/search1.png">Search</span></li>
+      <li><a href="all-category" class="act"><img src="<?= base_url() ?>assets/images/icon/shop.png">Services</a></li>
+<?php if (site_setting('service_events_enabled','1') !== '0'): ?><li><a href="event"><img src="<?= base_url() ?>assets/images/icon/calendar.png">Events</a></li><?php endif; ?>
+      <?php if (site_setting('service_products_enabled','1') !== '0'): ?><li><a href="all-products"><img src="<?= base_url() ?>assets/images/icon/cart.png">Products</a></li><?php endif; ?>
+      <?php if (site_setting('service_blog_enabled','1') !== '0'): ?><li><a href="all-blog"><img src="<?= base_url() ?>assets/images/icon/blog1.png">Blogs</a></li><?php endif; ?>
     </ul>
   </div>
   <!-- END -->
 
   <!-- Optional JavaScript -->
-  <script src="../assets/js/jquery.min.js"></script>
-  <script src="../assets/js/popper.min.js"></script>
-  <script src="../assets/js/bootstrap.min.js"></script>
-  <script src="../assets/js/jquery-ui.js"></script>
-  <script src="../assets/js/select-opt.js"></script>
-  <script src="../assets/js/slick.js"></script>
-  <script src="../assets/js/custom.js"></script>
-  <script src="../assets/js/new.js"></script>
-  <script src="../assets/js/jquery.validate.min.js"></script>
-  <script src="../assets/js/custom_validation.js"></script>
+  <script src="<?= base_url() ?>assets/js/jquery.min.js"></script>
+  <script src="<?= base_url() ?>assets/js/popper.min.js"></script>
+  <script src="<?= base_url() ?>assets/js/bootstrap.min.js"></script>
+  <script src="<?= base_url() ?>assets/js/jquery-ui.js"></script>
+  <script src="<?= base_url() ?>assets/js/select-opt.js"></script>
+  <script src="<?= base_url() ?>assets/js/slick.js"></script>
+  <script src="<?= base_url() ?>assets/js/custom.js"></script>
+  <script src="<?= base_url() ?>assets/js/jquery.validate.min.js"></script>
+  <script src="<?= base_url() ?>assets/js/custom_validation.js"></script>
   <!-- Scripts -->
-  <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
-    integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
-    crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.3/dist/umd/popper.min.js"
-    integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49"
-    crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.1.3/dist/js/bootstrap.min.js"
-    integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy"
-    crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Swiper/8.4.7/swiper-bundle.min.js"></script>
-
-  <script>
-    // Initialize Swiper
-    var swiper = new Swiper(".mySwiper", {
-      slidesPerView: 1,
-      spaceBetween: 30,
-      loop: true,
-      autoplay: {
-        delay: 5000,
-        disableOnInteraction: false,
-      },
-      pagination: {
-        el: ".swiper-pagination",
-        clickable: true,
-      },
-      navigation: {
-        nextEl: ".swiper-button-next",
-        prevEl: ".swiper-button-prev",
-      },
-    });
-
-
-
-
-    // Category tab functionality (replace the old one)
-    $('.nav-pills .nav-link').on('click', function(e) {
-      e.preventDefault();
-      $('.nav-pills .nav-link').removeClass('active');
-      $(this).addClass('active');
-      const category = $(this).text().trim();
-      if (category === "All News") {
-        $('.news-item').show();
-      } else {
-        $('.news-item').hide();
-        $(`.news-item[data-category="${category}"]`).show();
-      }
-    });
-
-
-    // Parallax effect for banner
-    $(window).scroll(function() {
-      const scrollTop = $(this).scrollTop();
-      $('.banner-section').css('transform', 'translateY(' + scrollTop * 0.1 + 'px)');
-    });
-
-    // Dynamic time update
-    function updateTimes() {
-      const now = new Date();
-      $('.card-meta span:first-child, .trending-meta, .slide-meta').each(function() {
-        const text = $(this).text();
-        if (text.includes('hours ago')) {
-          // Simulate dynamic time updates
-        }
-      });
-    }
-
-    // Initialize animations
-    setTimeout(() => {
-      $('.fade-in').addClass('animate');
-    }, 500);
-
-    // Add interactive hover effects to cards
-    $('.news-card').hover(
-      function() {
-        $(this).find('.card-title').css('color', 'var(--accent-color)');
-      },
-      function() {
-        $(this).find('.card-title').css('color', 'var(--primary-color)');
-      }
-    );
-
-    // Mobile menu enhancement
-    $('.navbar-toggler').on('click', function() {
-      $(this).toggleClass('active');
-    });
-
-    // Add click effect to all interactive elements
-    $('button, .btn, .nav-link, .list-group-item').on('click', function(e) {
-      const ripple = $('<span class="ripple"></span>');
-      const rect = this.getBoundingClientRect();
-      const size = Math.max(rect.width, rect.height);
-      const x = e.clientX - rect.left - size / 2;
-      const y = e.clientY - rect.top - size / 2;
-
-      ripple.css({
-        position: 'absolute',
-        borderRadius: '50%',
-        transform: 'scale(0)',
-        animation: 'ripple 0.6s linear',
-        left: x + 'px',
-        top: y + 'px',
-        width: size + 'px',
-        height: size + 'px',
-        background: 'rgba(255, 255, 255, 0.5)',
-        pointerEvents: 'none'
-      });
-
-      $(this).css('position', 'relative').css('overflow', 'hidden').append(ripple);
-
-      setTimeout(() => {
-        ripple.remove();
-      }, 600);
-    });
-    // Add ripple animation CSS
-    const style = document.createElement('style');
-    style.textContent = `
-                @keyframes ripple {
-                    to {
-                        transform: scale(4);
-                        opacity: 0;
-                    }
-                }
-                
-                .pulse {
-                    animation: pulse 1s infinite;
-                }
-                
-                @keyframes pulse {
-                    0% { transform: scale(1); }
-                    50% { transform: scale(1.05); }
-                    100% { transform: scale(1); }
-                }
-                
-                .clicked {
-                    transform: scale(0.98);
-                    transition: transform 0.1s ease;
-                }
-                
-                .animate {
-                    animation: fadeInUp 0.6s ease forwards;
-                }
-                
-                .swiper-button-next,
-                .swiper-button-prev {
-                    color: white !important;
-                    background: rgba(24, 15, 94, 0.8);
-                    width: 50px !important;
-                    height: 50px !important;
-                    border-radius: 50%;
-                    margin-top: -25px !important;
-                }
-                
-                .swiper-button-next:after,
-                .swiper-button-prev:after {
-                    font-size: 18px !important;
-                }
-                
-                .swiper-pagination-bullet {
-                    background: white !important;
-                    opacity: 0.7;
-                }
-                
-                .swiper-pagination-bullet-active {
-                    background: var(--accent-color) !important;
-                    opacity: 1;
-                }
-                
-                .list-group-item {
-                    border: none !important;
-                    padding: 15px 0 !important;
-                    border-bottom: 1px solid var(--border-color) !important;
-                    transition: all 0.3s ease;
-                }
-                
-                .list-group-item:hover {
-                    background: var(--bg-light) !important;
-                    padding-left: 15px !important;
-                    border-radius: 10px !important;
-                    margin: 0 -15px !important;
-                }
-                
-                .list-group-item:last-child {
-                    border-bottom: none !important;
-                }
-                
-                .badge-primary {
-                    background: var(--accent-color) !important;
-                }
-                
-                /* Mobile Responsiveness Enhancements */
-                @media (max-width: 992px) {
-                    .swiper {
-                        height: 300px;
-                    }
-                    
-                    .slide-title {
-                        font-size: 1.4rem;
-                    }
-                }
-                
-                @media (max-width: 576px) {
-                    .banner-title {
-                        font-size: 2rem;
-                    }
-                    
-                    .banner-subtitle {
-                        font-size: 1.1rem;
-                    }
-                    
-                    .search-input {
-                        padding: 12px 48px 12px 16px;
-                        font-size: 1rem;
-                        height: 44px;
-                    }
-                    
-                    .nav-pills .nav-link {
-                        padding: 8px 15px;
-                        margin: 2px;
-                        font-size: 0.9rem;
-                    }
-                    
-                    .card-title {
-                        font-size: 1.1rem;
-                    }
-                    
-                    .swiper {
-                        height: 250px;
-                    }
-                    
-                    .slide-content {
-                        padding: 20px 20px 20px;
-                    }
-                    
-                    .slide-title {
-                        font-size: 1.2rem;
-                    }
-                }
-            `;
-    document.head.appendChild(style);
-  </script>
-
-  <!-- Full Calendar -->
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      var calendarEl = document.getElementById('sidebar-calendar');
-      if (calendarEl) {
-        // Custom SVGs for prev/next (zoom) buttons
-        function svgBtn(icon) {
-          if (icon === 'prev') {
-            return `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M11 2L5 8l6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
-          }
-          if (icon === 'next') {
-            return `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 2l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
-          }
-          if (icon === 'minus') {
-            return `<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="7.25" width="10" height="1.5" rx="0.75"/></svg>`;
-          }
-          return '';
-        }
-
-        var calendar = new FullCalendar.Calendar(calendarEl, {
-          initialView: 'dayGridMonth',
-          height: 320,
-          headerToolbar: {
-            left: 'prev,next',
-            center: 'title',
-            right: ''
-          },
-          events: [{
-              title: 'Live News Event',
-              start: new Date().toISOString().slice(0, 10),
-              color: '#2a1a7f'
-            },
-            {
-              title: 'Sports Final',
-              start: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString().slice(0, 10),
-              color: '#ffc107'
-            }
-          ],
-          buttonText: {
-            prev: '',
-            next: ''
-          },
-          customButtons: {
-            prev: {
-              text: '',
-              icon: 'prev',
-              click: function() {
-                calendar.prev();
-              }
-            },
-            next: {
-              text: '',
-              icon: 'next',
-              click: function() {
-                calendar.next();
-              }
-            }
-          },
-          // Render SVG icons for navigation
-          viewDidMount: function() {
-            setTimeout(function() {
-              let prevBtn = calendarEl.querySelector('.fc-prev-button');
-              let nextBtn = calendarEl.querySelector('.fc-next-button');
-              if (prevBtn) prevBtn.innerHTML = svgBtn('prev');
-              if (nextBtn) nextBtn.innerHTML = svgBtn('next');
-            }, 10);
-          }
-        });
-        calendar.render();
-      }
-    });
-  </script>
 
   <!-- Weather Weekly Widget -->
   <script>

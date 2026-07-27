@@ -1,0 +1,325 @@
+/* ============================================================================
+ * Pearland411 — homepage sections
+ * ----------------------------------------------------------------------------
+ * ONLY the pieces the homepage gained that the theme has no styles for:
+ * the Business Hotspot strip, the Business of the Week spotlight, the
+ * two-column What's On / Community blocks and the merged owner band.
+ *
+ * Everything else on the page keeps using the theme's own classes
+ * (.lst-com-box, .blog-box, .video-box, .widget, .section-title …) from
+ * assets/css/style.css and the view's inline <style>. Nothing here restyles
+ * them.
+ *
+ * SCOPING RULE — every selector starts `.p411-home`, and this file is linked
+ * only from application/views/index.php. Neither condition is optional: the
+ * theme stylesheet is shared by ~200 other views and must stay untouched.
+ * ==========================================================================*/
+
+.p411-home {
+	--p411-green: #8CC63F;   /* the logo's pear green */
+	--p411-green-d: #6BA935;
+	--p411-green-dd: #4E8A28;
+	--p411-green-w: #F3F8E8;
+	--p411-green-l: #D6E7B2;
+	--p411-ink: #2E3338;
+	--p411-ink-2: #5D6469;
+	--p411-ink-3: #8A9095;
+	--p411-line: #E4E7DE;
+	--p411-card: #fff;
+	--p411-amber: #C8871B;
+	--p411-amber-w: #FDF6E7;
+}
+
+/* ---- shared section frame ------------------------------------------- */
+
+.p411-home .p411-sec { margin-bottom: 38px; }
+
+.p411-home .p411-sec__head {
+	display: flex; align-items: flex-end; justify-content: space-between;
+	gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.p411-home .p411-sec__head h2 {
+	margin: 0; font-size: 22px; font-weight: 700; line-height: 1.25;
+	position: relative; padding-bottom: 9px; color: var(--p411-ink);
+}
+.p411-home .p411-sec__head h2::after {
+	content: ""; position: absolute; left: 0; bottom: 0;
+	width: 42px; height: 3px; border-radius: 2px; background: var(--p411-green);
+}
+.p411-home .p411-sec__head .p411-more {
+	font-size: 14px; font-weight: 600; color: var(--p411-green-dd); white-space: nowrap;
+}
+.p411-home .p411-sec__head .p411-more:hover { text-decoration: underline; }
+
+.p411-home .p411-sub {
+	margin: -6px 0 14px; font-size: 14px; color: var(--p411-ink-2);
+}
+
+/* ---- empty states ---------------------------------------------------- */
+
+.p411-home .p411-empty {
+	background: var(--p411-card); border: 1px dashed var(--p411-line);
+	border-radius: 8px; padding: 26px 20px; text-align: center;
+}
+.p411-home .p411-empty h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; color: var(--p411-ink); }
+.p411-home .p411-empty p { margin: 0 auto; max-width: 46ch; font-size: 14px; color: var(--p411-ink-2); }
+.p411-home .p411-empty .p411-btn { margin-top: 14px; }
+
+/* ---- buttons (scoped; the theme's .btn is left alone) ---------------- */
+
+.p411-home .p411-btn {
+	display: inline-block; padding: 9px 20px; border-radius: 999px;
+	font-size: 14px; font-weight: 600; line-height: 1.4; text-align: center;
+	border: 1px solid transparent; cursor: pointer;
+	background: var(--p411-green); color: #fff;
+	transition: background .16s ease;
+}
+.p411-home a.p411-btn { color: #fff; }
+.p411-home .p411-btn:hover { background: var(--p411-green-d); color: #fff; }
+.p411-home .p411-btn--ghost { background: #fff; color: var(--p411-ink); border-color: var(--p411-line); }
+.p411-home a.p411-btn--ghost { color: var(--p411-ink); }
+.p411-home .p411-btn--ghost:hover { background: var(--p411-green-w); border-color: var(--p411-green); color: var(--p411-green-dd); }
+
+/* ---- category strip -------------------------------------------------- */
+
+.p411-home .p411-cats {
+	display: grid; gap: 10px;
+	grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+}
+.p411-home .p411-cats a {
+	display: block; text-align: center; padding: 14px 9px;
+	background: var(--p411-card); border: 1px solid var(--p411-line);
+	border-radius: 8px; color: var(--p411-ink);
+}
+.p411-home .p411-cats a:hover { border-color: var(--p411-green); background: var(--p411-green-w); }
+.p411-home .p411-cats svg { color: var(--p411-green-dd); display: block; margin: 0 auto 7px; }
+.p411-home .p411-cats b { display: block; font-size: 13px; font-weight: 600; line-height: 1.3; }
+.p411-home .p411-cats span { display: block; margin-top: 3px; font-size: 11px; color: var(--p411-ink-3); }
+
+/* ---- Business Hotspot: a slim logo strip, not another card row ------- */
+
+.p411-home .p411-hotspot {
+	background: var(--p411-card); border: 1px solid var(--p411-line);
+	border-radius: 10px; padding: 12px 14px;
+}
+.p411-home .p411-hotspot__head {
+	display: flex; align-items: center; gap: 9px; margin-bottom: 10px;
+}
+.p411-home .p411-hotspot__head h2 {
+	margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .09em;
+	text-transform: uppercase; color: var(--p411-ink-2);
+}
+.p411-home .p411-hotspot__head svg { color: var(--p411-green-dd); flex: none; }
+.p411-home .p411-hotspot__head .p411-more { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--p411-green-dd); }
+
+.p411-home .p411-hotspot__rail {
+	display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;
+	scrollbar-width: thin;
+}
+.p411-home .p411-hotspot__item {
+	flex: 0 0 auto; width: 148px; text-align: center;
+	border: 1px solid var(--p411-line); border-radius: 8px; padding: 10px 8px;
+	background: #fff; color: var(--p411-ink);
+}
+.p411-home .p411-hotspot__item:hover { border-color: var(--p411-green); background: var(--p411-green-w); }
+.p411-home .p411-hotspot__item img {
+	display: block; width: 100%; height: 44px; object-fit: contain; margin-bottom: 7px;
+}
+.p411-home .p411-hotspot__item b {
+	display: block; font-size: 12px; font-weight: 600; line-height: 1.3;
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.p411-home .p411-hotspot__item span { display: block; margin-top: 2px; font-size: 10.5px; color: var(--p411-ink-3); }
+
+/* ---- Business of the Week: one wide spotlight ------------------------ */
+
+.p411-home .p411-week {
+	display: grid; grid-template-columns: 1fr; gap: 0;
+	background: var(--p411-card); border: 1px solid var(--p411-green-l);
+	border-radius: 12px; overflow: hidden;
+	box-shadow: 0 2px 10px rgba(46, 51, 56, .06);
+}
+.p411-home .p411-week__media { position: relative; background: var(--p411-green-w); }
+.p411-home .p411-week__media img { display: block; width: 100%; height: 100%; min-height: 190px; object-fit: cover; }
+.p411-home .p411-week__flag {
+	position: absolute; top: 12px; left: 12px;
+	background: var(--p411-green-dd); color: #fff;
+	font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+	padding: 5px 11px; border-radius: 4px;
+}
+.p411-home .p411-week__body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 8px; }
+.p411-home .p411-week__cat {
+	font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+	color: var(--p411-green-dd);
+}
+.p411-home .p411-week__body h3 { margin: 0; font-size: 21px; font-weight: 700; line-height: 1.25; color: var(--p411-ink); }
+.p411-home .p411-week__body p { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--p411-ink-2); }
+.p411-home .p411-week__foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+.p411-home .p411-week__until { font-size: 12px; color: var(--p411-ink-3); }
+
+@media (min-width: 768px) {
+	.p411-home .p411-week { grid-template-columns: 42% 1fr; }
+}
+
+/* ---- two-column blocks (What's On / Community) ----------------------- */
+
+.p411-home .p411-split { display: grid; grid-template-columns: 1fr; gap: 26px; }
+@media (min-width: 700px) { .p411-home .p411-split { grid-template-columns: 1fr 1fr; } }
+
+.p411-home .p411-split h3 {
+	margin: 0 0 12px; font-size: 15px; font-weight: 700; color: var(--p411-ink);
+	display: flex; align-items: center; gap: 8px;
+}
+.p411-home .p411-split h3 svg { color: var(--p411-green-dd); flex: none; }
+.p411-home .p411-split h3 .p411-more { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--p411-green-dd); }
+
+.p411-home .p411-stack { display: flex; flex-direction: column; gap: 10px; }
+
+/* deal row */
+.p411-home .p411-deal {
+	display: block; background: var(--p411-card); border: 1px solid var(--p411-line);
+	border-left: 4px solid var(--p411-amber); border-radius: 8px; padding: 12px 14px;
+	color: var(--p411-ink);
+}
+.p411-home .p411-deal:hover { border-color: var(--p411-amber); background: var(--p411-amber-w); }
+.p411-home .p411-deal__off { font-size: 17px; font-weight: 700; color: var(--p411-amber); line-height: 1.2; }
+.p411-home .p411-deal__name { display: block; margin-top: 3px; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.p411-home .p411-deal__meta { display: block; margin-top: 3px; font-size: 12px; color: var(--p411-ink-3); }
+
+/* event row */
+.p411-home .p411-event {
+	display: flex; gap: 12px; background: var(--p411-card); border: 1px solid var(--p411-line);
+	border-radius: 8px; padding: 12px 14px; color: var(--p411-ink);
+}
+.p411-home .p411-event:hover { border-color: var(--p411-green); background: var(--p411-green-w); }
+.p411-home .p411-event__date {
+	flex: none; width: 48px; text-align: center; border: 1px solid var(--p411-line);
+	border-radius: 6px; overflow: hidden; background: #fff;
+}
+.p411-home .p411-event__date i {
+	display: block; font-style: normal; background: var(--p411-green); color: #fff;
+	font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; padding: 3px 0;
+}
+.p411-home .p411-event__date b { display: block; padding: 4px 0 5px; font-size: 18px; font-weight: 700; }
+.p411-home .p411-event__body { min-width: 0; }
+.p411-home .p411-event__body b { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.p411-home .p411-event__body span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--p411-ink-2); }
+
+/* ---- merged owner band ---------------------------------------------- */
+
+.p411-home .p411-owner { background: #fff; border-top: 1px solid var(--p411-line); padding: 44px 0; }
+.p411-home .p411-owner__head { text-align: center; max-width: 62ch; margin: 0 auto 28px; }
+.p411-home .p411-owner__head h2 { margin: 0 0 8px; font-size: 26px; font-weight: 700; color: var(--p411-ink); }
+.p411-home .p411-owner__head p { margin: 0; font-size: 15px; color: var(--p411-ink-2); }
+
+.p411-home .p411-feat4 { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.p411-home .p411-feat4 > div {
+	background: #fff; border: 1px solid var(--p411-line); border-radius: 10px;
+	padding: 22px 18px; text-align: center;
+}
+.p411-home .p411-feat4 i {
+	display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 13px;
+	border-radius: 12px; background: var(--p411-green-w); color: var(--p411-green-dd);
+}
+.p411-home .p411-feat4 h3 { margin: 0 0 7px; font-size: 16px; font-weight: 700; color: var(--p411-ink); }
+.p411-home .p411-feat4 p { margin: 0; font-size: 14px; color: var(--p411-ink-2); }
+
+.p411-home .p411-owner__cta { text-align: center; margin-top: 28px; }
+.p411-home .p411-owner__cta .p411-btn { padding: 12px 28px; font-size: 15px; }
+
+/* ---- ad rows --------------------------------------------------------- */
+
+.p411-home .p411-adrow { margin: 0 0 30px; }
+.p411-home .p411-sidebar-ad { margin-bottom: 26px; }
+
+/* ---- responsive ------------------------------------------------------ */
+
+@media (max-width: 767px) {
+	.p411-home .p411-sec { margin-bottom: 30px; }
+	.p411-home .p411-sec__head h2 { font-size: 19px; }
+	.p411-home .p411-owner { padding: 32px 0; }
+	.p411-home .p411-owner__head h2 { font-size: 22px; }
+	.p411-home .p411-week__body { padding: 16px 16px 18px; }
+	.p411-home .p411-week__body h3 { font-size: 18px; }
+}
+
+@media (max-width: 480px) {
+	.p411-home .p411-cats { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* The skyscraper is 295x600 and only makes sense beside a long column.
+   Once the sidebar stacks under the content it has nothing to sit against. */
+@media (max-width: 991px) {
+	.p411-home .ad-slot-rightpanelskyscraper { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.p411-home * { transition: none !important; animation: none !important; }
+}
+
+/* ---- grids + compact media rows -------------------------------------- */
+
+/* Three-up row for Featured. The theme's own 3-col grid is an ID
+   (#business-list), which can only appear once, so Newest keeps that and
+   Featured uses this. Both hold the same .lst-com-box card. */
+.p411-home .p411-grid3 {
+	display: grid; gap: 15px;
+	grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+@media (max-width: 420px) { .p411-home .p411-grid3 { grid-template-columns: 1fr; } }
+
+/* Compact video / news row — the point of merging those two sections is to
+   stop them each eating a full-width band of large cards. */
+.p411-home .p411-media {
+	display: flex; gap: 12px; align-items: flex-start;
+	background: var(--p411-card); border: 1px solid var(--p411-line);
+	border-radius: 8px; padding: 10px; color: var(--p411-ink);
+}
+.p411-home .p411-media:hover { border-color: var(--p411-green); background: var(--p411-green-w); }
+.p411-home .p411-media__thumb {
+	flex: none; width: 96px; height: 68px; border-radius: 6px; overflow: hidden;
+	position: relative; background: var(--p411-green-w);
+}
+.p411-home .p411-media__thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.p411-home .p411-media__play {
+	position: absolute; inset: 0; display: grid; place-items: center;
+	background: rgba(38, 44, 30, .3); color: #fff;
+}
+.p411-home .p411-media__body { min-width: 0; }
+.p411-home .p411-media__body b {
+	display: block; font-size: 14px; font-weight: 600; line-height: 1.35; margin-bottom: 4px;
+}
+.p411-home .p411-media__body span {
+	display: block; font-size: 12.5px; line-height: 1.5; color: var(--p411-ink-2);
+}
+
+/* style.css line 2050 gives .hom-head `background-image: url(../images/banner4.jpg)`,
+   and that file does not exist — a 404 on every page that uses the header. The
+   gradient underneath it is what actually renders, so dropping the request here
+   costs nothing visually. Scoped to the homepage on purpose: style.css is shared
+   by ~200 views and fixing it there is a separate, wider change. */
+.p411-home .hom-head { background-image: none; }
+
+/* Sideways scroll on phones. Two causes in the theme's own header: .pop-menu
+   computes 5px wider than the viewport, and .mob-me-all is a position:fixed
+   off-canvas panel parked to the right of the fold. A fixed element ignores an
+   ancestor's overflow, so this has to sit on <body> — which is why the scoping
+   class is on <body class="p411-home"> rather than on .full_wrapper.
+   Homepage-scoped on purpose: both rules live in the shared style.css and
+   fixing them there would touch every page on the site. */
+.p411-home { overflow-x: hidden; }
+
+/* Card images. The theme paints .list-com-img with
+   linear-gradient(45deg, var(--primary-color), var(--accent-color)) — a navy
+   that both clashes with the logo green and shows through as a dark wedge
+   wherever the image doesn't fully cover. Recolour to the brand and make the
+   image fill its box. Scoped, so listing pages keep the theme's own look. */
+.p411-home .list-com-img { background: linear-gradient(135deg, #6BA935, #8CC63F); }
+.p411-home .list-com-img img { display: block; box-sizing: border-box; }
+
+/* Band around the category strip. It deliberately does not reuse the theme's
+   .category-tabs, which carries `display:none !important` below 768px — that
+   rule was written for the old hard-coded topic tabs, and this strip is a
+   responsive grid that earns its place on a phone. */
+.p411-home .p411-catstrip { background: #fff; border-bottom: 1px solid var(--p411-line); }
+.p411-home .p411-catstrip > .container { padding-top: 16px; padding-bottom: 16px; }

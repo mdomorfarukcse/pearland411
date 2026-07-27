@@ -5628,6 +5628,65 @@ class Usermodel extends CI_Model
 	}
 
 	/**
+	 * Listings with a live "Business Hotspot on Homepage" placement.
+	 *
+	 * Sold as plans.slug = 'business-hotspot' ($25 / 30 days). The paid term
+	 * is stored as a date in listings.hotspot_until (migration 0018), so the
+	 * placement drops off by itself the day after it expires — nobody has to
+	 * remember to switch it off.
+	 *
+	 * Returns array() when 0018 hasn't been run, so the homepage degrades to
+	 * hiding the section instead of erroring.
+	 */
+	public function getHotspotListings($limit = 8)
+	{
+		if (!$this->db->field_exists('hotspot_until', 'listings')) return array();
+
+		return $this->db
+			->select('listings.listing_id, listings.listing_name, listings.listing_slug,
+			          listings.listing_image, listings.hotspot_until, listing_categories.category_name', false)
+			->from('listings')
+			->join('listing_categories', 'listings.category_id = listing_categories.category_id', 'left')
+			->where('listings.listing_status', 0)
+			->where('listings.is_deleted', 0)
+			->where('listings.hotspot_until >=', date('Y-m-d'))
+			->order_by('listings.hotspot_until', 'ASC')
+			->limit((int) $limit)
+			->get()
+			->result();
+	}
+
+	/**
+	 * The current "Business Of the Week" listing.
+	 *
+	 * Sold as plans.slug = 'business-of-the-week' ($20 / 7 days), stored in
+	 * listings.week_until (migration 0018). Deliberately returns ONE row: the
+	 * homepage gives it a single wide spotlight card, and being the only one
+	 * is what the customer is paying for. If several are live, the one
+	 * expiring soonest wins so each buyer gets their turn.
+	 *
+	 * @return object|null
+	 */
+	public function getBusinessOfTheWeek()
+	{
+		if (!$this->db->field_exists('week_until', 'listings')) return null;
+
+		return $this->db
+			->select('listings.listing_id, listings.listing_name, listings.listing_slug,
+			          listings.listing_description, listings.listing_image, listings.week_until,
+			          listing_categories.category_name', false)
+			->from('listings')
+			->join('listing_categories', 'listings.category_id = listing_categories.category_id', 'left')
+			->where('listings.listing_status', 0)
+			->where('listings.is_deleted', 0)
+			->where('listings.week_until >=', date('Y-m-d'))
+			->order_by('listings.week_until', 'ASC')
+			->limit(1)
+			->get()
+			->row();
+	}
+
+	/**
 	 * Top categories by live listing count, for the homepage category
 	 * strip and sidebar. Stable ordering (unlike getRandomTenCategory)
 	 * so the strip doesn't reshuffle on every page load.
