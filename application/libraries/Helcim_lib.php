@@ -36,6 +36,58 @@ class Helcim_lib
         return !empty($this->cfg['api_token']);
     }
 
+    /**
+     * Live credential check for the admin settings screen.
+     *
+     * is_configured() only proves a token string exists — it says nothing about
+     * whether that token carries the right scopes. A token missing the checkout
+     * permission still renders a working-looking "Pay securely" button and only
+     * fails when a real customer clicks it, so this asks Helcim directly.
+     *
+     * Initializing a checkout session is the cheapest call that exercises the
+     * same scope the storefront needs. Nothing is charged and no customer is
+     * involved; the unused session token is simply never redeemed.
+     *
+     * Note this only proves the CHECKOUT scope. Charging a vaulted card for a
+     * renewal hits /payment/purchase, which is gated separately by the
+     * "Transaction Processing" restriction — verify that with
+     * `php index.php cli renew_subscriptions`.
+     *
+     * @return array ['success'=>bool, 'error'=>?string]
+     */
+    public function health_check()
+    {
+        if (!$this->is_configured()) {
+            return array(
+                'success' => false,
+                'error'   => 'No API token set. Add HELCIM_API_TOKEN to your .env file.',
+            );
+        }
+
+        $res = $this->request('POST', '/helcim-pay/initialize', array(
+            'paymentType' => 'purchase',
+            'amount'      => 1.00,
+            'currency'    => $this->currency(),
+        ));
+
+        if ($res['success']) {
+            return array('success' => true, 'error' => null);
+        }
+
+        if ($res['status'] === 0) {
+            $msg = 'Could not reach Helcim — network or TLS error. Check that this server allows outbound HTTPS.';
+        } elseif ($res['status'] === 401 || $res['status'] === 403) {
+            $msg = 'Helcim rejected the token (HTTP ' . $res['status'] . '). In the Helcim dashboard under '
+                 . 'Settings > Integrations > API, open this token\'s API Access Configuration and confirm '
+                 . '"I will use this token for a checkout integration" is ticked. If the token was recently '
+                 . 'regenerated, the value in .env is stale. Helcim said: ' . $res['error'];
+        } else {
+            $msg = 'Helcim returned HTTP ' . $res['status'] . ': ' . $res['error'];
+        }
+
+        return array('success' => false, 'error' => $msg);
+    }
+
     public function currency()
     {
         return isset($this->cfg['currency']) ? $this->cfg['currency'] : 'USD';

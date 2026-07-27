@@ -29,6 +29,15 @@ DirectoryIndex index.php
     RewriteCond %{HTTP:X-Forwarded-Proto} !https
     RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
+    # Deny dot-directories and dotfiles outright. This MUST come before the
+    # real-file passthrough below: deployment is `git pull` on the server, so
+    # .git/ lives in webroot, and the <FilesMatch> rules further down only match
+    # file NAMES ending in .git — .git/config, .git/HEAD and .git/index do not
+    # match those and would be served directly by the passthrough rule.
+    # .well-known is carved out so cPanel/AutoSSL ACME renewal keeps working.
+    RewriteRule (^|/)\.git(/|$) - [F,L]
+    RewriteRule (^|/)\.(?!well-known/)[^/]+ - [F,L]
+
     # Don't rewrite for real files / directories (assets, uploads, etc.)
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
