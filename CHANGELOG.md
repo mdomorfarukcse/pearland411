@@ -101,6 +101,9 @@ migrations and key files touched so the next session doesn't have to re-read the
 - No MySQL in this environment, so migrations 0015/0016 are **unrun**. Until 0015 is applied the
   admin duration save will still fail — the model guard keeps it from erroring, but the columns must
   exist for the value to persist.
+
+---
+
 ## 2026-07-26 — Security: block `.git/` from the web, allow `.env` above the webroot
 
 Prompted by a review of secret handling before live Helcim credentials were added. The `.env`
