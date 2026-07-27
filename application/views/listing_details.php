@@ -1,1562 +1,839 @@
-<!-- START -->
-<section>
-	<div class="list-det-fix">
+<?php
+/**
+ * /listing-details/<slug> — one business.
+ *
+ * Same shell as the directory and the homepage: hero, then a main column and a
+ * right-hand sidebar. Styling is in assets/css/directory.css (scoped to
+ * `.p411-ld`, linked via $page_css); nothing here touches the shared theme.
+ *
+ * From User::listing_details(): $listing, $user, $logged_id, $RelatedListing,
+ * $listing_reviews, $review_stats, $review_total, $review_average,
+ * $listing_category, $owner_socials, $ad_slots.
+ *
+ * Admin::listing_preview() renders this view too, with a thinner data set, so
+ * every variable is defaulted below rather than assumed.
+ */
+
+if (empty($listing)) {
+	// Belt and braces: the controllers show_404() before reaching the view.
+	echo '<div class="container" style="padding:60px 0;"><h1>Listing not found</h1></div>';
+	return;
+}
+
+$logged_id       = isset($logged_id) ? $logged_id : null;
+$user            = isset($user) ? $user : null;
+$RelatedListing  = (isset($RelatedListing)  && is_array($RelatedListing))  ? $RelatedListing  : array();
+$listing_reviews = (isset($listing_reviews) && is_array($listing_reviews)) ? $listing_reviews : array();
+$review_stats    = (isset($review_stats)    && is_array($review_stats))    ? $review_stats    : array();
+$owner_socials   = (isset($owner_socials)   && is_array($owner_socials))   ? $owner_socials   : array();
+$listing_category = isset($listing_category) ? $listing_category : null;
+
+// Totals: the controller derives these, but Admin's preview doesn't.
+if (!isset($review_total)) {
+	$review_total = $review_stats ? array_sum($review_stats) : (int) ($listing->total_reviews ?? 0);
+}
+if (!isset($review_average)) {
+	$review_average = 0.0;
+	if ($review_stats && $review_total > 0) {
+		$weighted = 0;
+		foreach ($review_stats as $stars => $count) $weighted += ($stars * $count);
+		$review_average = $weighted / $review_total;
+	} else {
+		$review_average = (float) ($listing->average_rating ?? 0);
+	}
+}
+$review_total   = (int) $review_total;
+$review_average = (float) $review_average;
+
+$ad_slots = (isset($ad_slots) && is_array($ad_slots)) ? $ad_slots : array(
+	'top'      => 'top-banner-site-wide',
+	'inline'   => 'middle-banner-category',
+	'side_1'   => 'right-side-banner-1',
+	'side_2'   => 'right-side-banner-2',
+	'side_sky' => 'right-panel-skyscraper',
+	'bottom'   => 'bottom-banner-site-wide',
+);
+
+/* ---- normalised fields ------------------------------------------------- */
+
+$ld_name    = (string) ($listing->listing_name ?? '');
+$ld_slug    = (string) ($listing->listing_slug ?? '');
+$ld_url     = base_url('listing-details/' . rawurlencode($ld_slug));
+$ld_logo    = !empty($listing->listing_image) ? base_url($listing->listing_image) : base_url('assets/images/placeholder-listing.svg');
+$ld_cover   = !empty($listing->cover_image)   ? base_url($listing->cover_image)   : base_url('assets/images/llisting_details_bg.jpg');
+$ld_claimed = !empty($listing->user_id);
+$ld_verified = !empty($listing->featured_listing) || !empty($listing->spotlight_listing);
+
+$show_addr  = ((int) ($listing->display_address ?? 0) === 1) && !empty($listing->listing_address);
+$show_phone = ((int) ($listing->display_phone ?? 0) === 1) && !empty($listing->listing_mobile);
+$wa_number  = preg_replace('/[^0-9]/', '', (string) (!empty($listing->listing_whatsapp) ? $listing->listing_whatsapp : ($listing->listing_mobile ?? '')));
+$show_wa    = $show_phone && $wa_number !== '';
+
+/**
+ * Descriptions were pasted in with markup (`<p>…<br />`), and escaping the
+ * whole string printed those tags on the page. Turn the block-level tags into
+ * newlines, drop the rest, then escape — so stored HTML reads as clean text
+ * and no markup can be injected either.
+ */
+$ld_text = function ($value) {
+	$value = preg_replace('#<\s*(br|/p|/div|/li)\s*/?\s*>#i', "\n", (string) $value);
+	$value = strip_tags($value);
+	$value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+	$value = preg_replace("/\n{3,}/", "\n\n", trim($value));
+	return $value;
+};
+
+/* ---- optional blocks --------------------------------------------------- */
+
+$ld_services = array();
+if (!empty($listing->service_offered)) {
+	$ld_services = array_values(array_filter(array_map('trim', explode(',', (string) $listing->service_offered)), 'strlen'));
+}
+
+$ld_areas = array();
+if (!empty($listing->service_locations)) {
+	$ld_areas = array_values(array_filter(array_map('trim', explode(',', (string) $listing->service_locations)), 'strlen'));
+}
+
+$ld_gallery = array();
+if (!empty($listing->listing_image_gallery)) {
+	$decoded = json_decode((string) $listing->listing_image_gallery, true);
+	if (is_array($decoded)) {
+		$ld_gallery = array_values(array_filter(array_map('trim', $decoded), 'strlen'));
+	}
+}
+
+$ld_videos = array();
+if (!empty($listing->listing_video)) {
+	foreach (array_filter(array_map('trim', explode(',', (string) $listing->listing_video)), 'strlen') as $video_url) {
+		$embed = $video_url;
+		if (strpos($video_url, 'youtube.com/watch?v=') !== false) {
+			parse_str((string) parse_url($video_url, PHP_URL_QUERY), $qs);
+			if (!empty($qs['v'])) $embed = 'https://www.youtube.com/embed/' . rawurlencode($qs['v']);
+		} elseif (strpos($video_url, 'youtu.be/') !== false) {
+			$id = trim((string) parse_url($video_url, PHP_URL_PATH), '/');
+			if ($id !== '') $embed = 'https://www.youtube.com/embed/' . rawurlencode($id);
+		}
+		$ld_videos[] = $embed;
+	}
+}
+
+$has_map = !empty($listing->google_map) || (!empty($listing->listing_lat) && !empty($listing->listing_lng));
+
+/* ---- sub-nav ----------------------------------------------------------- */
+
+$ld_nav = array('about' => 'About');
+if ($ld_services)                 $ld_nav['services'] = 'Services';
+if ($ld_gallery)                  $ld_nav['gallery']  = 'Photos';
+if ($ld_videos)                   $ld_nav['videos']   = 'Videos';
+$ld_nav['reviews'] = 'Reviews' . ($review_total > 0 ? ' (' . $review_total . ')' : '');
+if ($has_map)                     $ld_nav['location'] = 'Location';
+if ($RelatedListing)              $ld_nav['related']  = 'Similar businesses';
+
+/* ---- sharing ----------------------------------------------------------- */
+
+$share_url   = rawurlencode($ld_url);
+$share_title = rawurlencode($ld_name);
+$share_image = rawurlencode(!empty($listing->listing_image) ? base_url($listing->listing_image) : base_url('assets/images/pearland-logo.png'));
+
+/** Five gold/grey stars for a 0–5 value. */
+$ld_stars = function ($value) {
+	$out = '';
+	$full = (int) round((float) $value);
+	for ($i = 1; $i <= 5; $i++) {
+		$out .= '<i class="material-icons" aria-hidden="true">' . ($i <= $full ? 'star' : 'star_border') . '</i>';
+	}
+	return $out;
+};
+?>
+
+<section class="p411-ld">
+
+	<!-- ============================================================ HERO -->
+	<div class="p411-ld__hero">
+		<div class="p411-ld__cover" style="background-image:url('<?= e_attr($ld_cover) ?>');" aria-hidden="true"></div>
 		<div class="container">
-			<div class="row">
-				<div class="list-det-fix-inn">
-					<div class="list-fix-pro">
-						<img src="<?= (empty($listing->listing_image)) ? base_url('assets/images/pearland-logo.png') :  base_url($listing->listing_image); ?>" alt="">
+			<nav class="p411-crumb" aria-label="Breadcrumb">
+				<a href="<?= base_url() ?>">Home</a>
+				<span aria-hidden="true">/</span>
+				<a href="<?= e_url(base_url('all_listing')) ?>">Directory</a>
+				<?php if (!empty($listing_category->category_name)): ?>
+					<span aria-hidden="true">/</span>
+					<a href="<?= e_url(base_url('all_listing/' . rawurlencode((string) ($listing_category->category_slug ?: $listing_category->category_id)))) ?>"><?= e($listing_category->category_name) ?></a>
+				<?php endif; ?>
+				<span aria-hidden="true">/</span>
+				<span class="is-current"><?= e($ld_name) ?></span>
+			</nav>
+
+			<div class="p411-ld__ident">
+				<div class="p411-ld__logo">
+					<img src="<?= e_attr($ld_logo) ?>" alt="<?= e_attr($ld_name) ?>" loading="eager" decoding="async">
+				</div>
+
+				<div class="p411-ld__head">
+					<div class="p411-ld__badges">
+						<?php if (!empty($listing_category->category_name)): ?>
+							<a class="p411-tag" href="<?= e_url(base_url('all_listing/' . rawurlencode((string) ($listing_category->category_slug ?: $listing_category->category_id)))) ?>"><?= e($listing_category->category_name) ?></a>
+						<?php endif; ?>
+						<?php if ($ld_verified): ?>
+							<span class="p411-tag p411-tag--green"><i class="material-icons" aria-hidden="true">verified</i> Featured</span>
+						<?php endif; ?>
+						<?php if (!$ld_claimed): ?>
+							<span class="p411-tag p411-tag--amber">Unclaimed</span>
+						<?php endif; ?>
+						<?php if (!empty($listing->year_established)): ?>
+							<span class="p411-tag">Since <?= e($listing->year_established) ?></span>
+						<?php endif; ?>
 					</div>
-					<div class="list-fix-tit">
-						<h3><?= e($listing->listing_name); ?></h3>
-						<?php if ($listing->display_address == 1) { ?>
-							<p><b>Address:</b> <?= e($listing->listing_address); ?></p>
-						<?php } ?>
+
+					<h1><?= e($ld_name) ?></h1>
+
+					<div class="p411-ld__rate">
+						<?php if ($review_total > 0): ?>
+							<b><?= number_format($review_average, 1) ?></b>
+							<span class="p411-stars"><?= $ld_stars($review_average) ?></span>
+							<span><?= number_format($review_total) ?> review<?= $review_total === 1 ? '' : 's' ?></span>
+						<?php else: ?>
+							<span class="p411-stars"><?= $ld_stars(0) ?></span>
+							<span>No reviews yet &mdash; <a href="#write-review" style="color:#fff;text-decoration:underline;">be the first</a></span>
+						<?php endif; ?>
+						<?php if (!empty($listing->views)): ?>
+							<span>&middot; <?= number_format((int) $listing->views) ?> views</span>
+						<?php endif; ?>
 					</div>
-					<div class="list-fix-btn"> <span data-toggle="modal" data-target="#quote" class="pulse">Send an enquiry</span>
+
+					<div class="p411-ld__facts">
+						<?php if ($show_addr): ?>
+							<span><i class="material-icons" aria-hidden="true">place</i><?= e($listing->listing_address) ?></span>
+						<?php endif; ?>
+						<?php if ($show_phone): ?>
+							<a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) ?>"><i class="material-icons" aria-hidden="true">call</i><?= e($listing->listing_mobile) ?></a>
+						<?php endif; ?>
+						<?php if (!empty($listing->listing_email)): ?>
+							<a href="mailto:<?= e_attr($listing->listing_email) ?>"><i class="material-icons" aria-hidden="true">mail_outline</i><?= e($listing->listing_email) ?></a>
+						<?php endif; ?>
+						<?php if (!empty($listing->listing_website)): ?>
+							<a href="<?= e_url($listing->listing_website) ?>" target="_blank" rel="noopener nofollow"><i class="material-icons" aria-hidden="true">language</i><?= e($listing->listing_website) ?></a>
+						<?php endif; ?>
+					</div>
+
+					<div class="p411-ld__cta">
+						<?php if ($show_phone): ?>
+							<a class="p411-btn" href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) ?>">
+								<i class="material-icons" style="font-size:17px;" aria-hidden="true">call</i> Call now
+							</a>
+						<?php endif; ?>
+						<?php if ($show_wa): ?>
+							<a class="p411-btn p411-btn--wa" href="https://wa.me/<?= e_attr($wa_number) ?>" target="_blank" rel="noopener nofollow">WhatsApp</a>
+						<?php endif; ?>
+						<button type="button" class="p411-btn p411-btn--ghost" data-toggle="modal" data-target="#quote">Get a quote</button>
+						<?php if (!empty($listing->listing_lat) && !empty($listing->listing_lng)): ?>
+							<a class="p411-btn p411-btn--ghost" target="_blank" rel="noopener"
+							   href="https://www.google.com/maps/dir/?api=1&amp;destination=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>">Directions</a>
+						<?php endif; ?>
+						<?php if (!$ld_claimed): ?>
+							<a class="p411-btn p411-btn--navy" href="<?= e_url(base_url('claim-listing/' . rawurlencode($ld_slug))) ?>">Claim this listing</a>
+						<?php endif; ?>
 					</div>
 				</div>
 			</div>
 		</div>
 	</div>
-</section>
-<!-- END -->
-<!-- START -->
-<section>
-	<div class="list-bann">
-		<img src="<?= (empty($listing->cover_image)) ? '/assets/images/llisting_details_bg.jpg' :  base_url($listing->cover_image); ?>" alt="">
+
+	<!-- ========================================================= SUB-NAV -->
+	<div class="p411-ld__nav">
+		<div class="container">
+			<ul>
+				<?php foreach ($ld_nav as $anchor => $label): ?>
+					<li><a href="#<?= e_attr($anchor) ?>"><?= $label ?></a></li>
+				<?php endforeach; ?>
+			</ul>
+		</div>
 	</div>
-</section>
-<!-- END -->
-<!-- START -->
-<!--LISTING DETAILS-->
-<section class=" pg-list-1">
+
 	<div class="container">
-		<div class="row">
-			<div class="col-md-12">
-				<div class="pg-list-1-pro">
-					<img src="<?= (empty($listing->listing_image)) ? '/assets/images/fallback_profile.svg' :  base_url($listing->listing_image); ?>" alt=""> <span class="stat"><i class="material-icons">verified_user</i></span>
-				</div>
-				<div class="pg-list-1-left">
-					<h3><?= e($listing->listing_name); ?></h3>
-					<div class="list-rat-all" id="main-rating-display">
-						<?php
-						// Calculate actual review count and average rating as fallback
-						$actual_total_reviews = isset($listing->total_reviews) && $listing->total_reviews > 0 ? $listing->total_reviews : 0;
+		<?php $__claim_msg = $this->session->flashdata('claim_message'); ?>
+		<?php if (!empty($__claim_msg)): ?>
+			<div class="p411-note p411-note--info" style="margin-top:18px;"><?= e($__claim_msg) ?></div>
+		<?php endif; ?>
 
-						// If no total_reviews from database, calculate from review_stats
-						if ($actual_total_reviews == 0 && isset($review_stats) && is_array($review_stats)) {
-							$actual_total_reviews = array_sum($review_stats);
-						}
+		<div class="p411-shell">
 
-						// Calculate weighted average if we don't have it from database
-						$actual_average_rating = isset($listing->average_rating) && $listing->average_rating > 0 ? $listing->average_rating : 0;
-						if ($actual_average_rating == 0 && isset($review_stats) && is_array($review_stats) && $actual_total_reviews > 0) {
-							$weighted_sum = 0;
-							for ($i = 1; $i <= 5; $i++) {
-								$count = isset($review_stats[$i]) ? $review_stats[$i] : 0;
-								$weighted_sum += ($i * $count);
-							}
-							$actual_average_rating = $weighted_sum / $actual_total_reviews;
-						}
-						?>
-						<b><?= number_format($actual_average_rating, 1); ?></b>
-						<label class="rat">
-							<?php
-							$rating_display = (int)$actual_average_rating;
-							for ($i = 1; $i <= 5; $i++) {
-								if ($i <= $rating_display) {
-									echo '<i class="material-icons">star</i>';
-								} else {
-									echo '<i class="material-icons">star_border</i>';
-								}
-							}
-							?>
-						</label>
-						<span><?= $actual_total_reviews; ?> Review<?= ($actual_total_reviews != 1) ? 's' : ''; ?></span>
-					</div>
-					<?php if ($listing->display_address == 1) { ?>
-						<p><b>Address:</b> <?= e($listing->listing_address); ?></p>
-					<?php } ?>
-					<div class="list-number pag-p1-phone">
-						<ul>
-							<?php if ($listing->display_phone == 1) { ?>
-								<a href="Tel:<?= e($listing->listing_mobile); ?>">
-									<li class="ic-php"><?= e($listing->listing_mobile); ?></li>
-								</a>
-							<?php } ?>
-							<a href="mailto:<?= e($listing->listing_email); ?>">
-								<li class="ic-mai"><?= e($listing->listing_email); ?></li>
-							</a>
-							<a target="_blank" href="<?= e_url($listing->listing_website); ?>">
-								<li class="ic-web"><?= e($listing->listing_website); ?></li>
-							</a>
-						</ul>
-					</div>
+			<!-- ==================================================== MAIN -->
+			<div class="p411-shell__main">
+				<div class="p411-adrow">
+					<?php $slot = $ad_slots['top'];
+					$slot_alias = 'listing-top';
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
 				</div>
-				<div class="list-ban-btn">
-					<ul>
-						<?php
-						// display_phone is a 0/1 toggle controlling whether
-						// contact details are exposed; listing_mobile and
-						// listing_whatsapp hold the actual numbers.
-						$__wa_number = !empty($listing->listing_whatsapp)
-							? $listing->listing_whatsapp
-							: $listing->listing_mobile;
-						$__wa_number = preg_replace('/[^0-9+]/', '', (string) $__wa_number);
-						?>
-						<?php if ($listing->display_phone == '1' && !empty($listing->listing_mobile)) { ?>
-							<li> <a href="tel:<?= e($listing->listing_mobile); ?>" class="cta cta-call">Call now</a>
-							</li>
-						<?php } ?>
-						<!-- <li><span class="cta cta-like like-button " data-listing-id="5408" id="like-btn-5408">
-								<b class="like-count">0</b>
-								<span class="like-text">Like</span>
-							</span></li> -->
-						<?php if ($listing->display_phone == '1' && !empty($__wa_number)) { ?>
-						<li> <a href="https://wa.me/<?= e_attr($__wa_number) ?>" target="_blank" rel="noopener noreferrer" class="cta cta-rev">WhatsApp</a></li>
-						<?php } ?>
-						<li> <span data-toggle="modal" data-target="#quote" class="pulse cta cta-get">Get quote</span>
-						</li>
-						<?php
-						// Only show the claim CTA when the listing has no owner yet.
-						// Once a successful claim transfers ownership (user_id is
-						// set on the listing row), the CTA is hidden.
-						if (empty($listing->user_id)):
-						?>
-							<li>
-								<a href="<?= base_url('claim-listing/' . rawurlencode($listing->listing_slug)) ?>"
-								   class="cta cta-get"
-								   style="background:#0e2a3a;color:#fff;">Claim this listing</a>
-							</li>
+
+				<div class="p411-ld__body">
+
+					<!-- ABOUT -->
+					<div class="p411-card" id="about">
+						<div class="p411-card__head">
+							<h2>About <?= e($ld_name) ?></h2>
+						</div>
+
+						<?php $ld_about = $ld_text($listing->listing_description ?? ''); ?>
+						<?php if ($ld_about !== ''): ?>
+							<div class="p411-prose"><?= nl2br(e($ld_about)) ?></div>
+						<?php else: ?>
+							<div class="p411-empty p411-empty--inline">
+								<h3>No description yet</h3>
+								<p>
+									<?= $ld_claimed
+										? 'This business hasn&rsquo;t added a description yet. Call or message them using the details above.'
+										: 'Nobody has claimed this listing yet, so there&rsquo;s no description. If it&rsquo;s your business you can claim it and add one for free.' ?>
+								</p>
+								<?php if (!$ld_claimed): ?>
+									<div class="p411-empty__actions">
+										<a class="p411-btn p411-btn--sm" href="<?= e_url(base_url('claim-listing/' . rawurlencode($ld_slug))) ?>">Claim this listing</a>
+									</div>
+								<?php endif; ?>
+							</div>
 						<?php endif; ?>
-					</ul>
 
-					<?php $__claim_msg = $this->session->flashdata('claim_message'); if (!empty($__claim_msg)): ?>
-						<div class="alert alert-info" style="margin-top:16px;">
-							<?= e($__claim_msg) ?>
+						<div class="p411-share" style="margin-top:18px;" aria-label="Share this business">
+							<a class="so-fb" target="_blank" rel="noopener" title="Share on Facebook"
+							   href="https://www.facebook.com/sharer/sharer.php?u=<?= $share_url ?>"
+							   onclick="window.open(this.href,'share-fb','width=800,height=600');return false;">
+								<img src="<?= base_url('assets/images/social/3.png') ?>" alt="Facebook" loading="lazy"></a>
+							<a class="so-tw" target="_blank" rel="noopener" title="Share on X / Twitter"
+							   href="https://twitter.com/intent/tweet?url=<?= $share_url ?>&amp;text=<?= $share_title ?>"
+							   onclick="window.open(this.href,'share-tw','width=800,height=600');return false;">
+								<img src="<?= base_url('assets/images/social/2.png') ?>" alt="Twitter" loading="lazy"></a>
+							<a class="so-wa" target="_blank" rel="noopener" title="Share on WhatsApp"
+							   href="https://wa.me/?text=<?= $share_title ?>%20-%20<?= $share_url ?>">
+								<img src="<?= base_url('assets/images/social/6.png') ?>" alt="WhatsApp" loading="lazy"></a>
+							<a class="so-li" target="_blank" rel="noopener" title="Share on LinkedIn"
+							   href="https://www.linkedin.com/sharing/share-offsite/?url=<?= $share_url ?>"
+							   onclick="window.open(this.href,'share-li','width=800,height=600');return false;">
+								<img src="<?= base_url('assets/images/social/1.png') ?>" alt="LinkedIn" loading="lazy"></a>
+							<a class="so-pi" target="_blank" rel="noopener" title="Share on Pinterest"
+							   href="https://pinterest.com/pin/create/button/?url=<?= $share_url ?>&amp;media=<?= $share_image ?>&amp;description=<?= $share_title ?>"
+							   onclick="window.open(this.href,'share-pi','width=800,height=600');return false;">
+								<img src="<?= base_url('assets/images/social/9.png') ?>" alt="Pinterest" loading="lazy"></a>
+							<a class="so-link" href="javascript:void(0)" title="Copy link"
+							   onclick="p411CopyLink(<?= e_attr(json_encode($ld_url)) ?>)">
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+									<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M10.7 13.3a3 3 0 0 0 4.24 0l2.12-2.12a3 3 0 0 0-4.24-4.24L11.4 8.36"/>
+										<path d="M13.3 10.7a3 3 0 0 0-4.24 0L6.94 12.8a3 3 0 0 0 4.24 4.24l1.42-1.42"/>
+									</g>
+								</svg>
+							</a>
+						</div>
+					</div>
+
+					<!-- SERVICES + AREAS -->
+					<?php if ($ld_services || $ld_areas || $ld_claimed): ?>
+						<div class="p411-card" id="services">
+							<div class="p411-card__head">
+								<h2>Services &amp; coverage</h2>
+							</div>
+
+							<h3 style="font-size:14px;font-weight:700;margin-bottom:10px;">Services offered</h3>
+							<?php if ($ld_services): ?>
+								<div class="p411-chips">
+									<?php foreach ($ld_services as $service): ?><span><?= e($service) ?></span><?php endforeach; ?>
+								</div>
+							<?php else: ?>
+								<p class="p411-form__hint" style="margin:0;">No services listed yet &mdash; contact the business to ask what they cover.</p>
+							<?php endif; ?>
+
+							<h3 style="font-size:14px;font-weight:700;margin:20px 0 10px;">Areas served</h3>
+							<?php if ($ld_areas): ?>
+								<div class="p411-chips p411-chips--plain">
+									<?php foreach ($ld_areas as $area): ?><span><?= e($area) ?></span><?php endforeach; ?>
+								</div>
+							<?php else: ?>
+								<p class="p411-form__hint" style="margin:0;">No service areas listed. Pearland and the surrounding area is a safe assumption &mdash; ask to be sure.</p>
+							<?php endif; ?>
 						</div>
 					<?php endif; ?>
-				</div>
-			</div>
-		</div>
-	</div>
-</section>
 
-
-
-<section class=" list-pg-bg">
-	<div class="container">
-		<div class="row">
-			<div class="com-padd">
-				<div id="ld-abo" class="list-pg-lt list-page-com-p">
-					<!--                        -->
-					<!--LISTING DETAILS: LEFT PART 1-->
-					<div class="pglist-bg pglist-p-com">
-						<div class="pglist-p-com-ti">
-							<h3><span>About</span> <?= e($listing->listing_name); ?></h3>
-						</div>
-						<div class="list-pg-inn-sp list-pg-inn-abo">
-							<div class="share-btn">
-								<?php
-								// Current page URL for sharing
-								$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
-								$current_url = $protocol . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
-
-								// Listing details for sharing
-								$share_title = urlencode($listing->listing_name);
-								$share_description = urlencode(substr(strip_tags($listing->listing_description), 0, 150) . '...');
-								$share_image_url = !empty($listing->listing_image) ? $protocol . $_SERVER['HTTP_HOST'] . '/' . $listing->listing_image : $protocol . $_SERVER['HTTP_HOST'] . '/assets/images/pearland-logo.png';
-								?>
-								<ul>
-									<li>
-										<a target="_blank" href="https://www.facebook.com/sharer/sharer.php?u=<?= urlencode($current_url) ?>&quote=<?= $share_title ?>" class="so-fb" onclick="window.open(this.href, 'facebook-share-dialog', 'width=800,height=600'); return false;">
-											<img src="<?= base_url() ?>assets/images/social/3.png" alt="Share on Facebook" title="Share on Facebook">
-										</a>
-									</li>
-									<li>
-										<a target="_blank" href="https://twitter.com/intent/tweet?url=<?= urlencode($current_url) ?>&text=<?= $share_title ?>&hashtags=pearland411,business" class="so-tw" onclick="window.open(this.href, 'twitter-share-dialog', 'width=800,height=600'); return false;">
-											<img src="<?= base_url() ?>assets/images/social/2.png" alt="Share On Twitter" title="Share On Twitter">
-										</a>
-									</li>
-									<li>
-										<a target="_blank" href="https://wa.me/?text=<?= $share_title ?>%20-%20<?= urlencode($current_url) ?>" class="so-wa" onclick="window.open(this.href, 'whatsapp-share-dialog', 'width=800,height=600'); return false;">
-											<img src="<?= base_url() ?>assets/images/social/6.png" alt="Share on WhatsApp" title="Share on WhatsApp">
-										</a>
-									</li>
-									<li>
-										<a target="_blank" href="https://www.linkedin.com/sharing/share-offsite/?url=<?= urlencode($current_url) ?>&title=<?= $share_title ?>&summary=<?= $share_description ?>" class="so-li" onclick="window.open(this.href, 'linkedin-share-dialog', 'width=800,height=600'); return false;">
-											<img src="<?= base_url() ?>assets/images/social/1.png" alt="Share on LinkedIn" title="Share on LinkedIn">
-										</a>
-									</li>
-									<li>
-										<a target="_blank" href="https://pinterest.com/pin/create/button/?url=<?= urlencode($current_url) ?>&media=<?= urlencode($share_image_url) ?>&description=<?= $share_title ?>" class="so-pi" onclick="window.open(this.href, 'pinterest-share-dialog', 'width=800,height=600'); return false;">
-											<img src="<?= base_url() ?>assets/images/social/9.png" alt="Share on Pinterest" title="Share on Pinterest">
-										</a>
-									</li>
-									<li>
-										<a href="javascript:void(0)" onclick="copyToClipboard('<?= $current_url ?>')" class="so-link" title="Copy Link">
-											<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="false" role="img">
-												<title>Copy link</title>
-												<g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-													<!-- link chain -->
-													<path d="M10.7 13.3a3 3 0 0 0 4.24 0l2.12-2.12a3 3 0 0 0 0-4.24 3 3 0 0 0-4.24 0L10.7 9.1" />
-													<path d="M13.3 10.7a3 3 0 0 0-4.24 0L6.94 13a3 3 0 0 0 0 4.24 3 3 0 0 0 4.24 0L13.3 14.9" />
-													<!-- copy / clipboard overlay -->
-													<rect x="3.5" y="3.5" width="7" height="9" rx="1" />
-													<path d="M5.5 6.5h3" />
-												</g>
-											</svg>
-
-										</a>
-									</li>
-								</ul>
+					<!-- PHOTO GALLERY -->
+					<?php if ($ld_gallery): ?>
+						<div class="p411-card" id="gallery">
+							<div class="p411-card__head">
+								<h2>Photos</h2>
 							</div>
-							<p>
-								<?= e_nl2br($listing->listing_description); ?>
-							</p>
-						</div>
-					</div>
-					<!--                            -->
-					<!--END LISTING DETAILS: LEFT PART 1-->
-
-
-					<!--LISTING DETAILS: LEFT PART 2-->
-					<div id="ld-ser" class="pglist-bg pglist-p-com">
-						<div class="pglist-p-com-ti">
-							<h3><span>Services</span> Offered</h3>
-						</div>
-						<div class="list-pg-inn-sp">
-							<div class="row pg-list-ser-area">
-								<ul>
-									<?php
-									if (!empty($listing->service_offered) && trim($listing->service_offered) !== '') {
-										$service_offered = explode(',', $listing->service_offered);
-										foreach ($service_offered as $service_name) {
-											$service_name = trim($service_name);
-											if (!empty($service_name)) {
-									?>
-												<li><span><?= $service_name ?></span></li>
-										<?php
-											}
-										}
-									} else {
-										?>
-										<li><span>No services listed</span></li>
-									<?php
-									}
-									?>
-								</ul>
-							</div>
-						</div>
-					</div>
-					<!--END LISTING DETAILS: LEFT PART 2-->
-					<!--START SERVICE AREAS-->
-					<div id="ld-ser" class="pglist-bg pglist-p-com">
-						<div class="pglist-p-com-ti">
-							<h3><span>Service</span> Areas</h3>
-						</div>
-						<div class="list-pg-inn-sp">
-							<div class="row pg-list-ser-area">
-								<ul>
-									<?php
-									if (!empty($listing->service_locations) && trim($listing->service_locations) !== '') {
-										$service_area = explode(',', $listing->service_locations);
-										foreach ($service_area as $area) {
-											$area = trim($area);
-											if (!empty($area)) {
-									?>
-												<li><span><?= $area ?></span></li>
-										<?php
-											}
-										}
-									} else {
-										?>
-										<li><span>No service areas listed</span></li>
-									<?php
-									}
-									?>
-								</ul>
-							</div>
-						</div>
-					</div>
-					<!--END SERVICE AREAS-->
-					<!--LISTING DETAILS: LEFT PART 3 - PHOTO GALLERY-->
-					<?php
-					// Check if gallery images exist
-					$has_gallery_images = false;
-					if (!empty($listing->listing_image_gallery)) {
-						$gallery_check = json_decode($listing->listing_image_gallery, true);
-						$has_gallery_images = ($gallery_check && is_array($gallery_check) && count($gallery_check) > 0);
-					}
-
-					// DEBUG: Show gallery rendering status
-					if (isset($_GET['debug'])) {
-						echo "<!-- PHOTO GALLERY RENDER DEBUG: ";
-						echo "\nHas Gallery Images: " . ($has_gallery_images ? 'YES' : 'NO');
-						echo "\nGallery Data: " . ($listing->listing_image_gallery ?? 'NULL');
-						echo "-->";
-					}
-
-					if ($has_gallery_images) { ?>
-						<div id="ld-gal" class="pglist-bg pglist-p-com">
-							<div class="pglist-p-com-ti">
-								<h3><span>Photo</span> Gallery</h3>
-							</div>
-							<div class="list-pg-inn-sp">
-								<div id="demo" class="carousel slide" data-ride="carousel">
-									<!-- Indicators -->
-									<ul class="carousel-indicators">
-										<?php
-										// DEBUG: Show gallery data
-										if (isset($_GET['debug'])) {
-											echo "<!-- GALLERY DEBUG INFO:";
-											echo "\nListing Image Gallery: " . ($listing->listing_image_gallery ?? 'NULL');
-											if (!empty($listing->listing_image_gallery)) {
-												$debug_gallery = json_decode($listing->listing_image_gallery, true);
-												echo "\nGallery Images Count: " . (is_array($debug_gallery) ? count($debug_gallery) : 0);
-												if (is_array($debug_gallery)) {
-													foreach ($debug_gallery as $idx => $img) {
-														echo "\nImage " . ($idx + 1) . ": " . $img;
-													}
-												}
-											}
-											echo "-->";
-										}
-
-										// Only show gallery images from listing_image_gallery field
-										$gallery_images = [];
-										if (!empty($listing->listing_image_gallery)) {
-											$gallery_data = json_decode($listing->listing_image_gallery, true);
-											if ($gallery_data && is_array($gallery_data)) {
-												foreach ($gallery_data as $img) {
-													// Gallery images are stored with full path like assets/images/listings/filename.jpg
-													$gallery_images[] = $img;
-												}
-											}
-										}
-
-										$all_images = $gallery_images;
-										$carousel_count = max(count($all_images), 1); // At least 1 slide
-										for ($i = 0; $i < $carousel_count; $i++) {
-										?>
-											<li data-target="#demo" data-slide-to="<?= $i ?>" class="<?= $i == 0 ? 'active' : '' ?>"></li>
-										<?php } ?>
-									</ul>
-									<!-- The slideshow -->
-									<div class="carousel-inner">
-										<?php
-										if (!empty($all_images) && count($all_images) > 0) {
-											foreach ($all_images as $index => $image) {
-										?>
-												<div class="carousel-item <?= $index == 0 ? 'active' : '' ?>">
-													<img src="<?= base_url(trim($image)); ?>" alt="<?= e($listing->listing_name); ?>">
-												</div>
-											<?php
-											}
-										} else {
-											?>
-											<div class="carousel-item active">
-												<div style="text-align:center; padding:60px 20px; background:#f5f5f5; color:#666;">
-													<i class="fa fa-image" style="font-size:48px; margin-bottom:15px;"></i>
-													<h4>No Gallery Images</h4>
-													<p>Gallery images will appear here once uploaded.</p>
-												</div>
-											</div>
-										<?php } ?>
-									</div>
-									<!-- Left and right controls -->
-									<a class="carousel-control-prev" href="#demo" data-slide="prev"> <span class="carousel-control-prev-icon"></span>
+							<div class="p411-gallery">
+								<?php foreach ($ld_gallery as $image): ?>
+									<a href="<?= e_url(base_url($image)) ?>" target="_blank" rel="noopener">
+										<img src="<?= e_attr(base_url($image)) ?>" alt="<?= e_attr($ld_name) ?>" loading="lazy" decoding="async">
 									</a>
-									<a class="carousel-control-next" href="#demo" data-slide="next"> <span class="carousel-control-next-icon"></span>
-									</a>
-								</div>
+								<?php endforeach; ?>
 							</div>
 						</div>
-						<!--END LISTING DETAILS: LEFT PART 3-->
-					<?php } ?>
+					<?php endif; ?>
 
-					<!--LISTING DETAILS: VIDEO GALLERY SECTION-->
-					<?php if (!empty($listing->listing_video)) {
-						// DEBUG: Show video data
-						if (isset($_GET['debug'])) {
-							echo "<!-- VIDEO DEBUG INFO:";
-							echo "\nListing Video: " . ($listing->listing_video ?? 'NULL');
-							$debug_videos = array_filter(array_map('trim', explode(',', $listing->listing_video)));
-							echo "\nVideo URLs Count: " . count($debug_videos);
-							foreach ($debug_videos as $idx => $video) {
-								echo "\nVideo " . ($idx + 1) . ": " . $video;
-							}
-							echo "-->";
-						}
-					?>
-						<div id="ld-video" class="pglist-bg pglist-p-com">
-							<div class="pglist-p-com-ti">
-								<h3><span>Video</span> Gallery</h3>
+					<!-- VIDEOS -->
+					<?php if ($ld_videos): ?>
+						<div class="p411-card" id="videos">
+							<div class="p411-card__head">
+								<h2>Videos</h2>
 							</div>
-							<div class="list-pg-inn-sp">
-								<div id="videoDemo" class="carousel slide" data-ride="carousel">
-									<!-- Video indicators -->
-									<ul class="carousel-indicators">
-										<?php
-										// Parse video URLs - could be comma separated for multiple videos
-										$video_urls = array_filter(array_map('trim', explode(',', $listing->listing_video)));
-										for ($i = 0; $i < count($video_urls); $i++) {
-										?>
-											<li data-target="#videoDemo" data-slide-to="<?= $i ?>" class="<?= $i == 0 ? 'active' : '' ?>"></li>
-										<?php } ?>
-									</ul>
-									<!-- The video slideshow -->
-									<div class="carousel-inner">
-										<?php
-										if (!empty($video_urls)) {
-											foreach ($video_urls as $index => $video_url) {
-												// Convert YouTube URL to embed format
-												$embed_url = $video_url;
-												if (strpos($video_url, 'youtube.com/watch?v=') !== false) {
-													$video_id = str_replace('https://www.youtube.com/watch?v=', '', $video_url);
-													// Remove any additional parameters
-													$video_id = explode('&', $video_id)[0];
-													$embed_url = "https://www.youtube.com/embed/" . $video_id;
-												} elseif (strpos($video_url, 'youtu.be/') !== false) {
-													$video_id = str_replace('https://youtu.be/', '', $video_url);
-													$embed_url = "https://www.youtube.com/embed/" . $video_id;
-												}
-										?>
-												<div class="carousel-item <?= $index == 0 ? 'active' : '' ?>">
-													<div class="video-container" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
-														<iframe
-															src="<?= $embed_url ?>"
-															style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
-															frameborder="0"
-															allowfullscreen>
-														</iframe>
-													</div>
-												</div>
-										<?php
-											}
-										}
-										?>
+							<div class="p411-video">
+								<?php foreach ($ld_videos as $embed): ?>
+									<div class="p411-embed">
+										<iframe src="<?= e_url($embed) ?>" title="<?= e_attr($ld_name) ?> video" allowfullscreen loading="lazy"></iframe>
 									</div>
-									<!-- Left and right controls for video -->
-									<?php if (count($video_urls) > 1) { ?>
-										<a class="carousel-control-prev" href="#videoDemo" data-slide="prev">
-											<span class="carousel-control-prev-icon"></span>
-										</a>
-										<a class="carousel-control-next" href="#videoDemo" data-slide="next">
-											<span class="carousel-control-next-icon"></span>
-										</a>
-									<?php } ?>
-								</div>
+								<?php endforeach; ?>
 							</div>
 						</div>
-						<!--END VIDEO GALLERY SECTION-->
-					<?php } ?>
+					<?php endif; ?>
 
-
-					<!--360 DEGREE VIEW-->
-					<?php if (!empty($listing->virtual_tour_link)) { ?>
-						<div class="pglist-bg pglist-p-com" id="ld-360">
-							<div class="pglist-p-com-ti">
-								<h3><span>360 </span> Degree View</h3>
+					<!-- 360 TOUR -->
+					<?php if (!empty($listing->virtual_tour_link)): ?>
+						<div class="p411-card" id="tour">
+							<div class="p411-card__head">
+								<h2>360&deg; tour</h2>
 							</div>
-							<div class="list-pg-inn-sp list-360">
-								<iframe src="<?= e_url($listing->virtual_tour_link); ?>" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
+							<div class="p411-embed">
+								<iframe src="<?= e_url($listing->virtual_tour_link) ?>" title="360 degree tour" allowfullscreen loading="lazy"></iframe>
 							</div>
 						</div>
-					<?php } ?>
-					<!--END 360 DEGREE MAP: LEFT PART 8-->
-					<!--LISTING DETAILS: LEFT PART 6-->
-					<!--LISTING DETAILS: LEFT PART 6-->
-					<div class="pglist-bg pglist-p-com" style="" id="ld-rew">
-						<div class="pglist-p-com-ti">
-							<h3><span>Write Your</span> Reviews</h3>
-						</div>
-						<div class="list-pg-inn-sp">
-							<div class="list-pg-write-rev">
-								<?php if ($logged_id == NULL): ?>
-									<!-- Show login required message if user not logged in -->
-									<div style="text-align:center;color: #856404;padding: 15px;background: #fff3cd;border: 1px solid #ffeaa7;border-radius: 5px;margin: 10px 0;">
-										<p><strong>Please login to write a review.</strong></p>
-										<a href="<?= base_url('user/login'); ?>" class="btn btn-primary">Login Now</a>
-									</div>
-								<?php else: ?>
-									<!-- Show review form if user is logged in -->
-									<form class="col" name="review_form" id="review_form" method="post" action="<?= base_url('user/submit_review'); ?>">
-										<input type="hidden" name="listing_id" value="<?= $listing->listing_id; ?>">
-										<input type="hidden" name="listing_user_id" value="<?= $listing->user_id; ?>">
-										<input name="review_user_id" value="<?= $logged_id; ?>" type="hidden">
+					<?php endif; ?>
 
-										<?php if ($this->session->flashdata('review_success')): ?>
-											<div style="text-align:center;color: green;padding: 10px;background: #d4edda;border: 1px solid #c3e6cb;border-radius: 5px;margin: 10px 0;">
-												<?= e($this->session->flashdata('review_success')); ?>
-											</div>
-										<?php endif; ?>
-
-										<p>Writing great reviews may help others discover the places that are just apt for them. Here are a few tips to write a good review:</p>
-										<div class="row">
-											<div>
-												<fieldset class="rating">
-													<input type="radio" id="star5" name="price_rating" class="price_rating" value="5" />
-													<label class="full" for="star5" title="Awesome"></label>
-													<input type="radio" id="star4" name="price_rating" class="price_rating" value="4" />
-													<label class="full" for="star4" title="Excellent"></label>
-													<input type="radio" checked="checked" id="star3" class="price_rating" name="price_rating" value="3" />
-													<label class="full" for="star3" title="Good"></label>
-													<input type="radio" id="star2" name="price_rating" class="price_rating" value="2" />
-													<label class="full" for="star2" title="Average"></label>
-													<input type="radio" id="star1" name="price_rating" class="price_rating" value="1" />
-													<label class="full" for="star1" title="Poor"></label>
-												</fieldset>
-												<div id="star-value">3 Star</div>
-											</div>
-										</div>
-										<div class="row review_fields">
-											<div class="input-field col s6">
-												<?php if ($logged_id != NULL) { ?>
-													<input id="review_name" readonly name="review_name" type="text" value="<?= isset($user->name) ? $user->name : ''; ?>">
-												<?php } else { ?>
-													<input id="review_name" name="review_name" type="text" value="" placeholder="Enter name">
-												<?php } ?>
-											</div>
-											<div class="input-field col s6">
-												<?php if ($logged_id != NULL) { ?>
-													<input id="review_mobile" readonly name="review_mobile" type="text" onkeypress="return isNumber(event)" placeholder="Mobile number" value="<?= isset($user->mobile_number) ? $user->mobile_number : ''; ?>">
-												<?php } else { ?>
-													<input id="review_mobile" name="review_mobile" type="text" onkeypress="return isNumber(event)" placeholder="Mobile number" value="">
-												<?php } ?>
-											</div>
-										</div>
-										<div class="row">
-											<div class="input-field col s6">
-												<?php if ($logged_id != NULL) { ?>
-													<input id="review_email" readonly name="review_email" type="email" placeholder="Email Id" value="<?= isset($user->email_id) ? $user->email_id : ''; ?>">
-												<?php } else { ?>
-													<input id="review_email" name="review_email" type="email" placeholder="Email Id" value="">
-												<?php } ?>
-											</div>
-											<div class="input-field col s6">
-												<input id="review_city" name="review_city" placeholder="City" type="text">
-											</div>
-										</div>
-										<div class="row">
-											<div class="input-field col s12">
-												<textarea id="review_message" placeholder="Write review" name="review_message"></textarea>
-											</div>
-										</div>
-										<div class="row">
-											<div class="input-field col s12">
-												<input type="submit" id="review_submit" name="review_submit" value="Submit Review">
-											</div>
-										</div>
-									</form>
-								<?php endif; ?>
-							</div>
-						</div>
+					<!-- =============================================== IN-CONTENT AD -->
+					<div class="p411-adrow" style="margin:0;">
+						<?php $slot = $ad_slots['inline'];
+						$slot_alias = 'listing-inline';
+						include APPPATH . 'views/partials/ad_slot.php'; ?>
 					</div>
-					<!--END LISTING DETAILS: LEFT PART 6-->
-					<!--END LISTING DETAILS: LEFT PART 6-->
-					<!--LISTING DETAILS: LEFT PART 5-->
-					<!--LISTING DETAILS: LEFT PART 5-->
-					<div class="pglist-p3 pglist-bg pglist-p-com" id="ld-rev">
-						<div class="pglist-p-com-ti">
-							<h3><span>User</span> Reviews</h3>
+
+					<!-- REVIEWS -->
+					<div class="p411-card" id="reviews">
+						<div class="p411-card__head">
+							<h2>Reviews</h2>
+							<a class="p411-more" href="#write-review">Write a review &rarr;</a>
 						</div>
-						<div class="list-pg-inn-sp">
-							<div class="lp-ur-all">
-								<div class="lp-ur-all-left">
-									<?php
-									// Use the same calculated total_reviews from above
-									$total_reviews = $actual_total_reviews;
 
-									$rating_labels = [5 => 'Excellent', 4 => 'Very Good', 3 => 'Good', 2 => 'Fair', 1 => 'Poor'];
-									$rating_classes = [5 => '', 4 => 'lp-ur-all-left-Good', 3 => 'lp-ur-all-left-satis', 2 => 'lp-ur-all-left-below', 1 => 'lp-ur-all-left-poor'];
-
-									foreach ($rating_labels as $rating => $label) {
-										$count = isset($review_stats[$rating]) ? $review_stats[$rating] : 0;
-										$percentage = $total_reviews > 0 ? ($count / $total_reviews) * 100 : 0;
-									?>
-										<div class="lp-ur-all-left-1">
-											<div class="lp-ur-all-left-11"><?= $label ?> (<?= $count ?>)</div>
-											<div class="lp-ur-all-left-12">
-												<div class="lp-ur-all-left-13 <?= $rating_classes[$rating] ?>" style="width: <?= $percentage ?>%;"></div>
-											</div>
-										</div>
-									<?php } ?>
+						<?php if ($review_total > 0): ?>
+							<div class="p411-revsum">
+								<div class="p411-revsum__score">
+									<b><?= number_format($review_average, 1) ?></b>
+									<div class="p411-stars"><?= $ld_stars($review_average) ?></div>
+									<span><?= number_format($review_total) ?> review<?= $review_total === 1 ? '' : 's' ?></span>
 								</div>
-								<div class="lp-ur-all-right">
-									<h5>Overall Ratings</h5>
-									<p id="overall-rating-display">
-										<label class="rat">
-											<?php
-											$avg_rating_display = (int)$actual_average_rating;
-											for ($i = 1; $i <= 5; $i++) {
-												if ($i <= $avg_rating_display) {
-													echo '<i class="material-icons">star</i>';
-												} else {
-													echo '<i class="material-icons">star_border</i>';
-												}
-											}
-											?>
-										</label> <span>based on <?= $total_reviews ?> review<?= $total_reviews != 1 ? 's' : '' ?></span>
-									</p>
+								<div>
+									<?php
+									$labels = array(5 => 'Excellent', 4 => 'Very good', 3 => 'Good', 2 => 'Fair', 1 => 'Poor');
+									foreach ($labels as $stars => $label):
+										$count = isset($review_stats[$stars]) ? (int) $review_stats[$stars] : 0;
+										$pct   = $review_total > 0 ? round(($count / $review_total) * 100) : 0;
+									?>
+										<div class="p411-revbar">
+											<span class="p411-revbar__label"><?= $label ?></span>
+											<span class="p411-revbar__track"><span class="p411-revbar__fill" style="width:<?= (int) $pct ?>%;"></span></span>
+											<span class="p411-revbar__n"><?= $count ?></span>
+										</div>
+									<?php endforeach; ?>
 								</div>
 							</div>
-							<div class="lp-ur-all-rat" id="reviews-list">
-								<h5>Reviews (<?= $total_reviews ?>)</h5>
-								<ul>
-									<?php if (!empty($listing_reviews)) { ?>
-										<?php foreach ($listing_reviews as $review) { ?>
-											<li>
-												<div class="lr-user-wr-img">
-													<img src="<?= !empty($review->profile_image) ? base_url($review->profile_image) : base_url('assets/images/pearland-logo.png'); ?>" alt="<?= e($review->reviewer_name); ?>">
-												</div>
-												<div class="lr-user-wr-con">
-													<h6><?= e($review->reviewer_name); ?></h6>
-													<label class="rat">
-														<?php for ($i = 1; $i <= 5; $i++) { ?>
-															<?php if ($i <= $review->rating) { ?>
-																<i class="material-icons">star</i>
-															<?php } else { ?>
-																<i class="material-icons">star_border</i>
-															<?php } ?>
-														<?php } ?>
-													</label>
-													<span class="lr-revi-date"><?= date('d M Y', strtotime($review->created_at)); ?></span>
-													<?php if (!empty($review->review_message)) { ?>
-														<p><?= nl2br(htmlspecialchars($review->review_message)); ?></p>
-													<?php } ?>
-													<?php if (!empty($review->reviewer_city)) { ?>
-														<small style="color: #666; font-style: italic;">From: <?= e($review->reviewer_city); ?></small>
-													<?php } ?>
-												</div>
-											</li>
-										<?php } ?>
-									<?php } else { ?>
-										<li id="no-reviews">
-											<p style="text-align: center; color: #666; padding: 20px;">No reviews yet. Be the first to review this listing!</p>
+
+							<?php if ($listing_reviews): ?>
+								<ul class="p411-revlist" style="margin-top:20px;">
+									<?php foreach ($listing_reviews as $review): ?>
+										<li>
+											<div class="p411-revlist__ava">
+												<img src="<?= e_attr(!empty($review->profile_image) ? base_url($review->profile_image) : base_url('assets/images/fallback_profile.svg')) ?>"
+													 alt="" loading="lazy" decoding="async">
+											</div>
+											<div class="p411-revlist__body">
+												<h4><?= e($review->reviewer_name ?? 'Visitor') ?></h4>
+												<div class="p411-stars" style="margin:3px 0;"><?= $ld_stars($review->rating ?? 0) ?></div>
+												<span class="p411-revlist__when">
+													<?= !empty($review->created_at) ? e(date('j M Y', strtotime((string) $review->created_at))) : '' ?>
+													<?= !empty($review->reviewer_city) ? ' &middot; ' . e($review->reviewer_city) : '' ?>
+												</span>
+												<?php if (!empty($review->review_message)): ?>
+													<p><?= nl2br(e($review->review_message)) ?></p>
+												<?php endif; ?>
+											</div>
 										</li>
-									<?php } ?>
+									<?php endforeach; ?>
 								</ul>
+							<?php endif; ?>
+						<?php else: ?>
+							<div class="p411-empty p411-empty--inline">
+								<h3>No reviews yet</h3>
+								<p>Nobody has reviewed <?= e($ld_name) ?> on Pearland411. If you&rsquo;ve used them, your review helps the next person decide.</p>
+								<div class="p411-empty__actions">
+									<a class="p411-btn p411-btn--sm" href="#write-review">Write the first review</a>
+								</div>
 							</div>
+						<?php endif; ?>
+					</div>
+
+					<!-- WRITE A REVIEW -->
+					<div class="p411-card p411-form" id="write-review">
+						<div class="p411-card__head">
+							<h2>Write a review</h2>
 						</div>
-					</div>
-					<!--END LISTING DETAILS: LEFT PART 5-->
-					<?php $slot = 'listing-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
-					<?php include APPPATH . 'views/partials/web_dev_cta.php'; ?>
-					<!--RELATED PREMIUM LISTINGS-->
-					<div class="list-det-rel-pre">
-						<h2>Related listings:</h2>
-						<ul>
-							<?php if (!empty($RelatedListing)) { ?>
-								<?php foreach ($RelatedListing as $RelatedList) { ?>
-									<li>
-										<div class="land-pack-grid">
-											<div class="land-pack-grid-img">
-												<img src="<?= (empty($RelatedList->listing_image)) ? base_url('assets/images/pearland-logo.png') : base_url($RelatedList->listing_image); ?>" alt="">
-											</div>
-											<div class="land-pack-grid-text">
-												<h4><?= $RelatedList->listing_name ?></h4>
-												<div class="list-rat-all"> <b></b>
-												</div>
-											</div>
-											<a target="_blank" href="<?= base_url('user/listing-details/' . $RelatedList->listing_slug); ?>" class="land-pack-grid-btn"></a>
-										</div>
-									</li>
-								<?php } ?>
-							<?php } else { ?>
-								<li>
-									<div class="land-pack-grid-text">
-										<h4>No related listings found</h4>
+
+						<?php $__rev_ok = $this->session->flashdata('review_success'); ?>
+						<?php if (!empty($__rev_ok)): ?>
+							<div class="p411-note p411-note--ok"><?= e($__rev_ok) ?></div>
+						<?php endif; ?>
+
+						<?php if (empty($logged_id)): ?>
+							<div class="p411-empty p411-empty--inline">
+								<h3>Sign in to review</h3>
+								<p>Reviews are tied to an account so businesses can trust them. It takes a minute to register.</p>
+								<div class="p411-empty__actions">
+									<a class="p411-btn p411-btn--sm" href="<?= e_url(base_url('login')) ?>">Log in</a>
+									<a class="p411-btn p411-btn--sm p411-btn--ghost" href="<?= e_url(base_url('register')) ?>">Create an account</a>
+								</div>
+							</div>
+						<?php else: ?>
+							<p class="p411-form__hint">Say what you had done, how it went and whether you'd go back. Keep it factual &mdash; it's more useful that way.</p>
+
+							<form name="review_form" id="review_form" method="post" action="<?= base_url('user/submit_review') ?>">
+								<input type="hidden" name="listing_id" value="<?= (int) ($listing->listing_id ?? 0) ?>">
+								<input type="hidden" name="listing_user_id" value="<?= (int) ($listing->user_id ?? 0) ?>">
+								<input type="hidden" name="review_user_id" value="<?= (int) $logged_id ?>">
+
+								<div style="margin-bottom:14px;">
+									<fieldset class="p411-rating">
+										<?php foreach (array(5 => 'Awesome', 4 => 'Excellent', 3 => 'Good', 2 => 'Average', 1 => 'Poor') as $stars => $word): ?>
+											<input type="radio" id="p411star<?= $stars ?>" name="price_rating" class="price_rating"
+												   value="<?= $stars ?>" <?= $stars === 3 ? 'checked' : '' ?>>
+											<label for="p411star<?= $stars ?>" title="<?= $stars ?> &ndash; <?= $word ?>"><span class="sr-only"><?= $stars ?> stars</span></label>
+										<?php endforeach; ?>
+									</fieldset>
+									<div class="p411-rating__value" id="p411-star-value">3 stars &mdash; Good</div>
+								</div>
+
+								<div class="p411-grid2">
+									<div class="form-group">
+										<label class="sr-only" for="review_name">Your name</label>
+										<input id="review_name" name="review_name" type="text" class="form-control" required
+											   placeholder="Your name" value="<?= e_attr($user->name ?? '') ?>" <?= !empty($user->name) ? 'readonly' : '' ?>>
 									</div>
-								</li>
-							<?php } ?>
-						</ul>
-					</div>
-					<!--RELATED PREMIUM LISTINGS-->
-				</div>
-				<div class="list-pg-rt">
-					<!--LISTING DETAILS: LEFT PART 9-->
-					<div class="list-rhs-form pglist-bg pglist-p-com">
-						<div class="quote-pop">
-							<h3><span>Get</span> Quote</h3>
-
-							<?php if ($this->session->flashdata('message')): ?>
-								<div class="alert alert-success" style="background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin: 10px 0;">
-									<?= e($this->session->flashdata('message')); ?>
-								</div>
-							<?php endif; ?>
-
-							<?php if ($this->session->flashdata('error_msg')): ?>
-								<div class="alert alert-danger" style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin: 10px 0;">
-									<?= e($this->session->flashdata('error_msg')); ?>
-								</div>
-							<?php endif; ?>
-
-							<div id="detail_enq_success" class="log" style="display: none;">
-								<p>Your Enquiry Is Submitted Successfully</p>
-							</div>
-							<div id="detail_enq_same" class="log" style="display: none;">
-								<p>You cannot make enquiry on your own listing</p>
-							</div>
-							<div id="detail_enq_fail" class="log" style="display: none;">
-								<p>Something Went Wrong!!!</p>
-							</div>
-							<form method="post" action="<?= base_url('user/add-enquiry/listing_details/' . rawurlencode((string) $listing->listing_slug)); ?>" name="detail_enquiry_form" id="detail_enquiry_form">
-								<!-- Hidden fields for enquiry data -->
-								<input type="hidden" name="listing_id" value="<?= (int) $listing->listing_id; ?>">
-								<input type="hidden" name="event_id" value="">
-								<input type="hidden" name="blog_id" value="">
-								<input type="hidden" name="product_id" value="">
-								<input type="hidden" name="receiving_user_id" value="<?= (int) $listing->user_id; ?>">
-								<input type="hidden" name="enquiry_sender_id" value="<?= (int) (isset($logged_id) ? $logged_id : 0); ?>">
-								<input type="hidden" name="enquiry_source" value="<?= e_attr($listing->listing_name); ?>">
-								<input type="hidden" name="enquiry_type" value="listing">
-								<?php $disabled = empty($logged_id) ? 'disabled' : ''; ?>
-								<div class="form-group ic-user">
-									<input type="text" name="enquiry_name" value="<?= e_attr(isset($user->name) ? $user->name : ''); ?>" required="required" class="form-control" placeholder="Enter name*" <?= $disabled; ?>>
-								</div>
-								<div class="form-group ic-eml">
-									<input type="email" class="form-control" placeholder="Enter email*" required="required" value="<?= isset($user->email_id) ? $user->email_id : ''; ?>" name="enquiry_email" pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$" title="Invalid email address" <?= $disabled; ?>>
-								</div>
-								<div class="form-group ic-pho">
-									<input type="text" class="form-control" value="<?= isset($user->mobile_number) ? $user->mobile_number : ''; ?>" name="enquiry_mobile" placeholder="Enter mobile number *" pattern="[0-9]{10,15}" title="Please enter a valid phone number" required <?= $disabled; ?>>
+									<div class="form-group">
+										<label class="sr-only" for="review_mobile">Mobile number</label>
+										<input id="review_mobile" name="review_mobile" type="tel" class="form-control"
+											   placeholder="Mobile number" value="<?= e_attr($user->mobile_number ?? '') ?>" <?= !empty($user->mobile_number) ? 'readonly' : '' ?>>
+									</div>
+									<div class="form-group">
+										<label class="sr-only" for="review_email">Email</label>
+										<input id="review_email" name="review_email" type="email" class="form-control" required
+											   placeholder="Email address" value="<?= e_attr($user->email_id ?? '') ?>" <?= !empty($user->email_id) ? 'readonly' : '' ?>>
+									</div>
+									<div class="form-group">
+										<label class="sr-only" for="review_city">City</label>
+										<input id="review_city" name="review_city" type="text" class="form-control" placeholder="City">
+									</div>
 								</div>
 								<div class="form-group">
-									<textarea class="form-control" rows="3" name="enquiry_message" placeholder="Enter your query or message" <?= $disabled; ?>></textarea>
+									<label class="sr-only" for="review_message">Your review</label>
+									<textarea id="review_message" name="review_message" class="form-control" rows="4" placeholder="Write your review"></textarea>
 								</div>
-								<?php if (!empty($logged_id)): ?>
-									<button type="submit" id="detail_enquiry_submit" name="enquiry_submit" class="btn btn-primary">Submit</button>
-								<?php else: ?>
-									<a href="<?= base_url('/login'); ?>"><button type="button" class="btn btn-primary" style="background:#f44336; border:none;">Please Log In First</button></a>
-								<?php endif; ?>
+								<button type="submit" id="review_submit" name="review_submit" class="p411-btn">Submit review</button>
 							</form>
-						</div>
+						<?php endif; ?>
 					</div>
-					<!--END LISTING DETAILS: LEFT PART 9-->
-					<!--LISTING DETAILS: LEFT PART 7-->
-					<!-- <div class="lide-guar pglist-bg pglist-p-com">
-						<div class="pglist-p-com-ti pglist-p-com-ti-right">
-							<h3><span>Claim</span> Listing</h3>
-						</div>
-						<div class="list-pg-inn-sp">
-							<div class="list-pg-guar">
-								<ul>
-									<li>
-										<div class="list-pg-guar-img">
-											<img src="<?= base_url() ?>assets/images/icon/g2.png" alt="" />
-										</div>
-										<h4>Claim this business</h4>
-										<span data-toggle="modal" data-target="#claim" class="clim-edit">Suggest an edit</span>
-									</li>
-								</ul>
-							</div>
-						</div>
-					</div> -->
-					<!--END LISTING DETAILS: LEFT PART 7-->
-					<!--LISTING DETAILS: COMPANY BADGE-->
-					<div class="ld-rhs-pro pglist-bg pglist-p-com">
-						<div class="lis-comp-badg">
-							<div class="s1">
-								<div>
-									<span class="by">Business profile</span>
-									<img class="proi"
-										 src="<?= !empty($listing->listing_image) ? base_url($listing->listing_image) : base_url('assets/images/fallback_profile.svg') ?>"
-										 alt="<?= e_attr($listing->listing_name ?? '') ?>"
-										 loading="lazy" decoding="async">
-									<h4><?= e($listing->listing_name ?? '') ?></h4>
-									<?php if (!empty($listing->listing_address)): ?>
-										<p>Address: <?= e($listing->listing_address) ?></p>
-									<?php endif; ?>
 
-									<?php
-									$__socials = isset($owner_socials) ? $owner_socials : array();
-									$__has_socials = !empty(array_filter($__socials));
-									?>
-									<?php if ($__has_socials): ?>
-										<ul>
-											<?php if (!empty($__socials['facebook'])): ?>
-												<li><a href="<?= e_url($__socials['facebook']) ?>" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
-													<img src="<?= base_url('assets/images/social/3.png') ?>" alt="Facebook" loading="lazy">
-												</a></li>
+					<!-- RELATED -->
+					<div class="p411-card" id="related">
+						<div class="p411-card__head">
+							<h2>Similar businesses</h2>
+							<?php if (!empty($listing_category->category_slug)): ?>
+								<a class="p411-more" href="<?= e_url(base_url('all_listing/' . rawurlencode((string) $listing_category->category_slug))) ?>">See all &rarr;</a>
+							<?php endif; ?>
+						</div>
+
+						<?php if ($RelatedListing): ?>
+							<div class="p411-rel">
+								<?php foreach ($RelatedListing as $rel): ?>
+									<?php $rel_url = base_url('listing-details/' . rawurlencode((string) ($rel->listing_slug ?? ''))); ?>
+									<a class="p411-rel__item" href="<?= e_url($rel_url) ?>">
+										<div class="p411-rel__thumb">
+											<?php if (!empty($rel->listing_image)): ?>
+												<?= responsive_img($rel->listing_image, (string) ($rel->listing_name ?? '')) ?>
+											<?php else: ?>
+												<img src="<?= base_url('assets/images/placeholder-listing.svg') ?>" alt="" loading="lazy" decoding="async">
 											<?php endif; ?>
-											<?php if (!empty($__socials['twitter'])): ?>
-												<li><a href="<?= e_url($__socials['twitter']) ?>" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
-													<img src="<?= base_url('assets/images/social/2.png') ?>" alt="Twitter" loading="lazy">
-												</a></li>
-											<?php endif; ?>
-											<?php if (!empty($__socials['youtube'])): ?>
-												<li><a href="<?= e_url($__socials['youtube']) ?>" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
-													<img src="<?= base_url('assets/images/social/5.png') ?>" alt="YouTube" loading="lazy">
-												</a></li>
-											<?php endif; ?>
-											<?php if (!empty($__socials['website'])): ?>
-												<li><a href="<?= e_url($__socials['website']) ?>" target="_blank" rel="noopener noreferrer" aria-label="Website">
-													<img src="<?= base_url('assets/images/social/6.png') ?>" alt="Website" loading="lazy">
-												</a></li>
-											<?php endif; ?>
-										</ul>
-									<?php endif; ?>
+										</div>
+										<div class="p411-rel__body">
+											<b><?= e($rel->listing_name ?? '') ?></b>
+											<span><?= e(!empty($rel->category_name) ? $rel->category_name : 'Pearland area') ?></span>
+										</div>
+									</a>
+								<?php endforeach; ?>
+							</div>
+						<?php else: ?>
+							<div class="p411-empty p411-empty--inline">
+								<h3>Nothing similar listed yet</h3>
+								<p>
+									<?= !empty($listing_category->category_name)
+										? 'This is currently the only published business in ' . e($listing_category->category_name) . '.'
+										: 'This listing isn&rsquo;t assigned to a category yet, so we can&rsquo;t suggest similar businesses.' ?>
+								</p>
+								<div class="p411-empty__actions">
+									<a class="p411-btn p411-btn--sm p411-btn--ghost" href="<?= e_url(base_url('all_listing')) ?>">Browse the directory</a>
 								</div>
 							</div>
-						</div>
+						<?php endif; ?>
 					</div>
-					<!--END LISTING DETAILS: COMPANY BADGE-->
-					<!--LISTING DETAILS: LOCATION MAP-->
-					<div class="pglist-p3 pglist-bg pglist-p-com">
-						<div class="pglist-p-com-ti pglist-p-com-ti-right">
-							<h3><span>Our</span> Location</h3>
-						</div>
-						<div class="list-pg-inn-sp">
-							<div class="list-pg-map">
-								<?php if (!empty($listing->google_map)) { ?>
-									<!-- Render map from google_map field -->
-									<iframe src="<?= e_url($listing->google_map); ?>" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
-
-									<!-- Additional map actions -->
-									<div class="map-actions" style="margin-top: 15px; text-align: center;">
-										<?php if (!empty($listing->listing_lat) && !empty($listing->listing_lng)) { ?>
-											<a href="https://www.google.com/maps?q=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>" target="_blank" class="btn btn-primary btn-sm" style="margin-right: 10px; margin-bottom: 15px; width: 100%;">
-												<i class="fa fa-external-link"></i> Open in Google Maps
-											</a>
-											<a href="https://www.google.com/maps/dir/?api=1&destination=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>" target="_blank" class="btn btn-success btn-sm" style="width: 100%;">
-												<i class="fa fa-location-arrow"></i> Get Directions
-											</a>
-										<?php } ?>
-									</div>
-								<?php } elseif (!empty($listing->listing_lat) && !empty($listing->listing_lng)) { ?>
-									<!-- Fallback: Generate map URL from lat/lng if google_map field is empty -->
-									<iframe src="https://maps.google.com/maps?q=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>&output=embed" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
-								<?php } else { ?>
-									<!-- Default map if no location data -->
-									<iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d100940.17087601054!2d-122.50781157529548!3d37.75767917396271!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x80859a6d00690021%3A0x4a501367f076adff!2sSan%20Francisco%2C%20CA%2C%20USA!5e0!3m2!1sen!2sin!4v1615094456570!5m2!1sen!2sin" width="100%" height="450" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
-									<p style="text-align: center; margin-top: 10px; color: #666; font-size: 14px;">
-										<i class="fa fa-info-circle"></i> Default location shown. Please contact business for exact location.
-									</p>
-								<?php } ?>
-							</div>
-						</div>
-					</div>
-					<!--LISTING DETAILS: LEFT PART 9-->
-					<div class="pglist-p3 pglist-bg pglist-p-com">
-						<div class="pglist-p-com-ti pglist-p-com-ti-right">
-							<h3><span>Company</span> Info</h3>
-						</div>
-						<div class="list-pg-inn-sp">
-							<div class="list-pg-oth-info">
-								<ul>
-									<?php if (!empty($listing->listing_mobile)) { ?>
-										<li>Contact number <span><?= e($listing->listing_mobile); ?></span></li>
-									<?php } ?>
-									<?php if (!empty($listing->listing_mobile)) { ?>
-										<li>WhatsApp <span><?= e($listing->listing_mobile); ?></span></li>
-									<?php } ?>
-									<?php if (!empty($listing->listing_email)) { ?>
-										<li>Email id <span><?= e($listing->listing_email); ?></span></li>
-									<?php } ?>
-									<?php if (!empty($listing->contact_person)) { ?>
-										<li>Contact name <span><?= e($listing->contact_person); ?></span></li>
-									<?php } ?>
-									<?php if (!empty($listing->listing_website)) { ?>
-										<li>Website <span><?= e($listing->listing_website); ?></span></li>
-									<?php } ?>
-									<?php if (!empty($listing->business_hours)) { ?>
-										<li>Business Hours <span><?= $listing->business_hours; ?></span></li>
-									<?php } ?>
-									<?php if (!empty($listing->year_established)) { ?>
-										<li>Established <span><?= $listing->year_established; ?></span></li>
-									<?php } ?>
-								</ul>
-							</div>
-						</div>
-					</div>
-					<!--END LISTING DETAILS: LEFT PART 9-->
-
-
-					<?php $slot = 'listing-inline'; include APPPATH . 'views/partials/ad_slot.php'; ?>
-					<!--ADS-->
 				</div>
 			</div>
-		</div>
-	</div>
-</section>
 
-<!-- Social Sharing JavaScript -->
-<script>
-	// Copy to clipboard function
-	function copyToClipboard(text) {
-		// Add copying animation
-		var copyBtn = document.querySelector('.so-link');
-		if (copyBtn) {
-			copyBtn.classList.add('copying');
-			setTimeout(function() {
-				copyBtn.classList.remove('copying');
-			}, 600);
-		}
-
-		if (navigator.clipboard && window.isSecureContext) {
-			// Use the Clipboard API if available
-			navigator.clipboard.writeText(text).then(function() {
-				showCopyMessage('Link copied to clipboard!');
-			}, function(err) {
-				console.error('Could not copy text: ', err);
-				fallbackCopyTextToClipboard(text);
-			});
-		} else {
-			// Fallback for older browsers
-			fallbackCopyTextToClipboard(text);
-		}
-	} // Fallback copy function for older browsers
-	function fallbackCopyTextToClipboard(text) {
-		var textArea = document.createElement("textarea");
-		textArea.value = text;
-
-		// Avoid scrolling to bottom
-		textArea.style.top = "0";
-		textArea.style.left = "0";
-		textArea.style.position = "fixed";
-
-		document.body.appendChild(textArea);
-		textArea.focus();
-		textArea.select();
-
-		try {
-			var successful = document.execCommand('copy');
-			if (successful) {
-				showCopyMessage('Link copied to clipboard!');
-			} else {
-				showCopyMessage('Failed to copy link');
-			}
-		} catch (err) {
-			console.error('Fallback: Oops, unable to copy', err);
-			showCopyMessage('Failed to copy link');
-		}
-
-		document.body.removeChild(textArea);
-	}
-
-	// Show copy success message
-	function showCopyMessage(message) {
-		// Create toast notification
-		var toast = document.createElement('div');
-		toast.innerHTML = `
-		<div style="display: flex; align-items: center; gap: 8px;">
-			<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-				<path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fill="currentColor"/>
-			</svg>
-			<span>${message}</span>
-		</div>
-	`;
-		toast.style.cssText = `
-		position: fixed;
-		top: 20px;
-		right: 20px;
-		background: linear-gradient(135deg, #28a745, #20c997);
-		color: white;
-		padding: 16px 20px;
-		border-radius: 8px;
-		z-index: 10000;
-		font-size: 14px;
-		font-weight: 500;
-		box-shadow: 0 8px 32px rgba(40, 167, 69, 0.3);
-		transform: translateX(100%);
-		transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-		backdrop-filter: blur(10px);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-	`;
-
-		document.body.appendChild(toast);
-
-		// Animate in
-		setTimeout(function() {
-			toast.style.transform = 'translateX(0)';
-		}, 10);
-
-		// Remove toast after 3 seconds
-		setTimeout(function() {
-			toast.style.transform = 'translateX(100%)';
-			toast.style.opacity = '0';
-			setTimeout(function() {
-				if (toast.parentNode) {
-					document.body.removeChild(toast);
-				}
-			}, 400);
-		}, 3000);
-	} // Share tracking (optional - for analytics)
-	function trackShare(platform) {
-		// You can add Google Analytics or other tracking here
-		console.log('Shared on:', platform);
-
-		// Example: Google Analytics event tracking
-		// if (typeof gtag !== 'undefined') {
-		//     gtag('event', 'share', {
-		//         method: platform,
-		//         content_type: 'listing',
-		//         item_id: '<?= isset($listing->listing_slug) ? $listing->listing_slug : '' ?>'
-		//     });
-		// }
-	}
-
-	// Add click tracking to social media links
-	document.addEventListener('DOMContentLoaded', function() {
-		// Facebook
-		var fbLink = document.querySelector('.so-fb');
-		if (fbLink) {
-			fbLink.addEventListener('click', function() {
-				trackShare('facebook');
-			});
-		}
-
-		// Twitter
-		var twLink = document.querySelector('.so-tw');
-		if (twLink) {
-			twLink.addEventListener('click', function() {
-				trackShare('twitter');
-			});
-		}
-
-		// WhatsApp
-		var waLink = document.querySelector('.so-wa');
-		if (waLink) {
-			waLink.addEventListener('click', function() {
-				trackShare('whatsapp');
-			});
-		}
-
-		// LinkedIn
-		var liLink = document.querySelector('.so-li');
-		if (liLink) {
-			liLink.addEventListener('click', function() {
-				trackShare('linkedin');
-			});
-		}
-
-		// Pinterest
-		var piLink = document.querySelector('.so-pi');
-		if (piLink) {
-			piLink.addEventListener('click', function() {
-				trackShare('pinterest');
-			});
-		}
-
-		// Review form functionality
-		initializeReviewForm();
-
-
-	});
-
-	// Initialize review form with dynamic rating and AJAX submission
-	function initializeReviewForm() {
-		// Dynamic star rating
-		var ratingInputs = document.querySelectorAll('input[name="price_rating"]');
-		var starValue = document.getElementById('star-value');
-
-		ratingInputs.forEach(function(input) {
-			input.addEventListener('change', function() {
-				var rating = this.value;
-				var ratingText = '';
-				switch (rating) {
-					case '5':
-						ratingText = '5 Star - Awesome';
-						break;
-					case '4':
-						ratingText = '4 Star - Excellent';
-						break;
-					case '3':
-						ratingText = '3 Star - Good';
-						break;
-					case '2':
-						ratingText = '2 Star - Average';
-						break;
-					case '1':
-						ratingText = '1 Star - Poor';
-						break;
-					default:
-						ratingText = '0 Star - Very Poor';
-						break;
-				}
-				if (starValue) {
-					starValue.textContent = ratingText;
-				}
-			});
-		});
-
-		// Simple form validation before submit
-		var reviewForm = document.getElementById('review_form');
-		if (reviewForm) {
-			reviewForm.addEventListener('submit', function(e) {
-				// Check if user login input exists (means user is logged in)
-				var userIdInput = document.querySelector('input[name="review_user_id"]');
-				if (!userIdInput) {
-					alert('Please login first to submit a review.');
-					window.location.href = '<?= base_url("user/login"); ?>';
-					return false;
-				}
-
-				// Basic validation
-				var rating = document.querySelector('input[name="price_rating"]:checked');
-				var name = document.getElementById('review_name').value.trim();
-				var email = document.getElementById('review_email').value.trim();
-
-				if (!rating) {
-					alert('Please select a rating');
-					return false;
-				}
-
-				if (!name) {
-					alert('Please enter your name');
-					document.getElementById('review_name').focus();
-					return false;
-				}
-
-				if (!email) {
-					alert('Please enter your email');
-					document.getElementById('review_email').focus();
-					return false;
-				}
-
-				// Allow normal form submission
-				return true;
-			});
-		}
-	}
-
-	// Function to update rating display after new review
-	function updateRatingDisplay() {
-		// This would be called after successful review submission
-		// For now, we'll rely on page refresh after form submission
-		// But this function is ready for AJAX implementation
-		console.log('Rating display updated');
-	}
-</script>
-
-
-<!-- Social Sharing Styles -->
-<style>
-	.share-btn {
-		margin: 20px 0;
-	}
-
-	.share-btn ul {
-		list-style: none;
-		padding: 0;
-		margin: 0;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 12px;
-	}
-
-	.share-btn ul li {
-		display: inline-block;
-	}
-
-	.share-btn ul li a {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 44px;
-		height: 44px;
-		border-radius: 50%;
-		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-		text-decoration: none;
-		position: relative;
-		overflow: hidden;
-	}
-
-	/* Default state with brand colors */
-	.share-btn ul li a.so-fb {
-		background: #1877f2;
-		box-shadow: 0 2px 8px rgba(24, 119, 242, 0.3);
-	}
-
-	.share-btn ul li a.so-tw {
-		background: #1da1f2;
-		box-shadow: 0 2px 8px rgba(29, 161, 242, 0.3);
-	}
-
-	.share-btn ul li a.so-wa {
-		background: #25d366;
-		box-shadow: 0 2px 8px rgba(37, 211, 102, 0.3);
-	}
-
-	.share-btn ul li a.so-li {
-		background: #0a66c2;
-		box-shadow: 0 2px 8px rgba(10, 102, 194, 0.3);
-	}
-
-	.share-btn ul li a.so-pi {
-		background: #e60023;
-		box-shadow: 0 2px 8px rgba(230, 0, 35, 0.3);
-	}
-
-	.share-btn ul li a.so-link {
-		background: #32373aff;
-		box-shadow: 0 2px 8px rgba(108, 117, 125, 0.3);
-		color: white;
-	}
-
-	.share-btn ul li a.so-link svg {
-		margin-right: -5px;
-		margin-bottom: -5px;
-	}
-
-	/* Hover effects */
-	.share-btn ul li a:hover {
-		transform: translateY(-3px) scale(1.05);
-		box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-	}
-
-	.share-btn ul li a.so-fb:hover {
-		box-shadow: 0 8px 20px rgba(24, 119, 242, 0.4);
-	}
-
-	.share-btn ul li a.so-tw:hover {
-		box-shadow: 0 8px 20px rgba(29, 161, 242, 0.4);
-	}
-
-	.share-btn ul li a.so-wa:hover {
-		box-shadow: 0 8px 20px rgba(37, 211, 102, 0.4);
-	}
-
-	.share-btn ul li a.so-li:hover {
-		box-shadow: 0 8px 20px rgba(10, 102, 194, 0.4);
-	}
-
-	.share-btn ul li a.so-pi:hover {
-		box-shadow: 0 8px 20px rgba(230, 0, 35, 0.4);
-	}
-
-	.share-btn ul li a.so-link:hover {
-		box-shadow: 0 8px 20px rgba(108, 117, 125, 0.4);
-	}
-
-	/* Icon styling */
-	.share-btn ul li a img {
-		width: 20px;
-		height: 20px;
-		transition: all 0.3s ease;
-	}
-
-	.share-btn ul li a:hover img {
-		transform: scale(1.1);
-	}
-
-	/* Active state */
-	.share-btn ul li a:active {
-		transform: translateY(-1px) scale(1.02);
-	}
-
-	/* Tooltip on hover */
-	.share-btn ul li a::before {
-		content: attr(title);
-		position: absolute;
-		bottom: 120%;
-		left: 50%;
-		transform: translateX(-50%);
-		background: rgba(0, 0, 0, 0.8);
-		color: white;
-		padding: 6px 10px;
-		border-radius: 4px;
-		font-size: 12px;
-		white-space: nowrap;
-		opacity: 0;
-		visibility: hidden;
-		transition: all 0.3s ease;
-		z-index: 1000;
-	}
-
-	.share-btn ul li a::after {
-		content: '';
-		position: absolute;
-		bottom: 110%;
-		left: 50%;
-		transform: translateX(-50%);
-		border: 4px solid transparent;
-		border-top-color: rgba(0, 0, 0, 0.8);
-		opacity: 0;
-		visibility: hidden;
-		transition: all 0.3s ease;
-	}
-
-	.share-btn ul li a:hover::before,
-	.share-btn ul li a:hover::after {
-		opacity: 1;
-		visibility: visible;
-	}
-
-	/* Responsive design */
-	@media (max-width: 480px) {
-		.share-btn ul {
-			justify-content: center;
-			gap: 10px;
-		}
-
-		.share-btn ul li a {
-			width: 40px;
-			height: 40px;
-		}
-
-		.share-btn ul li a img {
-			width: 18px;
-			height: 18px;
-		}
-	}
-
-	/* Loading animation for copy button */
-	.share-btn ul li a.so-link.copying {
-		animation: pulse 0.6s ease-in-out;
-	}
-
-	@keyframes pulse {
-		0% {
-			transform: scale(1);
-		}
-
-		50% {
-			transform: scale(1.1);
-		}
-
-		100% {
-			transform: scale(1);
-		}
-	}
-
-	/* Review System Styles */
-	.lp-ur-all-left-12 {
-		background-color: #e9ecef;
-		height: 8px;
-		border-radius: 4px;
-		overflow: hidden;
-		margin: 5px 0;
-	}
-
-	.lp-ur-all-left-13 {
-		height: 100%;
-		background-color: #ffc107;
-		transition: width 0.3s ease;
-		border-radius: 4px;
-	}
-
-	.lp-ur-all-left-13.lp-ur-all-left-Good {
-		background-color: #28a745;
-	}
-
-	.lp-ur-all-left-13.lp-ur-all-left-satis {
-		background-color: #17a2b8;
-	}
-
-	.lp-ur-all-left-13.lp-ur-all-left-below {
-		background-color: #fd7e14;
-	}
-
-	.lp-ur-all-left-13.lp-ur-all-left-poor {
-		background-color: #dc3545;
-	}
-
-	.lp-ur-all-left-11 {
-		font-size: 14px;
-		color: #495057;
-		margin-bottom: 3px;
-	}
-
-	/* Star Rating Styles */
-	fieldset.rating {
-		border: none;
-		margin: 10px 0;
-		padding: 0;
-		display: inline-block;
-		/* direction: rtl; */
-		unicode-bidi: bidi-override;
-		margin-top: -22px;
-		margin-left: 10px;
-	}
-
-	fieldset.rating input {
-		display: none;
-	}
-
-	fieldset.rating label {
-		display: inline-block;
-		padding: 5px;
-		font-size: 30px;
-		color: #ddd;
-		cursor: pointer;
-		transition: color 0.2s;
-		position: relative;
-	}
-
-	fieldset.rating label:before {
-		content: "★";
-	}
-
-	fieldset.rating label:hover,
-	fieldset.rating label:hover~label,
-	fieldset.rating input:checked~label {
-		color: #ffc107;
-	}
-
-	.review_fields {
-		margin-top: 30px;
-	}
-
-
-	#star-value {
-		margin: 10px 0;
-		font-weight: bold;
-		color: #495057;
-		padding: 5px 10px;
-		background: #f8f9fa;
-		border-radius: 4px;
-		display: inline-block;
-	}
-
-	/* Review Form Styles */
-	#review_form {
-		background: #f8f9fa;
-		padding: 20px;
-		border-radius: 8px;
-		margin: 15px 0;
-	}
-
-	#review_form .input-field {
-		margin-bottom: 15px;
-	}
-
-	#review_form input[type="text"],
-	#review_form input[type="email"],
-	#review_form textarea {
-		width: 100%;
-		padding: 10px;
-		border: 1px solid #ddd;
-		border-radius: 4px;
-		font-size: 14px;
-	}
-
-	#review_form input[type="submit"] {
-		background: #007bff;
-		color: white;
-		padding: 12px 30px;
-		border: none;
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 16px;
-		transition: background 0.3s;
-	}
-
-	#review_form input[type="submit"]:hover {
-		background: #0056b3;
-	}
-
-	#review_form input[type="submit"]:disabled {
-		background: #6c757d;
-		cursor: not-allowed;
-	}
-
-	/* Review Display Styles */
-	.lr-user-wr-con h6 {
-		color: #495057;
-		font-weight: bold;
-		margin-bottom: 5px;
-	}
-
-	.lr-revi-date {
-		color: #6c757d;
-		font-size: 12px;
-		margin-left: 10px;
-	}
-
-	.lr-user-wr-con p {
-		margin: 10px 0;
-		line-height: 1.5;
-		color: #495057;
-	}
-
-	.lr-user-wr-img img {
-		width: 50px;
-		height: 50px;
-		border-radius: 50%;
-		object-fit: cover;
-	}
-
-	#reviews-list ul li {
-		padding: 15px 0;
-		border-bottom: 1px solid #e9ecef;
-		display: flex;
-		gap: 15px;
-	}
-
-	#reviews-list ul li:last-child {
-		border-bottom: none;
-	}
-
-	/* Responsive adjustments */
-	@media (max-width: 768px) {
-		.lp-ur-all {
-			flex-direction: column;
-		}
-
-		.rating label {
-			font-size: 20px;
-			padding: 3px;
-		}
-
-		#review_form {
-			padding: 15px;
-		}
-	}
-</style>
-
-<!-- Get Quote Modal -->
-<section>
-	<div class="pop-ups pop-quo">
-		<!-- The Modal -->
-		<div class="modal fade" id="quote">
-			<div class="modal-dialog">
-				<div class="modal-content">
-					<div class="log-bor">&nbsp;</div>
-					<span class="udb-inst">Send enquiry</span>
-					<button type="button" class="close" data-dismiss="modal">&times;</button>
-					<!-- Modal Header -->
-					<div class="quote-pop">
-						<h4>Get quote</h4>
-
-						<?php $__enq_msg = $this->session->flashdata('message'); if (!empty($__enq_msg)): ?>
-							<div class="alert alert-success" style="background-color: #d4edda; color: #155724; padding: 10px; border-radius: 5px; margin: 10px 0;">
-								<?= e($__enq_msg); ?>
-							</div>
+			<!-- ================================================= SIDEBAR -->
+			<aside class="p411-shell__side">
+
+				<!-- Get a quote -->
+				<div class="p411-card p411-form">
+					<div class="p411-card__head">
+						<h2>Get a quote</h2>
+					</div>
+
+					<?php $__enq_msg = $this->session->flashdata('message'); ?>
+					<?php if (!empty($__enq_msg)): ?>
+						<div class="p411-note p411-note--ok"><?= e($__enq_msg) ?></div>
+					<?php endif; ?>
+					<?php $__enq_err = $this->session->flashdata('error_msg'); ?>
+					<?php if (!empty($__enq_err)): ?>
+						<div class="p411-note p411-note--err"><?= e($__enq_err) ?></div>
+					<?php endif; ?>
+
+					<?php if (empty($logged_id)): ?>
+						<p class="p411-form__hint">Log in to send <?= e($ld_name) ?> an enquiry &mdash; it keeps your details and their inbox tidy.</p>
+						<a class="p411-btn p411-btn--block" href="<?= e_url(base_url('login')) ?>">Log in to enquire</a>
+						<a class="p411-btn p411-btn--block p411-btn--ghost" style="margin-top:8px;" href="<?= e_url(base_url('register')) ?>">Create an account</a>
+						<?php if ($show_phone): ?>
+							<p class="p411-form__hint" style="margin:12px 0 0;">In a hurry? Call <a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) ?>"><?= e($listing->listing_mobile) ?></a>.</p>
 						<?php endif; ?>
-
-						<?php $__enq_err = $this->session->flashdata('error_msg'); if (!empty($__enq_err)): ?>
-							<div class="alert alert-danger" style="background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin: 10px 0;">
-								<?= e($__enq_err); ?>
-							</div>
-						<?php endif; ?>
-
-						<form method="post" action="<?= base_url('user/add-enquiry/listing_details/' . rawurlencode((string) $listing->listing_slug)); ?>" name="enquiry_form" id="enquiry_form">
-
-							<!-- Hidden fields for enquiry data -->
-							<input type="hidden" name="listing_id" value="<?= (int) $listing->listing_id; ?>">
-							<input type="hidden" name="event_id" value="">
-							<input type="hidden" name="blog_id" value="">
-							<input type="hidden" name="product_id" value="">
-							<input type="hidden" name="receiving_user_id" value="<?= (int) $listing->user_id; ?>">
-							<input type="hidden" name="enquiry_sender_id" value="<?= (int) (isset($logged_id) ? $logged_id : 0); ?>">
-							<input type="hidden" name="enquiry_source" value="<?= e_attr($listing->listing_name); ?>">
+					<?php else: ?>
+						<p class="p411-form__hint">Tell <?= e($ld_name) ?> what you need and they'll come back to you.</p>
+						<form method="post" name="detail_enquiry_form" id="detail_enquiry_form"
+							  action="<?= base_url('user/add-enquiry/listing_details/' . rawurlencode($ld_slug)) ?>">
+							<input type="hidden" name="listing_id" value="<?= (int) ($listing->listing_id ?? 0) ?>">
+							<input type="hidden" name="receiving_user_id" value="<?= (int) ($listing->user_id ?? 0) ?>">
+							<input type="hidden" name="enquiry_sender_id" value="<?= (int) $logged_id ?>">
+							<input type="hidden" name="enquiry_source" value="<?= e_attr($ld_name) ?>">
 							<input type="hidden" name="enquiry_type" value="listing">
 
 							<div class="form-group">
-								<input type="text" class="form-control" name="enquiry_name" placeholder="Enter name*" required>
+								<label class="sr-only" for="enq_name">Your name</label>
+								<input id="enq_name" type="text" name="enquiry_name" class="form-control" required
+									   placeholder="Enter name*" value="<?= e_attr($user->name ?? '') ?>">
 							</div>
 							<div class="form-group">
-								<input type="email" class="form-control" name="enquiry_email" placeholder="Enter email*" pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$" title="Invalid email address" required>
+								<label class="sr-only" for="enq_email">Email</label>
+								<input id="enq_email" type="email" name="enquiry_email" class="form-control" required
+									   placeholder="Enter email*" value="<?= e_attr($user->email_id ?? '') ?>">
 							</div>
 							<div class="form-group">
-								<input type="text" class="form-control" name="enquiry_mobile" placeholder="Enter mobile number *" pattern="[0-9]{10,15}" title="Please enter a valid phone number (10-15 digits)" required>
+								<label class="sr-only" for="enq_phone">Phone</label>
+								<input id="enq_phone" type="tel" name="enquiry_mobile" class="form-control" required
+									   placeholder="Enter mobile number*" pattern="[0-9+\-\s()]{7,20}"
+									   title="7 to 20 characters: digits, spaces, + ( ) and - are allowed"
+									   value="<?= e_attr($user->mobile_number ?? '') ?>">
 							</div>
 							<div class="form-group">
-								<textarea class="form-control" rows="3" name="enquiry_message" placeholder="Enter your query or message"></textarea>
+								<label class="sr-only" for="enq_msg">Your message</label>
+								<textarea id="enq_msg" name="enquiry_message" class="form-control" rows="3" placeholder="What do you need a quote for?"></textarea>
 							</div>
-							<button type="submit" class="btn btn-primary">Submit</button>
+							<button type="submit" id="detail_enquiry_submit" name="enquiry_submit" class="p411-btn p411-btn--block">Send enquiry</button>
+						</form>
+					<?php endif; ?>
+				</div>
+
+				<!-- Contact details -->
+				<div class="p411-card">
+					<div class="p411-card__head">
+						<h2>Business info</h2>
+					</div>
+					<?php
+					$info_rows = array();
+					if ($show_phone)                        $info_rows['Phone']     = '<a href="tel:' . e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) . '">' . e($listing->listing_mobile) . '</a>';
+					if ($show_wa)                           $info_rows['WhatsApp']  = '<a href="https://wa.me/' . e_attr($wa_number) . '" target="_blank" rel="noopener nofollow">Message on WhatsApp</a>';
+					if (!empty($listing->listing_email))    $info_rows['Email']     = '<a href="mailto:' . e_attr($listing->listing_email) . '">' . e($listing->listing_email) . '</a>';
+					if (!empty($listing->listing_website))  $info_rows['Website']   = '<a href="' . e_url($listing->listing_website) . '" target="_blank" rel="noopener nofollow">' . e($listing->listing_website) . '</a>';
+					if (!empty($listing->contact_person))   $info_rows['Contact']   = e($listing->contact_person);
+					if ($show_addr)                         $info_rows['Address']   = e($listing->listing_address);
+					if (!empty($listing->business_hours))   $info_rows['Hours']     = nl2br(e($ld_text($listing->business_hours)));
+					if (!empty($listing->year_established)) $info_rows['Established'] = e($listing->year_established);
+					?>
+					<?php if ($info_rows): ?>
+						<ul class="p411-info">
+							<?php foreach ($info_rows as $label => $value): ?>
+								<li><?= $label ?><span><?= $value ?></span></li>
+							<?php endforeach; ?>
+						</ul>
+					<?php else: ?>
+						<p class="p411-form__hint" style="margin:0;">
+							This business hasn&rsquo;t published contact details.
+							<?= !$ld_claimed ? 'If it&rsquo;s yours, claim the listing to add them.' : 'Use the enquiry form above to get in touch.' ?>
+						</p>
+					<?php endif; ?>
+				</div>
+
+				<!-- Location -->
+				<div class="p411-card" id="location">
+					<div class="p411-card__head">
+						<h2>Location</h2>
+					</div>
+					<?php if (!empty($listing->google_map)): ?>
+						<div class="p411-map">
+							<iframe src="<?= e_url($listing->google_map) ?>" title="Map showing <?= e_attr($ld_name) ?>"
+									allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+						</div>
+					<?php elseif (!empty($listing->listing_lat) && !empty($listing->listing_lng)): ?>
+						<div class="p411-map">
+							<iframe src="https://maps.google.com/maps?q=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>&amp;output=embed"
+									title="Map showing <?= e_attr($ld_name) ?>" allowfullscreen loading="lazy"></iframe>
+						</div>
+					<?php else: ?>
+						<?php // A default map used to be rendered here — centred on San Francisco.
+						      // Better to say nothing is set than to point people 1,900 miles away. ?>
+						<div class="p411-empty p411-empty--inline">
+							<h3>No map pin yet</h3>
+							<p>
+								<?= $show_addr
+									? 'This business hasn&rsquo;t added a map, but its address is listed above.'
+									: 'This business hasn&rsquo;t shared a location.' ?>
+							</p>
+							<?php if ($show_addr): ?>
+								<div class="p411-empty__actions">
+									<a class="p411-btn p411-btn--sm p411-btn--ghost" target="_blank" rel="noopener"
+									   href="https://www.google.com/maps/search/?api=1&amp;query=<?= rawurlencode((string) $listing->listing_address) ?>">Find on Google Maps</a>
+								</div>
+							<?php endif; ?>
+						</div>
+					<?php endif; ?>
+
+					<?php if (!empty($listing->listing_lat) && !empty($listing->listing_lng)): ?>
+						<div class="p411-map__actions">
+							<a class="p411-btn p411-btn--sm p411-btn--ghost" target="_blank" rel="noopener"
+							   href="https://www.google.com/maps?q=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>">Open in Google Maps</a>
+							<a class="p411-btn p411-btn--sm" target="_blank" rel="noopener"
+							   href="https://www.google.com/maps/dir/?api=1&amp;destination=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>">Get directions</a>
+						</div>
+					<?php endif; ?>
+				</div>
+
+				<?php $slot = $ad_slots['side_1'];
+				$slot_alias = 'listing-sidebar';
+				// The static promo below already carries the web-services
+				// pitch, so an unsold zone sells the space itself.
+				$slot_creative = 'house-ad';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+				<?php // Static house promo — website development, hosting, local SEO. ?>
+				<?php include APPPATH . 'views/partials/service_promo.php'; ?>
+
+				<!-- Owner profile -->
+				<?php $has_socials = (bool) array_filter($owner_socials); ?>
+				<?php if ($ld_claimed || $has_socials): ?>
+					<div class="p411-card">
+						<div class="p411-card__head">
+							<h2>Business profile</h2>
+						</div>
+						<div class="p411-profile">
+							<div class="p411-profile__img">
+								<img src="<?= e_attr($ld_logo) ?>" alt="<?= e_attr($ld_name) ?>" loading="lazy" decoding="async">
+							</div>
+							<h3><?= e($ld_name) ?></h3>
+							<?php if ($show_addr): ?><p><?= e($listing->listing_address) ?></p><?php endif; ?>
+
+							<?php if ($has_socials): ?>
+								<div class="p411-profile__soc">
+									<?php
+									$soc_icons = array(
+										'facebook' => array('3.png', 'Facebook'),
+										'twitter'  => array('2.png', 'Twitter'),
+										'youtube'  => array('5.png', 'YouTube'),
+										'website'  => array('6.png', 'Website'),
+									);
+									foreach ($soc_icons as $key => $meta):
+										if (empty($owner_socials[$key])) continue;
+									?>
+										<a href="<?= e_url($owner_socials[$key]) ?>" target="_blank" rel="noopener nofollow" aria-label="<?= e_attr($meta[1]) ?>">
+											<img src="<?= base_url('assets/images/social/' . $meta[0]) ?>" alt="<?= e_attr($meta[1]) ?>" loading="lazy">
+										</a>
+									<?php endforeach; ?>
+								</div>
+							<?php endif; ?>
+						</div>
+					</div>
+				<?php else: ?>
+					<div class="p411-card">
+						<div class="p411-card__head">
+							<h2>Is this your business?</h2>
+						</div>
+						<p class="p411-form__hint">
+							This listing hasn&rsquo;t been claimed. Claim it to edit the details, add photos and reply to reviews.
+						</p>
+						<a class="p411-btn p411-btn--block" href="<?= e_url(base_url('claim-listing/' . rawurlencode($ld_slug))) ?>">Claim this listing</a>
+					</div>
+				<?php endif; ?>
+
+				<?php $slot = $ad_slots['side_2'];
+				$slot_creative = 'banner-design';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+				<?php $slot = $ad_slots['side_sky'];
+				$slot_fallback = false;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+			</aside>
+		</div>
+
+		<!-- ==================================================== BOTTOM AD -->
+		<div class="p411-adrow" style="margin-top:6px;">
+			<?php $slot = $ad_slots['bottom'];
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
+		</div>
+	</div>
+</section>
+
+<!-- ================================================ GET QUOTE MODAL -->
+<section>
+	<div class="pop-ups pop-quo">
+		<div class="modal fade" id="quote" tabindex="-1" role="dialog" aria-labelledby="quoteTitle" aria-hidden="true">
+			<div class="modal-dialog" role="document">
+				<div class="modal-content">
+					<div class="log-bor">&nbsp;</div>
+					<span class="udb-inst" id="quoteTitle">Send enquiry</span>
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close">&times;</button>
+					<div class="quote-pop p411-form">
+						<h4>Get a quote from <?= e($ld_name) ?></h4>
+
+						<form method="post" name="enquiry_form" id="enquiry_form"
+							  action="<?= base_url('user/add-enquiry/listing_details/' . rawurlencode($ld_slug)) ?>">
+							<input type="hidden" name="listing_id" value="<?= (int) ($listing->listing_id ?? 0) ?>">
+							<input type="hidden" name="receiving_user_id" value="<?= (int) ($listing->user_id ?? 0) ?>">
+							<input type="hidden" name="enquiry_sender_id" value="<?= (int) ($logged_id ?: 0) ?>">
+							<input type="hidden" name="enquiry_source" value="<?= e_attr($ld_name) ?>">
+							<input type="hidden" name="enquiry_type" value="listing">
+
+							<div class="form-group">
+								<label class="sr-only" for="modal_enq_name">Your name</label>
+								<input id="modal_enq_name" type="text" class="form-control" name="enquiry_name" required
+									   placeholder="Enter name*" value="<?= e_attr($user->name ?? '') ?>">
+							</div>
+							<div class="form-group">
+								<label class="sr-only" for="modal_enq_email">Email</label>
+								<input id="modal_enq_email" type="email" class="form-control" name="enquiry_email" required
+									   placeholder="Enter email*" value="<?= e_attr($user->email_id ?? '') ?>">
+							</div>
+							<div class="form-group">
+								<label class="sr-only" for="modal_enq_phone">Phone</label>
+								<input id="modal_enq_phone" type="tel" class="form-control" name="enquiry_mobile" required
+									   placeholder="Enter mobile number*" pattern="[0-9+\-\s()]{7,20}"
+									   title="7 to 20 characters: digits, spaces, + ( ) and - are allowed"
+									   value="<?= e_attr($user->mobile_number ?? '') ?>">
+							</div>
+							<div class="form-group">
+								<label class="sr-only" for="modal_enq_msg">Your message</label>
+								<textarea id="modal_enq_msg" class="form-control" rows="3" name="enquiry_message" placeholder="Enter your query or message"></textarea>
+							</div>
+							<button type="submit" class="p411-btn p411-btn--block">Send enquiry</button>
 						</form>
 					</div>
 				</div>
@@ -1564,3 +841,57 @@
 		</div>
 	</div>
 </section>
+
+<script>
+	(function () {
+		'use strict';
+
+		// Star picker label. The fieldset is reversed in CSS so the markup can
+		// stay 5→1; the label text follows whatever is actually checked.
+		var words = { '5': 'Awesome', '4': 'Excellent', '3': 'Good', '2': 'Average', '1': 'Poor' };
+		var out = document.getElementById('p411-star-value');
+		Array.prototype.forEach.call(document.querySelectorAll('input[name="price_rating"]'), function (input) {
+			input.addEventListener('change', function () {
+				if (out) out.innerHTML = this.value + ' star' + (this.value === '1' ? '' : 's') + ' &mdash; ' + words[this.value];
+			});
+		});
+
+		// Smooth-scroll the sub-nav without losing the sticky offset.
+		Array.prototype.forEach.call(document.querySelectorAll('.p411-ld__nav a[href^="#"], .p411-ld a[href="#write-review"]'), function (link) {
+			link.addEventListener('click', function (e) {
+				var target = document.getElementById(this.getAttribute('href').slice(1));
+				if (!target) return;
+				e.preventDefault();
+				target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			});
+		});
+	})();
+
+	// Copy the listing URL. Called inline from the share row.
+	function p411CopyLink(url) {
+		function toast(message) {
+			var el = document.createElement('div');
+			el.textContent = message;
+			el.setAttribute('role', 'status');
+			el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:10000;background:#4E8A28;color:#fff;'
+				+ 'padding:13px 18px;border-radius:9px;font-size:14px;box-shadow:0 8px 26px rgba(0,0,0,.22);';
+			document.body.appendChild(el);
+			setTimeout(function () { el.remove(); }, 2600);
+		}
+
+		if (navigator.clipboard && window.isSecureContext) {
+			navigator.clipboard.writeText(url).then(function () { toast('Link copied'); },
+				function () { toast('Could not copy the link'); });
+			return;
+		}
+
+		var field = document.createElement('textarea');
+		field.value = url;
+		field.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+		document.body.appendChild(field);
+		field.select();
+		try { toast(document.execCommand('copy') ? 'Link copied' : 'Could not copy the link'); }
+		catch (err) { toast('Could not copy the link'); }
+		document.body.removeChild(field);
+	}
+</script>

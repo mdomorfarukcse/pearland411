@@ -1335,15 +1335,23 @@ class Usermodel extends CI_Model
 
 
 
-	public function getListingByCategory($cat_identifier = NULL, $limit = NULL, $offset = NULL)
+	/**
+	 * Shared FROM + WHERE for the public directory (/all-listing), so the
+	 * page's list and its count can never disagree about what is visible.
+	 *
+	 * The join onto `user` is a LEFT join deliberately: admin-imported
+	 * listings carry user_id = 0 (nobody has claimed them yet) and an INNER
+	 * join dropped every one of them, which is why a directory with thousands
+	 * of businesses could render "No Listings Found".
+	 */
+	private function directoryQuery($cat_identifier = NULL)
 	{
-		$this->db->select('listings.*,user.name,listing_categories.category_name,listing_categories.category_slug')
-			->from('listings')
-			->join('user', 'listings.user_id = user.user_id')
+		$this->db->from('listings')
+			->join('user', 'listings.user_id = user.user_id', 'LEFT')
 			->join('listing_categories', 'listings.category_id = listing_categories.category_id', 'LEFT');
 
 		// Only filter by category if cat_identifier is provided
-		if ($cat_identifier !== NULL) {
+		if ($cat_identifier !== NULL && $cat_identifier !== '') {
 			// Check if it's numeric (ID) or string (slug)
 			if (is_numeric($cat_identifier)) {
 				$this->db->where('listing_categories.category_id', $cat_identifier);
@@ -1354,41 +1362,103 @@ class Usermodel extends CI_Model
 			}
 		}
 
-		return $this->db->where('listings.is_deleted', 0)
-			->where('listings.listing_status', 1)
-			->where('(listings.featured_listing IS NULL OR listings.featured_listing = 0)')
-			->where('(listings.spotlight_listing IS NULL OR listings.spotlight_listing = 0)')
-			->order_by('listings.created_at DESC, listings.listing_id DESC')
-			->limit($limit, $offset)
-			->get()->result();
+		$this->db->where('listings.is_deleted', 0)
+			->where('listings.listing_status', 1);
+	}
+
+	/**
+	 * One page of directory results.
+	 *
+	 * Featured and spotlight listings are INCLUDED and pinned to the top of
+	 * the first page — that placement is what the Featured Listing package
+	 * sells. They used to be excluded outright, so a paying customer's
+	 * listing disappeared from the very page people browse.
+	 *
+	 * @param string|int|null $cat_identifier category slug or id
+	 * @param int|null        $limit
+	 * @param int|null        $offset
+	 * @param string          $sort  featured|newest|name|rating
+	 */
+	public function getListingByCategory($cat_identifier = NULL, $limit = NULL, $offset = NULL, $sort = 'featured')
+	{
+		$this->db->select('listings.*,user.name,listing_categories.category_name,listing_categories.category_slug');
+		$this->directoryQuery($cat_identifier);
+
+		switch ($sort) {
+			case 'name':
+				$this->db->order_by('listings.listing_name ASC');
+				break;
+			case 'rating':
+				// Only order by rating when the column is actually there;
+				// older installs predate the review system.
+				if ($this->db->field_exists('average_rating', 'listings')) {
+					$this->db->order_by('listings.average_rating DESC, listings.total_reviews DESC');
+				}
+				$this->db->order_by('listings.listing_id DESC');
+				break;
+			case 'newest':
+				$this->db->order_by('listings.created_at DESC, listings.listing_id DESC');
+				break;
+			case 'featured':
+			default:
+				$this->db->order_by('COALESCE(listings.featured_listing, 0) DESC, COALESCE(listings.spotlight_listing, 0) DESC, listings.created_at DESC, listings.listing_id DESC', '', false);
+		}
+
+		return $this->db->limit($limit, $offset)->get()->result();
 	}
 
 	public function countListingsByCategory($cat_identifier = NULL)
 	{
-		// Match exact same structure as getListingByCategory method
-		$this->db->from('listings')
-			->join('user', 'listings.user_id = user.user_id')
-			->join('listing_categories', 'listings.category_id = listing_categories.category_id', 'LEFT');
-
-		// Only filter by category if cat_identifier is provided
-		if ($cat_identifier !== NULL) {
-			// Check if it's numeric (ID) or string (slug)
-			if (is_numeric($cat_identifier)) {
-				$this->db->where('listing_categories.category_id', $cat_identifier);
-			} else {
-				// For slug, try both database slug and generated slug from name
-				$where_condition = "(listing_categories.category_slug = '" . $this->db->escape_str($cat_identifier) . "' OR LOWER(REPLACE(listing_categories.category_name, ' ', '-')) = '" . $this->db->escape_str($cat_identifier) . "')";
-				$this->db->where($where_condition);
-			}
-		}
-
-		// Apply the exact same filters as getListingByCategory
-		$this->db->where('listings.is_deleted', 0)
-			->where('listings.listing_status', 1)
-			->where('(listings.featured_listing IS NULL OR listings.featured_listing = 0)')
-			->where('(listings.spotlight_listing IS NULL OR listings.spotlight_listing = 0)');
+		$this->directoryQuery($cat_identifier);
 
 		return $this->db->count_all_results();
+	}
+
+	/**
+	 * Featured businesses for the directory's sidebar rail. Prefers ones in
+	 * the category being browsed and tops up with site-wide featured
+	 * listings, so the rail is never empty on a thin category.
+	 */
+	public function getFeaturedListingsForDirectory($cat_identifier = NULL, $limit = 3)
+	{
+		$limit = max(1, (int) $limit);
+		$out   = array();
+		$seen  = array();
+
+		$collect = function ($rows) use (&$out, &$seen, $limit) {
+			foreach ($rows as $row) {
+				if (count($out) >= $limit) return;
+				if (isset($seen[$row->listing_id])) continue;
+				$seen[$row->listing_id] = true;
+				$out[] = $row;
+			}
+		};
+
+		if ($cat_identifier !== NULL && $cat_identifier !== '') {
+			$this->db->select('listings.*, listing_categories.category_name, listing_categories.category_slug');
+			$this->directoryQuery($cat_identifier);
+			$collect(
+				$this->db
+					->where('(listings.featured_listing = 1 OR listings.spotlight_listing = 1)')
+					->order_by('RAND()', '', false)
+					->limit($limit)
+					->get()->result()
+			);
+		}
+
+		if (count($out) < $limit) {
+			$this->db->select('listings.*, listing_categories.category_name, listing_categories.category_slug');
+			$this->directoryQuery(NULL);
+			$collect(
+				$this->db
+					->where('(listings.featured_listing = 1 OR listings.spotlight_listing = 1)')
+					->order_by('RAND()', '', false)
+					->limit($limit)
+					->get()->result()
+			);
+		}
+
+		return $out;
 	}
 
 	/**
@@ -1907,11 +1977,33 @@ class Usermodel extends CI_Model
 		return $text;
 	}
 
-	public function getRelatedListing($tableName, $listing_id, $category_id)
+	/**
+	 * Other businesses in the same category.
+	 *
+	 * Was a hand-built SQL string that interpolated the slug straight into
+	 * the WHERE clause and filtered on nothing else — so it happily returned
+	 * soft-deleted and unpublished listings. Now bound parameters, and only
+	 * live rows, ordered so featured businesses surface first.
+	 *
+	 * @param string $tableName  kept for call-site compatibility
+	 * @param string $listing_id the CURRENT listing's slug, excluded
+	 */
+	public function getRelatedListing($tableName, $listing_id, $category_id, $limit = 3)
 	{
-		$where = "WHERE listing_slug !='" . $listing_id . "' AND category_id = '" . $category_id . "'";
+		if (empty($category_id)) return array();
 
-		return $this->db->query("SELECT * FROM $tableName $where ORDER BY listing_id DESC LIMIT 3")->result();
+		$this->db
+			->select('l.*, lc.category_name, lc.category_slug')
+			->from($tableName . ' l')
+			->join('listing_categories lc', 'l.category_id = lc.category_id', 'left')
+			->where('l.category_id', $category_id)
+			->where('l.listing_slug !=', (string) $listing_id)
+			->where('l.is_deleted', 0)
+			->where('l.listing_status', 1)
+			->order_by('COALESCE(l.featured_listing, 0) DESC, l.listing_id DESC', '', false)
+			->limit((int) $limit);
+
+		return $this->db->get()->result();
 	}
 
 	/**

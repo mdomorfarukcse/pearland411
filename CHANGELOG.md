@@ -6,6 +6,124 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-07 — Directory + listing details rebuilt on the homepage layout
+
+`/all-listing` and `/listing-details/<slug>` now use the same shell as the
+reorganised homepage — hero, category strip, main column plus a right-hand
+sidebar — instead of the theme's left-rail layout. Both views were rewritten
+(`all-listing.php` 1,347 → 542 lines, `listing_details.php` 1,566 → 897),
+their ~1,000 lines of inline `<style>` replaced by one scoped stylesheet.
+
+### Fixed
+- **The directory could show "No Listings Found" on a database full of
+  businesses.** `getListingByCategory()` / `countListingsByCategory()` joined
+  `user` with an **INNER** join, so every admin-imported listing — the ones
+  with `user_id = 0`, i.e. everything nobody has claimed yet — was dropped from
+  both the results and the count. Now a LEFT join.
+- **Featured listings were excluded from the directory outright**
+  (`featured_listing = 0 AND spotlight_listing = 0` in the WHERE clause). A
+  customer paying $25/month for a Featured Listing vanished from the page
+  people actually browse. Featured/spotlight are now included and pinned to the
+  top of the results with a badge, which is what the package sells.
+- **Descriptions printed their own markup.** Listings were saved with pasted
+  HTML (`<p>…<br />`); `e_nl2br()` escaped it, so visitors read literal `<p>`
+  and `<br />` on the page. Block tags now become newlines, the rest is
+  stripped, then the text is escaped — clean text, and still no injection.
+- **No listing ever emitted an `aggregateRating`.** `getReviewStats()` returns
+  an array keyed 5..1, but the JSON-LD block tested `is_object($rs) &&
+  $rs->total_reviews`, which cannot be true for an array. Rating and count are
+  now derived once in the controller and used by both the view and the JSON-LD.
+- **A listing with no coordinates rendered a map of San Francisco**, 1,900
+  miles from Pearland, with no indication it was a placeholder. Replaced with
+  an empty state that offers a Google Maps address search when there is one.
+- `getRelatedListing()` interpolated the slug straight into a hand-built SQL
+  string and filtered on **nothing** but `category_id`, so it returned
+  soft-deleted and unpublished businesses. Now bound parameters plus
+  `is_deleted = 0` / `listing_status = 1`, featured first.
+- "Showing 1–10 of N" was stuck on the first page's numbers: the view read
+  `$current_offset`, which the controller never set. An offset past the end of
+  the results (hand-typed, or after listings were removed) rendered a blank
+  list; it now clamps to the last real page.
+- **`/all_listing/<category>/<offset>` was a 404.** CI3's `(:any)` is `[^/]+`,
+  not `.+`, so the two-segment form matched no route at all — which is why
+  pagination links had to be written as `/user/all_listing/…`. Added
+  `all_listing/(:any)/(:num)` (and the `all-listing` spelling), so page 2 of a
+  category is a clean URL.
+- A `:before { position: absolute; font-family: "Material Icons" }` rule at
+  `style.css:139` applies to **every element on the site**, which silently
+  collapsed the review star picker to a 0×0 pile. The new stylesheet undoes it
+  where a pseudo-element has to sit in the text flow; noted in a comment so the
+  next person doesn't lose an afternoon to it. The review form's rating readout
+  also had to move off `#star-value`, which `style.css:6841` pins to
+  `left: 175px` on an amber background.
+- The directory's enquiry form used `id="home_slide_enquiry_form"` — the same
+  id as the Help & Support form in `footer.php`, so every page carried two
+  elements with one id and `getElementById` could only ever reach one of them.
+- `listing_details_global()` was a thinner second copy of `listing_details()`:
+  no reviews, no review stats, no owner socials, no SEO tags, no ad zones. It
+  now delegates, so both URLs render the same page. `Admin::listing_preview()`
+  loaded the shared view with no data at all and, because it called
+  `$this->load->view('header')` without `$data`, no stylesheet either.
+- Every empty state now says which thing is missing and what to do next —
+  no results (category vs whole directory), no description, no services, no
+  service areas, no reviews, no map, no similar businesses, no featured
+  businesses, not logged in.
+
+### Added
+- **`assets/css/directory.css`** — one stylesheet for both pages, every
+  selector prefixed `.p411-dir` / `.p411-ld`, using the same tokens as
+  `home-sections.css` (logo pear green `#8CC63F`, the 3px green heading rule,
+  the same pill buttons and card frame) so the three pages read as one site.
+- **`$page_css` hook in `header.php`** — a controller sets
+  `$data['page_css']` (string or array) and the sheets load after the shared
+  ones. Pages that don't set it are unaffected; this is how the two views get
+  their CSS without touching `style.css`.
+- **`partials/service_promo.php`** — the static right-column block for
+  Pearland411's own services (website development, hosting, local SEO), linking
+  to `/contact-us`. Deliberately *not* a sellable zone: it never queries `ads`,
+  never rotates, and always renders, so the position is never empty. Sidebar
+  and full-width banner variants.
+- **Ad zones on both pages, keyed to the packages people can actually buy.**
+  Six placements each: top banner, in-content banner (after the 4th result /
+  mid-article), two sidebar banners, a skyscraper and a footer banner. The
+  directory's bottom zone switches to `bottom-banner-category` when a category
+  filter is on. Migration `0019_directory_ad_slots.sql` seeds the three
+  category-priced zones that were sellable but had no `ads_prices` row —
+  `right-banner-1`, `right-banner-2`, `bottom-banner-category`.
+- `ad_slot.php` gained `$slot_alias` (fall through to zone(s) this position
+  replaced, so inventory booked against the retired 0006 keys `listing-top` /
+  `listing-inline` / `listing-sidebar` keeps running) and `$slot_creative`
+  (force which house creative fills an unsold zone — the sidebar's permanent
+  services block would otherwise be repeated by the `scs-ad` fallback directly
+  above it).
+- Directory: sort control (featured / newest / A–Z / top rated) as a query
+  string, so it can't collide with the positional category/offset segments;
+  category strip and sidebar category list with live counts; result cards
+  carrying rating, address, phone, email and Call/WhatsApp actions.
+- Listing details: breadcrumb with the real category, a sticky sub-nav that
+  only lists sections that exist, a photo grid (was a carousel that rendered a
+  "no images" slide even when hidden), review distribution bars, and an
+  accessible star picker.
+- `getFeaturedListingsForDirectory()` — the sidebar's featured rail now prefers
+  businesses in the category being browsed and tops up site-wide, instead of
+  three random featured listings from anywhere.
+
+### Changed
+- Both pages read their per-page pixel box from `ads_prices.size`, as the
+  homepage does, so quoted size and rendered box cannot drift apart.
+- `listings` search/count logic lives in one private `directoryQuery()` helper,
+  so the list and its count can no longer disagree about what is visible.
+
+### Still to do
+- The packages seed still describes the right-hand banners as `900x100`; the
+  zones are seeded at `300x250` because they sit in a sidebar column. The
+  `/pricing-plan` copy needs the same correction 0017 already called for.
+- `#categoriesModal` is referenced by the shared `header.php` but defined
+  nowhere outside the homepage, so "All Categories" opens nothing on every
+  other page. Site-wide header fix, out of scope here.
+
+---
+
 ## 2026-07 — Homepage reorganised on the existing design
 
 Follow-up to the previous entry. That attempt replaced the whole theme, which

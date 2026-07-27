@@ -38,6 +38,18 @@
 	<!-- Brand palette + typography overrides — loaded last so it wins. -->
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/pearland-brand.css?v=1">
 
+	<?php
+	// Per-page stylesheets. A controller sets $data['page_css'] to one path or
+	// an array of them (relative to the web root) and they load here, after the
+	// shared sheets, so a page-scoped file wins without !important. Pages that
+	// don't set it are unaffected.
+	if (!empty($page_css)):
+		foreach ((array) $page_css as $__page_css):
+			?>
+			<link rel="stylesheet" href="<?= base_url($__page_css) ?>">
+		<?php endforeach;
+	endif; ?>
+
 	<!--DataTable-->
 	<link rel="stylesheet" href="//cdn.datatables.net/1.10.24/css/jquery.dataTables.min.css">
 

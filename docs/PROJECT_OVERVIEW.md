@@ -21,6 +21,15 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `edit_listings.php`, `checkout.php`, `pricing_plan.php`, `user_account.php`, …); admin views in
   `admin/`; shared partials `header.php` / `footer.php` / `user_left_sidebar.php`.
   Note: the **homepage `index.php` is self-contained** (its own header), separate from `header.php`.
+- **Per-page CSS:** a controller sets `$data['page_css']` (path or array of paths) and `header.php`
+  links them after the shared sheets. Used by `/all-listing` and `/listing-details`
+  (`assets/css/directory.css`, scoped `.p411-dir` / `.p411-ld`) and mirrored on the homepage by
+  `assets/css/home-sections.css` (`.p411-home`). The rule everywhere: **prefix every selector and
+  never edit the shared 345 KB `style.css`,** which ~200 views depend on.
+- **Reusable blocks:** `partials/ad_slot.php` (one sellable ad zone; options `$slot_class`,
+  `$slot_label`, `$slot_fallback`, `$slot_alias`, `$slot_creative`), `partials/service_promo.php`
+  (the static website/hosting/SEO promo → `/contact-us`; never sold, never empty),
+  `partials/web_dev_cta.php`, `partials/seo_head.php`.
 - **Helpers** (autoloaded): `site_setting` (settings + feature flags), `image` (uploads/resize:
   `safe_upload_image`, `uploadAndResize`, `responsive_img`), `view` (escaping/JSON-LD).
 - **Libraries:** `Helcim_lib` (payments), `Mailer` (SMTP email), `Rate_limit`.
@@ -47,7 +56,7 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Area | Route(s) | Controller / model | Notes |
 |---|---|---|---|
 | Home | `/` | `User::index` → `index.php` | Self-contained homepage |
-| Directory / listing | `/all-listing`, `/listing-details/<slug>` | `User::all_listing`, `listing_details` | |
+| Directory / listing | `/all-listing`, `/all_listing/<cat>[/<offset>]`, `/listing-details/<slug>` | `User::all_listing`, `listing_details` | Homepage layout + 6 ad zones each; `?sort=featured\|newest\|name\|rating` |
 | Claim a listing | `/claim-listing/<slug>` | `User::claim_listing`; admin `Admin::claim_approve` | transfers `listings.user_id` |
 | Edit own listing | `/user/edit-listing/<slug>` | `User::edit_listing` | ownership + capability gated |
 | Packages (customer) | `/pricing-plan` | `User::pricing_plan` → `pricing_plan.php` | lists all active `plans` |

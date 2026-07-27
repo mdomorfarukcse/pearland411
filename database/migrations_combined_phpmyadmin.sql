@@ -625,4 +625,28 @@ SET @s := IF(@e = 0, 'ALTER TABLE `listings` ADD COLUMN `week_until` DATE NULL D
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
+-- ============================================================
+-- 0019_directory_ad_slots.sql
+-- Category-priced ad zones for /all-listing and
+-- /listing-details. Same rule as 0017: each slot_key is the
+-- plans.slug of the package sold on /pricing-plan, so a
+-- purchase maps to a position. Data only.
+-- ============================================================
+INSERT INTO `ads_prices` (`name`, `slot_key`, `size`, `cost`, `status`, `created_at`, `updated_at`)
+SELECT * FROM (
+    SELECT '#1 Right Banner (Category)' AS name,
+           'right-banner-1'             AS slot_key,
+           '300x250'                    AS size,
+           25.00                        AS cost,
+           1                            AS status,
+           NOW()                        AS created_at,
+           NOW()                        AS updated_at
+    UNION ALL SELECT '#2 Right Banner (Category)',  'right-banner-2',         '300x250', 25.00, 1, NOW(), NOW()
+    UNION ALL SELECT 'Bottom Banner (Category)',    'bottom-banner-category', '900x100', 25.00, 1, NOW(), NOW()
+) AS seed
+WHERE NOT EXISTS (
+    SELECT 1 FROM `ads_prices` WHERE `ads_prices`.`slot_key` = seed.slot_key
+);
+
+
 SET FOREIGN_KEY_CHECKS = 1;
