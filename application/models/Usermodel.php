@@ -5373,13 +5373,46 @@ class Usermodel extends CI_Model
 			->where('c.coupon_status', 1)
 			->where('c.coupon_start_date <=', $today)
 			->where('c.coupon_end_date >=',  $today)
-			// The listings join matches on the OWNER, not the coupon, so a
-			// business with several listings would otherwise return the same
-			// coupon once per listing.
-			->group_by('c.coupon_id')
 			->order_by('c.coupon_cdt', 'DESC');
 		if ($limit !== null) $this->db->limit((int) $limit, (int) $offset);
 		return $this->db->get()->result();
+	}
+
+	/**
+	 * Active coupons, one row per coupon.
+	 *
+	 * getActiveCoupons() joins `listings` on the OWNER rather than the coupon,
+	 * so a business with N listings returns the same coupon N times.
+	 *
+	 * This is deliberately fixed in PHP, not with GROUP BY: the select list
+	 * carries columns from the joined tables that aren't functionally
+	 * dependent on coupons.coupon_id, so `GROUP BY c.coupon_id` is rejected
+	 * outright under ONLY_FULL_GROUP_BY (MySQL 5.7+ default) — the query then
+	 * returns false and the page dies. Over-fetch and de-dupe here instead;
+	 * it works on every MySQL configuration.
+	 *
+	 * @param  int $limit how many DISTINCT coupons you want back
+	 * @return array
+	 */
+	public function getDistinctActiveCoupons($limit = 4)
+	{
+		$limit = max(1, (int) $limit);
+
+		// Over-fetch to survive the fan-out, but stay bounded.
+		$rows = $this->getActiveCoupons($limit * 8);
+		if (!$rows) return array();
+
+		$seen = array();
+		$out  = array();
+		foreach ($rows as $row) {
+			$key = isset($row->coupon_id) ? $row->coupon_id : spl_object_hash($row);
+			if (isset($seen[$key])) continue;
+			$seen[$key] = true;
+			$out[] = $row;
+			if (count($out) >= $limit) break;
+		}
+
+		return $out;
 	}
 
 	public function getCouponById($id)
@@ -5592,6 +5625,65 @@ class Usermodel extends CI_Model
 			->limit((int) $limit);
 
 		return $this->db->get()->result();
+	}
+
+	/**
+	 * Listings with a live "Business Hotspot on Homepage" placement.
+	 *
+	 * Sold as plans.slug = 'business-hotspot' ($25 / 30 days). The paid term
+	 * is stored as a date in listings.hotspot_until (migration 0018), so the
+	 * placement drops off by itself the day after it expires — nobody has to
+	 * remember to switch it off.
+	 *
+	 * Returns array() when 0018 hasn't been run, so the homepage degrades to
+	 * hiding the section instead of erroring.
+	 */
+	public function getHotspotListings($limit = 8)
+	{
+		if (!$this->db->field_exists('hotspot_until', 'listings')) return array();
+
+		return $this->db
+			->select('listings.listing_id, listings.listing_name, listings.listing_slug,
+			          listings.listing_image, listings.hotspot_until, listing_categories.category_name', false)
+			->from('listings')
+			->join('listing_categories', 'listings.category_id = listing_categories.category_id', 'left')
+			->where('listings.listing_status', 0)
+			->where('listings.is_deleted', 0)
+			->where('listings.hotspot_until >=', date('Y-m-d'))
+			->order_by('listings.hotspot_until', 'ASC')
+			->limit((int) $limit)
+			->get()
+			->result();
+	}
+
+	/**
+	 * The current "Business Of the Week" listing.
+	 *
+	 * Sold as plans.slug = 'business-of-the-week' ($20 / 7 days), stored in
+	 * listings.week_until (migration 0018). Deliberately returns ONE row: the
+	 * homepage gives it a single wide spotlight card, and being the only one
+	 * is what the customer is paying for. If several are live, the one
+	 * expiring soonest wins so each buyer gets their turn.
+	 *
+	 * @return object|null
+	 */
+	public function getBusinessOfTheWeek()
+	{
+		if (!$this->db->field_exists('week_until', 'listings')) return null;
+
+		return $this->db
+			->select('listings.listing_id, listings.listing_name, listings.listing_slug,
+			          listings.listing_description, listings.listing_image, listings.week_until,
+			          listing_categories.category_name', false)
+			->from('listings')
+			->join('listing_categories', 'listings.category_id = listing_categories.category_id', 'left')
+			->where('listings.listing_status', 0)
+			->where('listings.is_deleted', 0)
+			->where('listings.week_until >=', date('Y-m-d'))
+			->order_by('listings.week_until', 'ASC')
+			->limit(1)
+			->get()
+			->row();
 	}
 
 	/**

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 295 600" width="295" height="600"
+     role="img" aria-label="Banner and ad design by Pearland411">
+  <title>Need a banner designed? Pearland411 designs your ad</title>
+  <defs>
+    <linearGradient id="bdtBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5A2540"/>
+      <stop offset="0.58" stop-color="#7C3357"/>
+      <stop offset="1" stop-color="#A2456F"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="295" height="600" fill="url(#bdtBg)"/>
+  <g opacity="0.14"><circle cx="272" cy="66" r="124" fill="#8CC63F"/></g>
+
+  <g transform="translate(147 152) scale(1.05)" fill="none" stroke="#8CC63F" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="-58" y="-42" width="116" height="80" rx="7"/>
+    <path d="M-58-16h116" stroke-width="4" opacity="0.75"/>
+    <path d="M-40 8h34M-40 22h56" stroke-width="4" opacity="0.75"/>
+    <path d="M34 4l22-22 14 14-22 22-18 4z" fill="#8CC63F" stroke="#8CC63F" stroke-width="4"/>
+  </g>
+
+  <text x="147" y="268" text-anchor="middle"
+        font-family="'Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+        font-size="12" font-weight="600" letter-spacing="2.2" fill="#F0C8DC">PEARLAND411 DESIGN</text>
+  <text x="147" y="314" text-anchor="middle"
+        font-family="'Poppins','Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+        font-size="32" font-weight="700" letter-spacing="-0.6" fill="#FFFFFF">No banner?</text>
+  <text x="147" y="352" text-anchor="middle"
+        font-family="'Poppins','Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+        font-size="32" font-weight="700" letter-spacing="-0.6" fill="#FFFFFF">We design it</text>
+
+  <path d="M97 380h100" stroke="#8CC63F" stroke-width="2" opacity="0.5"/>
+
+  <text x="147" y="418" text-anchor="middle" font-family="'Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif" font-size="16" fill="#EBC6D8">Ad artwork for</text>
+  <text x="147" y="444" text-anchor="middle" font-family="'Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif" font-size="16" fill="#EBC6D8">any size on this page</text>
+  <text x="147" y="484" text-anchor="middle" font-family="'Poppins','Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif" font-size="22" font-weight="700" fill="#FFFFFF">Print &amp; web ready</text>
+
+  <g transform="translate(46 518)">
+    <rect width="204" height="54" rx="27" fill="#8CC63F"/>
+    <text x="102" y="35" text-anchor="middle"
+          font-family="'Poppins','Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+          font-size="19" font-weight="700" fill="#231018">Design my ad</text>
+  </g>
+</svg>

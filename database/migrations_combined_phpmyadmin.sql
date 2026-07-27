@@ -513,30 +513,6 @@ SET @s := IF(@e = 0, 'ALTER TABLE `plans` ADD COLUMN `category` VARCHAR(50) NOT 
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
--- ============================================================
--- 0015_home_ad_slots.sql
--- Five extra ad zones for the redesigned homepage.
--- DATA ONLY (0006 already added slot_key/size), so this block is
--- byte-identical to database/migrations/0015_home_ad_slots.sql.
--- Idempotent: NOT EXISTS skips any slot_key already present.
--- ============================================================
-INSERT INTO `ads_prices` (`name`, `slot_key`, `size`, `cost`, `status`, `created_at`, `updated_at`)
-SELECT * FROM (
-    SELECT 'Homepage top leaderboard'      AS name,
-           'home-top-leaderboard'          AS slot_key,
-           '970x90'                        AS size,
-           120.00                          AS cost,
-           1                               AS status,
-           NOW()                           AS created_at,
-           NOW()                           AS updated_at
-    UNION ALL SELECT 'Homepage sidebar — top',        'home-sidebar-top',        '300x250',  69.00, 1, NOW(), NOW()
-    UNION ALL SELECT 'Homepage in-content billboard', 'home-inline-billboard',   '728x250',  79.00, 1, NOW(), NOW()
-    UNION ALL SELECT 'Homepage sidebar skyscraper',   'home-sidebar-skyscraper', '300x600',  89.00, 1, NOW(), NOW()
-    UNION ALL SELECT 'Homepage footer billboard',     'home-footer-billboard',   '970x250',  59.00, 1, NOW(), NOW()
-) AS seed
-WHERE NOT EXISTS (
-    SELECT 1 FROM `ads_prices` WHERE `ads_prices`.`slot_key` = seed.slot_key
-);
 
 
 -- ---------------------------------------------------------------------------
@@ -604,6 +580,49 @@ UPDATE `transactions` t JOIN `plans` p ON p.id = t.plan_id
    SET t.term_days = p.duration_days,
        t.expires_at = DATE_ADD(t.created_at, INTERVAL p.duration_days DAY)
  WHERE t.term_days IS NULL AND p.duration_days > 0;
+
+
+-- ============================================================
+-- 0017_home_ad_slots.sql
+-- Homepage ad zones. Each slot_key equals the plans.slug of the
+-- package sold on /pricing-plan, so a purchase maps to a position.
+-- DATA ONLY (0006 added slot_key/size) -> identical to the
+-- standalone file. Idempotent via NOT EXISTS.
+-- ============================================================
+INSERT INTO `ads_prices` (`name`, `slot_key`, `size`, `cost`, `status`, `created_at`, `updated_at`)
+SELECT * FROM (
+    SELECT 'Top Banner (Site Wide)'  AS name,
+           'top-banner-site-wide'    AS slot_key,
+           '700x100'                 AS size,
+           75.00                     AS cost,
+           1                         AS status,
+           NOW()                     AS created_at,
+           NOW()                     AS updated_at
+    UNION ALL SELECT 'Bottom Banner (Site Wide)', 'bottom-banner-site-wide', '900x100', 45.00, 1, NOW(), NOW()
+    UNION ALL SELECT 'Middle Banner (Category)',  'middle-banner-category',  '900x100', 25.00, 1, NOW(), NOW()
+    UNION ALL SELECT '#1 Right Side Banner',      'right-side-banner-1',     '300x250', 25.00, 1, NOW(), NOW()
+    UNION ALL SELECT '#2 Right Side Banner',      'right-side-banner-2',     '300x250', 25.00, 1, NOW(), NOW()
+    UNION ALL SELECT '#3 Right Side Banner',      'right-side-banner-3',     '300x250', 20.00, 1, NOW(), NOW()
+    UNION ALL SELECT 'Right Panel Skyscraper',    'right-panel-skyscraper',  '295x600', 20.00, 1, NOW(), NOW()
+) AS seed
+WHERE NOT EXISTS (
+    SELECT 1 FROM `ads_prices` WHERE `ads_prices`.`slot_key` = seed.slot_key
+);
+
+-- ============================================================
+-- 0018_homepage_promos.sql
+-- listings.hotspot_until / week_until — the two homepage
+-- placements sold as business-hotspot ($25/30d) and
+-- business-of-the-week ($20/7d). DATE, so the placement expires
+-- on its own. PREPARE/EXECUTE form for phpMyAdmin (no DELIMITER).
+-- ============================================================
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='listings' AND COLUMN_NAME='hotspot_until');
+SET @s := IF(@e = 0, 'ALTER TABLE `listings` ADD COLUMN `hotspot_until` DATE NULL DEFAULT NULL COMMENT ''Business Hotspot on Homepage - last day the placement shows'', ADD KEY `listings_hotspot_until_idx` (`hotspot_until`)', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='listings' AND COLUMN_NAME='week_until');
+SET @s := IF(@e = 0, 'ALTER TABLE `listings` ADD COLUMN `week_until` DATE NULL DEFAULT NULL COMMENT ''Business Of the Week - last day the placement shows'', ADD KEY `listings_week_until_idx` (`week_until`)', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
 SET FOREIGN_KEY_CHECKS = 1;

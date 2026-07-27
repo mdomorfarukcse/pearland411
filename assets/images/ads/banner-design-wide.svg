@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" width="900" height="300"
+     role="img" aria-label="Banner and ad design by Pearland411">
+  <title>Need a banner designed? Pearland411 designs your ad</title>
+  <!-- 3:1, content inside the middle 70% vertically. See house-ad-wide.svg. -->
+  <defs>
+    <linearGradient id="bdwBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5A2540"/>
+      <stop offset="0.58" stop-color="#7C3357"/>
+      <stop offset="1" stop-color="#A2456F"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="900" height="300" fill="url(#bdwBg)"/>
+  <g opacity="0.14"><circle cx="822" cy="42" r="146" fill="#8CC63F"/></g>
+
+  <g transform="translate(122 150) scale(0.92)" fill="none" stroke="#8CC63F" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="-58" y="-42" width="116" height="80" rx="7"/>
+    <path d="M-58-16h116" stroke-width="4" opacity="0.75"/>
+    <path d="M-40 8h34M-40 22h56" stroke-width="4" opacity="0.75"/>
+    <path d="M34 4l22-22 14 14-22 22-18 4z" fill="#8CC63F" stroke="#8CC63F" stroke-width="4"/>
+  </g>
+
+  <text x="212" y="118"
+        font-family="'Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+        font-size="14" font-weight="600" letter-spacing="2.6" fill="#F0C8DC">PEARLAND411 DESIGN</text>
+  <text x="212" y="162"
+        font-family="'Poppins','Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+        font-size="34" font-weight="700" letter-spacing="-0.6" fill="#FFFFFF">No banner? We'll design it</text>
+  <text x="212" y="194"
+        font-family="'Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+        font-size="17" fill="#EBC6D8">Ad artwork for any placement on Pearland411</text>
+
+  <g transform="translate(212 212)">
+    <rect width="180" height="48" rx="24" fill="#8CC63F"/>
+    <text x="90" y="31" text-anchor="middle"
+          font-family="'Poppins','Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+          font-size="18" font-weight="700" fill="#231018">Design my ad</text>
+  </g>
+</svg>
