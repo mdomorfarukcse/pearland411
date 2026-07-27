@@ -1662,7 +1662,11 @@ class User extends CI_Controller
 			'top'      => 'top-banner-site-wide',
 			'inline'   => 'middle-banner-category',
 			'side_1'   => 'right-side-banner-1',
-			'side_2'   => 'right-banner-1',
+			// Was 'right-banner-1', while listing-details used
+			// 'right-side-banner-2' for the same position — so an ad sold for
+			// the second sidebar slot showed on one page and not the other.
+			// The category-priced zones stay reachable as aliases below.
+			'side_2'   => 'right-side-banner-2',
 			'side_sky' => 'right-panel-skyscraper',
 			'bottom'   => $cat_slug ? 'bottom-banner-category' : 'bottom-banner-site-wide',
 		);
@@ -1673,10 +1677,13 @@ class User extends CI_Controller
 		// them keeps running in the equivalent new position.
 		$this->usermodel->primeAdSlots(array_merge(
 			array_values($data['ad_slots']),
-			array('listing-top', 'listing-inline', 'listing-sidebar')
+			array('listing-top', 'listing-inline', 'listing-sidebar',
+			      'right-banner-1', 'right-banner-2')
 		));
 
-		$data['page_css'] = 'assets/css/directory.css?v=1';
+		// promo-cards.css carries the two house promo cards this page
+		// includes; it is shared with the homepage so they can't drift.
+		$data['page_css'] = array('assets/css/directory.css?v=1', 'assets/css/promo-cards.css?v=1');
 
 		$this->load->view('header', $data);
 		$this->load->view('all-listing', $data);
@@ -2596,13 +2603,16 @@ class User extends CI_Controller
 			'side_sky' => 'right-panel-skyscraper',
 			'bottom'   => 'bottom-banner-site-wide',
 		);
-		// Legacy 0006 zones kept alive as aliases — see all_listing().
+		// Legacy 0006 zones and the category-priced directory zones kept
+		// alive as aliases — see all_listing().
 		$this->usermodel->primeAdSlots(array_merge(
 			array_values($data['ad_slots']),
-			array('listing-top', 'listing-inline', 'listing-sidebar')
+			array('listing-top', 'listing-inline', 'listing-sidebar',
+			      'right-banner-1', 'right-banner-2')
 		));
 
-		$data['page_css'] = 'assets/css/directory.css?v=1';
+		// See all_listing() — the promo cards are shared with the homepage.
+		$data['page_css'] = array('assets/css/directory.css?v=1', 'assets/css/promo-cards.css?v=1');
 
 		// Load views
 		$this->load->view('header', $data);
@@ -3356,7 +3366,12 @@ class User extends CI_Controller
 					'category_id'		=> intval($category_id),
 					'listing_address'	=> trim($listing_address),
 					'listing_slug' 		=> trim($listing_slug),
-					'listing_status' 	=> 'Active'
+					// listing_status is an INT column. This wrote the string
+					// 'Active', which MySQL coerced to 0 — i.e. unpublished —
+					// so every business submitted through this form was
+					// invisible. 1 = published; see
+					// Usermodel::applyPublishedListingFilter().
+					'listing_status' 	=> 1
 				);
 
 				// Add optional fields if they exist

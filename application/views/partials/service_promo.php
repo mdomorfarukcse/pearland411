@@ -66,7 +66,7 @@ $promo_contact = base_url('contact-us');
 				<?php endforeach; ?>
 			</ul>
 			<div>
-				<a class="p411-btn" href="<?= e_url($promo_contact) ?>">Talk to us</a>
+				<a class="p411-promo__cta" href="<?= e_url($promo_contact) ?>">Talk to us</a>
 			</div>
 		</div>
 	</section>
@@ -90,7 +90,7 @@ $promo_contact = base_url('contact-us');
 			<?php endforeach; ?>
 		</ul>
 
-		<a class="p411-btn p411-btn--block" href="<?= e_url($promo_contact) ?>">Contact us for a quote</a>
+		<a class="p411-promo__cta" href="<?= e_url($promo_contact) ?>">Contact us for a quote</a>
 		<a class="p411-promo__foot" href="<?= e_url($promo_contact) ?>">Or tell us what you need &rarr;</a>
 	</aside>
 

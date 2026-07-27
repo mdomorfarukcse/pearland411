@@ -1336,6 +1336,111 @@ class Usermodel extends CI_Model
 
 
 	/**
+	 * THE definition of "a listing the public may see".
+	 *
+	 * `listing_status = 1` means published and `is_deleted = 0` means not
+	 * binned. Both halves have to be applied together, everywhere, or a count
+	 * and the list it labels can disagree — which is exactly what happened:
+	 * getCategoriesWithCounts() filtered only is_deleted and reported 255 for
+	 * a category whose page, filtering listing_status too, showed 13.
+	 *
+	 * Route every public listing query through this rather than hand-rolling
+	 * the pair, so they cannot drift apart again.
+	 *
+	 * Note the convention: 1 = published. The CSV import and the add-listing
+	 * form used to write 0 (the form wrote the *string* 'Active', which MySQL
+	 * coerced to 0), while the admin panel, both dashboards and the sitemap
+	 * all read 1. Migration 0020 normalised the data; both write paths are
+	 * fixed in Admin::import_listings() and User::add_listing_scratch().
+	 *
+	 * @param string $alias table name or alias the caller used for `listings`
+	 */
+	private function applyPublishedListingFilter($alias = 'listings')
+	{
+		$this->db
+			->where($alias . '.is_deleted', 0)
+			->where($alias . '.listing_status', 1);
+	}
+
+	/**
+	 * The same predicate as SQL text, for use inside a JOIN ... ON clause.
+	 *
+	 * Counting queries LEFT JOIN `listings` onto `listing_categories`; putting
+	 * the predicate in WHERE instead would silently turn that into an INNER
+	 * join and drop empty categories. Same rule, different position.
+	 *
+	 * @param string $alias table name or alias the caller used for `listings`
+	 */
+	private function publishedListingJoinCondition($alias = 'listings')
+	{
+		return '(' . $alias . '.is_deleted IS NULL OR ' . $alias . '.is_deleted = 0)'
+			. ' AND ' . $alias . '.listing_status = 1';
+	}
+
+	/** table => (slug => category_id), built once per request by resolveCategoryIdBySlug(). */
+	private $category_slug_map = array();
+
+	/**
+	 * Turn a category slug from a URL into a category_id.
+	 *
+	 * Tries the stored `category_slug` first — that is the normal case and a
+	 * single indexed lookup. Categories created through the admin panel never
+	 * had a slug written, though, so those fall through to matching on the
+	 * name, and the match is done by running pearland_slug() over the names in
+	 * PHP rather than by rebuilding the slug rule in SQL.
+	 *
+	 * That is the point: the links are built with pearland_slug(), so
+	 * resolving them with the same function means the two can never disagree.
+	 * The SQL this replaces compared against LOWER(REPLACE(name, ' ', '-')),
+	 * which leaves punctuation in — so "Medical & Dental" was linked as
+	 * medical-dental and looked up as medical-&-dental, and the page came back
+	 * empty however many listings the category held. Migration 0020 backfills
+	 * the missing slugs; this keeps working for any that get missed.
+	 *
+	 * Uses $this->db->query() rather than the query builder on purpose: the
+	 * builder keeps one shared accumulator per request and callers are
+	 * mid-way through composing a query when this runs.
+	 *
+	 * @param  string   $slug
+	 * @param  string   $table category table to look in
+	 * @return int|null category_id, or NULL when nothing matches
+	 */
+	private function resolveCategoryIdBySlug($slug, $table = 'listing_categories')
+	{
+		$slug  = trim((string) $slug);
+		$table = preg_replace('/[^A-Za-z0-9_]/', '', (string) $table);
+		if ($slug === '' || $table === '') return NULL;
+
+		// Autoloaded, but the CLI controller can reach this model without it.
+		if (!function_exists('pearland_slug')) $this->load->helper('view');
+
+		$row = $this->db
+			->query('SELECT category_id FROM `' . $table . '` WHERE `category_slug` = ? LIMIT 1', array($slug))
+			->row();
+		if ($row) return (int) $row->category_id;
+
+		if (!isset($this->category_slug_map[$table])) {
+			$map  = array();
+			$rows = $this->db->query('SELECT category_id, category_name FROM `' . $table . '`')->result();
+			foreach ($rows as $c) {
+				$key = pearland_slug($c->category_name);
+				// First one wins, so two categories that slugify the same way
+				// resolve consistently instead of by row order.
+				if ($key !== '' && !isset($map[$key])) {
+					$map[$key] = (int) $c->category_id;
+				}
+			}
+			$this->category_slug_map[$table] = $map;
+		}
+
+		$key = pearland_slug($slug);
+
+		return isset($this->category_slug_map[$table][$key])
+			? $this->category_slug_map[$table][$key]
+			: NULL;
+	}
+
+	/**
 	 * Shared FROM + WHERE for the public directory (/all-listing), so the
 	 * page's list and its count can never disagree about what is visible.
 	 *
@@ -1354,16 +1459,20 @@ class Usermodel extends CI_Model
 		if ($cat_identifier !== NULL && $cat_identifier !== '') {
 			// Check if it's numeric (ID) or string (slug)
 			if (is_numeric($cat_identifier)) {
-				$this->db->where('listing_categories.category_id', $cat_identifier);
+				$this->db->where('listing_categories.category_id', (int) $cat_identifier);
 			} else {
-				// For slug, try both database slug and generated slug from name
-				$where_condition = "(listing_categories.category_slug = '" . $this->db->escape_str($cat_identifier) . "' OR LOWER(REPLACE(listing_categories.category_name, ' ', '-')) = '" . $this->db->escape_str($cat_identifier) . "')";
-				$this->db->where($where_condition);
+				$cat_id = $this->resolveCategoryIdBySlug($cat_identifier);
+				if ($cat_id === NULL) {
+					// Slug matches no category. Show an empty directory rather
+					// than every listing on the site.
+					$this->db->where('1 = 0', NULL, FALSE);
+				} else {
+					$this->db->where('listing_categories.category_id', $cat_id);
+				}
 			}
 		}
 
-		$this->db->where('listings.is_deleted', 0)
-			->where('listings.listing_status', 1);
+		$this->applyPublishedListingFilter('listings');
 	}
 
 	/**
@@ -2886,7 +2995,7 @@ class Usermodel extends CI_Model
 		$this->db->join('listing_categories', 'listings.category_id = listing_categories.category_id', 'LEFT');
 
 		// Status filters - Use 0 instead of 1 based on debug data
-		$this->db->where('listings.listing_status', 0);
+		$this->db->where('listings.listing_status', 1);   // 1 = published; see applyPublishedListingFilter()
 		$this->db->where('listings.is_deleted', 0);		// Exclude featured and spotlight listings
 		$this->db->where('(listings.featured_listing IS NULL OR listings.featured_listing = 0)');
 		$this->db->where('(listings.spotlight_listing IS NULL OR listings.spotlight_listing = 0)');
@@ -2912,7 +3021,7 @@ class Usermodel extends CI_Model
 		$this->db->join('listing_categories', 'listings.category_id = listing_categories.category_id', 'LEFT');
 
 		// Status filters - Use 0 instead of 1 based on debug data
-		$this->db->where('listings.listing_status', 0);
+		$this->db->where('listings.listing_status', 1);   // 1 = published; see applyPublishedListingFilter()
 		$this->db->where('listings.is_deleted', 0);		// Include featured OR spotlight listings
 		$this->db->group_start();
 		$this->db->where('listings.featured_listing', 1);
@@ -2964,28 +3073,18 @@ class Usermodel extends CI_Model
 		return $result ? $result->category_name : 'General';
 	}
 
+	/**
+	 * Heading for a category page. Resolved through resolveCategoryIdBySlug()
+	 * so the title matches the listings underneath it — the SQL fallback this
+	 * replaces used a different slug rule from the one the links are built
+	 * with, so a punctuated category showed its businesses under "General".
+	 */
 	public function getCategoryNameBySlug($category_slug, $table = 'listing_categories')
 	{
-		// First try exact slug match
-		$result = $this->db->select('category_name')
-			->from($table)
-			->where('category_slug', $category_slug)
-			->limit(1)
-			->get()->row();
+		$cat_id = $this->resolveCategoryIdBySlug($category_slug, $table);
+		if ($cat_id === NULL) return 'General';
 
-		if ($result) {
-			return $result->category_name;
-		}
-
-		// If not found, try generated slug match
-		$where_condition = "LOWER(REPLACE(category_name, ' ', '-')) = '" . $this->db->escape_str($category_slug) . "'";
-		$result = $this->db->select('category_name')
-			->from($table)
-			->where($where_condition)
-			->limit(1)
-			->get()->row();
-
-		return $result ? $result->category_name : 'General';
+		return $this->getCategoryName($cat_id, $table);
 	}
 
 	public function getCategorySlugById($category_id, $table = 'listing_categories')
@@ -3001,9 +3100,12 @@ class Usermodel extends CI_Model
 			if (!empty($result->category_slug)) {
 				return $result->category_slug;
 			}
-			// If slug is empty but we have category name, generate slug from name
+			// If slug is empty but we have category name, generate slug from
+			// name — via the shared helper, so the URL handed out here is the
+			// one resolveCategoryIdBySlug() will resolve back to this row.
 			if (!empty($result->category_name)) {
-				return strtolower(str_replace(' ', '-', $result->category_name));
+				if (!function_exists('pearland_slug')) $this->load->helper('view');
+				return pearland_slug($result->category_name);
 			}
 		}
 
@@ -3012,13 +3114,7 @@ class Usermodel extends CI_Model
 
 	public function getCategoryIdBySlug($category_slug, $table = 'listing_categories')
 	{
-		$table = $this->db->escape_str($table);
-		$result = $this->db->select($table . '.category_id')
-			->from($table)
-			->where($table . '.category_slug', $category_slug)
-			->limit(1)
-			->get()->row();
-		return $result ? $result->category_id : null;
+		return $this->resolveCategoryIdBySlug($category_slug, $table);
 	}
 
 	public function getCategoryBySlugOrId($identifier, $table = 'listing_categories')
@@ -3027,29 +3123,21 @@ class Usermodel extends CI_Model
 		if (is_numeric($identifier)) {
 			$result = $this->db->select('*')
 				->from($table)
-				->where('category_id', $identifier)
+				->where('category_id', (int) $identifier)
 				->limit(1)
 				->get()->row();
 			if ($result) return $result;
 		}
 
-		// Try exact slug match
-		$result = $this->db->select('*')
+		// Stored slug, then the name, both via the shared resolver.
+		$cat_id = $this->resolveCategoryIdBySlug($identifier, $table);
+		if ($cat_id === NULL) return NULL;
+
+		return $this->db->select('*')
 			->from($table)
-			->where('category_slug', $identifier)
+			->where('category_id', $cat_id)
 			->limit(1)
 			->get()->row();
-
-		if ($result) return $result;
-
-		// Try generated slug match
-		$result = $this->db->select('*')
-			->from($table)
-			->where('LOWER(REPLACE(category_name, " ", "-"))', $identifier)
-			->limit(1)
-			->get()->row();
-
-		return $result ? $result : null;
 	}
 
 	// Debug method to check categories and their slugs
@@ -3065,7 +3153,8 @@ class Usermodel extends CI_Model
 				'id' => $cat->category_id,
 				'name' => $cat->category_name,
 				'slug' => $cat->category_slug,
-				'generated_slug' => strtolower(str_replace(' ', '-', $cat->category_name))
+				// The slug the links actually use when category_slug is empty.
+				'generated_slug' => pearland_slug($cat->category_name)
 			];
 		}
 		return $debug_info;
@@ -3608,17 +3697,29 @@ class Usermodel extends CI_Model
 
 	/**
 	 * Search in categories table
+	 *
+	 * listing_count comes from a correlated subquery rather than a JOIN +
+	 * GROUP BY. Two reasons: it counts exactly what the category page will
+	 * show (see applyPublishedListingFilter — this used to filter only
+	 * is_deleted and so over-reported), and selecting `listing_categories.*`
+	 * alongside a GROUP BY on one column is rejected outright by MySQL 5.7+
+	 * under the default ONLY_FULL_GROUP_BY.
 	 */
 	public function searchCategories($search_term, $limit = 10)
 	{
-		$this->db->select('listing_categories.*, COUNT(listings.listing_id) as listing_count');
+		$this->db->select('listing_categories.*', false);
+		$this->db->select(
+			'(SELECT COUNT(*) FROM `listings` l'
+			. ' WHERE l.category_id = listing_categories.category_id'
+			. ' AND ' . $this->publishedListingJoinCondition('l')
+			. ') AS listing_count',
+			false
+		);
 		$this->db->from('listing_categories');
-		$this->db->join('listings', 'listing_categories.category_id = listings.category_id AND listings.is_deleted = 0', 'left');
 		$this->db->group_start();
 		$this->db->like('listing_categories.category_name', $search_term);
 		$this->db->or_like('listing_categories.category_description', $search_term);
 		$this->db->group_end();
-		$this->db->group_by('listing_categories.category_id');
 		$this->db->limit($limit);
 		$this->db->order_by('listing_categories.category_id', 'DESC');
 
@@ -5739,7 +5840,7 @@ class Usermodel extends CI_Model
 			          listings.listing_image, listings.hotspot_until, listing_categories.category_name', false)
 			->from('listings')
 			->join('listing_categories', 'listings.category_id = listing_categories.category_id', 'left')
-			->where('listings.listing_status', 0)
+			->where('listings.listing_status', 1)   // 1 = published
 			->where('listings.is_deleted', 0)
 			->where('listings.hotspot_until >=', date('Y-m-d'))
 			->order_by('listings.hotspot_until', 'ASC')
@@ -5769,7 +5870,7 @@ class Usermodel extends CI_Model
 			          listing_categories.category_name', false)
 			->from('listings')
 			->join('listing_categories', 'listings.category_id = listing_categories.category_id', 'left')
-			->where('listings.listing_status', 0)
+			->where('listings.listing_status', 1)   // 1 = published
 			->where('listings.is_deleted', 0)
 			->where('listings.week_until >=', date('Y-m-d'))
 			->order_by('listings.week_until', 'ASC')
@@ -5790,7 +5891,7 @@ class Usermodel extends CI_Model
 		$this->db
 			->select('lc.category_id, lc.category_name, lc.category_slug, COUNT(l.listing_id) AS listing_count', false)
 			->from('listing_categories lc')
-			->join('listings l', 'l.category_id = lc.category_id AND (l.is_deleted IS NULL OR l.is_deleted = 0)', 'left')
+			->join('listings l', 'l.category_id = lc.category_id AND ' . $this->publishedListingJoinCondition('l'), 'left')
 			->group_by('lc.category_id, lc.category_name, lc.category_slug')
 			->having('listing_count >', 0)
 			->order_by('listing_count', 'DESC')

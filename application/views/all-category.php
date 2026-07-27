@@ -357,7 +357,7 @@
 					if (count($categories_to_show) > 0) {
 						foreach ($categories_to_show as $category) {
 							// Generate category URL with slug
-							$category_url = !empty($category->category_slug) ? $category->category_slug : strtolower(str_replace(' ', '-', $category->category_name));
+							$category_url = !empty($category->category_slug) ? $category->category_slug : pearland_slug($category->category_name);
 
 							// Handle fallback image
 							$category_image = !empty($category->category_image) ? $category->category_image : 'assets/images/no_photo.jpg';

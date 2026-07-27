@@ -661,84 +661,10 @@
 .p411-note--err { background: #FDECEC; color: #96201F; border: 1px solid #F5C6C5; }
 .p411-note--info { background: var(--p411-amber-w); color: #7A5310; border: 1px solid #F0DDB4; }
 
-/* ---- static services promo (website / hosting / local SEO) ---------- */
-
-.p411-promo {
-	position: relative;
-	border-radius: 12px;
-	padding: 20px 18px;
-	color: #fff;
-	background: linear-gradient(150deg, #1F3D0F 0%, #35630F 55%, #4E8A28 100%);
-	overflow: hidden;
-}
-.p411-promo::after {
-	content: "";
-	position: absolute;
-	right: -40px;
-	top: -40px;
-	width: 150px;
-	height: 150px;
-	border-radius: 50%;
-	background: rgba(140, 198, 63, .22);
-}
-.p411-promo > * { position: relative; z-index: 1; }
-.p411-promo__eyebrow {
-	display: block;
-	font-size: 10.5px;
-	font-weight: 700;
-	letter-spacing: .14em;
-	text-transform: uppercase;
-	color: var(--p411-green-l);
-	margin-bottom: 7px;
-}
-.p411-promo h3 { color: #fff; font-size: 17px; font-weight: 700; margin-bottom: 7px; }
-.p411-promo p { font-size: 13.5px; color: rgba(255, 255, 255, .88); margin-bottom: 13px; }
-.p411-promo ul { margin: 0 0 15px; display: grid; gap: 8px; }
-.p411-promo li {
-	display: flex;
-	align-items: flex-start;
-	gap: 9px;
-	font-size: 13.5px;
-	color: rgba(255, 255, 255, .95);
-	line-height: 1.45;
-}
-.p411-promo li i {
-	flex: none;
-	display: grid;
-	place-items: center;
-	width: 26px;
-	height: 26px;
-	border-radius: 8px;
-	background: rgba(255, 255, 255, .14);
-	color: #fff;
-}
-.p411-promo li b { display: block; font-weight: 600; }
-.p411-promo li span { display: block; font-size: 12px; color: rgba(255, 255, 255, .72); }
-.p411-dir .p411-promo .p411-btn,
-.p411-ld .p411-promo .p411-btn { background: #fff; color: #23430F; }
-.p411-dir .p411-promo .p411-btn:hover,
-.p411-ld .p411-promo .p411-btn:hover { background: var(--p411-green-w); color: #23430F; }
-.p411-promo__foot {
-	display: block;
-	margin-top: 9px;
-	text-align: center;
-	font-size: 12.5px;
-	color: rgba(255, 255, 255, .82);
-}
-.p411-promo__foot:hover { color: #fff; text-decoration: underline; }
-
-/* banner variant, used full width above the footer */
-.p411-promo--banner { padding: 26px 24px; }
-.p411-promo--banner .p411-promo__grid {
-	display: grid;
-	gap: 18px;
-	align-items: center;
-	grid-template-columns: 1fr;
-}
-@media (min-width: 860px) {
-	.p411-promo--banner .p411-promo__grid { grid-template-columns: 1.15fr 1fr auto; }
-	.p411-promo--banner ul { grid-template-columns: 1fr; margin-bottom: 0; }
-}
+/* ---- static services promo ------------------------------------------- */
+/* Moved to assets/css/promo-cards.css — the same two cards now render on the
+   homepage as well, and keeping one copy is the only way they stay identical.
+   header.php loads promo-cards.css alongside this file. */
 
 /* ---- owner band (matches the homepage's) ----------------------------- */
 

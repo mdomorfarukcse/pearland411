@@ -166,11 +166,10 @@
 																	if (!empty($category->category_slug)) {
 																		$category_url = $category->category_slug;
 																	} else {
-																		// Generate slug from category name
-																		$category_url = strtolower(str_replace([' ', '&', '/'], ['-', 'and', '-'], $category->category_name));
-																		$category_url = preg_replace('/[^a-z0-9\-]/', '', $category_url);
-																		$category_url = preg_replace('/\-+/', '-', $category_url);
-																		$category_url = trim($category_url, '-');
+																		// Shared slug rule. This block used to map "&" to "and"
+																		// while the directory dropped it, so "Medical & Dental"
+																		// opened an empty page from this menu only.
+																		$category_url = pearland_slug($category->category_name);
 																	}
 
 																	echo '<li><a href="' . base_url('user/all_listing/' . htmlspecialchars($category_url)) . '">' . htmlspecialchars($category->category_name) . '</a></li>';

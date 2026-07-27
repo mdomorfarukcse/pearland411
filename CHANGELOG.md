@@ -6,6 +6,127 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-07-27 — Listing-count mismatch, category slugs, and the two house promo cards
+
+Four issues reported after the homepage rebuild. The first turned out to be a
+data bug hiding most of the directory from visitors; the rest are reuse of the
+services card that already existed on `/all-listing`.
+
+### Fixed
+- **A category box said "255 listings"; the category page showed 13.** Two
+  queries on the same screen disagreed about what "published" means.
+  `getCategoriesWithCounts()` filtered only `is_deleted`; `directoryQuery()`
+  also required `listing_status = 1`. And almost nothing wrote `1` — the admin
+  CSV import hardcoded `listing_status => 0` (`Admin.php`), and the public
+  add-listing form wrote the **string** `'Active'` into an `INT` column
+  (`User.php`), which MySQL coerces to `0`. So bulk-imported and user-submitted
+  businesses were all stored unpublished, counted by the box and filtered out
+  of the list. Meanwhile the admin listings table, both user dashboards and
+  `Sitemap.php` all read `1` = Active.
+
+  The fix is one definition instead of eleven hand-rolled copies:
+  `Usermodel::applyPublishedListingFilter()` (and
+  `publishedListingJoinCondition()` for counting LEFT JOINs, where the
+  predicate must sit in `ON` or empty categories vanish). Every public listing
+  query now routes through it, so a count and the list it labels can't drift
+  apart again. Migration **0020** normalises the stored data and both write
+  paths now write `1`.
+- **Category links with punctuation led to an empty page.** Three slug
+  generators disagreed: `pearland_slug()` gave `medical-dental`,
+  `all-listing.php` gave `medical-&-dental`, `header.php` gave
+  `medical-and-dental`, and the SQL fallback in `directoryQuery()` matched a
+  fourth form. `Admin::add_new_listing_category()` never wrote
+  `category_slug`, so admin-created categories depended on that fallback — and
+  for any name containing `&` or `/` the homepage link resolved to nothing
+  while the directory's own link worked.
+
+  All six category-link sites now call `pearland_slug()`; the new
+  `Usermodel::resolveCategoryIdBySlug()` resolves a URL back to a category by
+  running that same PHP function over the names, rather than rebuilding the
+  slug rule in SQL where it could diverge again. `getCategoryNameBySlug()`,
+  `getCategoryIdBySlug()` and `getCategoryBySlugOrId()` go through it too, so
+  the page heading can no longer say "General" over a populated list. Admin
+  add/edit now writes a unique `category_slug`, and migration 0020 backfills
+  the empty ones.
+- The homepage footer's "Top Category" / "Trending Category" links were
+  **relative** (`href="user/all_listing/…"`), so they 404'd from anywhere but
+  the homepage itself.
+- `searchCategories()` selected `listing_categories.*` alongside a `GROUP BY`
+  on one column — rejected outright by MySQL 5.7+ under the default
+  `ONLY_FULL_GROUP_BY`. Now a correlated subquery, no GROUP BY.
+- `/all-listing` mapped its second sidebar zone to `right-banner-1` while
+  `/listing-details` used `right-side-banner-2`, so an ad sold for that
+  position appeared on one page and not the other. Both are now
+  `right-side-banner-2`, with the category-priced zones (`right-banner-1/2`,
+  migration 0019) kept live as `$slot_alias`.
+
+### Added
+- `partials/banner_design_promo.php` — the ad/banner-design service as a card
+  in the burgundy palette the `banner-design-*.svg` creatives already use,
+  mirroring `service_promo.php`. An unsold `right-side-banner-2` now renders it
+  instead of a flat picture of an advertisement: the person that zone is for is
+  the advertiser who has no artwork yet, and an image can't tell them what they
+  get or give them somewhere to click. A real booking still wins the slot.
+- `ad_slot.php` gained **`$slot_fallback_partial`** — render a partial instead
+  of the default creative when nothing is sold. Ignored when an ad *is* sold,
+  and when `$slot_fallback = false`.
+- `assets/css/promo-cards.css` — the styles for both cards, split out of
+  `directory.css` now that the homepage renders them too. Every selector is a
+  `.p411-promo` / `.p411-bpromo` descendant, and nothing else in the codebase
+  emits those class names. The cards no longer borrow `.p411-btn`: they sit on
+  a dark panel and need a white button, and three page-scoped `.p411-btn`
+  rules across three stylesheets is how white-on-white buttons happen.
+  `.p411-promo__cta` / `.p411-bpromo__cta` are theirs alone.
+- `database/migrations/0020_listing_status_normalise.sql` — backs the current
+  values up to `listings.listing_status_backup`, publishes every non-deleted
+  listing that is `0`/`NULL`, and backfills the empty `category_slug`s using
+  the same rule as `pearland_slug()`. Idempotent: the backup column is the
+  guard, so a re-run can't re-publish something switched off since. Rollback is
+  in the file header. Mirrored into `migrations_combined_phpmyadmin.sql` (a
+  `REPLACE` chain instead of the standalone file's `WHILE` loop, since
+  phpMyAdmin can't take `DELIMITER`) and documented in `database/README.md`.
+
+### Changed
+- The homepage sidebar now carries both cards: `right-side-banner-1` is forced
+  to the generic `house-ad` creative with `service_promo.php` directly beneath
+  it — the same pairing the directory uses, so the web-services pitch isn't
+  printed twice — and `right-side-banner-2` falls back to the design card.
+- On `/listing-details`, the "Is this your business? / Business profile" block
+  moved from sixth in the sidebar to directly under **Business info**. For an
+  unclaimed listing that call-to-action is the most useful thing on the page
+  for the person who owns the business, and it used to sit below the map, both
+  sidebar ads and the services promo.
+- `Admin::listing_preview()` loads `promo-cards.css` alongside `directory.css`.
+
+### Migrations
+`database/migrations/0020_listing_status_normalise.sql` (run after 0019, or
+re-import `migrations_combined_phpmyadmin.sql`).
+
+**Verify afterwards** — every category's count must equal the "Showing 1–N of
+X" on its own page:
+
+```sql
+SELECT lc.category_name,
+       (SELECT COUNT(*) FROM listings l
+         WHERE l.category_id = lc.category_id
+           AND l.is_deleted = 0 AND l.listing_status = 1) AS n
+  FROM listing_categories lc ORDER BY n DESC;
+```
+
+### Key files
+`application/models/Usermodel.php`, `application/controllers/User.php`,
+`application/controllers/Admin.php`, `application/views/index.php`,
+`application/views/all-listing.php`, `application/views/listing_details.php`,
+`application/views/header.php`, `application/views/all-category.php`,
+`application/views/search.php`, `application/views/partials/ad_slot.php`,
+`application/views/partials/service_promo.php`,
+`application/views/partials/banner_design_promo.php` (new),
+`assets/css/promo-cards.css` (new), `assets/css/directory.css`,
+`database/migrations/0020_listing_status_normalise.sql` (new),
+`database/migrations_combined_phpmyadmin.sql`, `database/README.md`.
+
+---
+
 ## 2026-07 — Directory + listing details rebuilt on the homepage layout
 
 `/all-listing` and `/listing-details/<slug>` now use the same shell as the

@@ -841,6 +841,7 @@ class Admin extends CI_Controller
 		} else {
 			$data = array();
 			$data['category_name'] = $this->input->post('category_name');
+			$data['category_slug'] = $this->makeUniqueCategorySlug($data['category_name']);
 
 			if ($_FILES && $_FILES['category_image']['name']) {
 				$img_info = [
@@ -878,6 +879,13 @@ class Admin extends CI_Controller
 			$this->load->view('admin/footer');
 		} else {
 			$info['category_name'] = $this->input->post('category_name');
+
+			// Only (re)generate the slug when there isn't one. Rewriting it on
+			// every rename would silently break every link and bookmark to
+			// the category that is already out there.
+			if (empty($data['category']->category_slug)) {
+				$info['category_slug'] = $this->makeUniqueCategorySlug($info['category_name'], $id);
+			}
 
 			if ($_FILES && $_FILES['category_image']['name']) {
 				$img_info = [
@@ -1482,7 +1490,11 @@ class Admin extends CI_Controller
 				'category_id'  => $category_id,
 				'sub_category_id' => $sub_category_id,
 				'listing_slug' => $this->makeUniqueListingSlug($listing_name),
-				'listing_status' => 0,
+				// 1 = published. This wrote 0, so an entire CSV import landed
+				// invisible: the category boxes counted the rows, every public
+				// query filtered them out — 255 on the box, 13 on the page.
+				// See Usermodel::applyPublishedListingFilter().
+				'listing_status' => 1,
 				'is_deleted'   => 0,
 				'created_at'   => date('Y-m-d H:i:s'),
 			);
@@ -1673,6 +1685,49 @@ class Admin extends CI_Controller
 	/**
 	 * Build a URL-safe, collision-free listing slug from a name.
 	 */
+	/**
+	 * URL slug for a listing category.
+	 *
+	 * Categories added here never had a slug written, so the public side had
+	 * to guess one from the name — and the three places that link to a
+	 * category each guessed differently, so a name containing "&" or "/"
+	 * reached a populated page from one menu and an empty one from another.
+	 * Writing the slug once, with the same pearland_slug() the links use,
+	 * removes the guessing.
+	 *
+	 * @param string   $name
+	 * @param int|null $ignore_id category being edited, so it doesn't clash
+	 *                            with its own existing slug
+	 */
+	private function makeUniqueCategorySlug($name, $ignore_id = NULL)
+	{
+		$this->load->helper('view');
+
+		$base = pearland_slug($name);
+		if ($base === '') {
+			$base = 'category';
+		}
+
+		$slug   = $base;
+		$suffix = 1;
+		while ($this->categorySlugTaken($slug, $ignore_id)) {
+			$suffix++;
+			$slug = $base . '-' . $suffix;
+		}
+
+		return $slug;
+	}
+
+	private function categorySlugTaken($slug, $ignore_id = NULL)
+	{
+		$this->db->from('listing_categories')->where('category_slug', $slug);
+		if ($ignore_id !== NULL) {
+			$this->db->where('category_id !=', (int) $ignore_id);
+		}
+
+		return $this->db->count_all_results() > 0;
+	}
+
 	private function makeUniqueListingSlug($name)
 	{
 		$base = preg_replace('/[^A-Za-z0-9-]+/', '-', $name);
@@ -1867,7 +1922,9 @@ class Admin extends CI_Controller
 		}
 
 		$data['title']    = 'Preview: ' . (!empty($data['listing']->listing_name) ? $data['listing']->listing_name : 'listing');
-		$data['page_css'] = 'assets/css/directory.css?v=1';
+		// promo-cards.css too — the view includes the two house promo cards
+		// and their styles no longer live in directory.css.
+		$data['page_css'] = array('assets/css/directory.css?v=1', 'assets/css/promo-cards.css?v=1');
 
 		$this->load->view('header', $data);
 		$this->load->view('listing_details', $data);

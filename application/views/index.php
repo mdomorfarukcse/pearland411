@@ -17,6 +17,26 @@ Database Tables Required:
 
 ===============================================================================
 -->
+<?php
+/**
+ * Category URL. The stored slug is used verbatim when there is one — that is
+ * the string the directory matches on — and only a missing slug is generated,
+ * via the shared pearland_slug() so every link on the site derives the same
+ * URL from a given name. The four category lists on this page each used to
+ * carry their own copy of this rule, and they disagreed with the header's and
+ * the directory's on names containing "&": "Medical & Dental" became
+ * medical-and-dental here and medical-dental there, so one of the two links
+ * always landed on an empty page.
+ *
+ * Defined here, above every list that uses it.
+ */
+$home_cat_url = function ($category) {
+	$slug = !empty($category->category_slug)
+		? (string) $category->category_slug
+		: pearland_slug($category->category_name);
+	return base_url('all_listing/' . rawurlencode($slug));
+};
+?>
 <html lang="en">
 
 <head>
@@ -45,6 +65,11 @@ Database Tables Required:
   <!-- Homepage-only sections. Every selector is scoped to .p411-home and no
        other view loads this file, so it cannot affect the rest of the site. -->
   <link rel="stylesheet" href="<?= base_url() ?>assets/css/home-sections.css?v=1">
+  <!-- The two house promo cards (partials/service_promo.php and
+       partials/banner_design_promo.php). Shared with the directory and
+       listing-details pages so the cards can't drift; every selector is a
+       .p411-promo / .p411-bpromo descendant and nothing else emits those. -->
+  <link rel="stylesheet" href="<?= base_url() ?>assets/css/promo-cards.css?v=1">
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
 
@@ -2347,11 +2372,10 @@ Database Tables Required:
                               // Display categories from controller (up to 50)
                               foreach ($header_categories as $category) {
                                 // Generate category URL
-                                $category_url = !empty($category->category_slug)
-                                  ? $category->category_slug
-                                  : strtolower(str_replace([' ', '&'], ['-', 'and'], $category->category_name));
-
-                                echo '<li><a target="_blank" href="' . base_url('user/all_listing/' . $category_url) . '">' . htmlspecialchars($category->category_name) . '</a></li>';
+                                // Shared slug rule — this used to map "&" to "and"
+                                // while the directory dropped it, so those
+                                // categories opened an empty page from here.
+                                echo '<li><a target="_blank" href="' . htmlspecialchars($home_cat_url($category)) . '">' . htmlspecialchars($category->category_name) . '</a></li>';
                               }
                             } else {
                               // Fallback if no data from controller
@@ -2570,13 +2594,6 @@ Database Tables Required:
 
     $p411_placeholder = base_url('assets/images/placeholder-listing.svg');
 
-    // URL for a category row, tolerating a missing category_slug.
-    $p411_cat_url = function ($cat) {
-      $raw = !empty($cat->category_slug) ? $cat->category_slug
-           : (isset($cat->category_name) ? $cat->category_name : '');
-      return base_url('all_listing/' . pearland_slug($raw));
-    };
-
     // Trim a description without splitting a word or a multibyte character.
     $p411_excerpt = function ($text, $len = 105) {
       $text = trim(strip_tags(html_entity_decode((string) $text)));
@@ -2638,7 +2655,7 @@ Database Tables Required:
         <div class="container px-10">
           <div class="p411-cats">
             <?php foreach (array_slice($home_categories, 0, 8) as $cat): ?>
-              <a href="<?= e_url($p411_cat_url($cat)) ?>">
+              <a href="<?= e_url($home_cat_url($cat)) ?>">
                 <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><?= $p411_icon($cat->category_name) ?></svg>
                 <b><?= e($cat->category_name) ?></b>
@@ -2983,8 +3000,16 @@ Database Tables Required:
 
             <div class="p411-sidebar-ad">
               <?php $slot = 'right-side-banner-1';
+              // Same pairing as the directory sidebar: the web-services card
+              // directly below already carries that pitch, so an unsold zone
+              // sells the space itself rather than repeating it.
+              $slot_creative = 'house-ad';
               include APPPATH . 'views/partials/ad_slot.php'; ?>
             </div>
+
+            <?php // Static house promo — never sold, never rotated, so the
+                  // position is always filled. Styles: promo-cards.css. ?>
+            <?php include APPPATH . 'views/partials/service_promo.php'; ?>
 
             <!-- Weather (live, via the Weather::proxy endpoint) -->
             <div class="widget">
@@ -3000,7 +3025,7 @@ Database Tables Required:
                 <ul class="category-list">
                   <?php foreach (array_slice($home_categories, 0, 10) as $cat): ?>
                     <li>
-                      <a href="<?= e_url($p411_cat_url($cat)) ?>"><?= e($cat->category_name) ?></a>
+                      <a href="<?= e_url($home_cat_url($cat)) ?>"><?= e($cat->category_name) ?></a>
                     </li>
                   <?php endforeach; ?>
                 </ul>
@@ -3013,6 +3038,10 @@ Database Tables Required:
 
             <div class="p411-sidebar-ad">
               <?php $slot = 'right-side-banner-2';
+              // Unsold, this position becomes the ad/banner design card
+              // rather than a flat picture of an advertisement. A real
+              // booking still wins the slot.
+              $slot_fallback_partial = 'banner_design_promo.php';
               include APPPATH . 'views/partials/ad_slot.php'; ?>
             </div>
 
@@ -3124,28 +3153,11 @@ Database Tables Required:
           <h4>Top Category</h4>
           <ul>
             <?php
-            // Function to create safe URL slug
-            function createSafeSlug($text)
-            {
-              // Convert to lowercase
-              $slug = strtolower($text);
-              // Replace spaces with hyphens
-              $slug = str_replace(' ', '-', $slug);
-              // Remove special characters (keep only letters, numbers, and hyphens)
-              $slug = preg_replace('/[^a-z0-9\-]/', '', $slug);
-              // Remove multiple consecutive hyphens
-              $slug = preg_replace('/-+/', '-', $slug);
-              // Remove leading and trailing hyphens
-              $slug = trim($slug, '-');
-              return $slug;
-            }
-
             // Display first 8 categories for Top Category column
             if (!empty($all_listing_categories)) {
               $top_categories = array_slice($all_listing_categories, 0, 8);
               foreach ($top_categories as $category) {
-                $category_slug = (!empty($category->category_slug)) ? createSafeSlug($category->category_slug) : createSafeSlug($category->category_name);
-                echo '<li><a href="user/all_listing/' . htmlspecialchars($category_slug) . '">' . htmlspecialchars($category->category_name) . '</a></li>';
+                echo '<li><a href="' . htmlspecialchars($home_cat_url($category)) . '">' . htmlspecialchars($category->category_name) . '</a></li>';
               }
             } else {
               // Fallback categories
@@ -3169,8 +3181,7 @@ Database Tables Required:
             if (!empty($all_listing_categories) && count($all_listing_categories) > 8) {
               $trending_categories = array_slice($all_listing_categories, 8, 6);
               foreach ($trending_categories as $category) {
-                $category_slug = (!empty($category->category_slug)) ? createSafeSlug($category->category_slug) : createSafeSlug($category->category_name);
-                echo '<li><a href="user/all_listing/' . htmlspecialchars($category_slug) . '">' . htmlspecialchars($category->category_name) . '</a></li>';
+                echo '<li><a href="' . htmlspecialchars($home_cat_url($category)) . '">' . htmlspecialchars($category->category_name) . '</a></li>';
               }
             } else {
               // Fallback categories
@@ -3562,32 +3573,14 @@ Database Tables Required:
         </div>
         <div class="modal-body">
           <div class="row">
-            <?php
-            // Function to create safe URL slug (defined again for modal)
-            if (!function_exists('createSafeSlug')) {
-              function createSafeSlug($text)
-              {
-                // Convert to lowercase
-                $slug = strtolower($text);
-                // Replace spaces with hyphens
-                $slug = str_replace(' ', '-', $slug);
-                // Remove special characters (keep only letters, numbers, and hyphens)
-                $slug = preg_replace('/[^a-z0-9\-]/', '', $slug);
-                // Remove multiple consecutive hyphens
-                $slug = preg_replace('/-+/', '-', $slug);
-                // Remove leading and trailing hyphens
-                $slug = trim($slug, '-');
-                return $slug;
-              }
-            }
-            ?>
+            
             <?php if (isset($allCategories) && !empty($allCategories)): ?>
               <?php
               // Limit to 50 categories for modal (25 per column)
               $modal_limited_categories = array_slice($allCategories, 0, 50);
               foreach ($modal_limited_categories as $category): ?>
                 <div class="col-md-6 col-sm-6 mb-2">
-                  <a href="<?php echo base_url('user/all_listing/' . createSafeSlug((!empty($category->category_slug) ? $category->category_slug : $category->category_name))); ?>" class="d-block p-2" style="color: #666; text-decoration: none;">
+                  <a href="<?php echo htmlspecialchars($home_cat_url($category)); ?>" class="d-block p-2" style="color: #666; text-decoration: none;">
                     <i class="fa fa-angle-right" style="margin-right: 8px; color: #7bb73f;"></i>
                     <?php echo htmlspecialchars($category->category_name); ?>
                   </a>
