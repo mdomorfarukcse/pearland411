@@ -72,59 +72,57 @@
                                                     </h2>
                                                 </div>
                                                 <div class="pricing-features mt-4">
+                                                    <?php
+                                                    // Only list limits the plan actually grants. Printing
+                                                    // "Up to 0 products" for every unused type made all
+                                                    // three tiers look identical at a glance.
+                                                    $ck_limits = array(
+                                                        'listing_limit' => 'listing', 'product_limit' => 'product',
+                                                        'event_limit' => 'event', 'classified_limit' => 'classified',
+                                                        'blog_limit' => 'blog', 'news_limit' => 'news',
+                                                        'video_limit' => 'video', 'rental_limit' => 'rental',
+                                                        'house_limit' => 'house', 'ad_limit' => 'ad',
+                                                    );
+                                                    ?>
                                                     <?php if ($showLimits): ?>
-                                                    <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
-                                                        <?php echo ($plan->listing_limit == -1) ? 'Unlimited listings' : 'Up to ' . $plan->listing_limit . ' listings'; ?>
-                                                    </p>
-                                                    <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
-                                                        <?php echo ($plan->product_limit == -1) ? 'Unlimited products' : 'Up to ' . $plan->product_limit . ' products'; ?>
-                                                    </p>
-                                                    <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
-                                                        <?php echo ($plan->event_limit == -1) ? 'Unlimited events' : 'Up to ' . $plan->event_limit . ' events'; ?>
-                                                    </p>
-                                                    <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
-                                                        <?php echo ($plan->classified_limit == -1) ? 'Unlimited classifieds' : 'Up to ' . $plan->classified_limit . ' classifieds'; ?>
-                                                    </p>
-                                                    <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
-                                                        <?php echo (isset($plan->blog_limit) && $plan->blog_limit == -1) ? 'Unlimited blogs' : 'Up to ' . (isset($plan->blog_limit) ? $plan->blog_limit : 0) . ' blogs'; ?>
-                                                    </p>
-                                                    <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
-                                                        <?php echo (isset($plan->news_limit) && $plan->news_limit == -1) ? 'Unlimited news' : 'Up to ' . (isset($plan->news_limit) ? $plan->news_limit : 0) . ' news'; ?>
-                                                    </p>
-                                                    <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
-                                                        <?php echo (isset($plan->video_limit) && $plan->video_limit == -1) ? 'Unlimited videos' : 'Up to ' . (isset($plan->video_limit) ? $plan->video_limit : 0) . ' videos'; ?>
-                                                    </p>
-                                                    <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
-                                                        <?php echo (isset($plan->rental_limit) && $plan->rental_limit == -1) ? 'Unlimited rentals' : 'Up to ' . (isset($plan->rental_limit) ? $plan->rental_limit : 0) . ' rentals'; ?>
-                                                    </p>
-                                                    <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
-                                                        <?php echo (isset($plan->house_limit) && $plan->house_limit == -1) ? 'Unlimited houses' : 'Up to ' . (isset($plan->house_limit) ? $plan->house_limit : 0) . ' houses'; ?>
-                                                    </p>
-                                                    <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
-                                                        <?php echo $plan->duration_days; ?> days validity
-                                                    </p>
-                                                    <p>
-                                                        <?php if ($plan->featured_listing): ?>
-                                                            <i class="mdi mdi-check text-<?php echo $color; ?>"></i> Featured listing
-                                                        <?php else: ?>
-                                                            <i class="mdi mdi-close text-danger"></i> Featured listing
-                                                        <?php endif; ?>
-                                                    </p>
-                                                    <p>
-                                                        <?php if ($plan->analytics_access): ?>
-                                                            <i class="mdi mdi-check text-<?php echo $color; ?>"></i> Analytics dashboard
-                                                        <?php else: ?>
-                                                            <i class="mdi mdi-close text-danger"></i> Analytics dashboard
-                                                        <?php endif; ?>
-                                                    </p>
+                                                        <?php foreach ($ck_limits as $col => $label): ?>
+                                                            <?php $v = isset($plan->$col) ? (int) $plan->$col : 0; ?>
+                                                            <?php if ($v !== 0): ?>
+                                                                <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
+                                                                    <?php echo $v === -1 ? 'Unlimited ' . $label . 's' : 'Up to ' . $v . ' ' . $label . ($v === 1 ? '' : 's'); ?>
+                                                                </p>
+                                                            <?php endif; ?>
+                                                        <?php endforeach; ?>
+                                                        <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i>
+                                                            <?php echo (int) $plan->duration_days; ?> days validity
+                                                        </p>
+                                                        <?php
+                                                        // Absent features are muted and struck through as well as
+                                                        // icon-marked — when the icon font fails to load, an
+                                                        // icon-only cue made every plan read as if it had everything.
+                                                        $ck_flags = array(
+                                                            'featured_listing' => 'Featured listing',
+                                                            'priority_support' => 'Priority support',
+                                                            'analytics_access' => 'Analytics dashboard',
+                                                        );
+                                                        ?>
+                                                        <?php foreach ($ck_flags as $col => $label): ?>
+                                                            <?php if (!empty($plan->$col)): ?>
+                                                                <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i> <?php echo $label; ?></p>
+                                                            <?php else: ?>
+                                                                <p class="text-muted"><i class="mdi mdi-close text-danger"></i>
+                                                                    <del><?php echo $label; ?></del>
+                                                                </p>
+                                                            <?php endif; ?>
+                                                        <?php endforeach; ?>
                                                     <?php else: ?>
-                                                    <?php if (!empty($plan->description)): ?>
-                                                        <p class="text-muted"><?php echo nl2br(htmlspecialchars($plan->description)); ?></p>
-                                                    <?php endif; ?>
-                                                    <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i> <?php echo $plan->duration_days; ?> days validity</p>
-                                                    <?php if ($plan->featured_listing): ?>
-                                                        <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i> Featured listing</p>
-                                                    <?php endif; ?>
+                                                        <?php if (!empty($plan->description)): ?>
+                                                            <p class="text-muted"><?php echo nl2br(htmlspecialchars($plan->description)); ?></p>
+                                                        <?php endif; ?>
+                                                        <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i> <?php echo (int) $plan->duration_days; ?> days validity</p>
+                                                        <?php if ($plan->featured_listing): ?>
+                                                            <p><i class="mdi mdi-check text-<?php echo $color; ?>"></i> Featured listing</p>
+                                                        <?php endif; ?>
                                                     <?php endif; ?>
                                                 </div>
                                                 <div class="text-center mt-4">
@@ -633,13 +631,28 @@
                     resp.forEach(function(row) {
                         const tr = $('<tr/>');
                         tr.append($('<td/>').text(row.id));
-                        tr.append($('<td/>').text(row.duration_months));
-                        tr.append($('<td/>').text(row.duration_days));
+                        // Months/days are editable too — previously only price
+                        // was, so a term itself could never be corrected.
+                        tr.append($('<td/>').html('<input type="number" min="0" class="form-control duration-months" data-id="' + row.id + '" value="' + (parseInt(row.duration_months, 10) || 0) + '">'));
+                        tr.append($('<td/>').html('<input type="number" min="0" class="form-control duration-days" data-id="' + row.id + '" value="' + (parseInt(row.duration_days, 10) || 0) + '">'));
                         tr.append($('<td/>').html('<input type="number" step="0.01" class="form-control duration-price" data-id="' + row.id + '" value="' + (parseFloat(row.price) || 0).toFixed(2) + '">'));
                         tr.append($('<td/>').text(row.currency || 'USD'));
-                        tr.append($('<td/>').html('<button class="btn btn-sm btn-primary save-duration" data-id="' + row.id + '">Save</button>'));
+                        tr.append($('<td/>').html(
+                            '<button class="btn btn-sm btn-primary save-duration" data-id="' + row.id + '">Save</button> ' +
+                            '<button class="btn btn-sm btn-outline-danger delete-duration" data-id="' + row.id + '">Delete</button>'));
                         tbody.append(tr);
                     });
+
+                    // "Add a term" row — lets an admin offer 12- or 24-month
+                    // options, which the editor previously had no way to create.
+                    const addTr = $('<tr/>').addClass('bg-light');
+                    addTr.append($('<td/>').html('<em>new</em>'));
+                    addTr.append($('<td/>').html('<input type="number" min="0" class="form-control" id="newDurMonths" placeholder="12">'));
+                    addTr.append($('<td/>').html('<input type="number" min="0" class="form-control" id="newDurDays" placeholder="auto">'));
+                    addTr.append($('<td/>').html('<input type="number" step="0.01" class="form-control" id="newDurPrice" placeholder="0.00">'));
+                    addTr.append($('<td/>').text('USD'));
+                    addTr.append($('<td/>').html('<button class="btn btn-sm btn-success" id="addDurationBtn">Add term</button>'));
+                    tbody.append(addTr);
                 },
                 error: function() {
                     alert('Failed to load durations');
@@ -697,7 +710,9 @@
                 method: 'POST',
                 data: {
                     id: id,
-                    price: price
+                    price: price,
+                    duration_months: $('.duration-months[data-id="' + id + '"]').val(),
+                    duration_days: $('.duration-days[data-id="' + id + '"]').val()
                 },
                 dataType: 'json',
                 success: (resp) => {
@@ -714,6 +729,60 @@
                 complete: () => {
                     $('.save-duration[data-id="' + id + '"]').prop('disabled', false).text('Save');
                 }
+            });
+        });
+
+        function durAlert(msg, ok) {
+            $('#durationEditorAlert')
+                .removeClass('d-none alert-success alert-danger')
+                .addClass(ok ? 'alert-success' : 'alert-danger')
+                .text(msg);
+            if (ok) setTimeout(() => $('#durationEditorAlert').addClass('d-none'), 1500);
+        }
+
+        // Add a new term to the selected plan.
+        $(document).on('click', '#addDurationBtn', function() {
+            const planId = $('#manage_plan_select').val();
+            const months = $('#newDurMonths').val();
+            const days = $('#newDurDays').val();
+            const price = $('#newDurPrice').val();
+            if (!months && !days) {
+                durAlert('Enter the term length in months (or days).', false);
+                return;
+            }
+            $(this).prop('disabled', true).text('Adding...');
+            $.ajax({
+                url: '<?php echo base_url("admin/add_pricing_duration"); ?>',
+                method: 'POST',
+                data: { plan_id: planId, duration_months: months, duration_days: days, price: price },
+                dataType: 'json',
+                success: (resp) => {
+                    if (resp && resp.success) {
+                        durAlert('Term added', true);
+                        loadDurationsIntoTable(planId);
+                    } else {
+                        durAlert((resp && resp.error) || 'Failed to add term', false);
+                    }
+                },
+                error: () => durAlert('Server error', false),
+                complete: () => $('#addDurationBtn').prop('disabled', false).text('Add term')
+            });
+        });
+
+        $(document).on('click', '.delete-duration', function() {
+            if (!confirm('Delete this term? Customers will no longer be able to buy it.')) return;
+            const id = $(this).data('id');
+            const planId = $('#manage_plan_select').val();
+            $.ajax({
+                url: '<?php echo base_url("admin/delete_pricing_duration"); ?>',
+                method: 'POST',
+                data: { id: id },
+                dataType: 'json',
+                success: (resp) => {
+                    if (resp && resp.success) { durAlert('Term deleted', true); loadDurationsIntoTable(planId); }
+                    else { durAlert((resp && resp.error) || 'Failed to delete', false); }
+                },
+                error: () => durAlert('Server error', false)
             });
         });
     })(jQuery);

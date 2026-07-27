@@ -513,4 +513,73 @@ SET @s := IF(@e = 0, 'ALTER TABLE `plans` ADD COLUMN `category` VARCHAR(50) NOT 
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
+
+
+-- ---------------------------------------------------------------------------
+-- 0015_plan_durations_columns.sql
+-- Per-term pricing table. Never created by a migration before, so a fresh
+-- install had no table and the live DB lacked `currency`/`updated_at` — which
+-- made admin duration saves fail silently.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `plan_durations` (
+    `id`              INT(11) NOT NULL AUTO_INCREMENT,
+    `plan_id`         INT(11) NOT NULL,
+    `duration_months` INT(11) NOT NULL DEFAULT 1,
+    `duration_days`   INT(11) NOT NULL DEFAULT 30,
+    `price`           DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    `currency`        VARCHAR(10) NOT NULL DEFAULT 'USD',
+    `is_active`       TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at`      DATETIME NULL DEFAULT NULL,
+    `updated_at`      DATETIME NULL DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_plan_durations_plan` (`plan_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='plan_durations' AND COLUMN_NAME='currency');
+SET @s := IF(@e = 0, 'ALTER TABLE `plan_durations` ADD COLUMN `currency` VARCHAR(10) NOT NULL DEFAULT ''USD'' AFTER `price`', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='plan_durations' AND COLUMN_NAME='duration_days');
+SET @s := IF(@e = 0, 'ALTER TABLE `plan_durations` ADD COLUMN `duration_days` INT(11) NOT NULL DEFAULT 30 AFTER `duration_months`', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='plan_durations' AND COLUMN_NAME='is_active');
+SET @s := IF(@e = 0, 'ALTER TABLE `plan_durations` ADD COLUMN `is_active` TINYINT(1) NOT NULL DEFAULT 1', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='plan_durations' AND COLUMN_NAME='created_at');
+SET @s := IF(@e = 0, 'ALTER TABLE `plan_durations` ADD COLUMN `created_at` DATETIME NULL DEFAULT NULL', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='plan_durations' AND COLUMN_NAME='updated_at');
+SET @s := IF(@e = 0, 'ALTER TABLE `plan_durations` ADD COLUMN `updated_at` DATETIME NULL DEFAULT NULL', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+UPDATE `plan_durations` SET `duration_days` = `duration_months` * 30
+ WHERE (`duration_days` IS NULL OR `duration_days` = 0) AND `duration_months` > 0;
+
+
+-- ---------------------------------------------------------------------------
+-- 0016_transaction_term.sql
+-- Records the term a customer actually bought for an ad placement, so a
+-- 12-month banner is not reported as expiring in 30 days.
+-- ---------------------------------------------------------------------------
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='transactions' AND COLUMN_NAME='term_days');
+SET @s := IF(@e = 0, 'ALTER TABLE `transactions` ADD COLUMN `term_days` INT(11) NULL DEFAULT NULL', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='transactions' AND COLUMN_NAME='expires_at');
+SET @s := IF(@e = 0, 'ALTER TABLE `transactions` ADD COLUMN `expires_at` DATETIME NULL DEFAULT NULL', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='transactions' AND COLUMN_NAME='duration_id');
+SET @s := IF(@e = 0, 'ALTER TABLE `transactions` ADD COLUMN `duration_id` INT(11) NULL DEFAULT NULL', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+UPDATE `transactions` t JOIN `plans` p ON p.id = t.plan_id
+   SET t.term_days = p.duration_days,
+       t.expires_at = DATE_ADD(t.created_at, INTERVAL p.duration_days DAY)
+ WHERE t.term_days IS NULL AND p.duration_days > 0;
+
+
 SET FOREIGN_KEY_CHECKS = 1;

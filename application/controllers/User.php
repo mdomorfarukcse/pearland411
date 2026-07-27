@@ -56,7 +56,7 @@ class User extends CI_Controller
 			// and is signature-verified instead of session-gated.
 			'checkout', 'checkout_success', 'process_checkout', 'helcim_webhook',
 			// Advertising cart — guests build a cart before logging in.
-			'cart_add', 'cart_remove', 'cart_get', 'cart_clear', 'buy_now',
+			'cart_add', 'cart_remove', 'cart_get', 'cart_clear', 'buy_now', 'cart_set_term',
 			// Enquiry submission (rate-limited; anonymous OK)
 			'add_enquiry',
 			// Services catalog + quote requests
@@ -6369,16 +6369,25 @@ class User extends CI_Controller
 		if ($plan_id && is_numeric($plan_id)) {
 			$p = $this->usermodel->getPlanByIdForPricing((int) $plan_id);
 			if ($p && (float) $p->price > 0) {
-				$ids = $this->session->userdata('ad_cart');
-				$ids = is_array($ids) ? $ids : array();
+				$lines = $this->cartLines();
 				if ((isset($p->category) ? $p->category : '') === 'business-listing') {
-					$ids = array_filter($ids, function ($pid) {
-						$x = $this->usermodel->getPlanByIdForPricing((int) $pid);
+					$lines = array_filter($lines, function ($l) {
+						$x = $this->usermodel->getPlanByIdForPricing((int) $l['plan_id']);
 						return $x && (isset($x->category) ? $x->category : '') !== 'business-listing';
 					});
 				}
-				if (!in_array((int) $plan_id, $ids)) $ids[] = (int) $plan_id;
-				$this->session->set_userdata('ad_cart', array_values($ids));
+				$already = false;
+				foreach ($lines as $l) {
+					if ((int) $l['plan_id'] === (int) $plan_id) { $already = true; break; }
+				}
+				if (!$already) {
+					$lines[] = array(
+						'plan_id'     => (int) $plan_id,
+						'duration_id' => (int) $this->input->get('duration_id') ?: null,
+						'multiplier'  => max(1, (int) $this->input->get('multiplier') ?: 1),
+					);
+				}
+				$this->saveCartLines($lines);
 			}
 		}
 
@@ -6543,7 +6552,8 @@ class User extends CI_Controller
 				(float) $pending['amount'],
 				$pending['currency'],
 				$helcim_txn_id,
-				$approval_code
+				$approval_code,
+				!empty($pending['auto_renew']) ? 1 : 0
 			);
 			if (!$ok) {
 				return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Payment verified but recording failed. Contact support with transaction id ' . $helcim_txn_id . '.')));
@@ -6744,27 +6754,171 @@ class User extends CI_Controller
 	 * =================================================================== */
 
 	/** Build the cart summary from the session's plan-id list. */
+	/**
+	 * Normalize the session cart into term-aware lines.
+	 *
+	 * Carts used to be a flat array of plan ids; they now carry the term the
+	 * customer picked. Both shapes are accepted so a cart built before this
+	 * change (or by an old tab) still works.
+	 *
+	 * @return array of ['plan_id', 'duration_id'|null, 'multiplier']
+	 */
+	private function cartLines()
+	{
+		$raw = $this->session->userdata('ad_cart');
+		$raw = is_array($raw) ? $raw : array();
+		$lines = array();
+		foreach ($raw as $entry) {
+			if (is_array($entry)) {
+				$pid = isset($entry['plan_id']) ? (int) $entry['plan_id'] : 0;
+				if (!$pid) continue;
+				$lines[] = array(
+					'plan_id'     => $pid,
+					'duration_id' => !empty($entry['duration_id']) ? (int) $entry['duration_id'] : null,
+					'multiplier'  => max(1, isset($entry['multiplier']) ? (int) $entry['multiplier'] : 1),
+				);
+			} else {
+				$pid = (int) $entry;
+				if ($pid) {
+					$lines[] = array('plan_id' => $pid, 'duration_id' => null, 'multiplier' => 1);
+				}
+			}
+		}
+		return $lines;
+	}
+
+	private function saveCartLines($lines)
+	{
+		$this->session->set_userdata('ad_cart', array_values($lines));
+	}
+
+	/** "12 months", "2 years", "7 days" — how a term reads to a customer. */
+	private function termLabel($days, $months = 0)
+	{
+		$days = (int) $days;
+		$months = (int) $months;
+		if (!$months && $days >= 28) {
+			$months = (int) round($days / 30);
+		}
+		if ($months >= 12 && $months % 12 === 0) {
+			$years = $months / 12;
+			return $years . ' year' . ($years > 1 ? 's' : '');
+		}
+		if ($months >= 1) {
+			return $months . ' month' . ($months > 1 ? 's' : '');
+		}
+		return $days . ' day' . ($days === 1 ? '' : 's');
+	}
+
+	/**
+	 * The terms a customer may buy a plan for.
+	 *
+	 * Prefers the explicit `plan_durations` rows an admin configured (which may
+	 * carry a long-term discount). When a plan has none, offer standard
+	 * multiples of its base period so longer terms are still purchasable.
+	 */
+	private function planTermOptions($plan)
+	{
+		$out = array();
+		$base_days = (int) $plan->duration_days > 0 ? (int) $plan->duration_days : 30;
+
+		$rows = method_exists($this->usermodel, 'getPlanDurations')
+			? $this->usermodel->getPlanDurations((int) $plan->id)
+			: array();
+
+		foreach ($rows as $d) {
+			$months = (int) $d->duration_months;
+			$days   = (int) $d->duration_days ?: ($months * 30);
+			if ($days <= 0) continue;
+			$out[] = array(
+				'duration_id' => (int) $d->id,
+				'multiplier'  => null,
+				'days'        => $days,
+				'months'      => $months,
+				'price'       => (float) $d->price,
+				'label'       => $this->termLabel($days, $months),
+			);
+		}
+
+		if (empty($out)) {
+			foreach (array(1, 3, 6, 12, 24) as $m) {
+				$days = $base_days * $m;
+				$out[] = array(
+					'duration_id' => null,
+					'multiplier'  => $m,
+					'days'        => $days,
+					'months'      => $base_days >= 28 ? (int) round($days / 30) : 0,
+					'price'       => round((float) $plan->price * $m, 2),
+					'label'       => $this->termLabel($days, $base_days >= 28 ? (int) round($days / 30) : 0),
+				);
+			}
+		}
+		return $out;
+	}
+
+	/** Pick the option a line refers to, falling back to the shortest term. */
+	private function resolveTerm($plan, $line)
+	{
+		$options = $this->planTermOptions($plan);
+		if (empty($options)) return null;
+
+		foreach ($options as $o) {
+			if (!empty($line['duration_id']) && $o['duration_id'] === (int) $line['duration_id']) {
+				return $o;
+			}
+		}
+		if (empty($line['duration_id'])) {
+			foreach ($options as $o) {
+				if ($o['multiplier'] !== null && $o['multiplier'] === (int) $line['multiplier']) {
+					return $o;
+				}
+			}
+		}
+		return $options[0];
+	}
+
 	private function cartSummary()
 	{
-		$ids = $this->session->userdata('ad_cart');
-		$ids = is_array($ids) ? $ids : array();
+		$lines = $this->cartLines();
 		$items = array();
 		$total = 0.0;
 		$currency = 'USD';
-		foreach ($ids as $pid) {
-			$p = $this->usermodel->getPlanByIdForPricing((int) $pid);
+
+		foreach ($lines as $idx => $line) {
+			$p = $this->usermodel->getPlanByIdForPricing((int) $line['plan_id']);
 			if (!$p) continue;
 			$currency = $p->currency ?: 'USD';
+
+			$term = $this->resolveTerm($p, $line);
+			$days  = $term ? (int) $term['days'] : ((int) $p->duration_days ?: 30);
+			$price = $term ? (float) $term['price'] : (float) $p->price;
+
 			$items[] = array(
-				'plan_id'  => (int) $p->id,
-				'name'     => $p->name,
-				'price'    => (float) $p->price,
-				'category' => isset($p->category) ? $p->category : '',
-				'currency' => $currency,
+				'line'        => $idx,
+				'plan_id'     => (int) $p->id,
+				'name'        => $p->name,
+				'price'       => $price,
+				'base_price'  => (float) $p->price,
+				'category'    => isset($p->category) ? $p->category : '',
+				'currency'    => $currency,
+				'duration_id' => $term ? $term['duration_id'] : null,
+				'multiplier'  => $term ? $term['multiplier'] : 1,
+				'term_days'   => $days,
+				'term_label'  => $term ? $term['label'] : $this->termLabel($days),
+				'expires_at'  => date('Y-m-d', strtotime('+' . $days . ' days')),
+				'terms'       => $this->planTermOptions($p),
+				'recurring'   => in_array(isset($p->category) ? $p->category : '', array('business-listing', 'special'), true),
 			);
-			$total += (float) $p->price;
+			$total += $price;
 		}
-		return array('items' => $items, 'total' => round($total, 2), 'count' => count($items), 'currency' => $currency);
+
+		return array(
+			'items'     => $items,
+			'total'     => round($total, 2),
+			'count'     => count($items),
+			'currency'  => $currency,
+			'recurring' => (bool) array_filter($items, function ($i) { return $i['recurring']; }),
+		);
 	}
 
 	/** GET/POST — return the current cart as JSON. URL: /cart-get */
@@ -6789,21 +6943,29 @@ class User extends CI_Controller
 		if ((float) $plan->price <= 0) {
 			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'This is a free option — nothing to buy.')));
 		}
-		$ids = $this->session->userdata('ad_cart');
-		$ids = is_array($ids) ? $ids : array();
+		$lines = $this->cartLines();
 		$cat = isset($plan->category) ? $plan->category : '';
 
 		// Business-listing tier is single-select — drop any other tier first.
 		if ($cat === 'business-listing') {
-			$ids = array_filter($ids, function ($pid) {
-				$p = $this->usermodel->getPlanByIdForPricing((int) $pid);
+			$lines = array_filter($lines, function ($l) {
+				$p = $this->usermodel->getPlanByIdForPricing((int) $l['plan_id']);
 				return $p && (isset($p->category) ? $p->category : '') !== 'business-listing';
 			});
 		}
-		if (!in_array($plan_id, $ids)) {
-			$ids[] = $plan_id;
+
+		$already = false;
+		foreach ($lines as $l) {
+			if ((int) $l['plan_id'] === $plan_id) { $already = true; break; }
 		}
-		$this->session->set_userdata('ad_cart', array_values($ids));
+		if (!$already) {
+			$lines[] = array(
+				'plan_id'     => $plan_id,
+				'duration_id' => (int) $this->input->post('duration_id') ?: null,
+				'multiplier'  => max(1, (int) $this->input->post('multiplier') ?: 1),
+			);
+		}
+		$this->saveCartLines($lines);
 		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
 	}
 
@@ -6815,12 +6977,50 @@ class User extends CI_Controller
 			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
 		}
 		$plan_id = (int) $this->input->post('plan_id');
-		$ids = $this->session->userdata('ad_cart');
-		$ids = is_array($ids) ? $ids : array();
-		$ids = array_values(array_filter($ids, function ($pid) use ($plan_id) {
-			return (int) $pid !== $plan_id;
-		}));
-		$this->session->set_userdata('ad_cart', $ids);
+		$lines = array_filter($this->cartLines(), function ($l) use ($plan_id) {
+			return (int) $l['plan_id'] !== $plan_id;
+		});
+		$this->saveCartLines($lines);
+		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
+	}
+
+	/**
+	 * AJAX — change the term (1 month / 12 months / 2 years ...) of one cart
+	 * line. URL: /cart-set-term (POST plan_id + duration_id|multiplier)
+	 */
+	public function cart_set_term()
+	{
+		$this->output->set_content_type('application/json');
+		if ($this->input->method() !== 'post') {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
+		}
+		$plan_id     = (int) $this->input->post('plan_id');
+		$duration_id = (int) $this->input->post('duration_id');
+		$multiplier  = (int) $this->input->post('multiplier');
+
+		$plan = $this->usermodel->getPlanByIdForPricing($plan_id);
+		if (!$plan) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Invalid item.')));
+		}
+
+		// Only accept a term this plan actually offers — never trust the post.
+		$valid = false;
+		foreach ($this->planTermOptions($plan) as $o) {
+			if ($duration_id && $o['duration_id'] === $duration_id) { $valid = true; break; }
+			if (!$duration_id && $o['multiplier'] !== null && $o['multiplier'] === $multiplier) { $valid = true; break; }
+		}
+		if (!$valid) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'That term is not available for this package.')));
+		}
+
+		$lines = $this->cartLines();
+		foreach ($lines as $i => $l) {
+			if ((int) $l['plan_id'] === $plan_id) {
+				$lines[$i]['duration_id'] = $duration_id ?: null;
+				$lines[$i]['multiplier']  = max(1, $multiplier ?: 1);
+			}
+		}
+		$this->saveCartLines($lines);
 		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
 	}
 
@@ -6845,7 +7045,11 @@ class User extends CI_Controller
 			redirect('pricing-plan');
 			return;
 		}
-		$this->session->set_userdata('ad_cart', array($plan_id));
+		$this->saveCartLines(array(array(
+			'plan_id'     => $plan_id,
+			'duration_id' => (int) $this->input->get('duration_id') ?: null,
+			'multiplier'  => max(1, (int) $this->input->get('multiplier') ?: 1),
+		)));
 		redirect('checkout');
 	}
 
@@ -6879,6 +7083,9 @@ class User extends CI_Controller
 			'currency'      => $this->helcim_lib->currency(),
 			'mode'          => 'cart',
 			'cart_items'    => $cart['items'],
+			// Opt-in from the checkout checkbox; only meaningful for the
+			// recurring listing tiers, which vault the card on activation.
+			'auto_renew'    => (int) $this->input->post('auto_renew') ? 1 : 0,
 		));
 		return $this->output->set_output(json_encode(array('success' => true, 'checkoutToken' => $init['checkoutToken'])));
 	}
