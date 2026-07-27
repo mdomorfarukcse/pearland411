@@ -26,7 +26,7 @@ vanilla script.
   `scs-ad-*` (Space Center Systems), each in `strip` (970x90), `wide` (900x300), `box` (600x500)
   and `tall` (300x600). Four shapes because the live zones span 10.8:1 to 0.5:1; one artwork
   cropped unreadably at the extremes.
-- **Migration `0015_home_ad_slots.sql`** — five new `ads_prices` zones: `home-top-leaderboard`
+- **Migration `0017_home_ad_slots.sql`** — five new `ads_prices` zones: `home-top-leaderboard`
   970x90, `home-sidebar-top` 300x250, `home-inline-billboard` 728x250, `home-sidebar-skyscraper`
   300x600, `home-footer-billboard` 970x250. Data only (0006 already added `slot_key`/`size`), so
   no DDL and no `DELIMITER` — the standalone file and the combined bundle block are identical.

@@ -514,10 +514,10 @@ PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
 -- ============================================================
--- 0015_home_ad_slots.sql
+-- 0017_home_ad_slots.sql
 -- Five extra ad zones for the redesigned homepage.
 -- DATA ONLY (0006 already added slot_key/size), so this block is
--- byte-identical to database/migrations/0015_home_ad_slots.sql.
+-- byte-identical to database/migrations/0017_home_ad_slots.sql.
 -- Idempotent: NOT EXISTS skips any slot_key already present.
 -- ============================================================
 INSERT INTO `ads_prices` (`name`, `slot_key`, `size`, `cost`, `status`, `created_at`, `updated_at`)

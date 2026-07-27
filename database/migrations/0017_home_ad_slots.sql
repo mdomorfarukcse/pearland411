@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- 0015_home_ad_slots.sql
+-- 0017_home_ad_slots.sql
 -- ---------------------------------------------------------------------------
 -- Five extra ad zones for the redesigned homepage.
 --
@@ -13,8 +13,8 @@
 --
 -- Depends on: 0006_ad_zones.sql
 --
--- Run once after 0014:
---   mysql -u <user> -p <db> < database/migrations/0015_home_ad_slots.sql
+-- Run once after 0016:
+--   mysql -u <user> -p <db> < database/migrations/0017_home_ad_slots.sql
 --
 -- Zones added (all rendered by application/views/partials/ad_slot.php):
 --   home-top-leaderboard      970x90   under the hero, above the fold
