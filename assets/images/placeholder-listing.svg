@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480"
+     role="img" aria-label="No photo available — Pearland411">
+  <title>No photo available</title>
+  <defs>
+    <linearGradient id="plBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F4F8EC"/>
+      <stop offset="1" stop-color="#E7F0D8"/>
+    </linearGradient>
+    <linearGradient id="plPear" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#95CB55"/>
+      <stop offset="1" stop-color="#68A733"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="640" height="480" fill="url(#plBg)"/>
+
+  <!-- subtle grid so the tile reads as deliberate, not as a failed load -->
+  <g stroke="#82C341" stroke-width="1" opacity="0.10">
+    <path d="M0 80h640M0 160h640M0 240h640M0 320h640M0 400h640"/>
+    <path d="M80 0v480M160 0v480M240 0v480M320 0v480M400 0v480M480 0v480M560 0v480"/>
+  </g>
+
+  <g transform="translate(320 205)">
+    <!-- pear body -->
+    <path d="M0-58c-16 0-29 15-29 35 0 13-13 22-20 36-12 24 8 55 49 55s61-31 49-55c-7-14-20-23-20-36 0-20-13-35-29-35z"
+          fill="url(#plPear)"/>
+    <!-- stem -->
+    <path d="M2-58c0-14 3-26 9-36" stroke="#68A733" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <!-- leaf -->
+    <path d="M13-88c10-20 32-30 52-27 1 21-13 38-38 41-8 1-14-6-14-14z" fill="#95CB55"/>
+    <!-- camera glyph cut out of the pear -->
+    <g fill="#FFFFFF" opacity="0.92" transform="translate(0 26)">
+      <rect x="-26" y="-15" width="52" height="36" rx="6"/>
+      <rect x="-11" y="-21" width="22" height="8" rx="3"/>
+    </g>
+    <circle cx="0" cy="30" r="9" fill="#68A733"/>
+  </g>
+
+  <text x="320" y="330" text-anchor="middle"
+        font-family="'Poppins','Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+        font-size="30" font-weight="700" letter-spacing="-0.5" fill="#5E8B33">No photo yet</text>
+  <text x="320" y="362" text-anchor="middle"
+        font-family="'Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
+        font-size="19" fill="#8E9A7C">Pearland411.com</text>
+</svg>

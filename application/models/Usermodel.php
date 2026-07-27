@@ -5373,6 +5373,10 @@ class Usermodel extends CI_Model
 			->where('c.coupon_status', 1)
 			->where('c.coupon_start_date <=', $today)
 			->where('c.coupon_end_date >=',  $today)
+			// The listings join matches on the OWNER, not the coupon, so a
+			// business with several listings would otherwise return the same
+			// coupon once per listing.
+			->group_by('c.coupon_id')
 			->order_by('c.coupon_cdt', 'DESC');
 		if ($limit !== null) $this->db->limit((int) $limit, (int) $offset);
 		return $this->db->get()->result();
@@ -5406,7 +5410,17 @@ class Usermodel extends CI_Model
 	 */
 	public function getAdForSlot($slot_key)
 	{
-		if (empty($slot_key) || !$this->db->table_exists('ads')) return null;
+		if (empty($slot_key)) return null;
+
+		// Served from primeAdSlots() when the page primed its zones up
+		// front, so seven homepage slots cost one query, not seven.
+		if (self::$ad_slot_cache !== null && array_key_exists($slot_key, self::$ad_slot_cache)) {
+			$live = self::$ad_slot_cache[$slot_key]['ads'];
+			if (!$live) return null;
+			return $live[array_rand($live)];
+		}
+
+		if (!$this->db->table_exists('ads')) return null;
 		if (!$this->db->field_exists('slot_key', 'ads_prices')) return null;
 
 		$today = date('Y-m-d H:i:s');
@@ -5422,5 +5436,183 @@ class Usermodel extends CI_Model
 			->limit(1)
 			->get()
 			->row();
+	}
+
+	/**
+	 * Per-request cache of ad-slot rows, keyed by slot_key.
+	 * NULL = not primed yet. Filled by primeAdSlots().
+	 */
+	private static $ad_slot_cache = null;
+
+	/**
+	 * Fetch every requested ad zone in ONE query and cache the result.
+	 *
+	 * The homepage renders seven slots; without this each include would
+	 * fire its own `ORDER BY RAND()` query. Driving the query from
+	 * `ads_prices` (LEFT JOIN `ads`) instead of the other way round also
+	 * means the slot's `size` is known even when nothing is sold, which
+	 * is what lets the partial reserve the right box and avoid layout
+	 * shift on the house ad.
+	 *
+	 * @param array $slot_keys e.g. array('home-hero', 'home-sidebar')
+	 */
+	public function primeAdSlots(array $slot_keys)
+	{
+		if (self::$ad_slot_cache === null) self::$ad_slot_cache = array();
+
+		$slot_keys = array_values(array_unique(array_filter($slot_keys)));
+		if (!$slot_keys) return;
+
+		if (!$this->db->table_exists('ads_prices')) return;
+		if (!$this->db->field_exists('slot_key', 'ads_prices')) return;
+
+		$has_ads = $this->db->table_exists('ads');
+		$today   = date('Y-m-d H:i:s');
+
+		$this->db
+			->select('ap.slot_key, ap.size, ap.cost, ap.name AS slot_name')
+			->from('ads_prices ap')
+			->where_in('ap.slot_key', $slot_keys);
+
+		if ($has_ads) {
+			$this->db
+				->select('a.id, a.ad_photo, a.ad_link')
+				->join(
+					'ads a',
+					'a.ads_price_id = ap.id'
+						. ' AND a.ad_status = 1'
+						. ' AND a.ad_start_date <= ' . $this->db->escape($today)
+						. ' AND a.ad_end_date   >= ' . $this->db->escape($today),
+					'left'
+				);
+		}
+
+		$rows = $this->db->get()->result();
+
+		// Seed every requested key so a miss is remembered as "no slot".
+		foreach ($slot_keys as $key) {
+			if (!array_key_exists($key, self::$ad_slot_cache)) {
+				self::$ad_slot_cache[$key] = array('meta' => null, 'ads' => array());
+			}
+		}
+
+		foreach ($rows as $row) {
+			$key = $row->slot_key;
+			if (!isset(self::$ad_slot_cache[$key])) {
+				self::$ad_slot_cache[$key] = array('meta' => null, 'ads' => array());
+			}
+			if (self::$ad_slot_cache[$key]['meta'] === null) {
+				self::$ad_slot_cache[$key]['meta'] = (object) array(
+					'slot_key'  => $row->slot_key,
+					'size'      => isset($row->size) ? $row->size : null,
+					'cost'      => isset($row->cost) ? $row->cost : null,
+					'slot_name' => isset($row->slot_name) ? $row->slot_name : null,
+				);
+			}
+			// A LEFT JOIN with no live ad still returns the slot row.
+			if (!empty($row->ad_photo)) {
+				self::$ad_slot_cache[$key]['ads'][] = (object) array(
+					'id'       => isset($row->id) ? $row->id : 0,
+					'ad_photo' => $row->ad_photo,
+					'ad_link'  => isset($row->ad_link) ? $row->ad_link : '',
+					'size'     => isset($row->size) ? $row->size : null,
+					'slot_key' => $row->slot_key,
+				);
+			}
+		}
+	}
+
+	/**
+	 * Slot metadata (size / cost / name) regardless of whether anything
+	 * is sold. Used by the ad partial to reserve the correct box.
+	 *
+	 * @return object|null
+	 */
+	public function getAdSlotMeta($slot_key)
+	{
+		if (empty($slot_key)) return null;
+
+		if (self::$ad_slot_cache !== null && array_key_exists($slot_key, self::$ad_slot_cache)) {
+			return self::$ad_slot_cache[$slot_key]['meta'];
+		}
+
+		if (!$this->db->table_exists('ads_prices')) return null;
+		if (!$this->db->field_exists('slot_key', 'ads_prices')) return null;
+
+		return $this->db
+			->select('slot_key, size, cost, name AS slot_name')
+			->from('ads_prices')
+			->where('slot_key', $slot_key)
+			->limit(1)
+			->get()
+			->row();
+	}
+
+	/**
+	 * Public rate card for the "Advertise with us" block — the real
+	 * `ads_prices` rows, so on-page prices can't drift from the catalog.
+	 */
+	public function getAdSlotRateCard($limit = null)
+	{
+		if (!$this->db->table_exists('ads_prices')) return array();
+		if (!$this->db->field_exists('slot_key', 'ads_prices')) return array();
+
+		$this->db
+			->select('id, name, slot_key, size, cost')
+			->from('ads_prices')
+			->where('status', 1)
+			->where('slot_key IS NOT NULL', null, false)
+			->where('slot_key !=', '')
+			->order_by('cost', 'DESC');
+
+		if ($limit !== null) $this->db->limit((int) $limit);
+
+		return $this->db->get()->result();
+	}
+
+	/**
+	 * Events that have not happened yet, soonest first.
+	 *
+	 * `getlatest_events()` cannot be used for an "upcoming" list — it has
+	 * no date filter and orders by `event_id DESC`, so it returns the most
+	 * recently *created* events, which may all be in the past.
+	 */
+	public function getUpcomingEvents($limit = 6)
+	{
+		if (!$this->db->table_exists('events')) return array();
+
+		$this->db
+			->select('events.*, COALESCE(admin.admin_name, user.name) AS name', false)
+			->from('events')
+			->join('user',  'events.user_id  = user.user_id',   'left')
+			->join('admin', 'admin.admin_id  = events.admin_id', 'left')
+			->where('events.event_status', 1)
+			->where('events.event_start_date >=', date('Y-m-d'))
+			->order_by('events.event_start_date', 'ASC')
+			->limit((int) $limit);
+
+		return $this->db->get()->result();
+	}
+
+	/**
+	 * Top categories by live listing count, for the homepage category
+	 * strip and sidebar. Stable ordering (unlike getRandomTenCategory)
+	 * so the strip doesn't reshuffle on every page load.
+	 */
+	public function getCategoriesWithCounts($limit = 10)
+	{
+		if (!$this->db->table_exists('listing_categories')) return array();
+
+		$this->db
+			->select('lc.category_id, lc.category_name, lc.category_slug, COUNT(l.listing_id) AS listing_count', false)
+			->from('listing_categories lc')
+			->join('listings l', 'l.category_id = lc.category_id AND (l.is_deleted IS NULL OR l.is_deleted = 0)', 'left')
+			->group_by('lc.category_id, lc.category_name, lc.category_slug')
+			->having('listing_count >', 0)
+			->order_by('listing_count', 'DESC')
+			->order_by('lc.category_name', 'ASC')
+			->limit((int) $limit);
+
+		return $this->db->get()->result();
 	}
 }

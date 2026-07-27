@@ -131,3 +131,27 @@ if (!function_exists('admin_actions')) {
         return $out;
     }
 }
+
+if (!function_exists('pearland_slug')) {
+    /**
+     * URL-safe slug for category / listing names.
+     *
+     * Views previously each declared their own copy of this as
+     * `createSafeSlug()` — three times in views/index.php alone, one of
+     * them unguarded. Keeping a single guarded copy here removes the
+     * "Cannot redeclare" hazard that surfaces as soon as any of those
+     * views is split into a partial.
+     *
+     * @param  string $text
+     * @return string
+     */
+    function pearland_slug($text)
+    {
+        $slug = strtolower((string) $text);
+        $slug = str_replace(' ', '-', $slug);
+        $slug = preg_replace('/[^a-z0-9\-]/', '', $slug);
+        $slug = preg_replace('/-+/', '-', $slug);
+
+        return trim($slug, '-');
+    }
+}
