@@ -246,12 +246,16 @@ class User extends CI_Controller
 		$data['home_events']   = $data['show_events'] ? $this->usermodel->getUpcomingEvents(3) : array();
 
 		// Real coupons, replacing the four invented "hot deals".
-		$data['home_deals'] = $this->usermodel->getActiveCoupons(4);
+		// getDistinctActiveCoupons() de-dupes in PHP — see the model for why a
+		// GROUP BY here is fatal under ONLY_FULL_GROUP_BY.
+		$data['home_deals'] = $this->usermodel->getDistinctActiveCoupons(4);
 
 		// Categories: stable, count-ordered for the strip and the sidebar.
 		$data['home_categories']        = $this->usermodel->getCategoriesWithCounts(12);
 		$data['all_listing_categories'] = $this->usermodel->getHeaderNavigationCategories(50);
 		$data['header_categories']      = $data['all_listing_categories'];
+		// Still consumed by the sidebar category widget in views/index.php.
+		$data['random_listing_categories'] = $this->usermodel->getRandomTenCategory(10);
 
 		// --- Advertising ------------------------------------------------
 		// Prime every zone the view renders in ONE query; without this each
