@@ -1091,7 +1091,7 @@
                                     if (isset($category->category_slug) && !empty($category->category_slug)) {
                                         $category_url = $category->category_slug;
                                     } elseif (!empty($category->category_name)) {
-                                        $category_url = strtolower(str_replace(' ', '-', $category->category_name));
+                                        $category_url = !empty($category->category_slug) ? $category->category_slug : pearland_slug($category->category_name);
                                     } else {
                                         $category_url = $category->category_id;
                                     }

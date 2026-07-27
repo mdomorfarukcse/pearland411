@@ -6,9 +6,10 @@
  *
  * Three states, in order of preference:
  *   1. A live ad targeting this zone (ads.ad_status = 1, inside its date window).
- *   2. A built-in default creative — "advertise here", the Space Center Systems
- *      web-development ad, or the ad/banner-design ad. Which one is fixed per
- *      zone (see $__house_map below), so a slot always shows the same thing.
+ *   2. A built-in default — either a house partial ($slot_fallback_partial) or
+ *      a house creative: "advertise here", the Space Center Systems
+ *      web-development ad, or the ad/banner-design ad. Which creative is fixed
+ *      per zone (see $__house_map below), so a slot always shows the same thing.
  *   3. Nothing at all, when the includer sets $slot_fallback = false.
  *
  * Variables consumed (the includer sets them; only $slot is required):
@@ -23,6 +24,12 @@
  *                  ('house-ad' | 'scs-ad' | 'banner-design'), overriding the
  *                  per-slot map below. Used where the page already carries a
  *                  permanent web-services block and would otherwise repeat it.
+ *   $slot_fallback_partial (string) — filename under views/partials/ to render
+ *                  in place of the default creative when nothing is sold, e.g.
+ *                  'banner_design_promo.php'. A card can say what the service
+ *                  is, what it costs and where to click; a flat image can't.
+ *                  Ignored when an ad IS sold — a paying advertiser always
+ *                  wins the position. Ignored too when $slot_fallback = false.
  *
  * The zone's pixel size comes from ads_prices.size and is emitted as
  * width/height so the browser reserves the box before the image loads.
@@ -35,7 +42,7 @@ if (!isset($slot) || $slot === '') return;
 // Global off-switch. Deliberately unseeded — the helper's default keeps
 // advertising on unless an operator turns it off in /admin/setting.
 if (site_setting('service_ads_enabled', '1') === '0') {
-	unset($slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative);
+	unset($slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative, $slot_fallback_partial);
 	return;
 }
 
@@ -60,7 +67,23 @@ if (!$__ad && !empty($slot_alias) && method_exists($__ci->usermodel, 'getAdForSl
 
 $__fallback = isset($slot_fallback) ? (bool) $slot_fallback : true;
 if (!$__ad && !$__fallback) {
-	unset($slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative);
+	unset($slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative, $slot_fallback_partial);
+	return;
+}
+
+// ---- Unsold, and the includer supplied a house partial -------------------
+// Render it and stop: the sizing, the "Sponsored" microlabel and the creative
+// picking below all describe an <img> the partial isn't going to emit.
+if (!$__ad && !empty($slot_fallback_partial)) {
+	$__partial = APPPATH . 'views/partials/' . basename((string) $slot_fallback_partial);
+	// Clear the per-include options before handing over — the partial is a
+	// sibling of this one and must not inherit this include's settings.
+	unset($slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative,
+		$slot_fallback_partial, $__ci, $__ad, $__meta, $__fallback);
+	if (is_file($__partial)) {
+		include $__partial;
+	}
+	unset($__partial);
 	return;
 }
 
@@ -183,7 +206,8 @@ unset(
 	$__shape, $__creative, $__house_map, $__default, $__external, $__href, $__alt,
 	$__label, $__cls, $__style, $__need_css, $__alias_key,
 	// Per-include options must not leak into the next include on the page.
-	$slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative
+	$slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative,
+	$slot_fallback_partial
 );
 // Don't unset $slot — the includer owns it.
 ?>

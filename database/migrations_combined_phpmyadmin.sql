@@ -649,4 +649,80 @@ WHERE NOT EXISTS (
 );
 
 
+-- ============================================================
+-- 0020_listing_status_normalise.sql
+-- Publishes the listings that were imported / submitted as
+-- listing_status = 0 (the CSV import hardcoded 0; the public
+-- add-listing form wrote the string 'Active', which MySQL
+-- coerced to 0), so the category counters and the category
+-- pages finally agree. Backs the old values up to
+-- listings.listing_status_backup first.
+-- Also backfills listing_categories.category_slug, matching
+-- pearland_slug() in application/helpers/view_helper.php.
+-- PREPARE/EXECUTE + temp tables for phpMyAdmin (no DELIMITER).
+--
+-- ROLLBACK (publish step only):
+--   UPDATE `listings` SET `listing_status` = `listing_status_backup`
+--    WHERE `listing_status_backup` IS NOT NULL;
+-- ============================================================
+
+-- The backup column IS the idempotency guard: @p411_ls_new is 1 only on the
+-- run that creates it, so a re-import can never re-publish something an
+-- operator has since switched off.
+SET @p411_ls_new := (SELECT IF(COUNT(*) = 0, 1, 0) FROM INFORMATION_SCHEMA.COLUMNS
+                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings'
+                       AND COLUMN_NAME = 'listing_status_backup');
+
+SET @s := IF(@p411_ls_new = 1, 'ALTER TABLE `listings` ADD COLUMN `listing_status_backup` TINYINT(1) NULL DEFAULT NULL COMMENT ''listing_status before migration 0020 - rollback source''', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := IF(@p411_ls_new = 1, 'UPDATE `listings` SET `listing_status_backup` = `listing_status`', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := IF(@p411_ls_new = 1, 'UPDATE `listings` SET `listing_status` = 1 WHERE (`listing_status` IS NULL OR `listing_status` = 0) AND (`is_deleted` IS NULL OR `is_deleted` = 0)', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- listing_categories.category_slug — guard-add for older installs.
+SET @e := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='listing_categories' AND COLUMN_NAME='category_slug');
+SET @s := IF(@e = 0, 'ALTER TABLE `listing_categories` ADD COLUMN `category_slug` VARCHAR(191) NULL DEFAULT NULL', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Backfill the empty slugs. The REPLACE chain is pearland_slug() in SQL:
+-- lowercase, spaces to hyphens, drop every other punctuation character,
+-- collapse hyphen runs, trim. "Medical & Dental" -> "medical-dental".
+DROP TEMPORARY TABLE IF EXISTS `p411_slug_calc`;
+CREATE TEMPORARY TABLE `p411_slug_calc` AS
+SELECT `category_id`,
+       TRIM(BOTH '-' FROM REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TRIM(`category_name`)), ' ', '-'), '!', ''), '"', ''), '#', ''), '$', ''), '%', ''), '&', ''), '''', ''), '(', ''), ')', ''), '*', ''), '+', ''), ',', ''), '.', ''), '/', ''), ':', ''), ';', ''), '<', ''), '=', ''), '>', ''), '?', ''), '@', ''), '[', ''), '\\', ''), ']', ''), '^', ''), '_', ''), '`', ''), '{', ''), '|', ''), '}', ''), '~', ''), '---', '-'), '--', '-'), '--', '-'), '--', '-')) AS `slug`
+  FROM `listing_categories`
+ WHERE `category_slug` IS NULL OR `category_slug` = '';
+
+-- Discard anything that didn't reduce to a usable slug (an all-punctuation
+-- name, or non-ASCII the chain can't transliterate) and anything that would
+-- collide with a slug already in use. Those rows keep an empty slug and stay
+-- on name matching rather than being given a URL that lands elsewhere.
+DELETE FROM `p411_slug_calc`
+ WHERE `slug` IS NULL OR `slug` = ''
+    OR `slug` NOT REGEXP '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$';
+
+DELETE c FROM `p411_slug_calc` c
+ WHERE EXISTS (SELECT 1 FROM `listing_categories` lc WHERE lc.`category_slug` = c.`slug`);
+
+-- Collisions within the batch. A temporary table can only be opened once per
+-- statement, so the duplicates go to a second scratch table, not a subquery.
+DROP TEMPORARY TABLE IF EXISTS `p411_slug_dupes`;
+CREATE TEMPORARY TABLE `p411_slug_dupes` AS
+SELECT `slug` FROM `p411_slug_calc` GROUP BY `slug` HAVING COUNT(*) > 1;
+
+DELETE c FROM `p411_slug_calc` c JOIN `p411_slug_dupes` d ON d.`slug` = c.`slug`;
+
+UPDATE `listing_categories` lc
+  JOIN `p411_slug_calc` c ON c.`category_id` = lc.`category_id`
+   SET lc.`category_slug` = c.`slug`
+ WHERE lc.`category_slug` IS NULL OR lc.`category_slug` = '';
+
+DROP TEMPORARY TABLE IF EXISTS `p411_slug_dupes`;
+DROP TEMPORARY TABLE IF EXISTS `p411_slug_calc`;
+
+
 SET FOREIGN_KEY_CHECKS = 1;

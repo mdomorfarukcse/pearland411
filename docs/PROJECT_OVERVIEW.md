@@ -17,6 +17,13 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   - `Cli.php` — CLI jobs: `php index.php cli <method>` (`images_backfill`, `renew_subscriptions`).
   - `Weather.php`, `Sitemap.php`, `Errors.php`.
 - **Models** (`application/models/`): `Usermodel.php`, `Adminmodel.php` (most DB logic lives here).
+  Two rules in `Usermodel` are load-bearing and should never be re-implemented inline:
+  `applyPublishedListingFilter()` / `publishedListingJoinCondition()` define **"a listing the
+  public may see"** (`is_deleted = 0 AND listing_status = 1`; `1` = published), and
+  `resolveCategoryIdBySlug()` turns a category slug from a URL back into an id — stored
+  `category_slug` first, then by running `pearland_slug()` over the names in PHP, so link
+  generation and link resolution use the same function and cannot diverge. A count and the list it
+  labels disagreeing, or a category link landing on an empty page, is what happens when they do.
 - **Views** (`application/views/`): public views at the top level (`index.php`, `all-listing.php`,
   `edit_listings.php`, `checkout.php`, `pricing_plan.php`, `user_account.php`, …); admin views in
   `admin/`; shared partials `header.php` / `footer.php` / `user_left_sidebar.php`.
@@ -25,11 +32,16 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   links them after the shared sheets. Used by `/all-listing` and `/listing-details`
   (`assets/css/directory.css`, scoped `.p411-dir` / `.p411-ld`) and mirrored on the homepage by
   `assets/css/home-sections.css` (`.p411-home`). The rule everywhere: **prefix every selector and
-  never edit the shared 345 KB `style.css`,** which ~200 views depend on.
+  never edit the shared 345 KB `style.css`,** which ~200 views depend on. The one file without a
+  page scope is `assets/css/promo-cards.css` — it styles the two house promo cards below, whose
+  class names nothing else in the codebase emits, and it is shared by all three pages that render
+  them so they can't drift apart.
 - **Reusable blocks:** `partials/ad_slot.php` (one sellable ad zone; options `$slot_class`,
-  `$slot_label`, `$slot_fallback`, `$slot_alias`, `$slot_creative`), `partials/service_promo.php`
-  (the static website/hosting/SEO promo → `/contact-us`; never sold, never empty),
-  `partials/web_dev_cta.php`, `partials/seo_head.php`.
+  `$slot_label`, `$slot_fallback`, `$slot_alias`, `$slot_creative`, `$slot_fallback_partial`),
+  `partials/service_promo.php` (the static website/hosting/SEO promo → `/contact-us`),
+  `partials/banner_design_promo.php` (the ad/banner-design promo → `/request-service`; the unsold
+  fallback for `right-side-banner-2` via `$slot_fallback_partial`) — neither is sold or rotated, so
+  neither is ever empty — plus `partials/web_dev_cta.php`, `partials/seo_head.php`.
 - **Helpers** (autoloaded): `site_setting` (settings + feature flags), `image` (uploads/resize:
   `safe_upload_image`, `uploadAndResize`, `responsive_img`), `view` (escaping/JSON-LD).
 - **Libraries:** `Helcim_lib` (payments), `Mailer` (SMTP email), `Rate_limit`.

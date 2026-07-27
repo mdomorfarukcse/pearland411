@@ -37,7 +37,7 @@ $ad_slots = (isset($ad_slots) && is_array($ad_slots)) ? $ad_slots : array(
 	'top'      => 'top-banner-site-wide',
 	'inline'   => 'middle-banner-category',
 	'side_1'   => 'right-side-banner-1',
-	'side_2'   => 'right-banner-1',
+	'side_2'   => 'right-side-banner-2',
 	'side_sky' => 'right-panel-skyscraper',
 	'bottom'   => 'bottom-banner-site-wide',
 );
@@ -49,10 +49,17 @@ $dir_cat_url = function ($slug) {
 	return $slug !== '' ? base_url('all_listing/' . rawurlencode($slug)) : base_url('all_listing');
 };
 
-/** Slug for a category row, falling back to a generated one. */
+/**
+ * Slug for a category row, falling back to a generated one.
+ *
+ * The fallback goes through the shared pearland_slug() so this page, the
+ * homepage and the header all derive the same URL from a given category name.
+ * They used to disagree over "&" and "/", so a category with either in its
+ * name reached a populated page from one menu and an empty one from another.
+ */
 $dir_cat_slug = function ($cat) {
 	if (!empty($cat->category_slug)) return (string) $cat->category_slug;
-	if (!empty($cat->category_name)) return strtolower(str_replace(' ', '-', (string) $cat->category_name));
+	if (!empty($cat->category_name)) return pearland_slug($cat->category_name);
 	return isset($cat->category_id) ? (string) $cat->category_id : '';
 };
 
@@ -396,6 +403,17 @@ $showing_to   = $current_offset + count($allListings);
 				</div>
 
 				<?php $slot = $ad_slots['side_2'];
+				// The category-priced zones seeded by migration 0019. They are
+				// separate sellable packages that render in this same position,
+				// so anything booked on one still runs here.
+				$slot_alias = array('right-banner-1', 'right-banner-2');
+				// Unsold, this position becomes the ad/banner design card
+				// rather than a flat picture of an advertisement — the person
+				// this zone is for is the advertiser who has no artwork yet.
+				// A real booking still wins the slot.
+				$slot_fallback_partial = 'banner_design_promo.php';
+				// Kept as the creative for the case where the partial is
+				// missing, so the position never renders the generic house ad.
 				$slot_creative = 'banner-design';
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 

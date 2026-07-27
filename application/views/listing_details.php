@@ -673,6 +673,57 @@ $ld_stars = function ($value) {
 					<?php endif; ?>
 				</div>
 
+				<?php // Owner profile / claim prompt. Deliberately high in the
+				      // column — for an unclaimed listing this is the single
+				      // most useful thing on the page for the person who owns
+				      // the business, and it used to sit below the map, both
+				      // sidebar ads and the services promo. ?>
+				<!-- Owner profile -->
+				<?php $has_socials = (bool) array_filter($owner_socials); ?>
+				<?php if ($ld_claimed || $has_socials): ?>
+					<div class="p411-card">
+						<div class="p411-card__head">
+							<h2>Business profile</h2>
+						</div>
+						<div class="p411-profile">
+							<div class="p411-profile__img">
+								<img src="<?= e_attr($ld_logo) ?>" alt="<?= e_attr($ld_name) ?>" loading="lazy" decoding="async">
+							</div>
+							<h3><?= e($ld_name) ?></h3>
+							<?php if ($show_addr): ?><p><?= e($listing->listing_address) ?></p><?php endif; ?>
+
+							<?php if ($has_socials): ?>
+								<div class="p411-profile__soc">
+									<?php
+									$soc_icons = array(
+										'facebook' => array('3.png', 'Facebook'),
+										'twitter'  => array('2.png', 'Twitter'),
+										'youtube'  => array('5.png', 'YouTube'),
+										'website'  => array('6.png', 'Website'),
+									);
+									foreach ($soc_icons as $key => $meta):
+										if (empty($owner_socials[$key])) continue;
+									?>
+										<a href="<?= e_url($owner_socials[$key]) ?>" target="_blank" rel="noopener nofollow" aria-label="<?= e_attr($meta[1]) ?>">
+											<img src="<?= base_url('assets/images/social/' . $meta[0]) ?>" alt="<?= e_attr($meta[1]) ?>" loading="lazy">
+										</a>
+									<?php endforeach; ?>
+								</div>
+							<?php endif; ?>
+						</div>
+					</div>
+				<?php else: ?>
+					<div class="p411-card">
+						<div class="p411-card__head">
+							<h2>Is this your business?</h2>
+						</div>
+						<p class="p411-form__hint">
+							This listing hasn&rsquo;t been claimed. Claim it to edit the details, add photos and reply to reviews.
+						</p>
+						<a class="p411-btn p411-btn--block" href="<?= e_url(base_url('claim-listing/' . rawurlencode($ld_slug))) ?>">Claim this listing</a>
+					</div>
+				<?php endif; ?>
+
 				<!-- Location -->
 				<div class="p411-card" id="location">
 					<div class="p411-card__head">
@@ -727,53 +778,18 @@ $ld_stars = function ($value) {
 				<?php // Static house promo — website development, hosting, local SEO. ?>
 				<?php include APPPATH . 'views/partials/service_promo.php'; ?>
 
-				<!-- Owner profile -->
-				<?php $has_socials = (bool) array_filter($owner_socials); ?>
-				<?php if ($ld_claimed || $has_socials): ?>
-					<div class="p411-card">
-						<div class="p411-card__head">
-							<h2>Business profile</h2>
-						</div>
-						<div class="p411-profile">
-							<div class="p411-profile__img">
-								<img src="<?= e_attr($ld_logo) ?>" alt="<?= e_attr($ld_name) ?>" loading="lazy" decoding="async">
-							</div>
-							<h3><?= e($ld_name) ?></h3>
-							<?php if ($show_addr): ?><p><?= e($listing->listing_address) ?></p><?php endif; ?>
-
-							<?php if ($has_socials): ?>
-								<div class="p411-profile__soc">
-									<?php
-									$soc_icons = array(
-										'facebook' => array('3.png', 'Facebook'),
-										'twitter'  => array('2.png', 'Twitter'),
-										'youtube'  => array('5.png', 'YouTube'),
-										'website'  => array('6.png', 'Website'),
-									);
-									foreach ($soc_icons as $key => $meta):
-										if (empty($owner_socials[$key])) continue;
-									?>
-										<a href="<?= e_url($owner_socials[$key]) ?>" target="_blank" rel="noopener nofollow" aria-label="<?= e_attr($meta[1]) ?>">
-											<img src="<?= base_url('assets/images/social/' . $meta[0]) ?>" alt="<?= e_attr($meta[1]) ?>" loading="lazy">
-										</a>
-									<?php endforeach; ?>
-								</div>
-							<?php endif; ?>
-						</div>
-					</div>
-				<?php else: ?>
-					<div class="p411-card">
-						<div class="p411-card__head">
-							<h2>Is this your business?</h2>
-						</div>
-						<p class="p411-form__hint">
-							This listing hasn&rsquo;t been claimed. Claim it to edit the details, add photos and reply to reviews.
-						</p>
-						<a class="p411-btn p411-btn--block" href="<?= e_url(base_url('claim-listing/' . rawurlencode($ld_slug))) ?>">Claim this listing</a>
-					</div>
-				<?php endif; ?>
-
 				<?php $slot = $ad_slots['side_2'];
+				// The category-priced zones seeded by migration 0019. They are
+				// separate sellable packages that render in this same position,
+				// so anything booked on one still runs here.
+				$slot_alias = array('right-banner-1', 'right-banner-2');
+				// Unsold, this position becomes the ad/banner design card
+				// rather than a flat picture of an advertisement — the person
+				// this zone is for is the advertiser who has no artwork yet.
+				// A real booking still wins the slot.
+				$slot_fallback_partial = 'banner_design_promo.php';
+				// Kept as the creative for the case where the partial is
+				// missing, so the position never renders the generic house ad.
 				$slot_creative = 'banner-design';
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
