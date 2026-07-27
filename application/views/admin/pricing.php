@@ -7,6 +7,24 @@
     .pricing_wrapper .modal-dialog {
         max-width: 800px !important;
     }
+
+    /* The plan form is long. Without a cap the modal grew past the viewport and
+       the footer — with the Save Plan button — sat below the fold with no way
+       to scroll to it, so edits could be typed but never saved.
+       A direct max-height on the body is used rather than Bootstrap's
+       .modal-dialog-scrollable because a <form> sits between .modal-content and
+       .modal-body here, which breaks that rule's flex assumptions. */
+    .pricing_wrapper .modal-body {
+        max-height: calc(100vh - 210px);
+        overflow-y: auto;
+    }
+
+    .pricing_wrapper .modal-footer {
+        position: sticky;
+        bottom: 0;
+        background: #fff;
+        z-index: 2;
+    }
 </style>
 <section class="pricing_wrapper">
     <!-- Pricing Page for Admin -->
@@ -472,16 +490,27 @@
 
 </section>
 
-<!-- jQuery and Bootstrap JS (HTTPS secured) -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"
-    integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4="
-    crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"
-    integrity="sha384-Piv4xVNRyMGpqkS2by6br4gNJ7DXjqk09RmUpJ8jgGtD7zP9yug3goQfGII0yAns"
-    crossorigin="anonymous"></script>
+<script>
+// admin/footer.php loads jQuery, Bootstrap, select2 and chosen *after* this
+// view is rendered, so anything here that needs $ must wait for it.
+//
+// This page used to work around that by loading a SECOND copy of jQuery
+// (3.6.0) and Bootstrap (4.6.0) inline. That replaced window.jQuery halfway
+// down the page, so the plugins and handlers the footer's copies registered
+// were bound to a jQuery instance the rest of the page no longer used —
+// leaving the Edit Pricing Plan modal and the duration editor unreliable.
+// One jQuery per page; defer instead of duplicating.
+function ppAdminReady(fn) {
+    if (window.jQuery) { window.jQuery(fn); return; }
+    document.addEventListener('DOMContentLoaded', function () {
+        if (window.jQuery) { window.jQuery(fn); }
+        else { console.error('jQuery did not load — pricing admin UI is disabled.'); }
+    });
+}
+</script>
 
 <script>
-    $(document).ready(function() {
+    ppAdminReady(function ($) {
         // Force secure content only
         console.log('Pricing management loaded securely');
 
@@ -611,7 +640,7 @@
 
 
 <script>
-    (function($) {
+    ppAdminReady(function ($) {
         function loadDurationsIntoTable(planId) {
             if (!planId) return;
             $.ajax({
@@ -785,5 +814,5 @@
                 error: () => durAlert('Server error', false)
             });
         });
-    })(jQuery);
+    });
 </script>

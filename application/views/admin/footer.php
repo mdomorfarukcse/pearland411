@@ -18,7 +18,7 @@
 
 <script src="<?= base_url() ?>/assets/admin/js/admin-custom.js"></script>
 
-<script src="http://harvesthq.github.io/chosen/chosen.jquery.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chosen/1.8.7/chosen.jquery.min.js"></script>
 
 <script src="<?= base_url('assets/js/customCode2.js'); ?>"></script>
 <!-- Select2 JS CDN -->
