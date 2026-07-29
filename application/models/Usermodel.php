@@ -1115,7 +1115,19 @@ class Usermodel extends CI_Model
 	  Get All Event Information
 	===========================*/
 	// Get events with search and pagination (public)
-	public function getEventsWithPagination($search = '', $limit = 10, $offset = 0)
+	/**
+	 * @param string $search
+	 * @param int    $limit
+	 * @param int    $offset
+	 * @param string $when  'upcoming' | 'past' | 'all'. A listing of events
+	 *                      sorted newest-date-first shows next year's fair
+	 *                      above tonight's concert and mixes in everything
+	 *                      that has already happened, so /event asks for a
+	 *                      window and the sort follows it: soonest first
+	 *                      when looking forward, most recent first when
+	 *                      looking back.
+	 */
+	public function getEventsWithPagination($search = '', $limit = 10, $offset = 0, $when = 'all')
 	{
 		$this->db->select('events.*, COALESCE(admin.admin_name, user.name) AS host_name, user.profile_image AS host_image', false)
 			->from('events')
@@ -1129,16 +1141,22 @@ class Usermodel extends CI_Model
 			$this->db->or_like('events.event_address', $search);
 			$this->db->group_end();
 		}
-		// Newest event_start_date first; fall back to event_id for events
-		// that have no start date set. Plain identifiers so CI3 can escape
-		// them safely on its own — no raw expressions.
-		$this->db->order_by('events.event_start_date', 'DESC');
-		$this->db->order_by('events.event_id', 'DESC');
+
+		// Bound as a plain value rather than CURDATE(), so CI3 escapes it.
+		$today = date('Y-m-d');
+		if ($when === 'upcoming')  $this->db->where('events.event_start_date >=', $today);
+		elseif ($when === 'past')  $this->db->where('events.event_start_date <', $today);
+
+		// Plain identifiers so CI3 can escape them safely on its own — no
+		// raw expressions. event_id breaks ties for events with no date.
+		$this->db->order_by('events.event_start_date', $when === 'upcoming' ? 'ASC' : 'DESC');
+		$this->db->order_by('events.event_id', $when === 'upcoming' ? 'ASC' : 'DESC');
 		$this->db->limit($limit, $offset);
 		return $this->db->get()->result();
 	}
 
-	public function countEventsWithSearch($search = '')
+	/** Must apply exactly the filters getEventsWithPagination() applies. */
+	public function countEventsWithSearch($search = '', $when = 'all')
 	{
 		$this->db->from('events')->where('event_status', 1);
 		if (!empty($search)) {
@@ -1148,6 +1166,11 @@ class Usermodel extends CI_Model
 			$this->db->or_like('event_address', $search);
 			$this->db->group_end();
 		}
+
+		$today = date('Y-m-d');
+		if ($when === 'upcoming')  $this->db->where('event_start_date >=', $today);
+		elseif ($when === 'past')  $this->db->where('event_start_date <', $today);
+
 		return $this->db->count_all_results();
 	}
 
@@ -1576,14 +1599,48 @@ class Usermodel extends CI_Model
 	 * @param int $limit
 	 * @return array
 	 */
-	public function getRelatedNews($exclude_news_id, $limit = 3)
+	/**
+	 * @param int      $exclude_news_id
+	 * @param int      $limit
+	 * @param int|null $category_id  Prefer stories from this category, then
+	 *                               top up site-wide so the block is never
+	 *                               short just because a category is small.
+	 *
+	 * Also gained the `is_deleted = 0` filter the index has always had:
+	 * a soft-deleted story could still surface here.
+	 */
+	public function getRelatedNews($exclude_news_id, $limit = 3, $category_id = NULL)
 	{
-		$this->db->where('news_status', 1);
-		$this->db->where('news_id !=', $exclude_news_id);
-		$this->db->order_by('created_at', 'DESC');
-		$this->db->limit($limit);
-		$query = $this->db->get('news');
-		return $query->result();
+		$limit    = (int) $limit;
+		$picked   = array();
+		$seen_ids = array((int) $exclude_news_id);
+
+		$fetch = function ($category, $need) use (&$seen_ids) {
+			$this->db->select('news.*, categories.category_name, categories.category_slug', false)
+				->from('news')
+				->join('news_categories as categories', 'categories.category_id = news.news_category_id', 'LEFT')
+				->where('news.is_deleted', 0)
+				->where('news.news_status', 1)
+				->where_not_in('news.news_id', $seen_ids);
+			if ($category !== NULL) $this->db->where('news.news_category_id', (int) $category);
+
+			return $this->db->order_by('news.news_id', 'DESC')->limit((int) $need)->get()->result();
+		};
+
+		if ($category_id !== NULL) {
+			foreach ($fetch((int) $category_id, $limit) as $row) {
+				$picked[]   = $row;
+				$seen_ids[] = (int) $row->news_id;
+			}
+		}
+		if (count($picked) < $limit) {
+			foreach ($fetch(NULL, $limit - count($picked)) as $row) {
+				$picked[]   = $row;
+				$seen_ids[] = (int) $row->news_id;
+			}
+		}
+
+		return $picked;
 	}
 
 	/***********
@@ -1613,21 +1670,37 @@ class Usermodel extends CI_Model
 	}
 
 	// Get news with search and pagination (public)
-	public function getNewsWithSearch($search = '', $limit = 10, $offset = 0)
+	/**
+	 * @param string   $search
+	 * @param int      $limit
+	 * @param int      $offset
+	 * @param int|null $category_id  Filter to one news category.
+	 *
+	 * Selects `news.*` explicitly rather than `*`: the join brings in
+	 * news_categories, which has its own created_at, and a bare `*` would
+	 * let the category's timestamp overwrite the story's.
+	 */
+	public function getNewsWithSearch($search = '', $limit = 10, $offset = 0, $category_id = NULL)
 	{
-		$this->db->select('*')->from('news')->where('is_deleted', 0)->where('news_status', 1);
+		$this->db->select('news.*, categories.category_name, categories.category_slug', false)
+			->from('news')
+			->join('news_categories as categories', 'categories.category_id = news.news_category_id', 'LEFT')
+			->where('news.is_deleted', 0)
+			->where('news.news_status', 1);
 		if (!empty($search)) {
 			$this->db->group_start();
-			$this->db->like('news_title', $search);
-			$this->db->or_like('news_description', $search);
+			$this->db->like('news.news_title', $search);
+			$this->db->or_like('news.news_description', $search);
 			$this->db->group_end();
 		}
-		$this->db->order_by('news_id', 'DESC');
+		if ($category_id !== NULL) $this->db->where('news.news_category_id', (int) $category_id);
+		$this->db->order_by('news.news_id', 'DESC');
 		$this->db->limit($limit, $offset); // $limit = per_page, $offset = offset
 		return $this->db->get()->result();
 	}
 
-	public function countNewsWithSearch($search = '')
+	/** Must apply exactly the filters getNewsWithSearch() applies. */
+	public function countNewsWithSearch($search = '', $category_id = NULL)
 	{
 		$this->db->from('news')->where('is_deleted', 0)->where('news_status', 1);
 		if (!empty($search)) {
@@ -1636,6 +1709,7 @@ class Usermodel extends CI_Model
 			$this->db->or_like('news_description', $search);
 			$this->db->group_end();
 		}
+		if ($category_id !== NULL) $this->db->where('news_category_id', (int) $category_id);
 		return $this->db->count_all_results();
 	}
 
@@ -1990,7 +2064,17 @@ class Usermodel extends CI_Model
 			return $event;
 		}
 
-		// If not found, try to find by converting event names to slugs
+		// If not found, try to find by converting event names to slugs.
+		//
+		// Two generators are accepted, because two are in use: this model's
+		// createSafeSlug() (drops every non-alphanumeric run to one hyphen)
+		// and the shared pearland_slug() the views build links with (spaces to
+		// hyphens, then strips the rest). They agree on "Market: A Market" and
+		// disagree on "Don't Miss" — "don-t-miss" against "dont-miss" — so
+		// resolving on only one of them makes a link that generation produced
+		// unreachable. Accept both rather than pick a winner.
+		if (!function_exists('pearland_slug')) $this->load->helper('view');
+
 		$events = $this->db->select('*')
 			->from('events')
 			->where('event_status', 1)
@@ -1998,10 +2082,8 @@ class Usermodel extends CI_Model
 
 		foreach ($events as $event) {
 			// Create slug from event name if event_slug is empty
-			$generated_slug = $this->createSafeSlug($event->event_name);
-			if ($generated_slug === $slug) {
-				return $event;
-			}
+			if ($this->createSafeSlug($event->event_name) === $slug) return $event;
+			if (pearland_slug($event->event_name) === $slug)         return $event;
 		}
 
 		return null;
@@ -2118,15 +2200,40 @@ class Usermodel extends CI_Model
 	/**
 	 * Get related events excluding current event
 	 */
+	/**
+	 * Events to suggest beside the one being read: what is still to come
+	 * first (soonest at the front), topped up with the most recent past
+	 * events only if there aren't enough. Ordering by event_id alone put a
+	 * concert from last spring above a festival next week.
+	 */
 	public function getRelatedEvents($current_event_id, $limit = 3)
 	{
-		return $this->db->select('*')
+		$limit    = (int) $limit;
+		$seen_ids = array((int) $current_event_id);
+
+		$upcoming = $this->db->select('*')
 			->from('events')
 			->where('event_status', 1)
-			->where('event_id !=', $current_event_id)
-			->order_by('event_id', 'DESC')
+			->where_not_in('event_id', $seen_ids)
+			->where('event_start_date >=', date('Y-m-d'))
+			->order_by('event_start_date', 'ASC')
+			->order_by('event_id', 'ASC')
 			->limit($limit)
 			->get()->result();
+
+		foreach ($upcoming as $row) $seen_ids[] = (int) $row->event_id;
+		if (count($upcoming) >= $limit) return $upcoming;
+
+		$past = $this->db->select('*')
+			->from('events')
+			->where('event_status', 1)
+			->where_not_in('event_id', $seen_ids)
+			->order_by('event_start_date', 'DESC')
+			->order_by('event_id', 'DESC')
+			->limit($limit - count($upcoming))
+			->get()->result();
+
+		return array_merge($upcoming, $past);
 	}
 
 	public function add($tableName, $data)
@@ -2506,22 +2613,60 @@ class Usermodel extends CI_Model
 	 * @param int $limit
 	 * @return array
 	 */
-	public function getRelatedVideos($exclude_video_id, $limit = 3)
+	/**
+	 * @param int      $exclude_video_id
+	 * @param int      $limit
+	 * @param int|null $category_id  Prefer this category, then top up.
+	 *
+	 * The status filter is deliberately absent, matching getAllVideos():
+	 * the index has never filtered on video_status, and filtering only here
+	 * meant a page could list a video it then refused to suggest.
+	 */
+	public function getRelatedVideos($exclude_video_id, $limit = 3, $category_id = NULL)
 	{
-		$this->db->where('video_status', 1);
-		$this->db->where('video_id !=', $exclude_video_id);
-		$this->db->order_by('created_at', 'DESC');
-		$this->db->limit($limit);
-		$query = $this->db->get('video');
-		return $query->result();
+		$limit    = (int) $limit;
+		$picked   = array();
+		$seen_ids = array((int) $exclude_video_id);
+
+		$fetch = function ($category, $need) use (&$seen_ids) {
+			$this->db->select('video.video_id, video.video_title, video.video_slug, video.video_image, video.video_code, video.video_description, video.views, video.created_at, categories.category_name, categories.category_slug', false)
+				->from('video')
+				->join('video_categories as categories', 'categories.category_id = video.video_category_id', 'LEFT')
+				->where_not_in('video.video_id', $seen_ids);
+			if ($category !== NULL) $this->db->where('video.video_category_id', (int) $category);
+
+			return $this->db->order_by('video.video_id', 'DESC')->limit((int) $need)->get()->result();
+		};
+
+		if ($category_id !== NULL) {
+			foreach ($fetch((int) $category_id, $limit) as $row) {
+				$picked[]   = $row;
+				$seen_ids[] = (int) $row->video_id;
+			}
+		}
+		if (count($picked) < $limit) {
+			foreach ($fetch(NULL, $limit - count($picked)) as $row) {
+				$picked[]   = $row;
+				$seen_ids[] = (int) $row->video_id;
+			}
+		}
+
+		return $picked;
 	}
 
 
 	// Global Videos
 	// Get videos with search and pagination (public)
-	public function getAllVideos($search = '', $limit = 10, $offset = 0)
+	/**
+	 * @param int|null $category_id  Filter to one video category.
+	 *
+	 * video_code and views join the select list: without the code a video
+	 * whose thumbnail was never uploaded had nothing to show but a broken
+	 * image, and YouTube already hosts one for every video id.
+	 */
+	public function getAllVideos($search = '', $limit = 10, $offset = 0, $category_id = NULL)
 	{
-		$this->db->select('video.video_id,video.video_title, video.video_description,video.video_status,video.created_at,video.video_slug,video.video_image, user.user_id,user.name,categories.category_name')
+		$this->db->select('video.video_id,video.video_title, video.video_description,video.video_status,video.created_at,video.video_slug,video.video_image,video.video_code,video.views, user.user_id,user.name,categories.category_name,categories.category_slug')
 			->from('video')
 			->join('user', 'user.user_id = video.user_id', 'LEFT')
 			->join('video_categories as categories', 'categories.category_id = video.video_category_id', 'LEFT');
@@ -2531,12 +2676,14 @@ class Usermodel extends CI_Model
 			$this->db->or_like('video_description', $search);
 			$this->db->group_end();
 		}
+		if ($category_id !== NULL) $this->db->where('video.video_category_id', (int) $category_id);
 		$this->db->order_by('video_id', 'DESC');
 		$this->db->limit($limit, $offset);
 		return $this->db->get()->result();
 	}
 
-	public function countVideosWithSearch($search = '')
+	/** Must apply exactly the filters getAllVideos() applies. */
+	public function countVideosWithSearch($search = '', $category_id = NULL)
 	{
 		$this->db->from('video');
 		if (!empty($search)) {
@@ -2545,6 +2692,7 @@ class Usermodel extends CI_Model
 			$this->db->or_like('video_description', $search);
 			$this->db->group_end();
 		}
+		if ($category_id !== NULL) $this->db->where('video_category_id', (int) $category_id);
 		return $this->db->count_all_results();
 	}
 
@@ -5803,18 +5951,25 @@ class Usermodel extends CI_Model
 	 * no date filter and orders by `event_id DESC`, so it returns the most
 	 * recently *created* events, which may all be in the past.
 	 */
-	public function getUpcomingEvents($limit = 6)
+	public function getUpcomingEvents($limit = 6, $exclude_id = 0)
 	{
 		if (!$this->db->table_exists('events')) return array();
 
+		// `name` is what the homepage widget reads; `host_name` is what the
+		// events pages read. Same value, aliased twice, so neither caller
+		// has to know about the other.
 		$this->db
-			->select('events.*, COALESCE(admin.admin_name, user.name) AS name', false)
+			->select('events.*, COALESCE(admin.admin_name, user.name) AS name, COALESCE(admin.admin_name, user.name) AS host_name', false)
 			->from('events')
 			->join('user',  'events.user_id  = user.user_id',   'left')
 			->join('admin', 'admin.admin_id  = events.admin_id', 'left')
 			->where('events.event_status', 1)
-			->where('events.event_start_date >=', date('Y-m-d'))
+			->where('events.event_start_date >=', date('Y-m-d'));
+		if ((int) $exclude_id > 0) $this->db->where('events.event_id !=', (int) $exclude_id);
+
+		$this->db
 			->order_by('events.event_start_date', 'ASC')
+			->order_by('events.event_id', 'ASC')
 			->limit((int) $limit);
 
 		return $this->db->get()->result();
@@ -5899,5 +6054,116 @@ class Usermodel extends CI_Model
 			->limit((int) $limit);
 
 		return $this->db->get()->result();
+	}
+
+	/* =====================================================================
+	 * CONTENT SECTIONS — events, news, videos
+	 * ---------------------------------------------------------------------
+	 * Backing queries for /event, /news, /videos and their detail pages,
+	 * laid out like the directory: a filter (time window for events, a
+	 * category for news and videos), a count that agrees with the list it
+	 * labels, and a sidebar rail that isn't just the first page repeated.
+	 * ===================================================================*/
+
+	/**
+	 * Turn a category slug from a /news or /videos URL back into an id.
+	 *
+	 * Public wrapper over the private resolver the directory uses, so link
+	 * generation (stored `category_slug`, else pearland_slug() of the name)
+	 * and link resolution run the same rule. The admin's category forms
+	 * build their slug with a different expression again
+	 * (`preg_replace('/[^A-Za-z0-9-]+/', '-', $name)`, which keeps capitals),
+	 * so a stored slug is tried verbatim first and only then slugified.
+	 *
+	 * @param  string $slug
+	 * @param  string $table  news_categories | video_categories
+	 * @return int|null
+	 */
+	public function resolveContentCategoryId($slug, $table)
+	{
+		if (!in_array($table, array('news_categories', 'video_categories'), true)) return NULL;
+		if (!$this->db->table_exists($table)) return NULL;
+
+		return $this->resolveCategoryIdBySlug($slug, $table);
+	}
+
+	/**
+	 * News categories that actually have published stories, most first.
+	 * Empty categories are dropped: a strip of dead links is worse than a
+	 * shorter strip.
+	 */
+	public function getNewsCategoriesWithCounts($limit = 12)
+	{
+		if (!$this->db->table_exists('news_categories')) return array();
+
+		return $this->db
+			->select('c.category_id, c.category_name, c.category_slug, COUNT(n.news_id) AS item_count', false)
+			->from('news_categories c')
+			->join('news n', 'n.news_category_id = c.category_id AND n.is_deleted = 0 AND n.news_status = 1', 'left')
+			->group_by('c.category_id, c.category_name, c.category_slug')
+			->having('item_count >', 0)
+			->order_by('item_count', 'DESC')
+			->order_by('c.category_name', 'ASC')
+			->limit((int) $limit)
+			->get()->result();
+	}
+
+	/** Video categories that have videos in them, most first. */
+	public function getVideoCategoriesWithCounts($limit = 12)
+	{
+		if (!$this->db->table_exists('video_categories')) return array();
+
+		return $this->db
+			->select('c.category_id, c.category_name, c.category_slug, COUNT(v.video_id) AS item_count', false)
+			->from('video_categories c')
+			->join('video v', 'v.video_category_id = c.category_id', 'left')
+			->group_by('c.category_id, c.category_name, c.category_slug')
+			->having('item_count >', 0)
+			->order_by('item_count', 'DESC')
+			->order_by('c.category_name', 'ASC')
+			->limit((int) $limit)
+			->get()->result();
+	}
+
+	/** How many events are still to come. Drives the index's default filter. */
+	public function countUpcomingEvents()
+	{
+		return $this->db
+			->from('events')
+			->where('event_status', 1)
+			->where('event_start_date >=', date('Y-m-d'))
+			->count_all_results();
+	}
+
+	/** Most-read published stories, for the news sidebar. */
+	public function getPopularNews($limit = 5, $exclude_id = 0)
+	{
+		$this->db->select('news.*, categories.category_name, categories.category_slug', false)
+			->from('news')
+			->join('news_categories as categories', 'categories.category_id = news.news_category_id', 'LEFT')
+			->where('news.is_deleted', 0)
+			->where('news.news_status', 1);
+		if ((int) $exclude_id > 0) $this->db->where('news.news_id !=', (int) $exclude_id);
+
+		return $this->db
+			->order_by('news.views', 'DESC')
+			->order_by('news.news_id', 'DESC')
+			->limit((int) $limit)
+			->get()->result();
+	}
+
+	/** Most-watched videos, for the videos sidebar. */
+	public function getPopularVideos($limit = 5, $exclude_id = 0)
+	{
+		$this->db->select('video.video_id, video.video_title, video.video_slug, video.video_image, video.video_code, video.views, video.created_at, categories.category_name, categories.category_slug', false)
+			->from('video')
+			->join('video_categories as categories', 'categories.category_id = video.video_category_id', 'LEFT');
+		if ((int) $exclude_id > 0) $this->db->where('video.video_id !=', (int) $exclude_id);
+
+		return $this->db
+			->order_by('video.views', 'DESC')
+			->order_by('video.video_id', 'DESC')
+			->limit((int) $limit)
+			->get()->result();
 	}
 }

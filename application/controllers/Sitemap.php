@@ -62,7 +62,7 @@ class Sitemap extends CI_Controller
             $this->_collect('listings', 'listing_slug', 'created_at', 'listing-details/', '0.7',
                 array('listing_status' => 1, 'is_deleted' => 0)),
             $this->_collect('listing_categories', 'category_slug', null, 'all_listing/', '0.6'),
-            $this->_collect('news', 'news_slug', 'created_at', 'news_details/', '0.6'),
+            $this->_collect('news', 'news_slug', 'created_at', 'news-details/', '0.6'),
             $this->_collect('blogs', 'blog_slug', 'created_at', 'blogs-details/', '0.5'),
             $this->_collect('events', 'event_slug', 'created_at', 'event-details/', '0.5'),
             $this->_collect('classifieds', 'classifieds_slug', 'created_at', 'classifieds-details/', '0.5'),

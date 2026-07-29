@@ -168,6 +168,43 @@ class User extends CI_Controller
 	}
 
 	/**
+	 * The six ad positions the content sections render — events, news and
+	 * videos, index and detail alike.
+	 *
+	 * Identical to the directory's, and for the same reason: every key is a
+	 * `plans.slug` from /pricing-plan (migrations 0017 + 0019), so buying the
+	 * package fills the position. The 0006 zones these pages used to render
+	 * ('events-sidebar', 'news-sidebar') match no package and so could never
+	 * be bought — they stay reachable as $slot_alias in the views, so an ad an
+	 * operator booked against one by hand keeps getting its impressions.
+	 */
+	private function contentAdSlots()
+	{
+		return array(
+			'top'      => 'top-banner-site-wide',
+			'inline'   => 'middle-banner-category',
+			'side_1'   => 'right-side-banner-1',
+			'side_2'   => 'right-side-banner-2',
+			'side_sky' => 'right-panel-skyscraper',
+			'bottom'   => 'bottom-banner-site-wide',
+		);
+	}
+
+	/**
+	 * Per-page stylesheets for the content sections: the shared page kit, the
+	 * components those six pages add, and the two house promo cards. Loaded
+	 * through the $page_css hook in views/header.php, after the shared sheets.
+	 */
+	private function contentPageCss()
+	{
+		return array(
+			'assets/css/directory.css?v=1',
+			'assets/css/content.css?v=1',
+			'assets/css/promo-cards.css?v=1',
+		);
+	}
+
+	/**
 	 * Field-level listing capabilities for a listing owner, derived from
 	 * their active plan (freemium model). With no active plan — a claimed
 	 * listing on the free tier — every rich capability is off; only
@@ -474,20 +511,38 @@ class User extends CI_Controller
 	public function news()
 	{
 		if (!$this->requireService('service_news_enabled')) return;
-		$this->load->model('usermodel');
-		$this->load->library('pagination');
 
 		$search_query = $this->input->get('q', TRUE);
+		$search_query = is_string($search_query) ? trim($search_query) : '';
+
+		// Section filter. A query string rather than a path segment, so it
+		// composes with ?q= and ?page= and can't collide with the routes.
+		$cat_slug = $this->input->get('category', TRUE);
+		$cat_slug = is_string($cat_slug) ? trim($cat_slug) : '';
+		$cat_id   = $cat_slug !== '' ? $this->usermodel->resolveContentCategoryId($cat_slug, 'news_categories') : NULL;
+		$cat_name = '';
+		if ($cat_id !== NULL) {
+			$cat_row  = $this->usermodel->getSingleValue($cat_id, 'category_id', 'news_categories');
+			$cat_name = $cat_row ? (string) $cat_row->category_name : '';
+		} elseif ($cat_slug !== '') {
+			// Unknown slug: don't silently show everything under a heading
+			// that says otherwise — filter to nothing and let the view
+			// explain, the same as an empty category.
+			$cat_id = 0;
+		}
+
+		$per_page = 12;
 		$page = (int) $this->input->get('page', TRUE);
-		$per_page = 10;
 		if ($page < 1) $page = 1;
+
+		$total_rows  = $this->usermodel->countNewsWithSearch($search_query, $cat_id);
+		$total_pages = max(1, (int) ceil($total_rows / $per_page));
+		if ($page > $total_pages) $page = $total_pages;
 		$offset = ($page - 1) * $per_page;
 
-		$total_rows = $this->usermodel->countNewsWithSearch($search_query);
-		$all_news = $this->usermodel->getNewsWithSearch($search_query, $per_page, $offset);
+		$all_news = $this->usermodel->getNewsWithSearch($search_query, $per_page, $offset, $cat_id);
 
-		// Pagination config (custom, similar to events)
-		// Pagination config (reuse_query_string fixes duplicate/empty links)
+		// Pagination config (reuse_query_string keeps ?q= and ?category=)
 		$config = [
 			'base_url' => base_url('news'),
 			'total_rows' => $total_rows,
@@ -496,6 +551,7 @@ class User extends CI_Controller
 			'query_string_segment' => 'page',
 			'reuse_query_string' => TRUE,
 			'use_page_numbers' => TRUE,
+			'attributes' => array('class' => 'page-link'),
 			'full_tag_open' => '<ul class="pagination">',
 			'full_tag_close' => '</ul>',
 			'cur_tag_open' => '<li class="page-item active"><span class="page-link">',
@@ -510,16 +566,49 @@ class User extends CI_Controller
 			'first_tag_close' => '</li>',
 			'last_tag_open' => '<li class="page-item">',
 			'last_tag_close' => '</li>',
-			'next_link' => 'Next >',
-			'prev_link' => '< Prev',
+			'next_link' => 'Next &rsaquo;',
+			'prev_link' => '&lsaquo; Prev',
 		];
 		$this->pagination->initialize($config);
-		$pagination_links = $this->pagination->create_links();
 
-		$data['all_news'] = $all_news;
-		$data['pagination_links'] = $pagination_links;
-		$data['search_query'] = $search_query;
-		$data['title'] = 'News';
+		$data = array();
+		$data['all_news']         = $all_news;
+		$data['pagination_links'] = $this->pagination->create_links();
+		$data['search_query']     = $search_query;
+		$data['total_news']       = $total_rows;
+		$data['per_page']         = $per_page;
+		$data['current_page']     = $page;
+		$data['total_pages']      = $total_pages;
+		$data['current_offset']   = $offset;
+
+		$data['news_categories']        = $this->usermodel->getNewsCategoriesWithCounts(12);
+		$data['current_category_slug']  = $cat_slug;
+		$data['current_category_name']  = $cat_name;
+		$data['popular_news']           = $this->usermodel->getPopularNews(5);
+
+		if ($this->session->userdata('logged_user')) {
+			$data['user'] = $this->usermodel->getUserInformation();
+		}
+
+		$data['ad_slots'] = $this->contentAdSlots();
+		$this->usermodel->primeAdSlots(array_merge(
+			array_values($data['ad_slots']),
+			array('news-sidebar', 'right-banner-1', 'right-banner-2')
+		));
+		$data['page_css'] = $this->contentPageCss();
+
+		$data['title'] = $cat_name !== ''
+			? $cat_name . ' — Pearland News — Pearland411'
+			: 'Pearland News — Local News & Announcements — Pearland411';
+		$data['meta_description'] = 'Local news from Pearland, Texas: city announcements, business openings, '
+			. 'public safety and community stories'
+			. ($cat_name !== '' ? ' filed under ' . $cat_name . '.' : '.');
+		$data['canonical_url'] = $cat_slug !== ''
+			? base_url('news') . '?' . http_build_query(array('category' => $cat_slug))
+			: base_url('news');
+
+		$this->loadHeaderCategories($data);
+
 		$this->load->view('header', $data);
 		$this->load->view('news', $data);
 		$this->load->view('footer');
@@ -1751,17 +1840,46 @@ class User extends CI_Controller
 	public function event()
 	{
 		if (!$this->requireService('service_events_enabled')) return;
-		$this->load->model('usermodel');
-		$this->load->library('pagination');
 
 		$search_query = $this->input->get('q', TRUE);
+		$search_query = is_string($search_query) ? trim($search_query) : '';
+
+		// Time window. An events index sorted newest-date-first shows next
+		// year's fair above tonight's concert and mixes in everything that
+		// already happened, so the page asks for a window and defaults to
+		// what is still to come.
+		$when          = strtolower((string) $this->input->get('when', TRUE));
+		$explicit_when = in_array($when, array('upcoming', 'past', 'all'), TRUE);
+		if (!$explicit_when) $when = 'upcoming';
+
+		$per_page = 12;
 		$page = (int) $this->input->get('page', TRUE);
-		$per_page = 10;
 		if ($page < 1) $page = 1;
+
+		// Counts for all three tabs: the strip has to be honest about which
+		// windows have anything in them, and the default depends on it.
+		$counts = array(
+			'upcoming' => $this->usermodel->countEventsWithSearch($search_query, 'upcoming'),
+			'past'     => $this->usermodel->countEventsWithSearch($search_query, 'past'),
+			'all'      => $this->usermodel->countEventsWithSearch($search_query, 'all'),
+		);
+
+		// Never land on an empty page just because nothing is scheduled —
+		// fall back to the archive and let the view say so.
+		$when_auto = FALSE;
+		if (!$explicit_when && $counts['upcoming'] === 0 && $counts['all'] > 0) {
+			$when      = 'all';
+			$when_auto = TRUE;
+		}
+
+		$total_rows  = (int) $counts[$when];
+		$total_pages = max(1, (int) ceil($total_rows / $per_page));
+		// An offset past the end (hand-typed, or after events were removed)
+		// used to render a blank list; clamp to the last real page instead.
+		if ($page > $total_pages) $page = $total_pages;
 		$offset = ($page - 1) * $per_page;
 
-		$total_rows = $this->usermodel->countEventsWithSearch($search_query);
-		$all_events = $this->usermodel->getEventsWithPagination($search_query, $per_page, $offset);
+		$all_events = $this->usermodel->getEventsWithPagination($search_query, $per_page, $offset, $when);
 
 		$config = [
 			'base_url' => base_url('event'),
@@ -1771,6 +1889,9 @@ class User extends CI_Controller
 			'query_string_segment' => 'page',
 			'reuse_query_string' => TRUE,
 			'use_page_numbers' => TRUE,
+			// Without this CI3 emits a bare <a>, and the shared pager styling
+			// keys off .page-link.
+			'attributes' => array('class' => 'page-link'),
 			'full_tag_open' => '<ul class="pagination">',
 			'full_tag_close' => '</ul>',
 			'cur_tag_open' => '<li class="page-item active"><span class="page-link">',
@@ -1785,16 +1906,44 @@ class User extends CI_Controller
 			'first_tag_close' => '</li>',
 			'last_tag_open' => '<li class="page-item">',
 			'last_tag_close' => '</li>',
-			'next_link' => 'Next >',
-			'prev_link' => '< Prev',
+			'next_link' => 'Next &rsaquo;',
+			'prev_link' => '&lsaquo; Prev',
 		];
 		$this->pagination->initialize($config);
-		$pagination_links = $this->pagination->create_links();
 
-		$data['Allevent'] = $all_events;
-		$data['pagination_links'] = $pagination_links;
-		$data['search_query'] = $search_query;
-		$data['title'] = "Pearland | All Event";
+		$data = array();
+		$data['Allevent']         = $all_events;
+		$data['pagination_links'] = $this->pagination->create_links();
+		$data['search_query']     = $search_query;
+		$data['when']             = $when;
+		$data['when_counts']      = $counts;
+		$data['when_auto']        = $when_auto;
+		$data['total_events']     = $total_rows;
+		$data['per_page']         = $per_page;
+		$data['current_page']     = $page;
+		$data['total_pages']      = $total_pages;
+		$data['current_offset']   = $offset;
+
+		// Sidebar rail — what's next, whichever window is being browsed.
+		$data['upcoming_events'] = $this->usermodel->getUpcomingEvents(5);
+
+		if ($this->session->userdata('logged_user')) {
+			$data['user'] = $this->usermodel->getUserInformation();
+		}
+
+		$data['ad_slots'] = $this->contentAdSlots();
+		$this->usermodel->primeAdSlots(array_merge(
+			array_values($data['ad_slots']),
+			array('events-sidebar', 'right-banner-1', 'right-banner-2')
+		));
+		$data['page_css'] = $this->contentPageCss();
+
+		$data['title'] = $search_query !== ''
+			? 'Events matching "' . $search_query . '" — Pearland411'
+			: 'Pearland Events — What&rsquo;s On in Pearland, TX';
+		$data['meta_description'] = 'Concerts, markets, festivals and community events in Pearland, Texas. '
+			. ($counts['upcoming'] > 0 ? $counts['upcoming'] . ' upcoming events with dates, times and venues.' : 'Dates, times, venues and contact details.');
+		$data['canonical_url'] = base_url('event');
 
 		// Load header categories using professional MVC approach
 		$this->loadHeaderCategories($data);
@@ -1805,54 +1954,47 @@ class User extends CI_Controller
 	}
 
 	/**
-	 * Event Search Method
-	 * Handles event search functionality with GET parameter
-	 * URL: /user/event_search?q=search_term
+	 * Legacy alias for the events index.
+	 *
+	 * It used to be a second, thinner copy of event(): no pagination, no time
+	 * window, no counts, no sidebar and no ad zones, so /user/event_search
+	 * rendered a visibly poorer page than /event?q=… for the same search. The
+	 * search box posts to /event now; one code path serves both.
 	 */
 	public function event_search()
 	{
-		if (!$this->requireService('service_events_enabled')) return;
-		// Get search query from GET parameter
-		$search_query = $this->input->get('q');
-
-		if ($this->session->userdata('logged_user')) {
-			$data['user'] = $this->usermodel->getUserInformation();
-		}
-
-		// If search query exists, search events, otherwise show all events
-		if (!empty($search_query)) {
-			$data['Allevent'] = $this->usermodel->searchEvents($search_query, 50); // Increase limit to 50
-			$data['search_query'] = $search_query;
-			$data['title'] = "Search Results for '" . htmlspecialchars($search_query) . "' | Events";
-		} else {
-			$data['Allevent'] = $this->usermodel->get_events();
-			$data['search_query'] = '';
-			$data['title'] = "Pearland | All Event";
-		}
-
-		// Load header categories using professional MVC approach
-		$this->loadHeaderCategories($data);
-
-		$this->load->view('header', $data);
-		$this->load->view('events', $data);
-		$this->load->view('footer');
+		$this->event();
 	}
 
 	// Videos Page
 	public function videos()
 	{
 		if (!$this->requireService('service_videos_enabled')) return;
-		$this->load->model('usermodel');
-		$this->load->library('pagination');
 
 		$search_query = $this->input->get('q', TRUE);
+		$search_query = is_string($search_query) ? trim($search_query) : '';
+
+		$cat_slug = $this->input->get('category', TRUE);
+		$cat_slug = is_string($cat_slug) ? trim($cat_slug) : '';
+		$cat_id   = $cat_slug !== '' ? $this->usermodel->resolveContentCategoryId($cat_slug, 'video_categories') : NULL;
+		$cat_name = '';
+		if ($cat_id !== NULL) {
+			$cat_row  = $this->usermodel->getSingleValue($cat_id, 'category_id', 'video_categories');
+			$cat_name = $cat_row ? (string) $cat_row->category_name : '';
+		} elseif ($cat_slug !== '') {
+			$cat_id = 0;
+		}
+
+		$per_page = 12;
 		$page = (int) $this->input->get('page', TRUE);
-		$per_page = 10;
 		if ($page < 1) $page = 1;
+
+		$total_rows  = $this->usermodel->countVideosWithSearch($search_query, $cat_id);
+		$total_pages = max(1, (int) ceil($total_rows / $per_page));
+		if ($page > $total_pages) $page = $total_pages;
 		$offset = ($page - 1) * $per_page;
 
-		$total_rows = $this->usermodel->countVideosWithSearch($search_query);
-		$all_videos = $this->usermodel->getAllVideos($search_query, $per_page, $offset);
+		$all_videos = $this->usermodel->getAllVideos($search_query, $per_page, $offset, $cat_id);
 
 		$config = [
 			'base_url' => base_url('videos'),
@@ -1862,6 +2004,7 @@ class User extends CI_Controller
 			'query_string_segment' => 'page',
 			'reuse_query_string' => TRUE,
 			'use_page_numbers' => TRUE,
+			'attributes' => array('class' => 'page-link'),
 			'full_tag_open' => '<ul class="pagination">',
 			'full_tag_close' => '</ul>',
 			'cur_tag_open' => '<li class="page-item active"><span class="page-link">',
@@ -1876,16 +2019,45 @@ class User extends CI_Controller
 			'first_tag_close' => '</li>',
 			'last_tag_open' => '<li class="page-item">',
 			'last_tag_close' => '</li>',
-			'next_link' => 'Next >',
-			'prev_link' => '< Prev',
+			'next_link' => 'Next &rsaquo;',
+			'prev_link' => '&lsaquo; Prev',
 		];
 		$this->pagination->initialize($config);
-		$pagination_links = $this->pagination->create_links();
 
-		$data['all_videos'] = $all_videos;
-		$data['pagination_links'] = $pagination_links;
-		$data['search_query'] = $search_query;
-		$data['title'] = "Pearland | Videos";
+		$data = array();
+		$data['all_videos']       = $all_videos;
+		$data['pagination_links'] = $this->pagination->create_links();
+		$data['search_query']     = $search_query;
+		$data['total_videos']     = $total_rows;
+		$data['per_page']         = $per_page;
+		$data['current_page']     = $page;
+		$data['total_pages']      = $total_pages;
+		$data['current_offset']   = $offset;
+
+		$data['video_categories']      = $this->usermodel->getVideoCategoriesWithCounts(12);
+		$data['current_category_slug'] = $cat_slug;
+		$data['current_category_name'] = $cat_name;
+		$data['popular_videos']        = $this->usermodel->getPopularVideos(5);
+
+		if ($this->session->userdata('logged_user')) {
+			$data['user'] = $this->usermodel->getUserInformation();
+		}
+
+		$data['ad_slots'] = $this->contentAdSlots();
+		$this->usermodel->primeAdSlots(array_merge(
+			array_values($data['ad_slots']),
+			array('right-banner-1', 'right-banner-2')
+		));
+		$data['page_css'] = $this->contentPageCss();
+
+		$data['title'] = $cat_name !== ''
+			? $cat_name . ' Videos — Pearland411'
+			: 'Pearland Videos — Local Video from Pearland, TX — Pearland411';
+		$data['meta_description'] = 'Watch local video from Pearland, Texas: reports, walk-throughs and community clips'
+			. ($cat_name !== '' ? ' in ' . $cat_name . '.' : '.');
+		$data['canonical_url'] = $cat_slug !== ''
+			? base_url('videos') . '?' . http_build_query(array('category' => $cat_slug))
+			: base_url('videos');
 
 		// Load header categories using professional MVC approach
 		$this->loadHeaderCategories($data);
@@ -2627,16 +2799,34 @@ class User extends CI_Controller
 	public function video_details($slug)
 	{
 		if (!$this->requireService('service_videos_enabled')) return;
-		// Get video details by slug
+
+		$data = array();
+		// Get video details by slug, falling back to the id so a link built
+		// before slugs existed still resolves.
 		$data['video'] = $this->usermodel->getSingleValue($slug, 'video_slug', 'video');
+		if (!$data['video'] && ctype_digit((string) $slug)) {
+			$data['video'] = $this->usermodel->getSingleValue((int) $slug, 'video_id', 'video');
+		}
 
 		if (!$data['video']) {
 			show_404();
 			return;
 		}
 
+		$video = $data['video'];
+
 		// Increment views count for this video
-		$this->usermodel->incrementViews('video', 'video_id', $data['video']->video_id);
+		$this->usermodel->incrementViews('video', 'video_id', $video->video_id);
+
+		// The row comes from `video` alone, so the channel name has to be
+		// looked up separately for the breadcrumb and the category link.
+		if (!empty($video->video_category_id)) {
+			$cat = $this->usermodel->getSingleValue($video->video_category_id, 'category_id', 'video_categories');
+			if ($cat) {
+				$video->category_name = $cat->category_name;
+				$video->category_slug = isset($cat->category_slug) ? $cat->category_slug : '';
+			}
+		}
 
 		// Get logged user ID for form prefilling
 		$logged_id = NULL;
@@ -2648,20 +2838,66 @@ class User extends CI_Controller
 		}
 		$data['logged_id'] = $logged_id;
 
-		// Generate share URLs dynamically for this video
-		$video_url = base_url('user/video-details/' . $data['video']->video_slug);
-		$video_title = $data['video']->video_title;
-		$video_image = !empty($data['video']->video_image) ? base_url($data['video']->video_image) : '';
+		$video_key   = !empty($video->video_slug) ? $video->video_slug : (string) $video->video_id;
+		$video_url   = base_url('video-details/' . rawurlencode($video_key));
+		$video_title = (string) $video->video_title;
+		$video_image = !empty($video->video_image)
+			? base_url($video->video_image)
+			: youtube_thumb_url($video->video_code ?? '', 'maxresdefault');
+
+		// Kept for any caller still reading it; the view rebuilds its own
+		// against the canonical short URL.
 		$data['share_urls'] = [
-			'facebook' => 'https://www.facebook.com/sharer/sharer.php?u=' . urlencode($video_url) . '&quote=' . urlencode($video_title),
+			'facebook' => 'https://www.facebook.com/sharer/sharer.php?u=' . urlencode($video_url),
 			'twitter' => 'https://twitter.com/share?text=' . urlencode($video_title) . '&url=' . urlencode($video_url),
 			'whatsapp' => 'https://wa.me/?text=' . urlencode($video_title . ' ' . $video_url),
 			'linkedin' => 'https://www.linkedin.com/sharing/share-offsite/?url=' . urlencode($video_url),
 			'pinterest' => 'https://www.pinterest.com/pin/create/bookmarklet/?media=' . urlencode($video_image) . '&url=' . urlencode($video_url) . '&description=' . urlencode($video_title),
 		];
 
-		// Get 3 related videos (excluding current)
-		$data['related_videos'] = $this->usermodel->getRelatedVideos($data['video']->video_id, 3);
+		// Related: same channel first, topped up from the whole library.
+		$data['related_videos'] = $this->usermodel->getRelatedVideos(
+			$video->video_id,
+			3,
+			!empty($video->video_category_id) ? (int) $video->video_category_id : NULL
+		);
+		$data['popular_videos'] = $this->usermodel->getPopularVideos(5, (int) $video->video_id);
+
+		$data['ad_slots'] = $this->contentAdSlots();
+		$this->usermodel->primeAdSlots(array_merge(
+			array_values($data['ad_slots']),
+			array('right-banner-1', 'right-banner-2')
+		));
+		$data['page_css'] = $this->contentPageCss();
+
+		// SEO: per-page meta + VideoObject JSON-LD. Prefer the admin-set
+		// video_seo_* columns; fall back to a trimmed description.
+		$desc_auto = content_excerpt($video->video_description ?? '', 160);
+		if ($desc_auto === '') $desc_auto = 'Watch "' . $video_title . '" on Pearland411.';
+
+		$data['title'] = !empty($video->video_seo_title)
+			? $video->video_seo_title
+			: ($video_title . ' — Pearland411 Video');
+		$data['meta_description'] = !empty($video->video_seo_description) ? $video->video_seo_description : $desc_auto;
+		$data['meta_keywords']    = !empty($video->video_seo_keywords) ? $video->video_seo_keywords : '';
+		$data['canonical_url']    = $video_url;
+		if ($video_image !== '') $data['og_image'] = $video_image;
+
+		$data['json_ld'] = json_ld(array(
+			'@context'     => 'https://schema.org',
+			'@type'        => 'VideoObject',
+			'name'         => $video_title,
+			'description'  => $data['meta_description'],
+			'thumbnailUrl' => $video_image ?: null,
+			'uploadDate'   => !empty($video->created_at) ? date('c', strtotime($video->created_at)) : null,
+			'embedUrl'     => youtube_embed_url($video->video_code ?? '') ?: null,
+			'url'          => $video_url,
+			'publisher'    => array(
+				'@type' => 'Organization',
+				'name'  => 'Pearland411',
+				'logo'  => array('@type' => 'ImageObject', 'url' => base_url('assets/images/pearland-logo.png')),
+			),
+		));
 
 		// Load views
 		$this->load->view('header', $data);
@@ -2678,6 +2914,8 @@ class User extends CI_Controller
 	public function news_details($slug_or_id)
 	{
 		if (!$this->requireService('service_news_enabled')) return;
+
+		$data = array();
 		// Get news details by slug or ID
 		if (is_numeric($slug_or_id)) {
 			$data['news'] = $this->usermodel->getSingleValue($slug_or_id, 'news_id', 'news');
@@ -2690,8 +2928,28 @@ class User extends CI_Controller
 			return;
 		}
 
+		$news = $data['news'];
+
 		// Increment views count for this news
-		$this->usermodel->incrementViews('news', 'news_id', $data['news']->news_id);
+		$this->usermodel->incrementViews('news', 'news_id', $news->news_id);
+
+		// The row comes from `news` alone, so the section name has to be
+		// looked up separately for the breadcrumb and the category link.
+		if (!empty($news->news_category_id)) {
+			$cat = $this->usermodel->getSingleValue($news->news_category_id, 'category_id', 'news_categories');
+			if ($cat) {
+				$news->category_name = $cat->category_name;
+				$news->category_slug = isset($cat->category_slug) ? $cat->category_slug : '';
+			}
+		}
+
+		// Byline. The view used to run this query itself, straight off
+		// $this->db in the middle of the markup.
+		$data['news_author'] = 'Pearland411';
+		if (!empty($news->user_id)) {
+			$author = $this->usermodel->getSingleValue($news->user_id, 'user_id', 'user');
+			if ($author && !empty($author->name)) $data['news_author'] = $author->name;
+		}
 
 		// Get logged user ID for form prefilling
 		$logged_id = NULL;
@@ -2703,29 +2961,46 @@ class User extends CI_Controller
 		}
 		$data['logged_id'] = $logged_id;
 
-		// Generate share URLs dynamically for this news
-		$news_url = base_url('user/news-details/' . $data['news']->news_slug);
-		$news_title = $data['news']->news_title;
-		$news_image = !empty($data['news']->news_image) ? base_url($data['news']->news_image) : '';
+		// The canonical URL is the short one. It used to be the long
+		// /user/news-details/… form, which is what every share button and the
+		// JSON-LD then pointed at.
+		$news_key   = !empty($news->news_slug) ? $news->news_slug : (string) $news->news_id;
+		$news_url   = base_url('news-details/' . rawurlencode($news_key));
+		$news_title = (string) $news->news_title;
+		$news_image = !empty($news->news_image) ? base_url($news->news_image) : '';
+
+		// Kept for any caller still reading it; the view rebuilds its own.
 		$data['share_urls'] = [
-			'facebook' => 'https://www.facebook.com/sharer/sharer.php?u=' . urlencode($news_url) . '&quote=' . urlencode($news_title),
+			'facebook' => 'https://www.facebook.com/sharer/sharer.php?u=' . urlencode($news_url),
 			'twitter' => 'https://twitter.com/share?text=' . urlencode($news_title) . '&url=' . urlencode($news_url),
 			'whatsapp' => 'https://wa.me/?text=' . urlencode($news_title . ' ' . $news_url),
 			'linkedin' => 'https://www.linkedin.com/sharing/share-offsite/?url=' . urlencode($news_url),
 			'pinterest' => 'https://www.pinterest.com/pin/create/bookmarklet/?media=' . urlencode($news_image) . '&url=' . urlencode($news_url) . '&description=' . urlencode($news_title),
 		];
 
-		// Get 3 related news (excluding current)
-		$data['related_news'] = $this->usermodel->getRelatedNews($data['news']->news_id, 3);
+		// Related: same section first, topped up from the whole newsroom.
+		$data['related_news'] = $this->usermodel->getRelatedNews(
+			$news->news_id,
+			3,
+			!empty($news->news_category_id) ? (int) $news->news_category_id : NULL
+		);
+		$data['popular_news'] = $this->usermodel->getPopularNews(5, (int) $news->news_id);
+
+		$data['ad_slots'] = $this->contentAdSlots();
+		$this->usermodel->primeAdSlots(array_merge(
+			array_values($data['ad_slots']),
+			array('news-sidebar', 'right-banner-1', 'right-banner-2')
+		));
+		$data['page_css'] = $this->contentPageCss();
 
 		// SEO: per-page meta + NewsArticle JSON-LD. Prefer admin-set
 		// news_seo_* columns; fall back to trimmed body.
-		$news = $data['news'];
-		$desc_auto = trim(strip_tags((string) ($news->news_description ?? '')));
-		$desc_auto = $desc_auto !== '' ? mb_substr($desc_auto, 0, 160) : ('News story: ' . $news->news_title);
+		$desc_auto = content_excerpt($news->news_description ?? '', 160);
+		if ($desc_auto === '') $desc_auto = 'News story: ' . $news_title;
+
 		$data['title']            = !empty($news->news_seo_title)
 			? $news->news_seo_title
-			: ($news->news_title . ' — Pearland411');
+			: ($news_title . ' — Pearland411');
 		$data['meta_description'] = !empty($news->news_seo_description)
 			? $news->news_seo_description
 			: $desc_auto;
@@ -2733,13 +3008,15 @@ class User extends CI_Controller
 			? $news->news_seo_keywords
 			: '';
 		$data['canonical_url']    = $news_url;
-		if (!empty($news->news_image)) $data['og_image'] = $news_image;
+		if ($news_image !== '') $data['og_image'] = $news_image;
 
 		$data['json_ld'] = json_ld(array(
 			'@context'      => 'https://schema.org',
 			'@type'         => 'NewsArticle',
-			'headline'      => (string) $news->news_title,
+			'headline'      => $news_title,
+			'description'   => $data['meta_description'],
 			'datePublished' => !empty($news->created_at) ? date('c', strtotime($news->created_at)) : null,
+			'author'        => array('@type' => 'Person', 'name' => $data['news_author']),
 			'image'         => $news_image ?: null,
 			'mainEntityOfPage' => $news_url,
 			'publisher'     => array(
@@ -2748,6 +3025,8 @@ class User extends CI_Controller
 				'logo'  => array('@type' => 'ImageObject', 'url' => base_url('assets/images/pearland-logo.png')),
 			),
 		));
+
+		$this->loadHeaderCategories($data);
 
 		// Load views
 		$this->load->view('header', $data);
@@ -5721,20 +6000,55 @@ class User extends CI_Controller
 		$data['title'] = $event->event_name . ' — Pearland411 Events';
 
 		// Get related events excluding current event
-		$data['related_events'] = $this->usermodel->getRelatedEvents($event->event_id, 3);
+		$data['related_events']  = $this->usermodel->getRelatedEvents($event->event_id, 3);
+		$data['upcoming_events'] = $this->usermodel->getUpcomingEvents(5, (int) $event->event_id);
+
+		// Who is hosting. Events are hosted by an admin (staff) account; fall
+		// back to the legacy public user for events that predate admin_id.
+		// This used to be worked out inside the view, via get_instance().
+		$data['event_host'] = array('name' => 'Pearland411', 'image' => '', 'joined' => '');
+		if (!empty($event->admin_id)) {
+			$this->load->model('adminmodel');
+			$event_admin = $this->adminmodel->getAdminByIdRaw($event->admin_id);
+			if ($event_admin && !empty($event_admin->admin_name)) {
+				$data['event_host']['name'] = $event_admin->admin_name;
+			}
+		} elseif (!empty($event->user_id)) {
+			$event_user = $this->usermodel->getSingleValue($event->user_id, 'user_id', 'user');
+			if ($event_user) {
+				if (!empty($event_user->name))          $data['event_host']['name']   = $event_user->name;
+				if (!empty($event_user->profile_image)) $data['event_host']['image']  = base_url($event_user->profile_image);
+				if (!empty($event_user->user_created))  $data['event_host']['joined'] = date('M Y', strtotime($event_user->user_created));
+			}
+		}
+
+		$data['ad_slots'] = $this->contentAdSlots();
+		$this->usermodel->primeAdSlots(array_merge(
+			array_values($data['ad_slots']),
+			array('events-sidebar', 'right-banner-1', 'right-banner-2')
+		));
+		$data['page_css'] = $this->contentPageCss();
 
 		// SEO: per-page meta + Event JSON-LD
-		$desc = trim(strip_tags((string) ($event->event_description ?? '')));
-		$desc = $desc !== '' ? mb_substr($desc, 0, 160) : ('Event details for ' . $event->event_name);
+		$desc = content_excerpt($event->event_description ?? '', 160);
+		if ($desc === '') $desc = 'Event details for ' . $event->event_name;
 		$data['meta_description'] = $desc;
-		$data['canonical_url']    = base_url('event-details/' . rawurlencode($event->event_slug));
+		$data['canonical_url']    = base_url('event-details/' . rawurlencode(
+			!empty($event->event_slug) ? $event->event_slug : pearland_slug($event->event_name)
+		));
 		if (!empty($event->event_image)) $data['og_image'] = base_url($event->event_image);
 
 		$ld = array(
-			'@context' => 'https://schema.org',
-			'@type'    => 'Event',
-			'name'     => (string) $event->event_name,
-			'url'      => $data['canonical_url'],
+			'@context'    => 'https://schema.org',
+			'@type'       => 'Event',
+			'name'        => (string) $event->event_name,
+			'description' => $desc,
+			'url'         => $data['canonical_url'],
+			// Google flags an Event with no eventStatus/attendanceMode as
+			// incomplete; both are safe defaults for a listed local event.
+			'eventStatus' => 'https://schema.org/EventScheduled',
+			'eventAttendanceMode' => 'https://schema.org/OfflineEventAttendanceMode',
+			'organizer'   => array('@type' => 'Organization', 'name' => $data['event_host']['name']),
 		);
 		if (!empty($event->event_start_date)) $ld['startDate'] = date('c', strtotime($event->event_start_date));
 		if (!empty($event->event_end_date))   $ld['endDate']   = date('c', strtotime($event->event_end_date));

@@ -29,12 +29,15 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `admin/`; shared partials `header.php` / `footer.php` / `user_left_sidebar.php`.
   Note: the **homepage `index.php` is self-contained** (its own header), separate from `header.php`.
 - **Per-page CSS:** a controller sets `$data['page_css']` (path or array of paths) and `header.php`
-  links them after the shared sheets. Used by `/all-listing` and `/listing-details`
-  (`assets/css/directory.css`, scoped `.p411-dir` / `.p411-ld`) and mirrored on the homepage by
+  links them after the shared sheets. `assets/css/directory.css` is the **shared page kit** — hero,
+  two-column shell, cards, buttons, forms, notes, empty states, pager, rail, owner band — and its
+  design tokens are declared on the three page scopes that opt in: `.p411-dir` (`/all-listing`),
+  `.p411-ld` (`/listing-details`) and `.p411-ct` (events / news / videos + their detail pages, which
+  add `assets/css/content.css` on top). The homepage mirrors the same language in
   `assets/css/home-sections.css` (`.p411-home`). The rule everywhere: **prefix every selector and
   never edit the shared 345 KB `style.css`,** which ~200 views depend on. The one file without a
   page scope is `assets/css/promo-cards.css` — it styles the two house promo cards below, whose
-  class names nothing else in the codebase emits, and it is shared by all three pages that render
+  class names nothing else in the codebase emits, and it is shared by every page that renders
   them so they can't drift apart.
 - **Reusable blocks:** `partials/ad_slot.php` (one sellable ad zone; options `$slot_class`,
   `$slot_label`, `$slot_fallback`, `$slot_alias`, `$slot_creative`, `$slot_fallback_partial`),
@@ -43,7 +46,11 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   fallback for `right-side-banner-2` via `$slot_fallback_partial`) — neither is sold or rotated, so
   neither is ever empty — plus `partials/web_dev_cta.php`, `partials/seo_head.php`.
 - **Helpers** (autoloaded): `site_setting` (settings + feature flags), `image` (uploads/resize:
-  `safe_upload_image`, `uploadAndResize`, `responsive_img`), `view` (escaping/JSON-LD).
+  `safe_upload_image`, `uploadAndResize`, `responsive_img`), `view` — escaping (`e`, `e_attr`,
+  `e_url`, `e_nl2br`), `json_ld`, `pearland_slug`, plus the content helpers the events/news/videos
+  pages share: `content_text()` / `content_excerpt()` (stored rich text → clean **unescaped** text;
+  escape at output), `youtube_id()` / `youtube_thumb_url()` / `youtube_embed_url()`, and
+  `embed_src()` (pull the `src` out of a pasted map iframe instead of echoing admin markup).
 - **Libraries:** `Helcim_lib` (payments), `Mailer` (SMTP email), `Rate_limit`.
 
 ## Routing
@@ -78,7 +85,10 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Admin | `/admin` | `Admin::*` | |
 | Site settings / services | `/admin/setting` | `Admin::admin_setting` | feature flags |
 | Plan pricing/capabilities | `/admin/pricing` | `Admin::add/edit_pricing_plan` | |
-| Content types | events/news/blogs/products/videos/classifieds/houses/rentals | `User::*` + admin CRUD | gated by `service_*_enabled` |
+| Events | `/event[?when=upcoming\|past\|all&q=]`, `/event-details/<slug>` | `User::event`, `event_details` | Homepage layout + 6 ad zones each; defaults to **upcoming**, widens to the archive by itself when nothing is scheduled |
+| News | `/news[?category=<slug>&q=]`, `/news-details/<slug>` | `User::news`, `news_details` | Same shell; counted section strip; both hyphen and underscore detail URLs route, hyphen is canonical |
+| Videos | `/videos[?category=<slug>&q=]`, `/video-details/<slug>` | `User::videos`, `video_details` | Same shell; YouTube thumbnail fallback when no still was uploaded |
+| Other content types | blogs/products/classifieds/houses/rentals | `User::*` + admin CRUD | gated by `service_*_enabled`; still on the old theme layout |
 
 ## Key DB tables
 `user`, `listings` (+ `listing_categories`, `listing_sub_categories`, `listing_other_info`),

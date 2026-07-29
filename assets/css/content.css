@@ -1,0 +1,441 @@
+/* ============================================================================
+ * Pearland411 — content sections
+ * ----------------------------------------------------------------------------
+ * /event, /news, /videos and their detail pages. Everything shared with the
+ * directory and listing-details — the hero, the two-column shell, cards,
+ * buttons, forms, notes, empty states, the pager, the rail, the promo band —
+ * comes from assets/css/directory.css, which those views load first. This file
+ * only adds what the content sections need on top: the hero search pill, the
+ * time/category filters, the article + video cards, and the article body.
+ *
+ * SCOPING RULE — the six views wrap themselves in `.p411-ct`, which is where
+ * directory.css declares the design tokens, and every class name below starts
+ * `p411-ct`. Nothing here leaks into the ~200 views that share style.css, and
+ * style.css itself is never edited.
+ *
+ * ONE TRAP WORTH KNOWING: style.css:139 carries a bare
+ * `:before { position: absolute; font-family: "Material Icons"; ... }` that
+ * applies to EVERY element on the site. Any ::before here that is meant to sit
+ * in the text flow has to undo all of it — see .p411-ct-card__date::before.
+ * ==========================================================================*/
+
+/* ---- hero extras ----------------------------------------------------- */
+
+.p411-ct-hero__search {
+	margin-top: 18px;
+	max-width: 560px;
+}
+.p411-ct-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	background: #fff;
+	border-radius: 999px;
+	padding: 6px;
+	box-shadow: 0 12px 30px rgba(15, 23, 42, .18);
+}
+.p411-ct-search input[type="search"],
+.p411-ct-search input[type="text"] {
+	flex: 1;
+	min-width: 0;
+	height: 44px;
+	border: 0;
+	/* Safari draws its own rounded chrome (and a cancel button) on
+	   type=search, which fights the pill this input already sits in. */
+	-webkit-appearance: none;
+	appearance: none;
+	background: transparent;
+	padding: 0 8px 0 18px;
+	font-size: 14.5px;
+	color: var(--p411-ink);
+	box-shadow: none;
+	outline: none;
+	margin: 0;
+	border-radius: 999px;
+}
+.p411-ct-search input::placeholder { color: var(--p411-ink-3); }
+.p411-ct-search input:focus { outline: none; box-shadow: none; }
+.p411-ct-search button {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	border: 0;
+	border-radius: 50%;
+	background: var(--p411-green);
+	color: #fff;
+	cursor: pointer;
+	transition: background .16s ease;
+}
+.p411-ct-search button:hover { background: var(--p411-green-d); }
+.p411-ct-search button .material-icons { font-size: 21px; line-height: 1; }
+.p411-ct-search__clear {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	color: var(--p411-ink-3);
+}
+.p411-ct-search__clear:hover { background: var(--p411-bg); color: var(--p411-ink); }
+.p411-ct-search__clear .material-icons { font-size: 19px; }
+
+/* ---- filter strip ---------------------------------------------------- */
+/* The category strip reuses .p411-catstrip / .p411-cats from the kit. This is
+   the narrower time filter the events index needs on top of it. */
+
+.p411-ct-filters { background: #fff; border-bottom: 1px solid var(--p411-line); }
+.p411-ct-filters > .container {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	flex-wrap: wrap;
+	padding-top: 12px;
+	padding-bottom: 12px;
+}
+.p411-ct-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.p411-ct-tabs a {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 7px 16px;
+	border: 1px solid var(--p411-line);
+	border-radius: 999px;
+	font-size: 13.5px;
+	font-weight: 600;
+	color: var(--p411-ink-2);
+	background: #fff;
+	transition: background .16s ease, border-color .16s ease, color .16s ease;
+}
+.p411-ct-tabs a:hover { border-color: var(--p411-green); background: var(--p411-green-w); color: var(--p411-green-dd); }
+.p411-ct-tabs a.is-active { background: var(--p411-green); border-color: var(--p411-green); color: #fff; }
+.p411-ct-tabs em {
+	font-style: normal;
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: var(--p411-bg);
+	color: var(--p411-ink-3);
+	font-size: 11.5px;
+	font-weight: 700;
+}
+.p411-ct-tabs a.is-active em { background: rgba(255, 255, 255, .25); color: #fff; }
+.p411-ct-filters__note { font-size: 12.5px; color: var(--p411-ink-3); margin-left: auto; }
+
+/* ---- card grid ------------------------------------------------------- */
+
+.p411-ct-grid {
+	display: grid;
+	gap: 16px;
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.p411-ct-grid--wide { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.p411-ct-grid > .p411-adrow { grid-column: 1 / -1; margin: 2px 0; }
+
+.p411-ct-card {
+	display: flex;
+	flex-direction: column;
+	background: var(--p411-card);
+	border: 1px solid var(--p411-line);
+	border-radius: 12px;
+	overflow: hidden;
+	transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.p411-ct-card:hover {
+	transform: translateY(-3px);
+	border-color: var(--p411-green-l);
+	box-shadow: 0 12px 28px rgba(46, 51, 56, .09);
+}
+
+/* A DIV, never an <a>: the badges sitting on top of the artwork include a link
+   to the category, and an <a> inside an <a> is not nesting the parser accepts —
+   it closes the outer one and hoists the badge out of its positioning context,
+   which lands an absolutely-positioned chip somewhere else on the page. The
+   picture link is a child instead, exactly as the directory's card does it. */
+.p411-ct-card__media {
+	display: block;
+	position: relative;
+	aspect-ratio: 16 / 9;
+	background: var(--p411-green-w);
+	overflow: hidden;
+}
+/* Matched by class, not by `> a`: the category badge is a link too, and a bare
+   child selector stretched it to the full thumbnail — a 999px radius on a
+   281x158 box is an ellipse across the artwork, which is exactly what it drew. */
+.p411-ct-card__media > .p411-ct-card__link { display: block; width: 100%; height: 100%; }
+.p411-ct-card__media img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	transition: transform .35s ease;
+}
+.p411-ct-card:hover .p411-ct-card__media img { transform: scale(1.04); }
+.p411-ct a.p411-flag:hover { background: var(--p411-green-dd); color: #fff; }
+
+/* Calendar chip — month over day, top-left of the artwork. */
+.p411-ct-card__date {
+	position: absolute;
+	top: 10px;
+	left: 10px;
+	min-width: 46px;
+	padding: 5px 8px 6px;
+	border-radius: 9px;
+	background: rgba(20, 30, 12, .82);
+	color: #fff;
+	text-align: center;
+	line-height: 1.05;
+	backdrop-filter: blur(4px);
+}
+.p411-ct-card__date span {
+	display: block;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: .1em;
+	text-transform: uppercase;
+	opacity: .88;
+}
+.p411-ct-card__date b { display: block; font-size: 17px; font-weight: 700; }
+.p411-ct-card__date--past { background: rgba(58, 64, 70, .82); }
+
+/* Play badge on video artwork. Never intercepts the click — it covers the
+   whole thumbnail and the link underneath is what people are aiming at. */
+.p411-ct-card__play {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	background: rgba(15, 23, 42, .18);
+	transition: background .2s ease;
+	pointer-events: none;
+}
+.p411-ct-card:hover .p411-ct-card__play { background: rgba(15, 23, 42, .3); }
+.p411-ct-card__play i {
+	display: grid;
+	place-items: center;
+	width: 54px;
+	height: 54px;
+	border-radius: 50%;
+	background: rgba(0, 0, 0, .58);
+	border: 2px solid rgba(255, 255, 255, .85);
+	transition: transform .2s ease, background .2s ease;
+}
+.p411-ct-card:hover .p411-ct-card__play i { transform: scale(1.08); background: var(--p411-green-dd); }
+.p411-ct-card__play svg { width: 22px; height: 22px; margin-left: 3px; }
+
+.p411-ct-card__body {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 14px 16px 4px;
+	flex: 1;
+}
+.p411-ct-card__body h3 { font-size: 16px; font-weight: 700; line-height: 1.35; }
+.p411-ct-card__body h3 a { color: var(--p411-ink); }
+.p411-ct-card__body h3 a:hover { color: var(--p411-green-dd); }
+
+.p411-ct-excerpt {
+	font-size: 13.5px;
+	line-height: 1.6;
+	color: var(--p411-ink-2);
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.p411-ct-meta { display: flex; flex-direction: column; gap: 4px; }
+.p411-ct-meta li,
+.p411-ct-meta > span {
+	display: flex;
+	align-items: flex-start;
+	gap: 7px;
+	font-size: 13px;
+	color: var(--p411-ink-2);
+	min-width: 0;
+}
+.p411-ct-meta .material-icons {
+	font-size: 15px;
+	line-height: 1.5;
+	color: var(--p411-green-dd);
+	flex: none;
+}
+.p411-ct-meta em {
+	font-style: normal;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.p411-ct-meta--inline { flex-direction: row; flex-wrap: wrap; gap: 6px 14px; }
+
+.p411-ct-card__foot {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin-top: auto;
+	padding: 12px 16px 14px;
+	border-top: 1px solid var(--p411-line);
+}
+.p411-ct-card__foot .p411-btn { margin-left: auto; }
+
+.p411-ct-host { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.p411-ct-host img,
+.p411-ct-host span.p411-ct-host__ava {
+	flex: none;
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	object-fit: cover;
+	background: var(--p411-green-w);
+	display: grid;
+	place-items: center;
+	color: var(--p411-green-dd);
+	font-size: 12px;
+	font-weight: 700;
+}
+.p411-ct-host b {
+	display: block;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--p411-ink);
+	line-height: 1.25;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.p411-ct-host small { display: block; font-size: 11px; color: var(--p411-ink-3); }
+
+/* ---- lead story (news index, first item) ----------------------------- */
+
+.p411-ct-card--lead { margin-bottom: 16px; }
+@media (min-width: 700px) {
+	.p411-ct-card--lead { display: grid; grid-template-columns: minmax(0, 46%) minmax(0, 1fr); }
+	.p411-ct-card--lead .p411-ct-card__media { aspect-ratio: auto; height: 100%; min-height: 240px; }
+	.p411-ct-card--lead .p411-ct-card__body { padding: 20px 22px 6px; gap: 10px; }
+	.p411-ct-card--lead .p411-ct-card__body h3 { font-size: 22px; }
+	.p411-ct-card--lead .p411-ct-card__foot { padding: 12px 22px 18px; border-top: 0; }
+	.p411-ct-card--lead .p411-ct-excerpt { -webkit-line-clamp: 4; }
+}
+
+/* ---- article + video detail body ------------------------------------- */
+
+.p411-ct-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+
+.p411-ct-facts { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 12px; }
+.p411-ct-facts a,
+.p411-ct-facts span {
+	display: inline-flex;
+	align-items: flex-start;
+	gap: 8px;
+	font-size: 13.5px;
+	color: rgba(255, 255, 255, .88);
+	word-break: break-word;
+}
+.p411-ct-facts a:hover { color: #fff; text-decoration: underline; }
+.p411-ct-facts .material-icons { font-size: 16px; color: var(--p411-green); flex: none; margin-top: 2px; }
+
+.p411-ct-cta { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+
+/* Chip row that jumps to the sections further down. Deliberately not sticky:
+   the theme's own header is `position: fixed` at z-index 20, and a second
+   sticky bar underneath it just fights for the same 60 pixels. */
+.p411-ct-jump { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.p411-ct-jump a {
+	display: inline-block;
+	padding: 6px 14px;
+	border: 1px solid var(--p411-line);
+	border-radius: 999px;
+	background: #fff;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--p411-ink-2);
+}
+.p411-ct-jump a:hover { border-color: var(--p411-green); background: var(--p411-green-w); color: var(--p411-green-dd); }
+
+.p411-ct-body { display: flex; flex-direction: column; gap: 18px; }
+.p411-ct-body > .p411-card { scroll-margin-top: 80px; }
+
+.p411-ct-figure { margin: 0 0 16px; border-radius: 12px; overflow: hidden; border: 1px solid var(--p411-line); background: var(--p411-green-w); }
+.p411-ct-figure img { display: block; width: 100%; height: auto; }
+.p411-ct-figure figcaption { padding: 8px 12px; font-size: 12px; color: var(--p411-ink-3); background: #fff; }
+
+.p411-ct-byline {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px 18px;
+	padding-bottom: 14px;
+	margin-bottom: 16px;
+	border-bottom: 1px solid var(--p411-line);
+	font-size: 13px;
+	color: var(--p411-ink-3);
+}
+.p411-ct-byline span { display: inline-flex; align-items: center; gap: 6px; }
+.p411-ct-byline b { color: var(--p411-ink); font-weight: 600; }
+.p411-ct-byline .material-icons { font-size: 16px; color: var(--p411-green-dd); }
+
+/* ---- video player ---------------------------------------------------- */
+
+.p411-ct-player {
+	position: relative;
+	padding-bottom: 56.25%;
+	height: 0;
+	overflow: hidden;
+	border-radius: 12px;
+	background: #000;
+	/* The theme has a .fclick overlay pattern and the sidebar cards sit in the
+	   same stacking context; without a z-index of its own the player used to
+	   swallow clicks into whatever painted last. */
+	z-index: 2;
+}
+.p411-ct-player iframe {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	border: 0;
+	z-index: 3;
+}
+
+/* ---- map ------------------------------------------------------------- */
+
+.p411-ct-map { border-radius: 10px; overflow: hidden; border: 1px solid var(--p411-line); line-height: 0; }
+.p411-ct-map iframe { display: block; width: 100%; height: 320px; border: 0; }
+.p411-ct-map__actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 12px; }
+
+/* ---- pager ----------------------------------------------------------- */
+/* CI3's pagination puts the class on the wrapper, not always on the anchor,
+   so the kit's `.page-link` rules can miss. Cover the bare anchor too. */
+
+.p411-pager .pagination li > a {
+	display: inline-block;
+	min-width: 42px;
+	padding: 8px 13px;
+	border: 1px solid var(--p411-line);
+	border-radius: 8px;
+	background: #fff;
+	color: var(--p411-ink-2);
+	font-size: 14px;
+	font-weight: 600;
+	text-align: center;
+}
+.p411-pager .pagination li > a:hover {
+	border-color: var(--p411-green);
+	background: var(--p411-green-w);
+	color: var(--p411-green-dd);
+}
+.p411-pager__hint { margin-top: 10px; font-size: 12.5px; color: var(--p411-ink-3); }
+
+/* ---- responsive ------------------------------------------------------ */
+
+@media (max-width: 767px) {
+	.p411-ct-grid { grid-template-columns: 1fr; }
+	.p411-ct-filters > .container { gap: 10px; }
+	.p411-ct-filters__note { margin-left: 0; width: 100%; }
+	.p411-ct-cta .p411-btn { flex: 1 1 auto; }
+	.p411-ct-map iframe { height: 240px; }
+	.p411-ct-search input[type="search"],
+	.p411-ct-search input[type="text"] { padding-left: 14px; font-size: 14px; }
+}

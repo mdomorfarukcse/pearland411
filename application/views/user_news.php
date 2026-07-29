@@ -183,7 +183,7 @@
 									</span>
 								</td>
 								<td><?= admin_actions(array(
-									'view' => base_url('news_details/' . rawurlencode((string) ($news->news_slug ?? $news->news_id))),
+									'view' => base_url('news-details/' . rawurlencode((string) ($news->news_slug ?? $news->news_id))),
 									'edit' => base_url('user/user-edit-news/' . rawurlencode((string) $news->news_slug)),
 								), 'news post') ?></td>
 							</tr>

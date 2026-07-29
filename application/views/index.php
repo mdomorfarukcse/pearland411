@@ -2936,7 +2936,7 @@ $home_cat_url = function ($category) {
                       <?php if (!empty($latest_videos)): ?>
                         <div class="p411-stack">
                           <?php foreach (array_slice($latest_videos, 0, 3) as $video): ?>
-                            <a class="p411-media" href="<?= base_url('video_details/' . rawurlencode($video->video_slug)) ?>">
+                            <a class="p411-media" href="<?= base_url('video-details/' . rawurlencode($video->video_slug)) ?>">
                               <span class="p411-media__thumb">
                                 <img src="<?= !empty($video->video_image) ? base_url($video->video_image) : e_attr($p411_placeholder) ?>"
                                      alt="<?= e_attr($video->video_title) ?>" loading="lazy" decoding="async">
@@ -2969,7 +2969,7 @@ $home_cat_url = function ($category) {
                       <?php if (!empty($latest_news)): ?>
                         <div class="p411-stack">
                           <?php foreach (array_slice($latest_news, 0, 3) as $news): ?>
-                            <a class="p411-media" href="<?= base_url('news_details/' . (int) $news->news_id) ?>">
+                            <a class="p411-media" href="<?= base_url('news-details/' . (int) $news->news_id) ?>">
                               <span class="p411-media__thumb">
                                 <img src="<?= !empty($news->news_image) ? base_url($news->news_image) : e_attr($p411_placeholder) ?>"
                                      alt="<?= e_attr($news->news_title) ?>" loading="lazy" decoding="async">
