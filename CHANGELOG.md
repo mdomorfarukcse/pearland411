@@ -6,6 +6,61 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-07-30 — About us rebuilt on the same layout
+
+`/about-us` now uses the shared page kit — hero with breadcrumb, section
+headings, cards, chips, buttons and the closing owner band — plus a few
+About-only bands (text/media splits, a live figures strip, the vision and
+mission panels) added to `assets/css/content.css`. The view went from 839 lines
+to 404.
+
+### Fixed
+- **526 lines of inline `<style>`, in a palette that matched nothing else on
+  the site.** The page was indigo and purple (`#2d1b69`-ish hero, purple
+  vision/mission band) while every other page is the logo's pear green and
+  navy. It now takes its colours from the same tokens as the homepage,
+  directory and content sections, so it reads as part of the site.
+- **Two hotlinked Unsplash photos** (`images.unsplash.com/photo-…?w=1200`) —
+  an external request on every page load, a third-party log entry for every
+  visitor, and no guarantee the images stay there. The intro now uses a local
+  asset with an honest caption; the "For business owners" stock photo of a
+  meeting is replaced by a card of the three real steps to getting listed,
+  which tells an owner something the photo didn't.
+- **"Explore thousands of verified businesses" was static copy.** The page now
+  counts what is actually on the site and links each figure to the page it came
+  from — businesses via the same `directoryQuery()` the directory counts with,
+  categories that actually have a listing in them (`countAllCategories()` would
+  have included the empty ones and read higher than the directory), plus
+  events, stories and videos. A section switched off in `/admin/setting` 404s,
+  so its figure is left out rather than advertised.
+- **"Upgrade to our Premium Plan" quoted no price and linked nowhere useful.**
+  The "from $N a month" line is read off the active `plans` rows, so it cannot
+  drift from what `/pricing-plan` charges, and the section links to both
+  `/register` and `/pricing-plan`.
+- `href="/contact-us"` was root-relative, which breaks in any sub-directory
+  install; it goes through `base_url()` like everything else.
+- No `<title>` beyond "About Us", no meta description, no canonical URL and no
+  structured data. It now has all four, including `AboutPage` +
+  `Organization` + `BreadcrumbList` JSON-LD.
+- On a phone the intro led with a photograph and pushed the heading below it.
+  Text comes first in the source now; the image is pulled into the left column
+  only once there are two columns.
+
+### Added
+- Site-wide ad zones (`top-banner-site-wide`, `bottom-banner-site-wide`) and
+  the house services promo, so the page carries the inventory a site-wide
+  package was sold on. Two positions only — it is full-width editorial with no
+  sidebar to hang the other four off.
+
+### Migrations
+None.
+
+### Key files
+`application/views/about.php` (rewritten), `application/controllers/User.php`
+(`about_us`), `assets/css/content.css`.
+
+---
+
 ## 2026-07-29 — Events, news and videos rebuilt on the homepage / directory layout
 
 `/event`, `/news`, `/videos` and all three detail pages now use the same shell

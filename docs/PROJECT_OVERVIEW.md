@@ -32,8 +32,8 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   links them after the shared sheets. `assets/css/directory.css` is the **shared page kit** — hero,
   two-column shell, cards, buttons, forms, notes, empty states, pager, rail, owner band — and its
   design tokens are declared on the three page scopes that opt in: `.p411-dir` (`/all-listing`),
-  `.p411-ld` (`/listing-details`) and `.p411-ct` (events / news / videos + their detail pages, which
-  add `assets/css/content.css` on top). The homepage mirrors the same language in
+  `.p411-ld` (`/listing-details`) and `.p411-ct` (events / news / videos + their detail pages, and
+  `/about-us`, which add `assets/css/content.css` on top). The homepage mirrors the same language in
   `assets/css/home-sections.css` (`.p411-home`). The rule everywhere: **prefix every selector and
   never edit the shared 345 KB `style.css`,** which ~200 views depend on. The one file without a
   page scope is `assets/css/promo-cards.css` — it styles the two house promo cards below, whose
@@ -75,6 +75,7 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Area | Route(s) | Controller / model | Notes |
 |---|---|---|---|
 | Home | `/` | `User::index` → `index.php` | Self-contained homepage |
+| About | `/about-us` | `User::about_us` → `about.php` | Shared kit; the figures in "Pearland411 today" are counted live and each links to its page |
 | Directory / listing | `/all-listing`, `/all_listing/<cat>[/<offset>]`, `/listing-details/<slug>` | `User::all_listing`, `listing_details` | Homepage layout + 6 ad zones each; `?sort=featured\|newest\|name\|rating` |
 | Claim a listing | `/claim-listing/<slug>` | `User::claim_listing`; admin `Admin::claim_approve` | transfers `listings.user_id` |
 | Edit own listing | `/user/edit-listing/<slug>` | `User::edit_listing` | ownership + capability gated |

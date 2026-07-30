@@ -372,11 +372,115 @@ class User extends CI_Controller
 	// About Us Page (static, with header/footer)
 	public function about_us()
 	{
-		// Load model
-		$this->load->model('usermodel');
-
 		$data = array();
-		$data['title'] = 'About Us';
+
+		// Live figures for the "Pearland411 today" strip. Each one is counted
+		// with the same query the page it links to uses — countListingsByCategory()
+		// runs directoryQuery(), the same helper /all-listing counts with — so a
+		// visitor who clicks through sees the number they were just shown. The
+		// page used to claim "thousands of verified businesses" in static copy.
+		$stats = array(
+			'listings' => array(
+				'value' => (int) $this->usermodel->countListingsByCategory(NULL),
+				'label' => 'businesses listed',
+				'link'  => 'Browse the directory',
+				'url'   => base_url('all_listing'),
+			),
+			// Categories that actually have a published listing in them, which
+			// is what the directory's own strip shows — countAllCategories()
+			// would include the empty ones and read higher than the directory.
+			'categories' => array(
+				'value' => count($this->usermodel->getCategoriesWithCounts(1000)),
+				'label' => 'categories to browse',
+				'link'  => 'See all categories',
+				'url'   => base_url('all-category'),
+			),
+		);
+
+		// A section that has been switched off in /admin/setting 404s, so don't
+		// advertise its figure here.
+		if (site_setting('service_events_enabled', '1') !== '0') {
+			$stats['events'] = array(
+				'value' => (int) $this->usermodel->countEventsWithSearch('', 'all'),
+				'label' => 'community events',
+				'link'  => "See what's on",
+				'url'   => base_url('event'),
+			);
+		}
+		if (site_setting('service_news_enabled', '1') !== '0') {
+			$stats['news'] = array(
+				'value' => (int) $this->usermodel->countNewsWithSearch(),
+				'label' => 'local stories published',
+				'link'  => 'Read the news',
+				'url'   => base_url('news'),
+			);
+		}
+		if (site_setting('service_videos_enabled', '1') !== '0') {
+			$stats['videos'] = array(
+				'value' => (int) $this->usermodel->countVideosWithSearch(),
+				'label' => 'videos to watch',
+				'link'  => 'Open the library',
+				'url'   => base_url('videos'),
+			);
+		}
+		$data['about_stats'] = $stats;
+
+		// "from $N a month" read off the catalogue rather than typed into the
+		// copy, so this page can't drift from what /pricing-plan charges.
+		$data['lowest_plan_price'] = NULL;
+		foreach ($this->usermodel->getActivePlans() as $plan) {
+			$price = isset($plan->price) ? (float) $plan->price : 0;
+			if ($price <= 0) continue;
+			if ($data['lowest_plan_price'] === NULL || $price < $data['lowest_plan_price']) {
+				$data['lowest_plan_price'] = $price;
+			}
+		}
+
+		// Two site-wide positions only: this page is full-width editorial, with
+		// no sidebar to hang the other four zones off.
+		$data['ad_slots'] = array(
+			'top'    => 'top-banner-site-wide',
+			'bottom' => 'bottom-banner-site-wide',
+		);
+		$this->usermodel->primeAdSlots(array_values($data['ad_slots']));
+		$data['page_css'] = $this->contentPageCss();
+
+		$data['title']            = 'About Pearland411 — The Local Directory for Pearland, TX';
+		$data['meta_description'] = 'Pearland411 is the local business directory and community hub for Pearland, '
+			. 'Texas: ' . ($stats['listings']['value'] > 0 ? number_format($stats['listings']['value']) . ' businesses, ' : '')
+			. 'events, news and deals in one place. Free to list your business.';
+		$data['canonical_url']    = base_url('about-us');
+		$data['og_image']         = base_url('assets/images/pearland-logo.png');
+
+		$data['structured_data'] = array(
+			'@context' => 'https://schema.org',
+			'@graph'   => array(
+				array(
+					'@type'       => 'AboutPage',
+					'url'         => $data['canonical_url'],
+					'name'        => 'About Pearland411',
+					'description' => $data['meta_description'],
+					'breadcrumb'  => array(
+						'@type'           => 'BreadcrumbList',
+						'itemListElement' => array(
+							array('@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => base_url()),
+							array('@type' => 'ListItem', 'position' => 2, 'name' => 'About us', 'item' => $data['canonical_url']),
+						),
+					),
+				),
+				array(
+					'@type'       => 'Organization',
+					'name'        => 'Pearland411',
+					'url'         => base_url(),
+					'logo'        => base_url('assets/images/pearland-logo.png'),
+					'description' => 'Local business directory and community hub for Pearland, Texas.',
+					'areaServed'  => array('@type' => 'City', 'name' => 'Pearland', 'addressRegion' => 'TX'),
+				),
+			),
+		);
+
+		$this->loadHeaderCategories($data);
+
 		$this->load->view('header', $data);
 		$this->load->view('about', $data);
 		$this->load->view('footer');
