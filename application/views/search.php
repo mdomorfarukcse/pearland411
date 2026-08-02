@@ -505,7 +505,7 @@
                                     <?php foreach ($search_results['news'] as $news): ?>
                                         <div class="result-card">
                                             <h5 class="result-title">
-                                                <a href="<?= base_url() ?>news_details/<?php echo isset($news->news_slug) ? $news->news_slug : $news->news_id; ?>">
+                                                <a href="<?= base_url() ?>news-details/<?php echo isset($news->news_slug) ? $news->news_slug : $news->news_id; ?>">
                                                     <?php echo htmlspecialchars($news->news_title); ?>
                                                 </a>
                                             </h5>
@@ -907,7 +907,7 @@
                                     <?php foreach ($search_results['videos'] as $video): ?>
                                         <div class="result-card">
                                             <h5 class="result-title">
-                                                <a href="<?= base_url() ?>video_details/<?php echo isset($video->video_slug) ? $video->video_slug : $video->video_id; ?>">
+                                                <a href="<?= base_url() ?>video-details/<?php echo isset($video->video_slug) ? $video->video_slug : $video->video_id; ?>">
                                                     <?php echo htmlspecialchars(isset($video->video_title) ? $video->video_title : (isset($video->video_name) ? $video->video_name : 'Video')); ?>
                                                 </a>
                                             </h5>
@@ -1121,7 +1121,7 @@
                         <?php foreach (array_slice($latest_news, 0, 5) as $news): ?>
                             <div class="news-item">
                                 <h6>
-                                    <a href="<?= base_url() ?>news_details/<?php echo isset($news->news_slug) ? $news->news_slug : $news->news_id; ?>">
+                                    <a href="<?= base_url() ?>news-details/<?php echo isset($news->news_slug) ? $news->news_slug : $news->news_id; ?>">
                                         <?php echo htmlspecialchars($news->news_title); ?>
                                     </a>
                                 </h6>

@@ -144,12 +144,19 @@ $route['admin/campaigns/queue/(:num)']          = 'admin/campaign_queue/$1';
 $route['admin/campaigns/send-batch/(:num)']     = 'admin/campaign_send_batch/$1';
 $route['admin/campaigns/delete/(:num)']         = 'admin/campaign_delete/$1';
 
-// News
-$route['news_details/(:any)'] = '/user/news_details/$1';
-// Videos
-$route['video_details/(:any)'] = '/user/video_details/$1';
+// News. The hyphenated form is the canonical one — it is what the share
+// buttons, the <link rel=canonical> and the JSON-LD carry — but it had no
+// route, so every "Related posts" link on a story 404'd: CI3's catch-all
+// `(:any)` is [^/]+ and matches one segment, and `news-details` is not a
+// controller. The underscore form stays for links already in the wild.
+$route['news-details/(:any)'] = 'user/news_details/$1';
+$route['news_details/(:any)'] = 'user/news_details/$1';
+// Videos — same pair, same reason.
+$route['video-details/(:any)'] = 'user/video_details/$1';
+$route['video_details/(:any)'] = 'user/video_details/$1';
 // Event
-$route['event-details/(:any)'] = '/user/event-details/$1';
+$route['event-details/(:any)'] = 'user/event_details/$1';
+$route['event_details/(:any)'] = 'user/event_details/$1';
 // Classifieds
 $route['classifieds-details/(:any)'] = '/user/classifieds-details/$1';
 // Products - Not working

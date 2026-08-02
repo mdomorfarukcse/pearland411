@@ -155,3 +155,149 @@ if (!function_exists('pearland_slug')) {
         return trim($slug, '-');
     }
 }
+
+if (!function_exists('content_text')) {
+    /**
+     * Turn a stored rich-text body into clean plain text.
+     *
+     * Events, news, blogs and videos are all saved with pasted markup
+     * (`<p>…<br />`). Escaping that whole string printed the tags on the
+     * page — which is exactly what an event description looked like — and
+     * echoing it raw is a stored-XSS sink. Block-level tags become
+     * newlines, everything else is stripped, entities are decoded, runs of
+     * blank lines collapse.
+     *
+     * RETURNS UNESCAPED TEXT. The caller escapes at output, as everywhere
+     * else in this codebase:
+     *
+     *   <?= nl2br(e(content_text($news->news_description))) ?>
+     *
+     * @param  mixed $value
+     * @return string
+     */
+    function content_text($value)
+    {
+        $value = preg_replace('#<\s*(br|/p|/div|/li|/h[1-6]|/tr)\s*/?\s*>#i', "\n", (string) $value);
+        $value = strip_tags($value);
+        $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $value = str_replace("\xC2\xA0", ' ', $value);           // stray &nbsp;
+        $value = preg_replace("/[ \t]+\n/", "\n", $value);
+        $value = preg_replace("/\n{3,}/", "\n\n", trim($value));
+
+        return $value;
+    }
+}
+
+if (!function_exists('content_excerpt')) {
+    /**
+     * A one-paragraph summary of a stored body, cut on a word boundary.
+     * Unescaped, like content_text() — escape at output.
+     *
+     * @param  mixed $value
+     * @param  int   $length  Maximum characters before the ellipsis.
+     * @return string
+     */
+    function content_excerpt($value, $length = 160)
+    {
+        $text = preg_replace('/\s+/u', ' ', content_text($value));
+        $text = trim($text);
+        if ($text === '' || mb_strlen($text, 'UTF-8') <= $length) return $text;
+
+        $cut = mb_substr($text, 0, $length, 'UTF-8');
+        $gap = mb_strrpos($cut, ' ', 0, 'UTF-8');
+        if ($gap !== false && $gap > (int) ($length * 0.6)) $cut = mb_substr($cut, 0, $gap, 'UTF-8');
+
+        return rtrim($cut, " ,.;:—-") . '…';
+    }
+}
+
+if (!function_exists('youtube_id')) {
+    /**
+     * Pull an 11-character YouTube id out of whatever was stored.
+     *
+     * `video.video_code` is meant to hold the bare id, but the admin form
+     * accepts free text, so a full watch URL, a share link or an embed URL
+     * all turn up in practice. Returns '' when nothing usable is found —
+     * callers must handle that rather than building a broken embed.
+     *
+     * @param  mixed $value
+     * @return string
+     */
+    function youtube_id($value)
+    {
+        $value = trim((string) $value);
+        if ($value === '') return '';
+
+        if (preg_match('~^[A-Za-z0-9_-]{11}$~', $value)) return $value;
+
+        $patterns = array(
+            '~[?&]v=([A-Za-z0-9_-]{11})~',            // watch?v=ID
+            '~youtu\.be/([A-Za-z0-9_-]{11})~',        // youtu.be/ID
+            '~/embed/([A-Za-z0-9_-]{11})~',           // /embed/ID
+            '~/shorts/([A-Za-z0-9_-]{11})~',          // /shorts/ID
+            '~/live/([A-Za-z0-9_-]{11})~',            // /live/ID
+        );
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $value, $m)) return $m[1];
+        }
+
+        return '';
+    }
+}
+
+if (!function_exists('youtube_thumb_url')) {
+    /**
+     * YouTube's own still for a video. Used when nobody uploaded a
+     * thumbnail — the alternative was a broken-image box on every card.
+     * Returns '' when the id can't be read.
+     */
+    function youtube_thumb_url($value, $size = 'hqdefault')
+    {
+        $id = youtube_id($value);
+        if ($id === '') return '';
+        $size = in_array($size, array('default', 'mqdefault', 'hqdefault', 'sddefault', 'maxresdefault'), true)
+            ? $size : 'hqdefault';
+
+        return 'https://i.ytimg.com/vi/' . $id . '/' . $size . '.jpg';
+    }
+}
+
+if (!function_exists('youtube_embed_url')) {
+    /** Player URL for an id/URL, or '' when there is nothing to play. */
+    function youtube_embed_url($value, array $params = array())
+    {
+        $id = youtube_id($value);
+        if ($id === '') return '';
+        $query = $params ? ('?' . http_build_query($params)) : '';
+
+        return 'https://www.youtube.com/embed/' . $id . $query;
+    }
+}
+
+if (!function_exists('embed_src')) {
+    /**
+     * Get a usable iframe src out of a stored "map" field.
+     *
+     * `events.event_map` is filled by pasting a Google Maps embed snippet,
+     * and the view used to echo that snippet raw — so whatever an admin
+     * pasted became live markup on a public page. Take the src out of it
+     * and let the view build its own iframe; accept a bare URL too.
+     * Returns '' for anything that isn't an http(s) URL.
+     *
+     * @param  mixed $value
+     * @return string
+     */
+    function embed_src($value)
+    {
+        $value = trim((string) $value);
+        if ($value === '') return '';
+
+        if (stripos($value, '<iframe') !== false
+            && preg_match('~<iframe[^>]*\ssrc\s*=\s*("|\')(.*?)\1~is', $value, $m)) {
+            $value = html_entity_decode($m[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        }
+
+        $value = trim($value);
+        return preg_match('~^https?://~i', $value) ? $value : '';
+    }
+}

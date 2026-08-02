@@ -6,6 +6,199 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-07-30 — About us rebuilt on the same layout
+
+`/about-us` now uses the shared page kit — hero with breadcrumb, section
+headings, cards, chips, buttons and the closing owner band — plus a few
+About-only bands (text/media splits, a live figures strip, the vision and
+mission panels) added to `assets/css/content.css`. The view went from 839 lines
+to 404.
+
+### Fixed
+- **526 lines of inline `<style>`, in a palette that matched nothing else on
+  the site.** The page was indigo and purple (`#2d1b69`-ish hero, purple
+  vision/mission band) while every other page is the logo's pear green and
+  navy. It now takes its colours from the same tokens as the homepage,
+  directory and content sections, so it reads as part of the site.
+- **Two hotlinked Unsplash photos** (`images.unsplash.com/photo-…?w=1200`) —
+  an external request on every page load, a third-party log entry for every
+  visitor, and no guarantee the images stay there. The intro now uses a local
+  asset with an honest caption; the "For business owners" stock photo of a
+  meeting is replaced by a card of the three real steps to getting listed,
+  which tells an owner something the photo didn't.
+- **"Explore thousands of verified businesses" was static copy.** The page now
+  counts what is actually on the site and links each figure to the page it came
+  from — businesses via the same `directoryQuery()` the directory counts with,
+  categories that actually have a listing in them (`countAllCategories()` would
+  have included the empty ones and read higher than the directory), plus
+  events, stories and videos. A section switched off in `/admin/setting` 404s,
+  so its figure is left out rather than advertised.
+- **"Upgrade to our Premium Plan" quoted no price and linked nowhere useful.**
+  The "from $N a month" line is read off the active `plans` rows, so it cannot
+  drift from what `/pricing-plan` charges, and the section links to both
+  `/register` and `/pricing-plan`.
+- `href="/contact-us"` was root-relative, which breaks in any sub-directory
+  install; it goes through `base_url()` like everything else.
+- No `<title>` beyond "About Us", no meta description, no canonical URL and no
+  structured data. It now has all four, including `AboutPage` +
+  `Organization` + `BreadcrumbList` JSON-LD.
+- On a phone the intro led with a photograph and pushed the heading below it.
+  Text comes first in the source now; the image is pulled into the left column
+  only once there are two columns.
+
+### Added
+- Site-wide ad zones (`top-banner-site-wide`, `bottom-banner-site-wide`) and
+  the house services promo, so the page carries the inventory a site-wide
+  package was sold on. Two positions only — it is full-width editorial with no
+  sidebar to hang the other four off.
+
+### Migrations
+None.
+
+### Key files
+`application/views/about.php` (rewritten), `application/controllers/User.php`
+(`about_us`), `assets/css/content.css`.
+
+---
+
+## 2026-07-29 — Events, news and videos rebuilt on the homepage / directory layout
+
+`/event`, `/news`, `/videos` and all three detail pages now use the same shell
+as the reorganised homepage and directory — hero band, filter or category
+strip, main column plus a right-hand sidebar, sellable ad zones, the two house
+promo cards and the owner band. All six views were rewritten and their **~1,300
+lines of inline `<style>`** (including two hand-copied duplicates of the
+sidebar marketing card) replaced by one small scoped stylesheet.
+
+### Fixed
+- **Every "Related posts" link on a news story was a 404.** They pointed at
+  `/news-details/<slug>` — the canonical form the share buttons, the
+  `<link rel=canonical>` and the JSON-LD all use — but only the underscore
+  spelling had a route, and CI3's catch-all `(:any)` is `[^/]+`, so a
+  two-segment hyphenated URL matched nothing at all. Both spellings are routed
+  now for news, videos and events, the hyphenated one is canonical everywhere
+  (sitemap, homepage rails, search results, share links), and the detail
+  controllers build `canonical_url` from it instead of the long
+  `/user/news-details/…` form they were advertising to Google.
+- **The events page was an archive labelled as a calendar.** It sorted by
+  `event_start_date DESC`, so next year's fair sat above tonight's concert and
+  everything that had already happened was mixed in with what hadn't. `/event`
+  now takes a `?when=upcoming|past|all` window, defaults to **upcoming** and
+  sorts soonest-first inside it — and if nothing is scheduled it widens to the
+  archive by itself and says so, rather than showing an empty page.
+- **Event descriptions printed their own markup.** They are saved with pasted
+  HTML (`<p>…<br />`) and the view escaped the lot, so visitors read literal
+  `<p>` tags down the page. News and video bodies had the opposite bug:
+  `strip_tags()` over the whole string, which threw away every paragraph
+  break and ran the story together. Both now go through the new
+  `content_text()` helper — block tags become newlines, the rest is stripped,
+  entities decoded, then escaped at output.
+- **`events.event_map` was echoed raw**, so whatever an admin pasted into that
+  field became live markup on a public page. The new `embed_src()` helper takes
+  the `src` out of the pasted snippet (or accepts a bare URL, rejecting
+  anything that isn't `http(s)`) and the view builds its own iframe.
+- **Videos with no uploaded thumbnail rendered a broken image.** `video_code`
+  was not even in the index's select list, though YouTube hosts a still for
+  every video id. It is now, and `youtube_thumb_url()` fills the gap. The
+  player embed goes through `youtube_id()`, which copes with the watch URLs,
+  `youtu.be` links and embed URLs that turn up in a free-text field — and when
+  there is genuinely no id, the page says so instead of framing a 404.
+- `getRelatedNews()` ignored `is_deleted`, so a soft-deleted story could still
+  be recommended. `getRelatedEvents()` ordered by `event_id DESC`, which put a
+  concert from last spring above a festival next week; it now offers what is
+  still to come first. Both, and `getRelatedVideos()`, prefer the same
+  category and top up site-wide so the block is never short.
+- `User::event_search()` was a second, thinner copy of `event()` — no
+  pagination, no window, no counts, no sidebar, no ad zones — so
+  `/user/event_search?q=x` rendered a visibly poorer page than `/event?q=x`.
+  It delegates now, as `listing_details_global()` does.
+- The news detail view ran its own `$this->db` query for the byline, mid-markup;
+  the event detail view called `get_instance()` to resolve the host the same
+  way. Both moved into the controller.
+- An offset past the end of the results rendered a blank list on all three
+  indexes; it clamps to the last real page, like the directory.
+- Every empty state now names the thing that is missing and what to do next —
+  no upcoming events vs no archive vs no events at all, no search matches, an
+  empty category, a story with no body, a video with no playable id.
+
+### Added
+- **`assets/css/content.css`** — the components the six pages add on top of the
+  shared kit: the hero search pill, the time/category filters, the event/story/
+  video cards, the lead story, the article body and the 16:9 player. Every
+  selector starts `p411-ct`; the file is linked only from those views.
+- **`content_text()`, `content_excerpt()`, `youtube_id()`,
+  `youtube_thumb_url()`, `youtube_embed_url()` and `embed_src()`** in
+  `helpers/view_helper.php`, so the six views share one definition of each
+  instead of six copies. `content_text()` / `content_excerpt()` return
+  **unescaped** text — the caller escapes at output, as everywhere else here.
+- **Ad zones keyed to the packages people can actually buy.** Six placements on
+  each of the six pages — top banner, in-content banner, two sidebar banners, a
+  skyscraper and a footer banner — primed in one query per page. The 0006 keys
+  these pages used to render (`events-sidebar`, `news-sidebar`) match no
+  package and could never be bought, so they stay live as `$slot_alias`: an ad
+  booked against one by hand keeps its impressions.
+- **Section and channel filters.** `/news?category=<slug>` and
+  `/videos?category=<slug>`, with counted strips and a sidebar list, resolved
+  through `Usermodel::resolveContentCategoryId()` — stored `category_slug`
+  first, then `pearland_slug()` over the names, because the admin's category
+  form builds slugs with a third expression again. A query string rather than a
+  path segment, so it composes with `?q=` and `?page=`.
+- Sidebar rails that aren't the first page repeated: **Coming up** on events,
+  **Most read** on news, **Most watched** on videos (`getPopularNews()`,
+  `getPopularVideos()`, `getUpcomingEvents()` with an exclusion).
+- Event details: an **Add to Google Calendar** link (all-day, since
+  `event_time` is free text and can't be parsed into a reliable start/end),
+  directions, a real map, an event-details table, a share row with copy-link,
+  and `eventStatus` / `eventAttendanceMode` / `organizer` on the JSON-LD.
+- Video details: `VideoObject` JSON-LD, `video_seo_*` meta support and a
+  canonical URL — it had none of the three.
+- News and videos indexes: per-page `<title>`, meta description and canonical.
+- `attributes => ['class' => 'page-link']` on all three paginators, so the
+  shared pager styling actually reaches the anchors CI3 emits.
+
+### Changed
+- `assets/css/directory.css` is now the **shared page kit**: its design tokens
+  are declared on `.p411-dir`, `.p411-ld` and the new `.p411-ct`, so the
+  content pages take the hero, cards, buttons, forms, notes, empty states,
+  pager, rail and owner band from one file rather than a second copy. Nothing
+  else in it changed; the two directory pages are untouched.
+- Existing model signatures gained optional trailing parameters only —
+  `getEventsWithPagination($search, $limit, $offset, $when)`,
+  `getNewsWithSearch(…, $category_id)`, `getAllVideos(…, $category_id)` and
+  their counts, which apply exactly the same filters as the list they label.
+- `getEventBySlug()` now accepts a slug generated by **either** rule in the
+  codebase (`createSafeSlug()` or `pearland_slug()`); they agree on
+  "Market: A Market" and disagree on "Don't Miss", and resolving on only one of
+  them makes a link that generation produced unreachable.
+- Per page: 12 results instead of 10, matching the 2/3-column grid.
+
+### Migrations
+None.
+
+### Still to do
+- `getAllVideos()` / `countVideosWithSearch()` still don't filter on
+  `video_status`, so a video switched off in `/admin` stays publicly visible.
+  The list and its count agree, so nothing is inconsistent — but the admin
+  toggle doesn't do what it says. Left alone deliberately: admin-created videos
+  don't set the column on insert, so adding the filter could empty the page,
+  depending on the column default. Check `SELECT video_status, COUNT(*) FROM
+  video GROUP BY 1` before switching it on.
+- The events index has no "featured event" concept, though the owner band
+  offers one. It needs a column and a package before the page can honour it.
+
+### Key files
+`application/views/events.php`, `event_details.php`, `news.php`,
+`news_details.php`, `videos.php`, `video_details.php` (all rewritten),
+`application/controllers/User.php` (`event`, `event_search`, `news`, `videos`,
+`event_details`, `news_details`, `video_details`, plus the private
+`contentAdSlots()` / `contentPageCss()`), `application/models/Usermodel.php`,
+`application/helpers/view_helper.php`, `application/config/routes.php`,
+`application/controllers/Sitemap.php`, `assets/css/content.css` (new),
+`assets/css/directory.css`, and the news/video links in `views/index.php`,
+`views/search.php`, `views/user_news.php`, `views/user_videos.php`.
+
+---
+
 ## 2026-07-27 — Listing-count mismatch, category slugs, and the two house promo cards
 
 Four issues reported after the homepage rebuild. The first turned out to be a

@@ -1,19 +1,28 @@
 /* ============================================================================
- * Pearland411 — Directory (/all-listing) + Listing details (/listing-details)
+ * Pearland411 — the shared page kit
  * ----------------------------------------------------------------------------
+ * Directory (/all-listing) + listing details (/listing-details) — and, since
+ * the content sections were rebuilt on the same shell, /event, /news, /videos
+ * and their detail pages, which add their own components in content.css and
+ * take the hero, cards, buttons, forms, pager and empty states from here.
+ *
  * Same design language as the reorganised homepage: the logo's pear green,
  * white cards on a light band, a 3px green underline on section headings and
  * the same pill buttons. The tokens below are deliberately identical to
- * assets/css/home-sections.css so the three pages read as one site.
+ * assets/css/home-sections.css so the pages read as one site.
  *
- * SCOPING RULE — every selector starts `.p411-dir` (directory) or `.p411-ld`
- * (listing details), and this file is linked only from those two views via the
- * $page_css hook in header.php. Neither condition is optional: style.css is
- * shared by ~200 other views and must stay untouched.
+ * SCOPING RULE — every class name starts `p411-`, the design tokens are
+ * declared on the page-scope classes below (`.p411-dir` directory, `.p411-ld`
+ * listing details, `.p411-ct` content sections), and the file is linked only
+ * from those views through the $page_css hook in header.php. Neither condition
+ * is optional: style.css is shared by ~200 other views and must stay
+ * untouched. A page that wants these components carries one of those three
+ * classes on its wrapper — that is the whole opt-in.
  * ==========================================================================*/
 
 .p411-dir,
-.p411-ld {
+.p411-ld,
+.p411-ct {
 	--p411-green: #8CC63F;
 	--p411-green-d: #6BA935;
 	--p411-green-dd: #4E8A28;
@@ -38,33 +47,38 @@
 /* The theme sets `overflow: hidden` / negative margins on some wrappers and
    styles bare `ul li` with bullets and padding. Normalise inside our scope. */
 .p411-dir ul,
-.p411-ld ul {
+.p411-ld ul,
+.p411-ct ul {
 	list-style: none;
 	margin: 0;
 	padding: 0;
 }
 
 .p411-dir a,
-.p411-ld a { text-decoration: none; }
+.p411-ld a,
+.p411-ct a { text-decoration: none; }
 
 .p411-dir img,
-.p411-ld img { max-width: 100%; }
+.p411-ld img,
+.p411-ct img { max-width: 100%; }
 
 .p411-dir h1, .p411-dir h2, .p411-dir h3, .p411-dir h4, .p411-dir h5,
-.p411-ld h1, .p411-ld h2, .p411-ld h3, .p411-ld h4, .p411-ld h5 {
+.p411-ld h1, .p411-ld h2, .p411-ld h3, .p411-ld h4, .p411-ld h5,
+.p411-ct h1, .p411-ct h2, .p411-ct h3, .p411-ct h4, .p411-ct h5 {
 	margin: 0;
 	color: var(--p411-ink);
 	line-height: 1.3;
 }
 
-.p411-dir p, .p411-ld p { margin: 0; }
+.p411-dir p, .p411-ld p, .p411-ct p { margin: 0; }
 
 /* style.css sets `.container { max-width: 1260px }` and nothing else, so the
    centring and the gutters come from Bootstrap's CDN copy. Restate them here so
-   these two pages don't sit flush against the window edge if that request is
+   these pages don't sit flush against the window edge if that request is
    slow, blocked or dropped. */
 .p411-dir .container,
-.p411-ld .container {
+.p411-ld .container,
+.p411-ct .container {
 	width: 100%;
 	max-width: 1260px;
 	margin-left: auto;
@@ -270,10 +284,10 @@
 	color: #fff;
 	transition: background .16s ease, box-shadow .16s ease;
 }
-.p411-dir a.p411-btn, .p411-ld a.p411-btn { color: #fff; }
+.p411-dir a.p411-btn, .p411-ld a.p411-btn, .p411-ct a.p411-btn { color: #fff; }
 .p411-btn:hover { background: var(--p411-green-d); color: #fff; }
 .p411-btn--ghost { background: #fff; color: var(--p411-ink); border-color: var(--p411-line); }
-.p411-dir a.p411-btn--ghost, .p411-ld a.p411-btn--ghost { color: var(--p411-ink); }
+.p411-dir a.p411-btn--ghost, .p411-ld a.p411-btn--ghost, .p411-ct a.p411-btn--ghost { color: var(--p411-ink); }
 .p411-btn--ghost:hover { background: var(--p411-green-w); border-color: var(--p411-green); color: var(--p411-green-dd); }
 .p411-btn--wa { background: #25D366; }
 .p411-btn--wa:hover { background: #1EBE57; }
@@ -1006,9 +1020,10 @@
 /* The skyscraper is 295x600 and only earns its place beside a long column. */
 @media (max-width: 991px) {
 	.p411-dir .ad-slot-rightpanelskyscraper,
-	.p411-ld .ad-slot-rightpanelskyscraper { display: none; }
+	.p411-ld .ad-slot-rightpanelskyscraper,
+	.p411-ct .ad-slot-rightpanelskyscraper { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.p411-dir *, .p411-ld * { transition: none !important; animation: none !important; }
+	.p411-dir *, .p411-ld *, .p411-ct * { transition: none !important; animation: none !important; }
 }

@@ -191,7 +191,7 @@
                       </td>
 
                       <td><?= admin_actions(array(
-                          'view' => base_url('video_details/' . rawurlencode((string) $video->video_slug)),
+                          'view' => base_url('video-details/' . rawurlencode((string) $video->video_slug)),
                           'edit' => base_url('user/edit-video/' . rawurlencode((string) $video->video_slug)),
                       ), 'video') ?></td>
                     </tr>

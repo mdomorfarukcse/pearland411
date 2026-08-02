@@ -1,653 +1,584 @@
 <?php
-// Function to create safe URL slugs
-function createSafeSlug($text)
-{
-	// Remove HTML tags
-	$text = strip_tags($text);
+/**
+ * /event-details/<slug> — one event.
+ *
+ * Same shell as listing-details: a hero band carrying the identity and the
+ * actions, then a main column and a right-hand sidebar. Styling is in
+ * assets/css/directory.css (the shared kit) + assets/css/content.css, linked
+ * through $page_css. No <style> block here — the previous version carried
+ * ~300 lines of them, including a second copy of the sidebar promo card.
+ *
+ * From User::event_details(): $event, $logged_id, $user, $related_events,
+ * $event_host, $upcoming_events, $ad_slots.
+ */
 
-	// Convert to lowercase
-	$text = strtolower($text);
-
-	// Replace spaces and special characters with hyphens
-	$text = preg_replace('/[^a-z0-9]+/', '-', $text);
-
-	// Remove leading and trailing hyphens
-	$text = trim($text, '-');
-
-	// Remove multiple consecutive hyphens
-	$text = preg_replace('/-+/', '-', $text);
-
-	return $text;
+if (empty($event)) {
+	// Belt and braces: the controller show_404()s before reaching the view.
+	echo '<div class="container" style="padding:60px 0;"><h1>Event not found</h1></div>';
+	return;
 }
+
+$logged_id       = isset($logged_id) ? $logged_id : null;
+$user            = isset($user) ? $user : null;
+$related_events  = (isset($related_events)  && is_array($related_events))  ? $related_events  : array();
+$upcoming_events = (isset($upcoming_events) && is_array($upcoming_events)) ? $upcoming_events : array();
+$event_host      = (isset($event_host)      && is_array($event_host))      ? $event_host      : array();
+
+$ad_slots = (isset($ad_slots) && is_array($ad_slots)) ? $ad_slots : array(
+	'top'      => 'top-banner-site-wide',
+	'inline'   => 'middle-banner-category',
+	'side_1'   => 'right-side-banner-1',
+	'side_2'   => 'right-side-banner-2',
+	'side_sky' => 'right-panel-skyscraper',
+	'bottom'   => 'bottom-banner-site-wide',
+);
+
+/* ---- normalised fields ------------------------------------------------- */
+
+$ev_name  = (string) ($event->event_name ?? '');
+$ev_slug  = !empty($event->event_slug) ? (string) $event->event_slug : pearland_slug($ev_name);
+$ev_link  = base_url('event-details/' . rawurlencode($ev_slug));
+$ev_image = !empty($event->event_image) ? base_url($event->event_image) : '';
+$ev_cover = $ev_image !== '' ? $ev_image : base_url('assets/images/event-bg.jpg');
+
+$ev_start_ts = !empty($event->event_start_date) ? strtotime((string) $event->event_start_date) : false;
+$ev_end_ts   = !empty($event->event_end_date)   ? strtotime((string) $event->event_end_date)   : false;
+$ev_upcoming = $ev_start_ts && $ev_start_ts >= strtotime('today');
+
+$ev_address = trim((string) ($event->event_address ?? ''));
+$ev_phone   = trim((string) ($event->event_mobile ?? ''));
+$ev_email   = trim((string) ($event->event_email ?? ''));
+$ev_website = trim((string) ($event->event_website ?? ''));
+$ev_contact = trim((string) ($event->event_contact_name ?? ''));
+$ev_time    = trim((string) ($event->event_time ?? ''));
+
+// Stored as a pasted Google Maps embed snippet. embed_src() takes the src out
+// of it so the page builds its own iframe rather than echoing admin markup.
+$ev_map = embed_src($event->event_map ?? '');
+
+$ev_about = content_text($event->event_description ?? '');
+
+/**
+ * "Add to Google Calendar" for an all-day entry on the event's date.
+ *
+ * event_time is free text ("4:00 PM – 9:00 PM", "6PM till late"), so it can't
+ * be turned into a reliable start/end timestamp. The all-day entry is honest,
+ * always right, and carries the written time in the description.
+ */
+$ev_calendar = '';
+if ($ev_start_ts) {
+	$cal_end = $ev_end_ts && $ev_end_ts >= $ev_start_ts ? $ev_end_ts : $ev_start_ts;
+	$details = trim(($ev_time !== '' ? 'Time: ' . $ev_time . "\n\n" : '')
+		. content_excerpt($event->event_description ?? '', 600)
+		. "\n\n" . $ev_link);
+	$ev_calendar = 'https://calendar.google.com/calendar/render?' . http_build_query(array(
+		'action'   => 'TEMPLATE',
+		'text'     => $ev_name,
+		'dates'    => date('Ymd', $ev_start_ts) . '/' . date('Ymd', strtotime('+1 day', $cal_end)),
+		'details'  => $details,
+		'location' => $ev_address,
+	));
+}
+
+$ev_directions = $ev_address !== ''
+	? 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($ev_address)
+	: '';
+
+/* ---- host -------------------------------------------------------------- */
+
+$host_name   = !empty($event_host['name'])   ? (string) $event_host['name']   : 'Pearland411';
+$host_image  = !empty($event_host['image'])  ? (string) $event_host['image']  : '';
+$host_joined = !empty($event_host['joined']) ? (string) $event_host['joined'] : '';
+
+/* ---- sharing ----------------------------------------------------------- */
+
+$share_url   = rawurlencode($ev_link);
+$share_title = rawurlencode($ev_name);
+$share_image = rawurlencode($ev_image !== '' ? $ev_image : base_url('assets/images/pearland-logo.png'));
+
+/* ---- in-page nav (only the sections that exist) ------------------------ */
+
+$ev_nav = array('about' => 'About');
+$ev_nav['details'] = 'Event details';
+if ($ev_map !== '' || $ev_address !== '') $ev_nav['location'] = 'Location';
+$ev_nav['enquire'] = 'Contact the organiser';
+if ($related_events)                      $ev_nav['related']  = 'More events';
 ?>
 
-<style>
-	.eve-deta-pg .lhs .img:before {
-		display: none !important;
-	}
+<section class="p411-ct p411-ct--event-details">
 
-	.eve-deta-body .rhs .sec-3 {
-		padding-top: 0px !important;
-		border-top: none !important;
-	}
+	<!-- ============================================================ HERO -->
+	<div class="p411-hero">
+		<div class="p411-hero__bg" style="background-image:url('<?= e_attr($ev_cover) ?>');" aria-hidden="true"></div>
+		<div class="container">
+			<nav class="p411-crumb" aria-label="Breadcrumb">
+				<a href="<?= base_url() ?>">Home</a>
+				<span aria-hidden="true">/</span>
+				<a href="<?= e_url(base_url('event')) ?>">Events</a>
+				<span aria-hidden="true">/</span>
+				<span class="is-current"><?= e($ev_name) ?></span>
+			</nav>
 
-	.eve-deta-body .eve-deta-body-main .rhs {
-		margin-top: -40px;
-	}
-
-	.eve-deta-body .eve-deta-body-main .lhs {
-		border-right: none !important;
-	}
-	
-	.ud-lhs-s1 {
-		margin-bottom: 30px !important;
-	}
-
-	/* Sidebar Web Development Section */
-	.sidebar-marketing-section {
-		width: 100%;
-		margin-bottom: 30px;
-	}
-
-	.sidebar-marketing-section .marketing-card {
-		background: linear-gradient(145deg, #1e68ac 0%, #1e40af 100%);
-		border-radius: 14px;
-		padding: 40px 32px;
-		position: relative;
-		overflow: hidden;
-		/* box-shadow: 0 20px 60px rgba(37, 99, 235, 0.3); */
-	}
-
-	.sidebar-marketing-section .marketing-card::before {
-		content: '';
-		position: absolute;
-		top: -50%;
-		right: -50%;
-		width: 200%;
-		height: 200%;
-		background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-		animation: pulseEffect 8s ease-in-out infinite;
-	}
-
-	@keyframes pulseEffect {
-
-		0%,
-		100% {
-			transform: scale(1);
-			opacity: 0.5;
-		}
-
-		50% {
-			transform: scale(1.1);
-			opacity: 0.8;
-		}
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content {
-		position: relative;
-		z-index: 2;
-	}
-
-
-	.sidebar-marketing-section .marketing-card .card-content .main-heading {
-		color: white;
-		font-size: 26px;
-		font-weight: 700;
-		margin-bottom: 12px;
-		line-height: 1.3;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .description {
-		color: rgba(255, 255, 255, 0.9);
-		font-size: 15px;
-		line-height: 1.6;
-		margin-bottom: 28px;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .features-wrapper {
-		margin-bottom: 28px;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .features-wrapper .feature {
-		display: flex;
-		align-items: center;
-		color: white;
-		font-size: 14px;
-		margin-bottom: 12px;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .features-wrapper .feature:last-child {
-		margin-bottom: 0;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .features-wrapper .feature .check-icon {
-		width: 20px;
-		height: 20px;
-		margin-right: 10px;
-		flex-shrink: 0;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .primary-button {
-		background: white;
-		color: #1e68ac;
-		border: none;
-		padding: 16px 32px;
-		font-size: 16px;
-		font-weight: 600;
-		border-radius: 99px;
-		cursor: pointer;
-		transition: all 0.3s ease;
-		display: block;
-		text-align: center;
-		width: 100%;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .primary-button:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
-		background: #f8fafc;
-	}
-
-	.sidebar-marketing-section .marketing-card .card-content .primary-button:active {
-		transform: translateY(0);
-	}
-
-	.pg_title {
-		font-size: 40px !important;
-		font-weight: 700 !important;
-		margin-bottom: 20px;
-	}
-
-	@media (max-width: 480px) {
-		.sidebar-marketing-section .marketing-card {
-			padding: 32px 24px;
-		}
-
-		.sidebar-marketing-section .marketing-card .card-content .main-heading {
-			font-size: 22px;
-		}
-
-		.sidebar-marketing-section .marketing-card .card-content .description {
-			font-size: 14px;
-		}
-
-		.pg_title {
-			font-size: 30px !important;
-		}
-	}
-
-	/* Sidebar Web Development Section */
-
-	.event-detail-modern {
-		max-width: 800px;
-		margin: 0 auto;
-	}
-
-	.event-detail-modern .head {
-		border-bottom: 3px solid #1e68ac;
-		padding-bottom: 1.5rem;
-		margin-bottom: 2rem;
-	}
-
-	.event-detail-modern .head h1 {
-		font-size: 2rem;
-		font-weight: 700;
-		color: #1e293b;
-		margin: 0;
-		line-height: 1.3;
-	}
-
-	.event-detail-modern>p,
-	.event-detail-modern>div:not(.head):not(.sec-1):not(.sec-2) {
-		color: #475569;
-		line-height: 1.8;
-		font-size: 1rem;
-		margin-bottom: 2.5rem;
-	}
-
-	.event-detail-modern .sec-1 {
-		background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-		border-left: 4px solid #1e68ac;
-		padding: 2rem 2.5rem;
-		margin-bottom: 2.5rem;
-	}
-
-	.event-detail-modern .sec-1 h4 {
-		font-size: 1.25rem;
-		font-weight: 600;
-		color: #1e293b;
-		margin: 0 0 1.5rem 0;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-	}
-
-	.event-detail-modern .sec-1 ul {
-		list-style: none;
-		padding: 0;
-		margin: 0;
-		/* display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-		gap: 1rem; */
-	}
-
-	.event-detail-modern .sec-1 ul li {
-		padding: 0.75rem 0;
-		color: #334155;
-		font-size: 0.95rem;
-		border-bottom: 1px solid #e2e8f0;
-	}
-
-	.event-detail-modern .sec-1 ul li:last-child {
-		border-bottom: none;
-	}
-
-	.event-detail-modern .sec-1 ul li b {
-		color: #1e68ac;
-		font-weight: 600;
-		display: inline-block;
-		min-width: 120px;
-	}
-
-	.event-detail-modern .sec-2 {
-		border-top: 2px solid #e2e8f0;
-		padding-top: 2rem;
-	}
-
-	.event-detail-modern .sec-2 h4 {
-		font-size: 1.25rem;
-		font-weight: 600;
-		color: #1e293b;
-		margin: 0 0 1.5rem 0;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-	}
-
-	.event-detail-modern .sec-2 iframe,
-	.event-detail-modern .sec-2 img {
-		width: 100%;
-		height: 400px;
-		border: 2px solid #e2e8f0;
-		border-radius: 4px;
-		box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-	}
-
-	.list-rhs-form {
-		border: none !important;
-	}
-
-	/* Responsive */
-	@media (max-width: 768px) {
-		.event-detail-modern .head h1 {
-			font-size: 1.5rem;
-		}
-
-		.event-detail-modern .sec-1 {
-			padding: 1.5rem;
-		}
-
-		.event-detail-modern .sec-1 ul {
-			grid-template-columns: 1fr;
-		}
-
-		.event-detail-modern .sec-2 iframe,
-		.event-detail-modern .sec-2 img {
-			height: 300px;
-		}
-	}
-</style>
-<!-- START -->
-<section class="eve-deta-pg" style="margin-top: 0px !important; padding-top: 50px;">
-	<div class="container">
-		<div class="eve-deta-pg-main">
-			<div class="lhs">
-				<div class="img">
-					<?php if ($event->event_image): ?>
-						<img src="<?= base_url($event->event_image); ?>" alt="">
-					<?php else: ?>
-						<img src="https://placehold.co/600x400/EEE/31343C" alt="">
-					<?php endif; ?>
-				</div>
-
-
+			<div class="p411-ct-badges">
+				<?php if ($ev_upcoming): ?>
+					<span class="p411-tag p411-tag--green"><i class="material-icons" aria-hidden="true">event_available</i> Upcoming</span>
+				<?php elseif ($ev_start_ts): ?>
+					<span class="p411-tag">This event has passed</span>
+				<?php endif; ?>
+				<?php if ($ev_start_ts): ?>
+					<span class="p411-tag"><?= e(date('D, j M Y', $ev_start_ts)) ?></span>
+				<?php endif; ?>
+				<?php if ($ev_time !== ''): ?>
+					<span class="p411-tag"><?= e($ev_time) ?></span>
+				<?php endif; ?>
 			</div>
 
-			<div class="rhs">
-				<div class="list-rhs-form pglist-bg pglist-p-com">
-					<div class="quote-pop">
-						<?php if ($this->session->flashdata('message')): ?>
-							<div class="log-suc">
-								<p><?= e($this->session->flashdata('message')); ?></p>
-							</div>
-						<?php endif; ?>
+			<h1><?= e($ev_name) ?></h1>
 
-						<h3>Get Quote</h3>
+			<div class="p411-ct-facts">
+				<?php if ($ev_start_ts): ?>
+					<span><i class="material-icons" aria-hidden="true">event</i><?= e(date('l, j F Y', $ev_start_ts)) ?><?= $ev_end_ts && $ev_end_ts > $ev_start_ts ? ' &ndash; ' . e(date('j F Y', $ev_end_ts)) : '' ?></span>
+				<?php endif; ?>
+				<?php if ($ev_time !== ''): ?>
+					<span><i class="material-icons" aria-hidden="true">schedule</i><?= e($ev_time) ?></span>
+				<?php endif; ?>
+				<?php if ($ev_address !== ''): ?>
+					<span><i class="material-icons" aria-hidden="true">place</i><?= e($ev_address) ?></span>
+				<?php endif; ?>
+				<?php if ($ev_phone !== ''): ?>
+					<a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', $ev_phone)) ?>"><i class="material-icons" aria-hidden="true">call</i><?= e($ev_phone) ?></a>
+				<?php endif; ?>
+				<?php if ($ev_email !== ''): ?>
+					<a href="mailto:<?= e_attr($ev_email) ?>"><i class="material-icons" aria-hidden="true">mail_outline</i><?= e($ev_email) ?></a>
+				<?php endif; ?>
+				<?php if ($ev_website !== ''): ?>
+					<a href="<?= e_url($ev_website) ?>" target="_blank" rel="noopener nofollow"><i class="material-icons" aria-hidden="true">language</i>Event website</a>
+				<?php endif; ?>
+			</div>
 
-						<div id="event_detail_enq_success" class="log" style="display: none;">
-							<p>Your Enquiry Is Submitted Successfully</p>
-						</div>
-						<div id="event_detail_enq_same" class="log" style="display: none;">
-							<p>You cannot make enquiry on your own event</p>
-						</div>
-						<div id="event_detail_enq_fail" class="log" style="display: none;">
-							<p>Something Went Wrong!!!</p>
-						</div>
-
-						<form method="post" action="<?= base_url('user/add-enquiry/event_details/' . rawurlencode($event->event_slug)); ?>" name="detail_enquiry_form" id="detail_enquiry_form">
-							<!-- Hidden fields for enquiry data -->
-							<input type="hidden" name="listing_id" value="">
-							<input type="hidden" name="event_id" value="<?= e_attr($event->event_slug); ?>">
-							<input type="hidden" name="blog_id" value="">
-							<input type="hidden" name="product_id" value="">
-							<input type="hidden" name="receiving_user_id" value="<?= (int) $event->user_id; ?>">
-							<input type="hidden" name="enquiry_sender_id" value="<?= (int) $logged_id; ?>">
-							<input type="hidden" name="enquiry_source" value="<?= e_attr($event->event_name); ?>">
-							<input type="hidden" name="enquiry_type" value="event">
-
-							<?php $disabled = $logged_id == NULL ? 'disabled' : ''; ?>
-
-							<div class="form-group ic-user">
-								<input type="text" name="enquiry_name" value="<?= set_value('enquiry_name'); ?>" required="required" class="form-control" placeholder="Enter name*" <?= $disabled; ?>>
-								<span class="text-danger"><?= form_error("enquiry_name") ? form_error("enquiry_name") : ''; ?></span>
-							</div>
-
-							<div class="form-group ic-eml">
-								<input type="email" class="form-control" name="enquiry_email" placeholder="Enter email*" required="required" value="<?= set_value('enquiry_email'); ?>" pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$" title="Invalid email address" <?= $disabled; ?>>
-								<span class="text-danger"><?= form_error("enquiry_email") ? form_error("enquiry_email") : ''; ?></span>
-							</div>
-
-							<div class="form-group ic-pho">
-								<input type="text" class="form-control" name="enquiry_mobile" value="<?= set_value('enquiry_mobile'); ?>" placeholder="Enter mobile number *" pattern="[0-9]{10,15}" title="Please enter a valid phone number (10-15 digits)" required <?= $disabled; ?>>
-								<span class="text-danger"><?= form_error("enquiry_mobile") ? form_error("enquiry_mobile") : ''; ?></span>
-							</div>
-
-							<div class="form-group">
-								<textarea class="form-control" rows="3" name="enquiry_message" placeholder="Enter your query or message" <?= $disabled; ?>></textarea>
-								<span class="text-danger"><?= form_error("enquiry_message") ? form_error("enquiry_message") : ''; ?></span>
-							</div>
-
-							<?php if ($logged_id != NULL): ?>
-								<button type="submit" id="detail_enquiry_submit" name="enquiry_submit" class="btn btn-primary">Submit</button>
-							<?php else: ?>
-								<a href="<?= base_url('/login'); ?>"><button type="button" class="btn btn-primary" style="background:#f44336; border:none;">Please Log In First</button></a>
-							<?php endif; ?>
-						</form>
-					</div>
-				</div>
+			<div class="p411-ct-cta">
+				<?php if ($ev_calendar !== '' && $ev_upcoming): ?>
+					<a class="p411-btn" href="<?= e_url($ev_calendar) ?>" target="_blank" rel="noopener">
+						<i class="material-icons" style="font-size:17px;" aria-hidden="true">calendar_today</i> Add to calendar
+					</a>
+				<?php endif; ?>
+				<?php if ($ev_directions !== ''): ?>
+					<a class="p411-btn p411-btn--ghost" href="<?= e_url($ev_directions) ?>" target="_blank" rel="noopener">Get directions</a>
+				<?php endif; ?>
+				<?php if ($ev_phone !== ''): ?>
+					<a class="p411-btn p411-btn--ghost" href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', $ev_phone)) ?>">Call the organiser</a>
+				<?php endif; ?>
+				<?php if ($ev_website !== ''): ?>
+					<a class="p411-btn p411-btn--ghost" href="<?= e_url($ev_website) ?>" target="_blank" rel="noopener nofollow">Tickets &amp; info</a>
+				<?php endif; ?>
 			</div>
 		</div>
 	</div>
-</section>
-<!--END--><!-- START -->
-<section class="eve-deta-body">
+
 	<div class="container">
-		<div class="eve-deta-body-main">
-			<div class="lhs event-detail-modern">
-				<div class="head">
-					<h1><?= e($event->event_name); ?></h1>
-				</div>
-				<?= e_nl2br($event->event_description); ?>
+		<div class="p411-shell">
 
-				<div class="sec-1">
-					<h4>Event information:</h4>
-					<ul>
-						<li><b>Name</b>: <?= e($event->event_name); ?></li>
-						<li><b>Date</b>: <?= date('d, M Y', strtotime($event->event_start_date)); ?></li>
-						<li><b>Time</b>: <?= e($event->event_time); ?></li>
-						<li><b>Address</b>: <?= e($event->event_address); ?></li>
-						<li><b>Contact Person</b>: <?= e($event->event_contact_name); ?></li>
-						<li><b>Phone</b>: <?= e($event->event_mobile); ?></li>
-						<li><b>Email</b>: <?= e($event->event_email); ?></li>
-						<li><b>Website</b>: <?= e($event->event_website); ?></li>
-					</ul>
+			<!-- ==================================================== MAIN -->
+			<div class="p411-shell__main">
+
+				<div class="p411-adrow">
+					<?php $slot = $ad_slots['top'];
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
 				</div>
 
-				<div class="sec-2 mt-2">
-					<h4>Location</h4>
-					<?= $event->event_map; ?>
-				</div>
-			</div>
+				<nav class="p411-ct-jump" aria-label="On this page">
+					<?php foreach ($ev_nav as $anchor => $label): ?>
+						<a href="#<?= e_attr($anchor) ?>"><?= e($label) ?></a>
+					<?php endforeach; ?>
+				</nav>
 
-			<div class="rhs">
+				<div class="p411-ct-body">
 
+					<?php if ($ev_image !== ''): ?>
+						<figure class="p411-ct-figure" style="margin-bottom:0;">
+							<?= responsive_img($event->event_image, $ev_name, array('fetchpriority' => 'high')) ?>
+						</figure>
+					<?php endif; ?>
 
-				<div class="sec-3 mb-3">
-					<div class="ud-lhs-s1">
-						<?php
-						// Resolve the event host. Events are now hosted by an admin
-						// (staff) account; fall back to the legacy public user for
-						// older events that predate the admin_id column.
-						$CI = &get_instance();
-						$event_user = null;
-						$user_name = 'Directory Finder';
-						$profile_image = 'https://img.freepik.com/premium-vector/user-icon-icon_1076610-59410.jpg';
-						$joined_date = '';
-
-						if (!empty($event->admin_id)) {
-							$CI->load->model('adminmodel');
-							$event_admin = $CI->adminmodel->getAdminByIdRaw($event->admin_id);
-							if ($event_admin && !empty($event_admin->admin_name)) {
-								$user_name = $event_admin->admin_name;
-							}
-						} elseif (!empty($event->user_id)) {
-							$event_user = $CI->usermodel->getSingleValue($event->user_id, 'user_id', 'user');
-							if ($event_user) {
-								$user_name = $event_user->name;
-								if (!empty($event_user->profile_image)) {
-									$profile_image = base_url($event_user->profile_image);
-								}
-								$joined_date = !empty($event_user->user_created) ? date('d M, Y', strtotime($event_user->user_created)) : '';
-							}
-						}
-						?>
-						<div style="font-weight:600; color:#333; margin-bottom:2px;">Hosted by</div>
-						<img src="<?= $profile_image; ?>" alt="<?= htmlspecialchars($user_name); ?>">
-						<h4><?= htmlspecialchars($user_name); ?></h4>
-						<?php if ($joined_date): ?>
-							<b>Joined on <?= $joined_date; ?></b>
+					<!-- ABOUT -->
+					<div class="p411-card" id="about">
+						<div class="p411-card__head">
+							<h2>About this event</h2>
+						</div>
+						<?php if ($ev_about !== ''): ?>
+							<?php // Descriptions are stored with pasted markup. content_text()
+							      // turns the block tags into newlines and strips the rest, so
+							      // the page reads as text instead of printing "<p>". ?>
+							<div class="p411-prose"><?= nl2br(e($ev_about)) ?></div>
+						<?php else: ?>
+							<div class="p411-empty p411-empty--inline">
+								<h3>No description yet</h3>
+								<p>The organiser hasn&rsquo;t written one. The date, time and address below are all confirmed &mdash; call or email them for the rest.</p>
+							</div>
 						<?php endif; ?>
 					</div>
-				</div>
 
-				<?php $slot = 'events-sidebar'; include APPPATH . 'views/partials/ad_slot.php'; ?>
-				<?php include APPPATH . 'views/partials/web_dev_cta.php'; ?>
-			</div>
-		</div>
-
-		<div class="pro-bot-shar">
-			<h4>Share this event</h4>
-			<ul>
-				<!-- Facebook -->
-				<li>
-					<div class="sh-pro-shar sh-pro-face">
-						<a target="_blank"
-							href="https://www.facebook.com/sharer/sharer.php?u=<?= urlencode(base_url('user/event_details/' . $event->event_id)); ?>">
-							Facebook
-						</a>
-					</div>
-				</li>
-
-				<!-- Twitter (X) -->
-				<li>
-					<div class="sh-pro-shar sh-pro-twi">
-						<a target="_blank"
-							href="https://twitter.com/intent/tweet?text=<?= urlencode($event->event_name); ?>&url=<?= urlencode(base_url('user/event_details/' . $event->event_id)); ?>">
-							Twitter
-						</a>
-					</div>
-				</li>
-
-				<!-- WhatsApp -->
-				<li>
-					<div class="sh-pro-shar sh-pro-what">
-						<a target="_blank"
-							href="https://api.whatsapp.com/send?text=<?= urlencode($event->event_name . ' - ' . base_url('user/event_details/' . $event->event_id)); ?>">
-							WhatsApp
-						</a>
-					</div>
-				</li>
-
-				<!-- LinkedIn -->
-				<li>
-					<div class="sh-pro-shar sh-pro-link">
-						<a target="_blank"
-							href="https://www.linkedin.com/sharing/share-offsite/?url=<?= urlencode(base_url('user/event_details/' . $event->event_id)); ?>">
-							LinkedIn
-						</a>
-					</div>
-				</li>
-
-				<!-- Pinterest -->
-				<li>
-					<div class="sh-pro-shar sh-pro-pin" style="background-color: #da271a;">
-						<a target="_blank"
-							href="https://pinterest.com/pin/create/button/?url=<?= urlencode(base_url('user/event_details/' . $event->event_id)); ?>&media=<?= $event->event_image ? urlencode(base_url($event->event_image)) : ''; ?>&description=<?= urlencode($event->event_name); ?>">
-							Pinterest
-						</a>
-					</div>
-				</li>
-			</ul>
-
-		</div>
-
-		<div class="pro-rel-events">
-			<h4>Related Events</h4>
-			<div class="event-body">
-				<div class="us-ppg-com">
-					<ul>
+					<!-- EVENT DETAILS -->
+					<div class="p411-card" id="details">
+						<div class="p411-card__head">
+							<h2>Event details</h2>
+						</div>
 						<?php
-						if (isset($related_events) && !empty($related_events)):
-							foreach ($related_events as $rel_event):
-								// Create safe slug for event details URL
-								$rel_event_slug = !empty($rel_event->event_slug) ? $rel_event->event_slug : createSafeSlug($rel_event->event_name);
-
-								// Set default image if event image is empty
-								$event_image = !empty($rel_event->event_image) ? base_url($rel_event->event_image) : 'https://placehold.co/300x200/EEE/31343C?text=Event';
+						$rows = array();
+						$rows['Event'] = e($ev_name);
+						if ($ev_start_ts)      $rows['Date']    = e(date('l, j F Y', $ev_start_ts));
+						if ($ev_end_ts && $ev_end_ts > $ev_start_ts) $rows['Ends'] = e(date('l, j F Y', $ev_end_ts));
+						if ($ev_time !== '')   $rows['Time']    = e($ev_time);
+						if ($ev_address !== '') $rows['Address'] = e($ev_address);
+						if ($ev_contact !== '') $rows['Contact'] = e($ev_contact);
+						if ($ev_phone !== '')   $rows['Phone']   = '<a href="tel:' . e_attr(preg_replace('/[^0-9+]/', '', $ev_phone)) . '">' . e($ev_phone) . '</a>';
+						if ($ev_email !== '')   $rows['Email']   = '<a href="mailto:' . e_attr($ev_email) . '">' . e($ev_email) . '</a>';
+						if ($ev_website !== '') $rows['Website'] = '<a href="' . e_url($ev_website) . '" target="_blank" rel="noopener nofollow">' . e($ev_website) . '</a>';
+						$rows['Hosted by'] = e($host_name);
 						?>
-								<li>
-									<div class="pro-eve-box">
-										<div>
-											<img src="<?= $event_image; ?>" alt="<?= htmlspecialchars($rel_event->event_name); ?>">
-										</div>
-										<div>
-											<span><?= date('M', strtotime($rel_event->event_start_date)); ?> <b><?= date('d', strtotime($rel_event->event_start_date)); ?></b></span>
-											<h2><?= htmlspecialchars($rel_event->event_name); ?></h2>
-											<p><?= htmlspecialchars($rel_event->event_address); ?></p>
-										</div>
-										<a href="<?= base_url('event-details/' . $rel_event_slug); ?>" class="fclick">&nbsp;</a>
+						<ul class="p411-info">
+							<?php foreach ($rows as $label => $value): ?>
+								<li><?= $label ?><span><?= $value ?></span></li>
+							<?php endforeach; ?>
+						</ul>
+
+						<div class="p411-ct-map__actions" style="margin-top:16px;">
+							<?php if ($ev_calendar !== ''): ?>
+								<a class="p411-btn p411-btn--sm" href="<?= e_url($ev_calendar) ?>" target="_blank" rel="noopener">Add to Google Calendar</a>
+							<?php endif; ?>
+							<?php if ($ev_directions !== ''): ?>
+								<a class="p411-btn p411-btn--sm p411-btn--ghost" href="<?= e_url($ev_directions) ?>" target="_blank" rel="noopener">Open in Google Maps</a>
+							<?php endif; ?>
+						</div>
+					</div>
+
+					<!-- LOCATION -->
+					<?php if ($ev_map !== '' || $ev_address !== ''): ?>
+						<div class="p411-card" id="location">
+							<div class="p411-card__head">
+								<h2>Location</h2>
+							</div>
+							<?php if ($ev_map !== ''): ?>
+								<div class="p411-ct-map">
+									<iframe src="<?= e_url($ev_map) ?>" title="Map showing <?= e_attr($ev_name) ?>"
+											allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+								</div>
+								<?php if ($ev_address !== ''): ?>
+									<p class="p411-form__hint" style="margin:12px 0 0;"><?= e($ev_address) ?></p>
+								<?php endif; ?>
+							<?php else: ?>
+								<div class="p411-empty p411-empty--inline">
+									<h3>No map pin yet</h3>
+									<p>The organiser hasn&rsquo;t embedded a map, but the address is <?= e($ev_address) ?>.</p>
+									<div class="p411-empty__actions">
+										<a class="p411-btn p411-btn--sm p411-btn--ghost" href="<?= e_url($ev_directions) ?>" target="_blank" rel="noopener">Find it on Google Maps</a>
 									</div>
-								</li>
-							<?php
-							endforeach;
-						else:
-							?>
-							<li style="text-align: center; padding: 30px;">
-								<p style="color: #666;">No related events available at the moment.</p>
-							</li>
+								</div>
+							<?php endif; ?>
+						</div>
+					<?php endif; ?>
+
+					<!-- IN-CONTENT AD -->
+					<div class="p411-adrow" style="margin:0;">
+						<?php $slot = $ad_slots['inline'];
+						include APPPATH . 'views/partials/ad_slot.php'; ?>
+					</div>
+
+					<!-- SHARE -->
+					<div class="p411-card" id="share">
+						<div class="p411-card__head">
+							<h2>Share this event</h2>
+						</div>
+						<p class="p411-form__hint">Know someone who'd go? Send it to them.</p>
+						<div class="p411-share" aria-label="Share this event">
+							<a class="so-fb" target="_blank" rel="noopener" title="Share on Facebook"
+							   href="https://www.facebook.com/sharer/sharer.php?u=<?= $share_url ?>"
+							   onclick="window.open(this.href,'share-fb','width=800,height=600');return false;">
+								<img src="<?= base_url('assets/images/social/3.png') ?>" alt="Facebook" loading="lazy"></a>
+							<a class="so-tw" target="_blank" rel="noopener" title="Share on X / Twitter"
+							   href="https://twitter.com/intent/tweet?url=<?= $share_url ?>&amp;text=<?= $share_title ?>"
+							   onclick="window.open(this.href,'share-tw','width=800,height=600');return false;">
+								<img src="<?= base_url('assets/images/social/2.png') ?>" alt="Twitter" loading="lazy"></a>
+							<a class="so-wa" target="_blank" rel="noopener" title="Share on WhatsApp"
+							   href="https://wa.me/?text=<?= $share_title ?>%20-%20<?= $share_url ?>">
+								<img src="<?= base_url('assets/images/social/6.png') ?>" alt="WhatsApp" loading="lazy"></a>
+							<a class="so-li" target="_blank" rel="noopener" title="Share on LinkedIn"
+							   href="https://www.linkedin.com/sharing/share-offsite/?url=<?= $share_url ?>"
+							   onclick="window.open(this.href,'share-li','width=800,height=600');return false;">
+								<img src="<?= base_url('assets/images/social/1.png') ?>" alt="LinkedIn" loading="lazy"></a>
+							<a class="so-pi" target="_blank" rel="noopener" title="Share on Pinterest"
+							   href="https://pinterest.com/pin/create/button/?url=<?= $share_url ?>&amp;media=<?= $share_image ?>&amp;description=<?= $share_title ?>"
+							   onclick="window.open(this.href,'share-pi','width=800,height=600');return false;">
+								<img src="<?= base_url('assets/images/social/9.png') ?>" alt="Pinterest" loading="lazy"></a>
+							<a class="so-link" href="javascript:void(0)" title="Copy link"
+							   onclick="p411CopyLink(<?= e_attr(json_encode($ev_link)) ?>)">
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+									<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M10.7 13.3a3 3 0 0 0 4.24 0l2.12-2.12a3 3 0 0 0-4.24-4.24L11.4 8.36"/>
+										<path d="M13.3 10.7a3 3 0 0 0-4.24 0L6.94 12.8a3 3 0 0 0 4.24 4.24l1.42-1.42"/>
+									</g>
+								</svg>
+							</a>
+						</div>
+					</div>
+
+					<!-- RELATED -->
+					<div class="p411-card" id="related">
+						<div class="p411-card__head">
+							<h2>More events</h2>
+							<a class="p411-more" href="<?= e_url(base_url('event')) ?>">See all &rarr;</a>
+						</div>
+
+						<?php if ($related_events): ?>
+							<div class="p411-rel">
+								<?php foreach ($related_events as $rel): ?>
+									<?php
+									$rel_slug = !empty($rel->event_slug) ? (string) $rel->event_slug : pearland_slug($rel->event_name ?? '');
+									$rel_url  = base_url('event-details/' . rawurlencode($rel_slug));
+									$rel_ts   = !empty($rel->event_start_date) ? strtotime((string) $rel->event_start_date) : false;
+									?>
+									<a class="p411-rel__item" href="<?= e_url($rel_url) ?>">
+										<div class="p411-rel__thumb">
+											<?php if (!empty($rel->event_image)): ?>
+												<?= responsive_img($rel->event_image, (string) ($rel->event_name ?? '')) ?>
+											<?php else: ?>
+												<img src="<?= base_url('assets/images/placeholder-listing.svg') ?>" alt="" loading="lazy" decoding="async">
+											<?php endif; ?>
+										</div>
+										<div class="p411-rel__body">
+											<b><?= e($rel->event_name ?? '') ?></b>
+											<span><?= $rel_ts ? e(date('D, j M Y', $rel_ts)) : e($rel->event_address ?? 'Pearland area') ?></span>
+										</div>
+									</a>
+								<?php endforeach; ?>
+							</div>
+						<?php else: ?>
+							<div class="p411-empty p411-empty--inline">
+								<h3>This is the only event listed</h3>
+								<p>Nothing else is on the Pearland411 calendar yet. If you're running something, listing it is free.</p>
+								<div class="p411-empty__actions">
+									<a class="p411-btn p411-btn--sm" href="<?= e_url(base_url('user/add_user_event')) ?>">Submit an event</a>
+								</div>
+							</div>
 						<?php endif; ?>
-					</ul>
+					</div>
 				</div>
 			</div>
+
+			<!-- ================================================= SIDEBAR -->
+			<aside class="p411-shell__side">
+
+				<!-- Contact the organiser -->
+				<div class="p411-card p411-form" id="enquire">
+					<div class="p411-card__head">
+						<h2>Contact the organiser</h2>
+					</div>
+
+					<?php $__msg = $this->session->flashdata('message'); ?>
+					<?php if (!empty($__msg)): ?>
+						<div class="p411-note p411-note--ok"><?= e($__msg) ?></div>
+					<?php endif; ?>
+
+					<div id="ev_enq_ok"   class="p411-note p411-note--ok"  style="display:none;">Thanks &mdash; your message has been sent.</div>
+					<div id="ev_enq_fail" class="p411-note p411-note--err" style="display:none;">Sorry, that didn't send. Please try again.</div>
+
+					<?php if (empty($logged_id)): ?>
+						<p class="p411-form__hint">Log in to message the organiser &mdash; it keeps your details and their inbox tidy.</p>
+						<a class="p411-btn p411-btn--block" href="<?= e_url(base_url('login')) ?>">Log in to enquire</a>
+						<a class="p411-btn p411-btn--block p411-btn--ghost" style="margin-top:8px;" href="<?= e_url(base_url('register')) ?>">Create an account</a>
+						<?php if ($ev_phone !== ''): ?>
+							<p class="p411-form__hint" style="margin:12px 0 0;">In a hurry? Call <a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', $ev_phone)) ?>"><?= e($ev_phone) ?></a>.</p>
+						<?php endif; ?>
+					<?php else: ?>
+						<p class="p411-form__hint">Ask about tickets, timings, parking &mdash; whatever you need to know.</p>
+						<form method="post" name="ev_enquiry_form" id="ev_enquiry_form"
+							  action="<?= base_url('user/add-enquiry/event_details/' . rawurlencode($ev_slug)) ?>">
+							<input type="hidden" name="listing_id" value="">
+							<input type="hidden" name="event_id" value="<?= e_attr($ev_slug) ?>">
+							<input type="hidden" name="blog_id" value="">
+							<input type="hidden" name="product_id" value="">
+							<input type="hidden" name="receiving_user_id" value="<?= (int) ($event->user_id ?? 0) ?>">
+							<input type="hidden" name="enquiry_sender_id" value="<?= (int) $logged_id ?>">
+							<input type="hidden" name="enquiry_source" value="<?= e_attr($ev_name) ?>">
+							<input type="hidden" name="enquiry_type" value="event">
+
+							<div class="form-group">
+								<label class="sr-only" for="ev_enq_name">Your name</label>
+								<input id="ev_enq_name" type="text" name="enquiry_name" class="form-control" required
+									   placeholder="Enter name*" value="<?= e_attr($user->name ?? '') ?>">
+							</div>
+							<div class="form-group">
+								<label class="sr-only" for="ev_enq_email">Email</label>
+								<input id="ev_enq_email" type="email" name="enquiry_email" class="form-control" required
+									   placeholder="Enter email*" value="<?= e_attr($user->email_id ?? '') ?>">
+							</div>
+							<div class="form-group">
+								<label class="sr-only" for="ev_enq_phone">Phone</label>
+								<input id="ev_enq_phone" type="tel" name="enquiry_mobile" class="form-control" required
+									   placeholder="Enter mobile number*" pattern="[0-9+\-\s()]{7,20}"
+									   title="7 to 20 characters: digits, spaces, + ( ) and - are allowed"
+									   value="<?= e_attr($user->mobile_number ?? '') ?>">
+							</div>
+							<div class="form-group">
+								<label class="sr-only" for="ev_enq_msg">Your message</label>
+								<textarea id="ev_enq_msg" name="enquiry_message" class="form-control" rows="3"
+										  placeholder="What would you like to know?"></textarea>
+							</div>
+							<button type="submit" id="ev_enquiry_submit" name="enquiry_submit" class="p411-btn p411-btn--block">Send message</button>
+						</form>
+					<?php endif; ?>
+				</div>
+
+				<!-- Host -->
+				<div class="p411-card">
+					<div class="p411-card__head">
+						<h2>Hosted by</h2>
+					</div>
+					<div class="p411-profile">
+						<div class="p411-profile__img">
+							<?php if ($host_image !== ''): ?>
+								<img src="<?= e_attr($host_image) ?>" alt="<?= e_attr($host_name) ?>" loading="lazy" decoding="async">
+							<?php else: ?>
+								<img src="<?= base_url('assets/images/fallback_profile.svg') ?>" alt="" loading="lazy" decoding="async">
+							<?php endif; ?>
+						</div>
+						<h3><?= e($host_name) ?></h3>
+						<?php if ($host_joined !== ''): ?><p>On Pearland411 since <?= e($host_joined) ?></p><?php endif; ?>
+						<?php if ($ev_contact !== '' && $ev_contact !== $host_name): ?>
+							<p>Contact person: <?= e($ev_contact) ?></p>
+						<?php endif; ?>
+					</div>
+				</div>
+
+				<?php $slot = $ad_slots['side_1'];
+				$slot_alias = 'events-sidebar';
+				$slot_creative = 'house-ad';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+				<?php include APPPATH . 'views/partials/service_promo.php'; ?>
+
+				<!-- Coming up -->
+				<?php if (!empty($upcoming_events)): ?>
+					<div class="p411-card">
+						<div class="p411-card__head">
+							<h2>Coming up</h2>
+							<a class="p411-more" href="<?= e_url(base_url('event')) ?>">All &rarr;</a>
+						</div>
+						<div class="p411-rail">
+							<?php foreach ($upcoming_events as $item): ?>
+								<?php
+								$item_slug = !empty($item->event_slug) ? (string) $item->event_slug : pearland_slug($item->event_name ?? '');
+								$item_ts   = !empty($item->event_start_date) ? strtotime((string) $item->event_start_date) : false;
+								?>
+								<a class="p411-rail__item" href="<?= e_url(base_url('event-details/' . rawurlencode($item_slug))) ?>">
+									<?php if (!empty($item->event_image)): ?>
+										<span class="p411-rail__thumb"><?= responsive_img($item->event_image, (string) ($item->event_name ?? '')) ?></span>
+									<?php else: ?>
+										<span class="p411-rail__thumb" style="background:var(--p411-green-dd);" aria-hidden="true"><?= $item_ts ? e(date('d', $item_ts)) : '&bull;' ?></span>
+									<?php endif; ?>
+									<span class="p411-rail__body">
+										<b><?= e($item->event_name ?? '') ?></b>
+										<span><?= $item_ts ? e(date('D, j M', $item_ts)) : e($item->event_address ?? 'Pearland area') ?></span>
+									</span>
+									<span class="p411-rail__go" aria-hidden="true"><i class="material-icons">chevron_right</i></span>
+								</a>
+							<?php endforeach; ?>
+						</div>
+					</div>
+				<?php endif; ?>
+
+				<?php $slot = $ad_slots['side_2'];
+				$slot_alias = array('right-banner-1', 'right-banner-2');
+				$slot_fallback_partial = 'banner_design_promo.php';
+				$slot_creative = 'banner-design';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+				<?php $slot = $ad_slots['side_sky'];
+				$slot_fallback = false;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+			</aside>
+		</div>
+
+		<!-- ==================================================== BOTTOM AD -->
+		<div class="p411-adrow" style="margin-top:6px;">
+			<?php $slot = $ad_slots['bottom'];
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
 		</div>
 	</div>
 </section>
 
 <script>
-	// Event Details Page Enquiry Form Handler
-	document.addEventListener('DOMContentLoaded', function() {
-		const enquiryForm = document.getElementById('detail_enquiry_form');
-		const submitButton = document.getElementById('detail_enquiry_submit');
+	(function () {
+		'use strict';
 
-		if (enquiryForm) {
-			enquiryForm.addEventListener('submit', function(e) {
+		// Smooth-scroll the jump chips.
+		Array.prototype.forEach.call(document.querySelectorAll('.p411-ct-jump a[href^="#"]'), function (link) {
+			link.addEventListener('click', function (e) {
+				var target = document.getElementById(this.getAttribute('href').slice(1));
+				if (!target) return;
 				e.preventDefault();
-
-				// Disable submit button to prevent double submission
-				submitButton.disabled = true;
-				submitButton.textContent = 'Submitting...';
-
-				// Get form data
-				const formData = new FormData(enquiryForm);
-
-				// Basic validation
-				const name = formData.get('enquiry_name');
-				const email = formData.get('enquiry_email');
-				const mobile = formData.get('enquiry_mobile');
-
-				if (!name || !email || !mobile) {
-					showMessage('event_detail_enq_fail', 'Please fill in all required fields.');
-					resetSubmitButton();
-					return;
-				}
-
-				// Email validation
-				const emailRegex = /^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$/;
-				if (!emailRegex.test(email)) {
-					showMessage('event_detail_enq_fail', 'Please enter a valid email address.');
-					resetSubmitButton();
-					return;
-				}
-
-				// Phone validation (10-15 digits)
-				const phoneRegex = /^[0-9]{10,15}$/;
-				if (!phoneRegex.test(mobile)) {
-					showMessage('event_detail_enq_fail', 'Please enter a valid phone number (10-15 digits).');
-					resetSubmitButton();
-					return;
-				}
-
-				// Submit form via AJAX
-				fetch(enquiryForm.action, {
-						method: 'POST',
-						body: formData,
-						headers: {
-							'X-Requested-With': 'XMLHttpRequest'
-						}
-					})
-					.then(response => response.json())
-					.then(data => {
-						if (data.success) {
-							showMessage('event_detail_enq_success', data.message || 'Your enquiry has been submitted successfully!');
-							enquiryForm.reset(); // Clear form
-						} else {
-							showMessage('event_detail_enq_fail', data.message || 'Something went wrong! Please try again.');
-						}
-					})
-					.catch(error => {
-						console.error('Error:', error);
-						showMessage('event_detail_enq_fail', 'Something went wrong! Please try again.');
-					})
-					.finally(() => {
-						resetSubmitButton();
-					});
+				target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 			});
-		}
+		});
 
-		function showMessage(elementId, message) {
-			// Hide all message divs
-			document.getElementById('event_detail_enq_success').style.display = 'none';
-			document.getElementById('event_detail_enq_same').style.display = 'none';
-			document.getElementById('event_detail_enq_fail').style.display = 'none';
+		// Enquiry form: post in the background so the reader keeps their place.
+		// The CSRF hook has already injected its hidden token into this form,
+		// and FormData carries it along.
+		var form = document.getElementById('ev_enquiry_form');
+		if (!form) return;
 
-			// Show the specific message
-			const messageDiv = document.getElementById(elementId);
-			if (messageDiv) {
-				messageDiv.style.display = 'block';
-				if (message) {
-					messageDiv.querySelector('p').textContent = message;
+		var ok   = document.getElementById('ev_enq_ok');
+		var fail = document.getElementById('ev_enq_fail');
+		var btn  = document.getElementById('ev_enquiry_submit');
+
+		form.addEventListener('submit', function (e) {
+			e.preventDefault();
+			ok.style.display = fail.style.display = 'none';
+			btn.disabled = true;
+
+			var xhr = new XMLHttpRequest();
+			xhr.open('POST', form.action, true);
+			xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+			xhr.onreadystatechange = function () {
+				if (xhr.readyState !== 4) return;
+				btn.disabled = false;
+				var success = false;
+				if (xhr.status === 200) {
+					try { success = !!JSON.parse(xhr.responseText).success; } catch (err) { success = false; }
 				}
+				if (success) { ok.style.display = 'block'; form.reset(); }
+				else { fail.style.display = 'block'; }
+			};
+			xhr.send(new FormData(form));
+		});
+	})();
 
-				// Auto-hide message after 5 seconds
-				setTimeout(() => {
-					messageDiv.style.display = 'none';
-				}, 5000);
-			}
+	// Copy the event URL. Called inline from the share row.
+	function p411CopyLink(url) {
+		function toast(message) {
+			var el = document.createElement('div');
+			el.textContent = message;
+			el.setAttribute('role', 'status');
+			el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:10000;background:#4E8A28;color:#fff;'
+				+ 'padding:13px 18px;border-radius:9px;font-size:14px;box-shadow:0 8px 26px rgba(0,0,0,.22);';
+			document.body.appendChild(el);
+			setTimeout(function () { el.remove(); }, 2600);
 		}
 
-		function resetSubmitButton() {
-			submitButton.disabled = false;
-			submitButton.textContent = 'Submit';
+		if (navigator.clipboard && window.isSecureContext) {
+			navigator.clipboard.writeText(url).then(function () { toast('Link copied'); },
+				function () { toast('Could not copy the link'); });
+			return;
 		}
-	});
+
+		var field = document.createElement('textarea');
+		field.value = url;
+		field.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+		document.body.appendChild(field);
+		field.select();
+		try { toast(document.execCommand('copy') ? 'Link copied' : 'Could not copy the link'); }
+		catch (err) { toast('Could not copy the link'); }
+		document.body.removeChild(field);
+	}
 </script>
-<!--END-->
