@@ -6,6 +6,150 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-02 — Homepage redesign: navy structure, green as an accent
+
+The homepage was pear green on pear green — green hero, green card frames,
+green "no photo" tiles, green house ads — which the client's review summed up
+as looking "too much like a lawn or landscaping website". The page is rebuilt
+against the supplied mockup: **navy** for the header, headings, footer and
+structure, **burgundy** for promotional and secondary bands, **green kept as
+an accent** on buttons, icons, links and labels, over cream and light-grey
+grounds. Same theme, same CodeIgniter plumbing; no new framework.
+
+`views/index.php` went from 3,736 lines to ~1,100: its 2,200-line inline
+`<style>` block is now `assets/css/home-sections.css`, so the page can be
+re-skinned without touching PHP.
+
+### Changed
+- **Section order** now matches the brief: header · hero · categories ·
+  featured · deals · events · explore · news + videos · grow your business ·
+  email signup · footer, with the weather in the right rail. The business
+  grid used to run before everything else and pushed deals, events and news
+  off the first two screens.
+- **Hero.** Navy at the top blending into burgundy, over a new Pearland dusk
+  illustration (water tower, a Town Center-style parade of shops, people on
+  the plaza) with a dark overlay for legibility. Green appears once, behind
+  the search bar. Two calls to action under it — *Explore Local Businesses*
+  and *List Your Business Free* — and the supporting line is the client's.
+- **Business cards.** One component, used by both Featured and Explore, so
+  they cannot drift: fixed-ratio media box, flex body, footer pinned to the
+  bottom. Every card in a row is the same height whether or not the listing
+  has a description — the old cards were up to a full screen tall when a
+  listing was empty. Each carries category, name, rating, one or two lines of
+  description, service area and a **View Business** button; Featured adds a
+  burgundy rule and a **Call** button.
+- **Explore is capped at six listings** with a *View All Pearland Businesses*
+  button, instead of nine full-width cards.
+- **Category strip.** Bigger icons, a light tint per tile, the accent rotating
+  navy / green / burgundy, a hover lift, quieter counts, and the whole card is
+  the link.
+- **Deals and events** gained a logo, category, expiry, a **Redeem Deal**
+  button, a burgundy date block and **Add to Calendar** (a Google template
+  URL, so nothing to install).
+- **News** is one lead story with a large image plus four supporting rows,
+  navy headlines, a burgundy *News* label and a green *Community* one. The
+  bright blue links were the theme's, not the brand's.
+- **Weather** shows three days plus current conditions, with the rest behind
+  *View full forecast*; it was six days and a block of statistics.
+- **The service promo card** (`partials/service_promo.php`) is navy with green
+  accents rather than a third large green panel; the design card stays
+  burgundy. `promo-cards.css` is shared, so the directory and listing pages
+  follow.
+- **Footer**, rewritten as `partials/site_footer.php` and shared with
+  `views/footer.php`: lighter navy (`#1E2F52`), a green-to-burgundy rule
+  across the top, the logo, a description, five link columns, contact details
+  and social icons. The theme's black phone quick-bar matches it now.
+
+### Fixed
+- **The same business could appear three times on one screen.** Hotspot,
+  Business of the Week, Featured and Explore each ran their own query with no
+  idea what the others had returned. `User::index()` now fills them in
+  priority order — paid placements first — and de-duplicates by `listing_id`
+  *and* by a flattened name, because the directory holds genuine duplicate
+  rows and two ids for "Monster Tree Service of Pearland" look identical to a
+  reader.
+- **Featured could be a row of blank cards.** `getHomepageFeatured()` only
+  returns listings with a real description (25+ characters, which is past
+  "-", "n/a" and an empty `<p></p>`), preferring those with a photograph.
+  When nothing qualifies the section sells the placement instead of showing
+  empty cards — a Featured row of blanks makes the paid slot look worthless.
+  `getHomepageListings()` applies the same bar and tops up if the grid would
+  otherwise be short.
+- **"No photo yet" was one pear-green tile repeated down the page.** There are
+  now 18 quiet cream/grey placeholders — one per kind of business plus one for
+  news — each with a category glyph and a single small green accent, picked by
+  the new `category_placeholder()` helper. Thumbnails under ~120px draw an
+  icon instead, because the artwork's caption turns to grey mush at that size.
+- **Every unsold ad zone showed the same green "your ad here" rectangle.**
+  House creatives now come in four palettes (green, burgundy, navy, cream)
+  with four different messages, assigned per position; the top, bottom, third
+  sidebar and skyscraper zones render *nothing* when unsold rather than a
+  placeholder, and the "Sponsored" label is smaller. All seven zones stay
+  bookable. The wide creative was also re-laid-out inside a safe area — at
+  970x250 `object-fit: cover` was cutting its button in half.
+- `getLatestNews()` ignored `is_deleted`, so a soft-deleted story stayed on the
+  homepage, and it selected neither the slug nor the date — the homepage linked
+  stories by id while the rest of the site uses `/news-details/<slug>`.
+- The shared footer had drifted into a second, hand-kept copy: a different
+  phone number and email from the homepage's, eight hard-coded category slugs
+  (several of which no longer resolve), and `Copyright © 2025-2035`. It is one
+  partial now, categories come from the same query the rest of the page uses,
+  contact details come from `/admin/setting`, and the year is `date('Y')`.
+- Every link in the phone quick-bar pointed at a `.html` file — `index.html`,
+  `all-category.html`, `events.html` — left over from the static template the
+  theme was cut from. None of them resolved. Its items are also `width: 20%`
+  `inline-block`, so five of them overflowed and the last sat half off-screen;
+  the row is flex now and the homepage caps it at five.
+- Bootstrap and jQuery UI were pulled from CDNs on the homepage although the
+  repository ships the same versions; both are served locally now. jQuery UI's
+  *script* was missing entirely, and `custom.js` calls `.autocomplete()` and
+  `.datepicker()` unconditionally, so everything in that file after those
+  calls was dead on the homepage.
+- `<meta name="viewport">` carried `maximum-scale=1`, which blocks pinch-zoom.
+
+### Added
+- `assets/css/home-sections.css` — the whole homepage, scoped to `.p411-home`.
+- `assets/css/site-footer.css` + `views/partials/site_footer.php` — the shared
+  footer, scoped to `.p411-foot`.
+- `scripts/generate_brand_art.py` — generates the category placeholders, the
+  four house-ad palettes and the advertiser templates. Deterministic, writes
+  only under `assets/images/`, safe to re-run.
+- `assets/images/ads/templates/` — four editable advertiser banner templates
+  (970x90, 900x300, 600x500, 300x600) where six declarations at the top of the
+  file set the colours, plus a README on customising them for an advertiser's
+  own brand.
+- `assets/images/home/hero-pearland.svg` — the hero illustration, hand-authored.
+- `category_placeholder()` in `helpers/view_helper.php`.
+- `site_logo_url` in `/admin/setting`: the header and footer logo is still
+  hot-linked from a third-party image host by default, and this is the switch
+  that moves it into `assets/images/` without a deploy.
+
+### Not done
+- **The 20 complete business listings** the client asked for are data entry in
+  the production database (logos, descriptions, phone numbers), not a code
+  change — there is no listing content in this repository to edit. The
+  completeness rules above mean those 20 will fill the homepage the moment
+  they exist, and until then the best of what is there is shown first.
+- **Photographs of Pearland.** The hero is an illustration; the placeholders
+  are drawn. Real photography of the Town Center, local owners and community
+  events has to be supplied or licensed.
+
+### Migrations
+None.
+
+### Key files
+`application/views/index.php` (rewritten), `application/views/partials/site_footer.php` (new),
+`application/views/partials/ad_slot.php`, `application/views/footer.php`,
+`application/views/header.php`, `application/controllers/User.php` (`index`),
+`application/controllers/Admin.php` + `views/admin/admin_setting.php` (`site_logo_url`),
+`application/models/Usermodel.php` (`getHomepageFeatured`, `getHomepageListings`,
+`getLatestNews`, `getActiveCoupons`), `application/helpers/view_helper.php`,
+`assets/css/home-sections.css` (rewritten), `assets/css/site-footer.css` (new),
+`assets/css/promo-cards.css`, `scripts/generate_brand_art.py` (new),
+`assets/images/placeholders/*`, `assets/images/ads/*`, `assets/images/home/hero-pearland.svg`.
+
+---
+
 ## 2026-07-30 — About us rebuilt on the same layout
 
 `/about-us` now uses the shared page kit — hero with breadcrumb, section

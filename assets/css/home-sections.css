@@ -1,325 +1,865 @@
 /* ============================================================================
- * Pearland411 — homepage sections
+ * Pearland411 — homepage
  * ----------------------------------------------------------------------------
- * ONLY the pieces the homepage gained that the theme has no styles for:
- * the Business Hotspot strip, the Business of the Week spotlight, the
- * two-column What's On / Community blocks and the merged owner band.
+ * The whole homepage lives here. It used to be a 2,200-line inline <style> in
+ * application/views/index.php plus a short companion file; both are now this
+ * one stylesheet, so the page can be re-skinned without touching PHP.
  *
- * Everything else on the page keeps using the theme's own classes
- * (.lst-com-box, .blog-box, .video-box, .widget, .section-title …) from
- * assets/css/style.css and the view's inline <style>. Nothing here restyles
- * them.
+ * COLOUR BALANCE (2026-08 brief). The page was pear green on green: green
+ * hero, green cards, green placeholders, green ads. Green is now an accent
+ * only — buttons, icons, links, small flags — and the structure is navy,
+ * with burgundy for promotional and secondary bands and cream/grey grounds.
+ *
+ *   Navy       #20245B   header, headings, footer, structure
+ *   Pear green #79B82A   buttons, icons, links, selected labels
+ *   Burgundy   #6D263D   secondary banners, promos, special features
+ *   Cream      #F7F5F0   page ground
+ *   Light grey #F2F3F5   cards, placeholders
  *
  * SCOPING RULE — every selector starts `.p411-home`, and this file is linked
  * only from application/views/index.php. Neither condition is optional: the
- * theme stylesheet is shared by ~200 other views and must stay untouched.
+ * theme's assets/css/style.css is shared by ~200 other views and must stay
+ * untouched, and several rules below deliberately override it.
  * ==========================================================================*/
 
 .p411-home {
-	--p411-green: #8CC63F;   /* the logo's pear green */
-	--p411-green-d: #6BA935;
-	--p411-green-dd: #4E8A28;
-	--p411-green-w: #F3F8E8;
-	--p411-green-l: #D6E7B2;
-	--p411-ink: #2E3338;
-	--p411-ink-2: #5D6469;
-	--p411-ink-3: #8A9095;
-	--p411-line: #E4E7DE;
-	--p411-card: #fff;
-	--p411-amber: #C8871B;
-	--p411-amber-w: #FDF6E7;
-}
+	/* navy */
+	--nv:    #20245B;
+	--nv-d:  #171A45;
+	--nv-l:  #2C3178;
+	--nv-w:  #EEF0F7;
+	/* pear green */
+	--gr:    #79B82A;
+	--gr-d:  #5E9220;
+	--gr-l:  #8FCB46;
+	--gr-w:  #F1F7E5;
+	/* burgundy */
+	--bu:    #6D263D;
+	--bu-l:  #8A3D59;
+	--bu-d:  #4E1A2B;
+	--bu-w:  #FBF1F5;
+	/* neutrals */
+	--cream: #F7F5F0;
+	--gray:  #F2F3F5;
+	--ink:   #1F2430;
+	--ink-2: #5A6472;
+	--ink-3: #8B93A1;
+	--line:  #E4E6EC;
+	--card:  #FFFFFF;
+	--amber: #C8871B;
 
-/* ---- shared section frame ------------------------------------------- */
-
-.p411-home .p411-sec { margin-bottom: 38px; }
-
-.p411-home .p411-sec__head {
-	display: flex; align-items: flex-end; justify-content: space-between;
-	gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+	--r:   12px;
+	--r-s: 8px;
+	--sh:   0 1px 2px rgba(31, 36, 48, .05), 0 6px 20px rgba(31, 36, 48, .06);
+	--sh-h: 0 2px 4px rgba(31, 36, 48, .06), 0 14px 30px rgba(31, 36, 48, .10);
 }
-.p411-home .p411-sec__head h2 {
-	margin: 0; font-size: 22px; font-weight: 700; line-height: 1.25;
-	position: relative; padding-bottom: 9px; color: var(--p411-ink);
-}
-.p411-home .p411-sec__head h2::after {
-	content: ""; position: absolute; left: 0; bottom: 0;
-	width: 42px; height: 3px; border-radius: 2px; background: var(--p411-green);
-}
-.p411-home .p411-sec__head .p411-more {
-	font-size: 14px; font-weight: 600; color: var(--p411-green-dd); white-space: nowrap;
-}
-.p411-home .p411-sec__head .p411-more:hover { text-decoration: underline; }
-
-.p411-home .p411-sub {
-	margin: -6px 0 14px; font-size: 14px; color: var(--p411-ink-2);
-}
-
-/* ---- empty states ---------------------------------------------------- */
-
-.p411-home .p411-empty {
-	background: var(--p411-card); border: 1px dashed var(--p411-line);
-	border-radius: 8px; padding: 26px 20px; text-align: center;
-}
-.p411-home .p411-empty h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; color: var(--p411-ink); }
-.p411-home .p411-empty p { margin: 0 auto; max-width: 46ch; font-size: 14px; color: var(--p411-ink-2); }
-.p411-home .p411-empty .p411-btn { margin-top: 14px; }
-
-/* ---- buttons (scoped; the theme's .btn is left alone) ---------------- */
-
-.p411-home .p411-btn {
-	display: inline-block; padding: 9px 20px; border-radius: 999px;
-	font-size: 14px; font-weight: 600; line-height: 1.4; text-align: center;
-	border: 1px solid transparent; cursor: pointer;
-	background: var(--p411-green); color: #fff;
-	transition: background .16s ease;
-}
-.p411-home a.p411-btn { color: #fff; }
-.p411-home .p411-btn:hover { background: var(--p411-green-d); color: #fff; }
-.p411-home .p411-btn--ghost { background: #fff; color: var(--p411-ink); border-color: var(--p411-line); }
-.p411-home a.p411-btn--ghost { color: var(--p411-ink); }
-.p411-home .p411-btn--ghost:hover { background: var(--p411-green-w); border-color: var(--p411-green); color: var(--p411-green-dd); }
-
-/* ---- category strip -------------------------------------------------- */
-
-.p411-home .p411-cats {
-	display: grid; gap: 10px;
-	grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
-}
-.p411-home .p411-cats a {
-	display: block; text-align: center; padding: 14px 9px;
-	background: var(--p411-card); border: 1px solid var(--p411-line);
-	border-radius: 8px; color: var(--p411-ink);
-}
-.p411-home .p411-cats a:hover { border-color: var(--p411-green); background: var(--p411-green-w); }
-.p411-home .p411-cats svg { color: var(--p411-green-dd); display: block; margin: 0 auto 7px; }
-.p411-home .p411-cats b { display: block; font-size: 13px; font-weight: 600; line-height: 1.3; }
-.p411-home .p411-cats span { display: block; margin-top: 3px; font-size: 11px; color: var(--p411-ink-3); }
-
-/* ---- Business Hotspot: a slim logo strip, not another card row ------- */
-
-.p411-home .p411-hotspot {
-	background: var(--p411-card); border: 1px solid var(--p411-line);
-	border-radius: 10px; padding: 12px 14px;
-}
-.p411-home .p411-hotspot__head {
-	display: flex; align-items: center; gap: 9px; margin-bottom: 10px;
-}
-.p411-home .p411-hotspot__head h2 {
-	margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .09em;
-	text-transform: uppercase; color: var(--p411-ink-2);
-}
-.p411-home .p411-hotspot__head svg { color: var(--p411-green-dd); flex: none; }
-.p411-home .p411-hotspot__head .p411-more { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--p411-green-dd); }
-
-.p411-home .p411-hotspot__rail {
-	display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;
-	scrollbar-width: thin;
-}
-.p411-home .p411-hotspot__item {
-	flex: 0 0 auto; width: 148px; text-align: center;
-	border: 1px solid var(--p411-line); border-radius: 8px; padding: 10px 8px;
-	background: #fff; color: var(--p411-ink);
-}
-.p411-home .p411-hotspot__item:hover { border-color: var(--p411-green); background: var(--p411-green-w); }
-.p411-home .p411-hotspot__item img {
-	display: block; width: 100%; height: 44px; object-fit: contain; margin-bottom: 7px;
-}
-.p411-home .p411-hotspot__item b {
-	display: block; font-size: 12px; font-weight: 600; line-height: 1.3;
-	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.p411-home .p411-hotspot__item span { display: block; margin-top: 2px; font-size: 10.5px; color: var(--p411-ink-3); }
-
-/* ---- Business of the Week: one wide spotlight ------------------------ */
-
-.p411-home .p411-week {
-	display: grid; grid-template-columns: 1fr; gap: 0;
-	background: var(--p411-card); border: 1px solid var(--p411-green-l);
-	border-radius: 12px; overflow: hidden;
-	box-shadow: 0 2px 10px rgba(46, 51, 56, .06);
-}
-.p411-home .p411-week__media { position: relative; background: var(--p411-green-w); }
-.p411-home .p411-week__media img { display: block; width: 100%; height: 100%; min-height: 190px; object-fit: cover; }
-.p411-home .p411-week__flag {
-	position: absolute; top: 12px; left: 12px;
-	background: var(--p411-green-dd); color: #fff;
-	font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-	padding: 5px 11px; border-radius: 4px;
-}
-.p411-home .p411-week__body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 8px; }
-.p411-home .p411-week__cat {
-	font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
-	color: var(--p411-green-dd);
-}
-.p411-home .p411-week__body h3 { margin: 0; font-size: 21px; font-weight: 700; line-height: 1.25; color: var(--p411-ink); }
-.p411-home .p411-week__body p { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--p411-ink-2); }
-.p411-home .p411-week__foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
-.p411-home .p411-week__until { font-size: 12px; color: var(--p411-ink-3); }
-
-@media (min-width: 768px) {
-	.p411-home .p411-week { grid-template-columns: 42% 1fr; }
-}
-
-/* ---- two-column blocks (What's On / Community) ----------------------- */
-
-.p411-home .p411-split { display: grid; grid-template-columns: 1fr; gap: 26px; }
-@media (min-width: 700px) { .p411-home .p411-split { grid-template-columns: 1fr 1fr; } }
-
-.p411-home .p411-split h3 {
-	margin: 0 0 12px; font-size: 15px; font-weight: 700; color: var(--p411-ink);
-	display: flex; align-items: center; gap: 8px;
-}
-.p411-home .p411-split h3 svg { color: var(--p411-green-dd); flex: none; }
-.p411-home .p411-split h3 .p411-more { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--p411-green-dd); }
-
-.p411-home .p411-stack { display: flex; flex-direction: column; gap: 10px; }
-
-/* deal row */
-.p411-home .p411-deal {
-	display: block; background: var(--p411-card); border: 1px solid var(--p411-line);
-	border-left: 4px solid var(--p411-amber); border-radius: 8px; padding: 12px 14px;
-	color: var(--p411-ink);
-}
-.p411-home .p411-deal:hover { border-color: var(--p411-amber); background: var(--p411-amber-w); }
-.p411-home .p411-deal__off { font-size: 17px; font-weight: 700; color: var(--p411-amber); line-height: 1.2; }
-.p411-home .p411-deal__name { display: block; margin-top: 3px; font-size: 14px; font-weight: 600; line-height: 1.35; }
-.p411-home .p411-deal__meta { display: block; margin-top: 3px; font-size: 12px; color: var(--p411-ink-3); }
-
-/* event row */
-.p411-home .p411-event {
-	display: flex; gap: 12px; background: var(--p411-card); border: 1px solid var(--p411-line);
-	border-radius: 8px; padding: 12px 14px; color: var(--p411-ink);
-}
-.p411-home .p411-event:hover { border-color: var(--p411-green); background: var(--p411-green-w); }
-.p411-home .p411-event__date {
-	flex: none; width: 48px; text-align: center; border: 1px solid var(--p411-line);
-	border-radius: 6px; overflow: hidden; background: #fff;
-}
-.p411-home .p411-event__date i {
-	display: block; font-style: normal; background: var(--p411-green); color: #fff;
-	font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; padding: 3px 0;
-}
-.p411-home .p411-event__date b { display: block; padding: 4px 0 5px; font-size: 18px; font-weight: 700; }
-.p411-home .p411-event__body { min-width: 0; }
-.p411-home .p411-event__body b { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; }
-.p411-home .p411-event__body span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--p411-ink-2); }
-
-/* ---- merged owner band ---------------------------------------------- */
-
-.p411-home .p411-owner { background: #fff; border-top: 1px solid var(--p411-line); padding: 44px 0; }
-.p411-home .p411-owner__head { text-align: center; max-width: 62ch; margin: 0 auto 28px; }
-.p411-home .p411-owner__head h2 { margin: 0 0 8px; font-size: 26px; font-weight: 700; color: var(--p411-ink); }
-.p411-home .p411-owner__head p { margin: 0; font-size: 15px; color: var(--p411-ink-2); }
-
-.p411-home .p411-feat4 { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-.p411-home .p411-feat4 > div {
-	background: #fff; border: 1px solid var(--p411-line); border-radius: 10px;
-	padding: 22px 18px; text-align: center;
-}
-.p411-home .p411-feat4 i {
-	display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 13px;
-	border-radius: 12px; background: var(--p411-green-w); color: var(--p411-green-dd);
-}
-.p411-home .p411-feat4 h3 { margin: 0 0 7px; font-size: 16px; font-weight: 700; color: var(--p411-ink); }
-.p411-home .p411-feat4 p { margin: 0; font-size: 14px; color: var(--p411-ink-2); }
-
-.p411-home .p411-owner__cta { text-align: center; margin-top: 28px; }
-.p411-home .p411-owner__cta .p411-btn { padding: 12px 28px; font-size: 15px; }
-
-/* ---- ad rows --------------------------------------------------------- */
-
-.p411-home .p411-adrow { margin: 0 0 30px; }
-.p411-home .p411-sidebar-ad { margin-bottom: 26px; }
-
-/* ---- responsive ------------------------------------------------------ */
-
-@media (max-width: 767px) {
-	.p411-home .p411-sec { margin-bottom: 30px; }
-	.p411-home .p411-sec__head h2 { font-size: 19px; }
-	.p411-home .p411-owner { padding: 32px 0; }
-	.p411-home .p411-owner__head h2 { font-size: 22px; }
-	.p411-home .p411-week__body { padding: 16px 16px 18px; }
-	.p411-home .p411-week__body h3 { font-size: 18px; }
-}
-
-@media (max-width: 480px) {
-	.p411-home .p411-cats { grid-template-columns: repeat(2, 1fr); }
-}
-
-/* The skyscraper is 295x600 and only makes sense beside a long column.
-   Once the sidebar stacks under the content it has nothing to sit against. */
-@media (max-width: 991px) {
-	.p411-home .ad-slot-rightpanelskyscraper { display: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.p411-home * { transition: none !important; animation: none !important; }
-}
-
-/* ---- grids + compact media rows -------------------------------------- */
-
-/* Three-up row for Featured. The theme's own 3-col grid is an ID
-   (#business-list), which can only appear once, so Newest keeps that and
-   Featured uses this. Both hold the same .lst-com-box card. */
-.p411-home .p411-grid3 {
-	display: grid; gap: 15px;
-	grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-}
-@media (max-width: 420px) { .p411-home .p411-grid3 { grid-template-columns: 1fr; } }
-
-/* Compact video / news row — the point of merging those two sections is to
-   stop them each eating a full-width band of large cards. */
-.p411-home .p411-media {
-	display: flex; gap: 12px; align-items: flex-start;
-	background: var(--p411-card); border: 1px solid var(--p411-line);
-	border-radius: 8px; padding: 10px; color: var(--p411-ink);
-}
-.p411-home .p411-media:hover { border-color: var(--p411-green); background: var(--p411-green-w); }
-.p411-home .p411-media__thumb {
-	flex: none; width: 96px; height: 68px; border-radius: 6px; overflow: hidden;
-	position: relative; background: var(--p411-green-w);
-}
-.p411-home .p411-media__thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.p411-home .p411-media__play {
-	position: absolute; inset: 0; display: grid; place-items: center;
-	background: rgba(38, 44, 30, .3); color: #fff;
-}
-.p411-home .p411-media__body { min-width: 0; }
-.p411-home .p411-media__body b {
-	display: block; font-size: 14px; font-weight: 600; line-height: 1.35; margin-bottom: 4px;
-}
-.p411-home .p411-media__body span {
-	display: block; font-size: 12.5px; line-height: 1.5; color: var(--p411-ink-2);
-}
-
-/* style.css line 2050 gives .hom-head `background-image: url(../images/banner4.jpg)`,
-   and that file does not exist — a 404 on every page that uses the header. The
-   gradient underneath it is what actually renders, so dropping the request here
-   costs nothing visually. Scoped to the homepage on purpose: style.css is shared
-   by ~200 views and fixing it there is a separate, wider change. */
-.p411-home .hom-head { background-image: none; }
 
 /* Sideways scroll on phones. Two causes in the theme's own header: .pop-menu
    computes 5px wider than the viewport, and .mob-me-all is a position:fixed
    off-canvas panel parked to the right of the fold. A fixed element ignores an
    ancestor's overflow, so this has to sit on <body> — which is why the scoping
-   class is on <body class="p411-home"> rather than on .full_wrapper.
-   Homepage-scoped on purpose: both rules live in the shared style.css and
-   fixing them there would touch every page on the site. */
-.p411-home { overflow-x: hidden; }
+   class is on <body class="p411-home"> rather than on .full_wrapper. */
+.p411-home { overflow-x: hidden; background: var(--cream); }
+.p411-home .full_wrapper { background: var(--cream) !important; }
+.p411-home .container { max-width: 1320px; }
 
-/* Card images. The theme paints .list-com-img with
-   linear-gradient(45deg, var(--primary-color), var(--accent-color)) — a navy
-   that both clashes with the logo green and shows through as a dark wedge
-   wherever the image doesn't fully cover. Recolour to the brand and make the
-   image fill its box. Scoped, so listing pages keep the theme's own look. */
-.p411-home .list-com-img { background: linear-gradient(135deg, #6BA935, #8CC63F); }
-.p411-home .list-com-img img { display: block; box-sizing: border-box; }
+.p411-home h1, .p411-home h2, .p411-home h3, .p411-home h4 { color: var(--nv); }
 
-/* Band around the category strip. It deliberately does not reuse the theme's
-   .category-tabs, which carries `display:none !important` below 768px — that
-   rule was written for the old hard-coded topic tabs, and this strip is a
-   responsive grid that earns its place on a phone. */
-.p411-home .p411-catstrip { background: #fff; border-bottom: 1px solid var(--p411-line); }
-.p411-home .p411-catstrip > .container { padding-top: 16px; padding-bottom: 16px; }
+/* ===========================================================================
+ * 1. BUTTONS + small shared bits
+ * ======================================================================== */
+
+.p411-home .p411-btn {
+	display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+	padding: 10px 20px; border-radius: 999px;
+	font-size: 14px; font-weight: 600; line-height: 1.4; text-align: center;
+	border: 1px solid transparent; cursor: pointer; white-space: nowrap;
+	background: var(--gr); color: #fff;
+	transition: background .16s ease, border-color .16s ease, color .16s ease;
+}
+.p411-home a.p411-btn, .p411-home a.p411-btn:hover { text-decoration: none; color: #fff; }
+.p411-home .p411-btn:hover { background: var(--gr-d); }
+
+.p411-home .p411-btn--navy { background: var(--nv); }
+.p411-home .p411-btn--navy:hover { background: var(--nv-l); }
+.p411-home .p411-btn--bu { background: var(--bu); }
+.p411-home .p411-btn--bu:hover { background: var(--bu-l); }
+
+.p411-home .p411-btn--ghost { background: #fff; color: var(--nv); border-color: var(--line); }
+.p411-home a.p411-btn--ghost { color: var(--nv); }
+.p411-home .p411-btn--ghost:hover { background: var(--gr-w); border-color: var(--gr); color: var(--gr-d); }
+
+.p411-home .p411-btn--sm { padding: 7px 15px; font-size: 13px; }
+.p411-home .p411-btn--lg { padding: 13px 28px; font-size: 15.5px; }
+.p411-home .p411-btn--block { width: 100%; }
+
+/* section frame */
+.p411-home .p411-sec { margin-bottom: 34px; }
+.p411-home .p411-sec__head {
+	display: flex; align-items: flex-end; justify-content: space-between;
+	gap: 12px; flex-wrap: wrap; margin-bottom: 18px;
+}
+.p411-home .p411-sec__head h2 {
+	margin: 0; font-size: 23px; font-weight: 700; line-height: 1.25;
+	position: relative; padding-bottom: 10px; color: var(--nv);
+}
+.p411-home .p411-sec__head h2::after {
+	content: ""; position: absolute; left: 0; bottom: 0;
+	width: 44px; height: 3px; border-radius: 2px; background: var(--bu);
+}
+.p411-home .p411-more {
+	font-size: 13.5px; font-weight: 600; color: var(--gr-d); white-space: nowrap;
+}
+.p411-home .p411-more:hover { color: var(--gr-d); text-decoration: underline; }
+
+/* empty states — never a big blank white box */
+.p411-home .p411-empty {
+	background: var(--gr-w); border: 1px dashed #CFE0AE;
+	border-radius: var(--r-s); padding: 22px 18px; text-align: center;
+}
+.p411-home .p411-empty h3 { margin: 0 0 6px; font-size: 15.5px; font-weight: 700; color: var(--nv); }
+.p411-home .p411-empty p { margin: 0 auto; max-width: 44ch; font-size: 13.5px; color: var(--ink-2); }
+.p411-home .p411-empty .p411-btn { margin-top: 13px; }
+.p411-home .p411-empty--bu { background: var(--bu-w); border-color: #E7CBD6; }
+
+/* category / status flags */
+.p411-home .p411-tag {
+	display: inline-block; padding: 3px 9px; border-radius: 4px;
+	font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+	background: var(--nv); color: #fff;
+}
+.p411-home .p411-tag--green { background: var(--gr-d); }
+.p411-home .p411-tag--bu    { background: var(--bu); }
+
+/* ===========================================================================
+ * 2. HEADER
+ * ---------------------------------------------------------------------------
+ * The theme's markup is kept as-is (.hom-top / .hom-nav / .pop-menu /
+ * .mob-me-all) so assets/js/custom.js keeps driving the mega menu and the
+ * off-canvas panel. Only the paint changes: a solid navy bar in normal flow
+ * instead of a transparent one floating over a green gradient.
+ * ======================================================================== */
+
+.p411-home .hom-head {
+	padding: 0 !important; margin-bottom: 0 !important;
+	background: none; background-image: none; position: relative;
+}
+/* style.css paints .hom-head with a blue overlay (:before) and a cloud strip
+   (:after) that belong to the old banner. Both are dropped here. */
+.p411-home .hom-head::before,
+.p411-home .hom-head::after { content: none !important; display: none !important; }
+
+.p411-home .hom-top {
+	position: static !important;
+	padding: 10px 0 !important;
+	background: var(--nv);
+	box-shadow: 0 1px 0 rgba(255, 255, 255, .06);
+	border-bottom: 3px solid var(--gr);
+}
+.p411-home .hom-top.dmact { background: var(--nv-d); }
+
+.p411-home .hom-nav { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.p411-home .hom-nav .ic-logo { width: 168px; max-width: 46vw; display: block; }
+.p411-home .top-log { flex: none; line-height: 0; }
+
+/* "Explore" opens the theme's mega menu */
+.p411-home .hom-nav .menu { flex: none; cursor: pointer; }
+.p411-home .hom-nav .menu h4 {
+	margin: 0; display: flex; align-items: center; gap: 6px;
+	font-size: 14.5px; font-weight: 600; color: #fff;
+	padding: 8px 12px; border-radius: 8px;
+	transition: background .16s ease;
+}
+.p411-home .hom-nav .menu h4::after {
+	content: ""; width: 7px; height: 7px; margin-top: -3px;
+	border-right: 2px solid var(--gr-l); border-bottom: 2px solid var(--gr-l);
+	transform: rotate(45deg);
+}
+.p411-home .hom-nav .menu:hover h4 { background: rgba(255, 255, 255, .1); }
+
+/* The header search box is hidden on the homepage — the hero carries the
+   search — but it stays in the DOM because the theme's bottom quick-bar
+   toggles `.top-ser-act` on it for the phone search. */
+.p411-home .top-ser { display: none; }
+.p411-home .top-ser.top-ser-act {
+	display: block; float: none; width: 100%; order: 9; padding: 8px 0 2px;
+}
+.p411-home .top-ser.top-ser-act form ul { display: flex; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.p411-home .top-ser.top-ser-act form ul li.sr-sea { flex: 1 1 auto; min-width: 0; }
+.p411-home .top-ser.top-ser-act input[type="text"] {
+	width: 100%; height: 42px; padding: 0 14px; border: 0; border-radius: 8px; font-size: 14px;
+}
+
+.p411-home .hom-nav .bl { margin: 0 0 0 auto; display: flex; align-items: center; gap: 4px; float: none; }
+.p411-home .hom-nav .bl li { float: none; margin: 0; list-style: none; }
+.p411-home .hom-nav .bl li a {
+	display: inline-block; line-height: 1.4; padding: 9px 13px;
+	font-family: inherit; font-size: 14px; font-weight: 600; color: #fff; border-radius: 8px;
+}
+.p411-home .hom-nav .bl li a:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+.p411-home .hom-nav .bl li:last-child a {
+	background: var(--gr); border: 1px solid var(--gr);
+	padding: 10px 20px; margin-left: 6px; border-radius: 999px;
+}
+.p411-home .hom-nav .bl li:last-child a:hover { background: var(--gr-d); border-color: var(--gr-d); }
+
+.p411-home .pop-menu { margin-top: 14px; border-radius: 0 0 var(--r) var(--r); }
+.p411-home .pop-menu .pmenu-cat h4,
+.p411-home .pop-menu .pmenu-spri h4 { color: var(--nv); }
+
+@media (max-width: 991px) {
+	.p411-home .hom-nav .bl { display: none; }
+	.p411-home .hom-nav .menu { margin-left: auto; }
+	.p411-home .hom-nav .ic-logo { width: 140px; }
+}
+@media (max-width: 575px) {
+	.p411-home .hom-nav .menu h4 { font-size: 13.5px; padding: 7px 8px; }
+	.p411-home .hom-nav .ic-logo { width: 124px; }
+}
+
+/* ===========================================================================
+ * 3. HERO
+ * ---------------------------------------------------------------------------
+ * Navy at the top blending into burgundy, over the Pearland dusk illustration
+ * (assets/images/home/hero-pearland.svg), with a dark overlay so the type
+ * stays readable. Green appears once, behind the search bar.
+ * ======================================================================== */
+
+.p411-home .p411-hero {
+	position: relative; overflow: hidden;
+	padding: 66px 0 62px;
+	background: linear-gradient(168deg, var(--nv-d) 0%, var(--nv) 42%, #4A2450 74%, var(--bu) 100%);
+}
+.p411-home .p411-hero__art {
+	position: absolute; inset: 0;
+	background: url("../images/home/hero-pearland.svg") center bottom / cover no-repeat;
+	opacity: .72;
+}
+/* the dark overlay the brief asks for — the headline sits on this, not on the
+   illustration */
+.p411-home .p411-hero::after {
+	content: ""; position: absolute; inset: 0;
+	background: linear-gradient(180deg, rgba(15, 17, 45, .72) 0%, rgba(23, 20, 52, .42) 50%, rgba(78, 26, 43, .58) 100%);
+}
+.p411-home .p411-hero > .container { position: relative; z-index: 2; }
+
+.p411-home .p411-hero__inner { max-width: 780px; margin: 0 auto; text-align: center; color: #fff; }
+.p411-home .p411-hero__inner h1 {
+	margin: 0 0 14px; color: #fff;
+	font-size: 46px; font-weight: 700; line-height: 1.14; letter-spacing: -0.5px;
+	text-shadow: 0 2px 18px rgba(0, 0, 0, .35);
+}
+.p411-home .p411-hero__inner > p {
+	margin: 0 auto 26px; max-width: 640px;
+	font-size: 16.5px; line-height: 1.6; color: rgba(255, 255, 255, .9);
+}
+
+/* search — the one place green is used as a ground in the hero */
+.p411-home .p411-hero__search { position: relative; max-width: 660px; margin: 0 auto; }
+.p411-home .p411-hero__search::before {
+	content: ""; position: absolute; inset: -12px -8px;
+	border-radius: 999px; background: rgba(121, 184, 42, .17);
+	filter: blur(14px); pointer-events: none;
+}
+.p411-home .p411-hero__search .p411-hero__field { position: relative; z-index: 1; }
+.p411-home .p411-hero__search input[type="text"] {
+	width: 100%; height: 58px; padding: 0 68px 0 22px;
+	border: 2px solid rgba(121, 184, 42, .55); border-radius: 999px;
+	background: #fff; color: var(--ink); font-size: 15.5px;
+	box-shadow: 0 14px 34px rgba(10, 12, 34, .28);
+}
+.p411-home .p411-hero__search input[type="text"]:focus {
+	outline: none; border-color: var(--gr);
+	box-shadow: 0 14px 34px rgba(10, 12, 34, .28), 0 0 0 4px rgba(121, 184, 42, .28);
+}
+.p411-home .p411-hero__search button {
+	position: absolute; right: 6px; top: 6px; z-index: 2;
+	width: 46px; height: 46px; border: 0; border-radius: 50%;
+	background: var(--gr); color: #fff; display: grid; place-items: center;
+	transition: background .16s ease;
+}
+.p411-home .p411-hero__search button:hover { background: var(--gr-d); }
+
+.p411-home .p411-hero__popular {
+	margin: 18px 0 0; font-size: 13.5px; color: rgba(255, 255, 255, .82);
+	display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; align-items: baseline;
+}
+.p411-home .p411-hero__popular b { font-weight: 600; }
+.p411-home .p411-hero__popular a { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+.p411-home .p411-hero__popular a:hover { color: var(--gr-l); }
+
+.p411-home .p411-hero__cta {
+	margin-top: 28px; display: flex; flex-wrap: wrap; gap: 14px; justify-content: center;
+}
+.p411-home .p411-hero__cta .p411-btn { box-shadow: 0 8px 22px rgba(10, 12, 34, .3); }
+/* The foot of the hero is burgundy, so the burgundy CTA needs an edge to
+   separate from it. */
+.p411-home .p411-hero__cta .p411-btn--bu { border-color: rgba(255, 255, 255, .4); }
+
+@media (max-width: 767px) {
+	.p411-home .p411-hero { padding: 44px 0 42px; }
+	.p411-home .p411-hero__inner h1 { font-size: 31px; }
+	.p411-home .p411-hero__inner > p { font-size: 15px; margin-bottom: 22px; }
+	.p411-home .p411-hero__search input[type="text"] { height: 52px; font-size: 15px; padding-right: 60px; }
+	.p411-home .p411-hero__search button { width: 42px; height: 42px; }
+	.p411-home .p411-hero__cta .p411-btn { flex: 1 1 210px; }
+}
+@media (max-width: 420px) {
+	.p411-home .p411-hero__inner h1 { font-size: 26px; }
+	.p411-home .p411-hero__popular { font-size: 12.5px; }
+}
+
+/* ===========================================================================
+ * 4. CATEGORY STRIP
+ * ---------------------------------------------------------------------------
+ * Whole card is the link, the count is quiet, and the accent colour rotates
+ * navy / green / burgundy so eight tiles don't read as one green block.
+ * Deliberately NOT the theme's .category-tabs, which carries
+ * `display:none !important` below 768px — that rule was written for the old
+ * hard-coded topic tabs; this strip earns its place on a phone.
+ * ======================================================================== */
+
+.p411-home .p411-catstrip { background: #fff; border-bottom: 1px solid var(--line); }
+.p411-home .p411-catstrip > .container { padding-top: 22px; padding-bottom: 20px; }
+
+.p411-home .p411-cats {
+	display: grid; gap: 12px;
+	grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+}
+.p411-home .p411-cat {
+	display: block; text-align: center; padding: 16px 10px 14px;
+	background: var(--gray); border: 1px solid transparent;
+	border-radius: var(--r); color: var(--nv);
+	transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease;
+}
+.p411-home .p411-cat:hover {
+	transform: translateY(-3px); box-shadow: var(--sh-h);
+	color: var(--nv); text-decoration: none;
+}
+.p411-home .p411-cat i {
+	display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 10px;
+	border-radius: 14px; background: #fff;
+}
+.p411-home .p411-cat b {
+	display: block; font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--nv);
+}
+.p411-home .p411-cat span {
+	display: block; margin-top: 4px; font-size: 11px; font-weight: 400; color: var(--ink-3);
+}
+
+/* three accents, applied round-robin in the view */
+.p411-home .p411-cat--green  { background: var(--gr-w); }
+.p411-home .p411-cat--green i  { color: var(--gr-d); }
+.p411-home .p411-cat--green:hover  { border-color: var(--gr); }
+.p411-home .p411-cat--bu     { background: var(--bu-w); }
+.p411-home .p411-cat--bu i     { color: var(--bu); }
+.p411-home .p411-cat--bu:hover     { border-color: var(--bu-l); }
+.p411-home .p411-cat--navy   { background: var(--nv-w); }
+.p411-home .p411-cat--navy i   { color: var(--nv); }
+.p411-home .p411-cat--navy:hover   { border-color: var(--nv-l); }
+
+.p411-home .p411-catstrip__more { margin-top: 14px; text-align: center; }
+
+@media (max-width: 575px) { .p411-home .p411-cats { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
+
+/* ===========================================================================
+ * 5. PAGE SHELL — main column + sidebar
+ * ======================================================================== */
+
+.p411-home .p411-main { padding: 34px 0 10px; }
+.p411-home .p411-shell { display: grid; grid-template-columns: minmax(0, 1fr); gap: 30px; }
+@media (min-width: 992px) {
+	.p411-home .p411-shell { grid-template-columns: minmax(0, 1fr) 330px; gap: 30px; }
+}
+.p411-home .p411-col { min-width: 0; }
+.p411-home .p411-rail { min-width: 0; }
+
+/* ===========================================================================
+ * 6. BUSINESS CARDS
+ * ---------------------------------------------------------------------------
+ * One card, used by Featured and by Explore. Equal height by construction:
+ * the media box has a fixed aspect ratio, the body is a flex column and the
+ * footer is pushed to the bottom, so a listing with no description does not
+ * produce a card half the height of its neighbour (or, as before, one nearly
+ * a screen tall).
+ * ======================================================================== */
+
+.p411-home .p411-grid { display: grid; gap: 18px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.p411-home .p411-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 900px) { .p411-home .p411-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+	.p411-home .p411-grid,
+	.p411-home .p411-grid--2 { grid-template-columns: minmax(0, 1fr); }
+}
+
+.p411-home .p411-card {
+	display: flex; flex-direction: column; height: 100%;
+	background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+	overflow: hidden; box-shadow: var(--sh);
+	transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.p411-home .p411-card:hover { transform: translateY(-4px); box-shadow: var(--sh-h); border-color: #D6DAE4; }
+
+.p411-home .p411-card__media {
+	position: relative; display: block; aspect-ratio: 16 / 10;
+	background: var(--gray); overflow: hidden; line-height: 0;
+}
+.p411-home .p411-card__media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.p411-home .p411-card__cat,
+.p411-home .p411-card__flag {
+	position: absolute; top: 10px;
+	padding: 4px 9px; border-radius: 4px; color: #fff;
+	font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+	line-height: 1.4;
+}
+/* The two badges share one row on a card barely 300px wide, so the category
+   — the longer of the two, and the one that can be any length an operator
+   types — is the one that gives way. */
+.p411-home .p411-card__cat {
+	left: 10px; max-width: calc(100% - 108px);
+	background: rgba(32, 36, 91, .92);
+	white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.p411-home .p411-card__flag { right: 10px; background: var(--bu); }
+.p411-home .p411-card__flag--new { background: var(--gr-d); }
+.p411-home .p411-card__flag--verified { background: var(--nv); }
+
+.p411-home .p411-card__body {
+	display: flex; flex-direction: column; flex: 1 1 auto; gap: 7px; padding: 15px 16px 16px;
+}
+.p411-home .p411-card__body h3 { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.3; }
+.p411-home .p411-card__body h3 a { color: var(--nv); }
+.p411-home .p411-card__body h3 a:hover { color: var(--gr-d); text-decoration: none; }
+
+.p411-home .p411-card__rate { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-3); }
+.p411-home .p411-card__stars { color: #E8A33D; letter-spacing: 1px; font-size: 13px; line-height: 1; }
+
+.p411-home .p411-card__desc {
+	margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--ink-2);
+	display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.p411-home .p411-card__meta {
+	display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--ink-3);
+}
+.p411-home .p411-card__meta span { display: inline-flex; align-items: center; gap: 5px; }
+.p411-home .p411-card__meta svg { color: var(--gr-d); flex: none; }
+
+.p411-home .p411-card__foot {
+	margin-top: auto; padding-top: 12px; display: flex; flex-wrap: wrap; gap: 8px;
+}
+
+/* Featured is the paid placement, so it reads as one: burgundy top rule and a
+   slightly stronger frame. */
+.p411-home .p411-card--featured { border-color: #E2CBD5; }
+.p411-home .p411-card--featured::before {
+	content: ""; display: block; height: 3px;
+	background: linear-gradient(90deg, var(--bu), var(--bu-l));
+}
+
+/* Explore rows are compact — six of them must not out-weigh the three
+   featured cards above. */
+.p411-home .p411-card--compact .p411-card__media { aspect-ratio: 16 / 9; }
+.p411-home .p411-card--compact .p411-card__body { padding: 12px 13px 13px; gap: 5px; }
+.p411-home .p411-card--compact .p411-card__body h3 { font-size: 14.5px; }
+.p411-home .p411-card--compact .p411-card__desc { font-size: 12.5px; -webkit-line-clamp: 2; }
+
+.p411-home .p411-seeall { margin-top: 22px; text-align: center; }
+
+/* ===========================================================================
+ * 7. HOTSPOT + BUSINESS OF THE WEEK (sold placements)
+ * ======================================================================== */
+
+.p411-home .p411-hotspot {
+	background: var(--card); border: 1px solid var(--line);
+	border-radius: var(--r); padding: 13px 15px; box-shadow: var(--sh);
+}
+.p411-home .p411-hotspot__head { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
+.p411-home .p411-hotspot__head h2 {
+	margin: 0; font-size: 12.5px; font-weight: 700; letter-spacing: .1em;
+	text-transform: uppercase; color: var(--ink-2);
+}
+.p411-home .p411-hotspot__head svg { color: var(--bu); flex: none; }
+.p411-home .p411-hotspot__head .p411-more { margin-left: auto; }
+
+.p411-home .p411-hotspot__rail {
+	display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin;
+}
+.p411-home .p411-hotspot__item {
+	flex: 0 0 auto; width: 150px; text-align: center;
+	border: 1px solid var(--line); border-radius: var(--r-s); padding: 10px 8px;
+	background: #fff; color: var(--nv);
+}
+.p411-home .p411-hotspot__item:hover { border-color: var(--gr); background: var(--gr-w); text-decoration: none; }
+.p411-home .p411-hotspot__item img { display: block; width: 100%; height: 46px; object-fit: contain; margin-bottom: 7px; }
+.p411-home .p411-hotspot__mark {
+	display: grid; place-items: center; height: 46px; margin-bottom: 7px;
+	color: var(--nv); opacity: .42;
+}
+.p411-home .p411-hotspot__item b {
+	display: block; font-size: 12px; font-weight: 600; line-height: 1.3;
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.p411-home .p411-hotspot__item span { display: block; margin-top: 2px; font-size: 10.5px; color: var(--ink-3); }
+
+.p411-home .p411-week {
+	display: grid; grid-template-columns: 1fr;
+	background: var(--card); border: 1px solid #E2CBD5; border-radius: var(--r);
+	overflow: hidden; box-shadow: var(--sh);
+}
+.p411-home .p411-week__media { position: relative; background: var(--gray); }
+.p411-home .p411-week__media img { display: block; width: 100%; height: 100%; min-height: 200px; object-fit: cover; }
+.p411-home .p411-week__flag {
+	position: absolute; top: 12px; left: 12px;
+	background: var(--bu); color: #fff;
+	font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+	padding: 5px 11px; border-radius: 4px;
+}
+.p411-home .p411-week__body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 9px; }
+.p411-home .p411-week__cat {
+	font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--bu);
+}
+.p411-home .p411-week__body h3 { margin: 0; font-size: 21px; font-weight: 700; line-height: 1.25; }
+.p411-home .p411-week__body p { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--ink-2); }
+.p411-home .p411-week__foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+.p411-home .p411-week__until { font-size: 12px; color: var(--ink-3); }
+@media (min-width: 768px) { .p411-home .p411-week { grid-template-columns: 42% 1fr; } }
+
+/* ===========================================================================
+ * 8. DEALS + EVENTS
+ * ======================================================================== */
+
+.p411-home .p411-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 26px; }
+@media (min-width: 760px) { .p411-home .p411-split { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.p411-home .p411-subhead {
+	margin: 0 0 13px; font-size: 15px; font-weight: 700; color: var(--nv);
+	display: flex; align-items: center; gap: 8px;
+}
+.p411-home .p411-subhead svg { flex: none; }
+.p411-home .p411-subhead .p411-more { margin-left: auto; }
+
+.p411-home .p411-stack { display: flex; flex-direction: column; gap: 12px; }
+
+/* --- deal ------------------------------------------------------------- */
+.p411-home .p411-deal {
+	display: flex; gap: 12px; align-items: flex-start;
+	background: var(--card); border: 1px solid var(--line);
+	border-left: 4px solid var(--bu); border-radius: var(--r-s);
+	padding: 12px 13px; box-shadow: var(--sh);
+}
+.p411-home .p411-deal__logo {
+	flex: none; width: 56px; height: 56px; border-radius: var(--r-s);
+	overflow: hidden; background: var(--gray); display: grid; place-items: center;
+}
+.p411-home .p411-deal__logo img { width: 100%; height: 100%; object-fit: cover; }
+.p411-home .p411-deal__body { min-width: 0; flex: 1 1 auto; }
+.p411-home .p411-deal__off {
+	display: inline-block; background: var(--bu); color: #fff;
+	padding: 2px 8px; border-radius: 4px;
+	font-size: 11.5px; font-weight: 700; letter-spacing: .04em;
+}
+.p411-home .p411-deal__name { display: block; margin-top: 6px; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.p411-home .p411-deal__name a { color: var(--nv); }
+.p411-home .p411-deal__name a:hover { color: var(--bu); text-decoration: none; }
+.p411-home .p411-deal__meta {
+	display: flex; flex-wrap: wrap; gap: 2px 10px;
+	margin-top: 4px; font-size: 12px; color: var(--ink-3);
+}
+.p411-home .p411-deal__exp { color: var(--bu-l); font-weight: 600; }
+.p411-home .p411-deal__cta { margin-top: 9px; }
+
+/* --- event ------------------------------------------------------------ */
+.p411-home .p411-event {
+	display: flex; gap: 12px;
+	background: var(--card); border: 1px solid var(--line); border-radius: var(--r-s);
+	padding: 12px 13px; box-shadow: var(--sh);
+}
+.p411-home .p411-event__date {
+	flex: none; width: 52px; text-align: center; border-radius: var(--r-s);
+	overflow: hidden; background: var(--bu-w); border: 1px solid #E7CBD6;
+}
+.p411-home .p411-event__date i {
+	display: block; font-style: normal; background: var(--bu); color: #fff;
+	font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; padding: 3px 0;
+}
+.p411-home .p411-event__date b { display: block; padding: 5px 0 6px; font-size: 19px; font-weight: 700; color: var(--bu); }
+.p411-home .p411-event__body { min-width: 0; flex: 1 1 auto; }
+.p411-home .p411-event__body b { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.p411-home .p411-event__body b a { color: var(--nv); }
+.p411-home .p411-event__body b a:hover { color: var(--bu); text-decoration: none; }
+.p411-home .p411-event__body span {
+	display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12.5px; color: var(--ink-2);
+}
+.p411-home .p411-event__body span svg { color: var(--ink-3); flex: none; }
+
+.p411-home .p411-mini {
+	display: inline-flex; align-items: center; gap: 5px; margin-top: 9px;
+	font-size: 12.5px; font-weight: 600; color: var(--gr-d);
+}
+.p411-home .p411-mini:hover { color: var(--gr-d); text-decoration: underline; }
+.p411-home .p411-mini svg { flex: none; }
+
+/* ===========================================================================
+ * 9. NEWS + VIDEOS
+ * ---------------------------------------------------------------------------
+ * One lead story with a big image, four supporting rows beside it. Navy
+ * headlines, burgundy "News" label, green "Community" label — the old bright
+ * blue links belonged to the theme, not the brand.
+ * ======================================================================== */
+
+.p411-home .p411-news { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+@media (min-width: 860px) { .p411-home .p411-news { grid-template-columns: 1.05fr 1fr; } }
+
+.p411-home .p411-news__lead {
+	display: flex; flex-direction: column; height: 100%;
+	background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+	overflow: hidden; box-shadow: var(--sh); color: var(--ink);
+	transition: transform .18s ease, box-shadow .18s ease;
+}
+.p411-home .p411-news__lead:hover { transform: translateY(-3px); box-shadow: var(--sh-h); text-decoration: none; color: var(--ink); }
+.p411-home .p411-news__media { display: block; aspect-ratio: 16 / 9; background: var(--gray); line-height: 0; }
+.p411-home .p411-news__media img { width: 100%; height: 100%; object-fit: cover; }
+.p411-home .p411-news__lead .p411-news__text { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 8px; }
+.p411-home .p411-news__lead b { font-size: 18px; font-weight: 700; line-height: 1.32; color: var(--nv); }
+.p411-home .p411-news__lead p {
+	margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--ink-2);
+	display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.p411-home .p411-news__rest { display: flex; flex-direction: column; gap: 12px; }
+/* flex: 1 1 0 makes the four rows share the lead card's height exactly;
+   centring keeps a one-line headline from leaving a hole under itself. */
+.p411-home .p411-news__item {
+	display: flex; gap: 12px; align-items: center;
+	background: var(--card); border: 1px solid var(--line); border-radius: var(--r-s);
+	padding: 10px; color: var(--ink); box-shadow: var(--sh); flex: 1 1 0;
+}
+.p411-home .p411-news__item:hover { border-color: #D6DAE4; text-decoration: none; color: var(--ink); }
+.p411-home .p411-news__thumb {
+	flex: none; width: 104px; aspect-ratio: 4 / 3; border-radius: 6px;
+	overflow: hidden; background: var(--gray); position: relative; line-height: 0;
+}
+.p411-home .p411-news__thumb img { width: 100%; height: 100%; object-fit: cover; }
+.p411-home .p411-news__body { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.p411-home .p411-news__body b {
+	font-size: 13.5px; font-weight: 600; line-height: 1.4; color: var(--nv);
+	display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.p411-home .p411-news__date { font-size: 11.5px; color: var(--ink-3); }
+
+/* Both are flex columns, so the label would otherwise stretch full width. */
+.p411-home .p411-news__text .p411-tag,
+.p411-home .p411-news__body .p411-tag { align-self: flex-start; }
+
+.p411-home .p411-play {
+	position: absolute; inset: 0; display: grid; place-items: center;
+	background: rgba(23, 26, 69, .35); color: #fff;
+}
+
+
+.p411-home .p411-videos { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 6px; }
+@media (max-width: 760px) { .p411-home .p411-videos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .p411-home .p411-videos { grid-template-columns: minmax(0, 1fr); } }
+.p411-home .p411-video {
+	display: block; background: var(--card); border: 1px solid var(--line);
+	border-radius: var(--r-s); overflow: hidden; box-shadow: var(--sh); color: var(--ink);
+}
+.p411-home .p411-video:hover { border-color: #D6DAE4; text-decoration: none; color: var(--ink); }
+.p411-home .p411-video__thumb { position: relative; display: block; aspect-ratio: 16 / 9; background: var(--gray); line-height: 0; }
+.p411-home .p411-video__thumb img { width: 100%; height: 100%; object-fit: cover; }
+.p411-home .p411-video b {
+	display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+	padding: 11px 12px 12px; font-size: 13.5px; font-weight: 600; line-height: 1.4; color: var(--nv);
+}
+
+/* Empty media, drawn rather than served. The artwork placeholders carry a
+   caption, which turns to grey mush in a 100px thumbnail; an icon in a tinted
+   box reads at any size. Declared after .p411-news__thumb / .p411-video__thumb
+   so its `display: grid` wins over their `display: block`. */
+.p411-home .p411-thumb--empty {
+	display: grid; place-items: center;
+	background: var(--gray); color: var(--nv);
+	border: 1px solid var(--line);
+}
+.p411-home .p411-thumb--empty svg { opacity: .38; }
+
+/* ===========================================================================
+ * 10. SIDEBAR
+ * ======================================================================== */
+
+.p411-home .p411-rail__card {
+	background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+	padding: 18px; margin-bottom: 22px; box-shadow: var(--sh);
+}
+.p411-home .p411-rail__title {
+	margin: 0 0 15px; font-size: 16.5px; font-weight: 700; color: var(--nv);
+	position: relative; padding-bottom: 9px;
+}
+.p411-home .p411-rail__title::after {
+	content: ""; position: absolute; left: 0; bottom: 0;
+	width: 34px; height: 3px; border-radius: 2px; background: var(--gr);
+}
+.p411-home .p411-rail__foot { margin-top: 13px; display: block; font-size: 13px; font-weight: 600; color: var(--gr-d); }
+.p411-home .p411-rail__foot:hover { text-decoration: underline; color: var(--gr-d); }
+
+/* sidebar category list */
+.p411-home .p411-catlist { list-style: none; margin: 0; padding: 0; }
+.p411-home .p411-catlist li { margin: 0; padding: 0; list-style: none; background: none; }
+.p411-home .p411-catlist li + li { border-top: 1px solid var(--line); }
+.p411-home .p411-catlist a {
+	display: flex; align-items: center; gap: 10px; padding: 9px 0;
+	font-size: 13.5px; font-weight: 500; color: var(--ink);
+}
+.p411-home .p411-catlist a:hover { color: var(--gr-d); text-decoration: none; }
+.p411-home .p411-catlist svg { flex: none; color: var(--gr-d); }
+.p411-home .p411-catlist em { margin-left: auto; font-style: normal; font-size: 11.5px; color: var(--ink-3); }
+
+/* --- weather ---------------------------------------------------------- */
+.p411-home .p411-weather__days { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.p411-home .p411-weather__day {
+	background: var(--nv-w); border-radius: var(--r-s); padding: 10px 4px 9px; text-align: center;
+}
+.p411-home .p411-weather__day--extra { display: none; }
+.p411-home .p411-weather.is-open .p411-weather__day--extra { display: block; }
+.p411-home .p411-weather__label { font-size: 12px; font-weight: 700; color: var(--nv); }
+.p411-home .p411-weather__icon { height: 30px; margin: 3px 0; }
+.p411-home .p411-weather__temp { font-size: 13px; font-weight: 700; color: var(--gr-d); }
+.p411-home .p411-weather__desc { font-size: 10.5px; color: var(--ink-3); line-height: 1.3; }
+
+.p411-home .p411-weather__now {
+	display: flex; align-items: center; gap: 14px; margin-top: 14px;
+	padding-top: 14px; border-top: 1px solid var(--line);
+}
+.p411-home .p411-weather__big { font-size: 34px; font-weight: 700; color: var(--nv); line-height: 1; }
+.p411-home .p411-weather__cond { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.p411-home .p411-weather__sub { font-size: 11.5px; color: var(--ink-3); line-height: 1.5; margin-top: 3px; }
+.p411-home .p411-weather__stamp {
+	font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+}
+.p411-home .p411-weather__more {
+	margin-top: 13px; padding: 0; border: 0; background: none;
+	font-size: 13px; font-weight: 600; color: var(--gr-d); cursor: pointer;
+}
+.p411-home .p411-weather__more:hover { text-decoration: underline; }
+.p411-home .p411-weather__err {
+	font-size: 13px; color: var(--bu); background: var(--bu-w);
+	border-radius: var(--r-s); padding: 12px 14px;
+}
+
+/* ===========================================================================
+ * 11. AD ZONES
+ * ---------------------------------------------------------------------------
+ * "Sponsored" stays small, the box never leaves a big empty gap, and an
+ * unsold zone either collapses (the view passes $slot_fallback = false) or
+ * carries a house creative in one of four palettes.
+ * ======================================================================== */
+
+/* The spacing belongs to the ad, not to its wrapper. Four of the seven zones
+   render nothing when unsold ($slot_fallback = false); with the margin on the
+   wrapper each of those still left a gap behind, which is exactly the "large
+   empty space above and below the ads" the brief called out. An empty wrapper
+   now contributes zero. (`:empty` would not help — PHP leaves a whitespace
+   text node inside.) */
+.p411-home .p411-adrow,
+.p411-home .p411-sidebar-ad { margin: 0; }
+.p411-home .p411-adrow .ad-slot { margin: 0 0 30px; }
+.p411-home .p411-adrow--top .ad-slot { margin: 22px 0 0; }
+.p411-home .p411-sidebar-ad .ad-slot { margin: 0 0 22px; }
+.p411-home .ad-slot { margin: 0; }
+.p411-home .ad-slot__label {
+	font-size: 9.5px; letter-spacing: .16em; color: var(--ink-3); margin-bottom: 6px;
+}
+.p411-home .ad-slot__link { border-color: var(--line); background: var(--gray); border-radius: var(--r); }
+.p411-home .ad-slot__link:hover { border-color: #D6DAE4; }
+
+/* The skyscraper is 295x600 and only makes sense beside a long column. Once
+   the sidebar stacks under the content it has nothing to sit against. */
+@media (max-width: 991px) { .p411-home .ad-slot-rightpanelskyscraper { display: none; } }
+
+/* ===========================================================================
+ * 12. OWNER BAND (cream)
+ * ======================================================================== */
+
+.p411-home .p411-owner {
+	background: var(--cream); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+	padding: 46px 0;
+}
+.p411-home .p411-owner__head { text-align: center; max-width: 74ch; margin: 0 auto 30px; }
+.p411-home .p411-owner__head h2 { margin: 0 0 10px; font-size: 27px; font-weight: 700; }
+.p411-home .p411-owner__head p { margin: 0; font-size: 15px; line-height: 1.65; color: var(--ink-2); }
+
+.p411-home .p411-feat4 { display: grid; gap: 16px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .p411-home .p411-feat4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px)  { .p411-home .p411-feat4 { grid-template-columns: minmax(0, 1fr); } }
+
+.p411-home .p411-feat {
+	display: flex; gap: 14px; align-items: flex-start;
+	background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 18px 16px;
+}
+.p411-home .p411-feat i {
+	flex: none; display: grid; place-items: center; width: 48px; height: 48px;
+	border-radius: 50%; color: #fff;
+}
+.p411-home .p411-feat--green i { background: var(--gr); }
+.p411-home .p411-feat--bu i    { background: var(--bu); }
+.p411-home .p411-feat--navy i  { background: var(--nv); }
+.p411-home .p411-feat h3 { margin: 0 0 5px; font-size: 15.5px; font-weight: 700; }
+.p411-home .p411-feat p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.p411-home .p411-feat a { font-size: 13px; font-weight: 600; color: var(--gr-d); }
+.p411-home .p411-feat a:hover { text-decoration: underline; color: var(--gr-d); }
+
+.p411-home .p411-owner__cta { margin-top: 26px; text-align: center; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* ===========================================================================
+ * 13. NEWSLETTER BAND (burgundy)
+ * ======================================================================== */
+
+.p411-home .p411-signup { background: linear-gradient(100deg, var(--bu-d), var(--bu) 55%, var(--bu-l)); padding: 26px 0; }
+.p411-home .p411-signup__row {
+	display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+}
+.p411-home .p411-signup__copy { display: flex; align-items: center; gap: 14px; color: #fff; min-width: 0; }
+.p411-home .p411-signup__copy svg { flex: none; opacity: .85; }
+.p411-home .p411-signup__copy p { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
+.p411-home .p411-signup__copy span { display: block; font-size: 13px; font-weight: 400; opacity: .82; }
+
+.p411-home .p411-signup__form { display: flex; gap: 8px; flex: 0 1 460px; }
+.p411-home .p411-signup__form input[type="email"] {
+	flex: 1 1 auto; min-width: 0; height: 44px; padding: 0 16px;
+	border: 1px solid rgba(255, 255, 255, .35); border-radius: 8px;
+	background: #fff; color: var(--ink); font-size: 14px;
+}
+.p411-home .p411-signup__form input[type="email"]:focus {
+	outline: none; box-shadow: 0 0 0 3px rgba(121, 184, 42, .45); border-color: var(--gr);
+}
+.p411-home .p411-signup__form button {
+	flex: none; height: 44px; padding: 0 24px; border: 0; border-radius: 8px;
+	background: var(--gr); color: #fff; font-size: 14px; font-weight: 700; cursor: pointer;
+	transition: background .16s ease;
+}
+.p411-home .p411-signup__form button:hover { background: var(--gr-d); }
+.p411-home .p411-signup__msg {
+	display: none; margin-top: 12px; padding: 10px 14px; border-radius: 8px;
+	font-size: 13.5px; background: rgba(255, 255, 255, .14); color: #fff;
+}
+.p411-home .p411-signup__msg.is-on { display: block; }
+
+@media (max-width: 700px) {
+	.p411-home .p411-signup__form { flex: 1 1 100%; }
+	.p411-home .p411-signup__copy p { font-size: 14px; }
+}
+
+/* ===========================================================================
+ * 14. MISC
+ * ======================================================================== */
+
+/* The theme's bottom quick-bar sits on the page on phones; give the page
+   enough tail that it never covers the footer's last row. */
+@media (max-width: 767px) { .p411-home .p411-foot { padding-bottom: 74px; } }
+
+@media (prefers-reduced-motion: reduce) {
+	.p411-home *, .p411-home *::before, .p411-home *::after {
+		transition: none !important; animation: none !important;
+	}
+}

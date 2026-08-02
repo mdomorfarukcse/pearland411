@@ -3199,11 +3199,25 @@ class Usermodel extends CI_Model
 			->get()->result();
 	}
 
-	// Get latest news for home page
+	/**
+	 * Latest published stories for the homepage.
+	 *
+	 * Selects the slug and the date as well as the body: the homepage links
+	 * stories by id, which routes, but /news-details/<slug> is the canonical
+	 * URL the rest of the site (and the sitemap, and the JSON-LD) uses, and
+	 * the news band shows a date on every card.
+	 *
+	 * It also honours `is_deleted`, which this query used to ignore — a
+	 * soft-deleted story stayed on the homepage until someone noticed.
+	 */
 	public function getLatestNews($limit = 5)
 	{
-		return $this->db->select('news.news_id, news.news_title, news.news_description, news.news_image, news.news_category_id')
+		return $this->db->select('news.news_id, news.news_title, news.news_description, news.news_image,
+		                          news.news_slug, news.created_at, news.news_category_id,
+		                          categories.category_name, categories.category_slug', false)
 			->from('news')
+			->join('news_categories as categories', 'categories.category_id = news.news_category_id', 'LEFT')
+			->where('news.is_deleted', 0)
 			->where('news.news_status', 1)
 			->order_by('news.news_id', 'DESC')
 			->limit($limit)
@@ -5706,11 +5720,16 @@ class Usermodel extends CI_Model
 	public function getActiveCoupons($limit = null, $offset = 0)
 	{
 		$today = date('Y-m-d');
+		// lc joins through the owner's listing, so the category is whatever
+		// business posted the offer. It can be NULL — a coupon posted by an
+		// account with no published listing has nothing to take it from — and
+		// every caller treats it as optional.
 		$this->db
-			->select('c.*, l.listing_name, l.listing_slug, u.name AS owner_name')
+			->select('c.*, l.listing_name, l.listing_slug, u.name AS owner_name, lc.category_name')
 			->from('coupons c')
 			->join('user u', 'u.user_id = c.coupon_user_id', 'left')
 			->join('listings l', 'l.user_id = c.coupon_user_id AND (l.is_deleted IS NULL OR l.is_deleted = 0)', 'left')
+			->join('listing_categories lc', 'lc.category_id = l.category_id', 'left')
 			->where('c.coupon_status', 1)
 			->where('c.coupon_start_date <=', $today)
 			->where('c.coupon_end_date >=',  $today)
@@ -6054,6 +6073,136 @@ class Usermodel extends CI_Model
 			->limit((int) $limit);
 
 		return $this->db->get()->result();
+	}
+
+	/* =====================================================================
+	 * HOMEPAGE LISTING FEEDS
+	 * ---------------------------------------------------------------------
+	 * getFeaturedListings() / getLatestListings() above are the original
+	 * pair. They select six columns, so a homepage card could not show a
+	 * service area, a phone number or a rating; they apply no quality bar,
+	 * so a listing with a one-character description could take a paid
+	 * Featured slot; and neither knows what the other returned, so the same
+	 * business could appear in Featured, in Hotspot and in the newest rail
+	 * on one screen. The two below fix all three, and are what the homepage
+	 * uses now. The originals stay for the other callers.
+	 * ===================================================================*/
+
+	/**
+	 * A listing is "complete enough for the homepage" when it has a real
+	 * description. Not a placeholder, not a dash: 25 characters is past
+	 * "-", "n/a", "TBD" and past an empty "<p></p>" a rich-text editor
+	 * leaves behind, and short of anything a real sentence would fail.
+	 *
+	 * Photographs are NOT required — every card now falls back to a
+	 * category placeholder rather than the old green "no photo" tile — but
+	 * a listing that has one sorts first, so the complete listings fill the
+	 * page before the merely adequate ones do.
+	 */
+	const HOMEPAGE_MIN_DESCRIPTION = 25;
+
+	/**
+	 * Shared FROM/WHERE for both homepage feeds.
+	 *
+	 * @param array $exclude_ids listing_ids already shown further up the page
+	 * @param bool  $require_description apply the completeness bar
+	 */
+	private function homepageListingQuery(array $exclude_ids = array(), $require_description = true)
+	{
+		// `listings.*` on purpose: `average_rating`, `display_phone` and
+		// friends arrived in later migrations and naming them would break
+		// an install that has not run them yet.
+		// Double-quoted in PHP so the SQL string literals stay single-quoted:
+		// under ANSI_QUOTES a "" would be read as an identifier, not as ''.
+		$this->db
+			->select("listings.*, listing_categories.category_name, listing_categories.category_slug,
+			          (CASE WHEN listings.listing_image IS NULL OR TRIM(listings.listing_image) = '' THEN 1 ELSE 0 END) AS p411_no_image", false)
+			->from('listings')
+			->join('listing_categories', 'listings.category_id = listing_categories.category_id', 'LEFT');
+
+		$this->applyPublishedListingFilter('listings');
+
+		$exclude_ids = array_values(array_unique(array_filter(array_map('intval', $exclude_ids))));
+		if ($exclude_ids) $this->db->where_not_in('listings.listing_id', $exclude_ids);
+
+		if ($require_description) {
+			$this->db->where(
+				"CHAR_LENGTH(TRIM(COALESCE(listings.listing_description, ''))) >= " . (int) self::HOMEPAGE_MIN_DESCRIPTION,
+				NULL,
+				FALSE
+			);
+		}
+	}
+
+	/**
+	 * Featured / spotlight businesses for the homepage's premium row.
+	 *
+	 * Only complete listings qualify. An empty Featured row reads as "nobody
+	 * has bought this yet", which is true and recoverable; a Featured row of
+	 * blank cards reads as "the paid placement is worthless", which is not.
+	 * There is deliberately no top-up pass here for that reason.
+	 *
+	 * @param int   $limit
+	 * @param array $exclude_ids
+	 */
+	public function getHomepageFeatured($limit = 3, array $exclude_ids = array())
+	{
+		$this->homepageListingQuery($exclude_ids, true);
+
+		$this->db->group_start()
+			->where('listings.featured_listing', 1)
+			->or_where('listings.spotlight_listing', 1)
+			->group_end();
+
+		$this->db->order_by('p411_no_image', 'ASC');
+		if ($this->db->field_exists('created_at', 'listings')) {
+			$this->db->order_by('listings.created_at', 'DESC');
+		}
+		$this->db->order_by('listings.listing_id', 'DESC');
+
+		return $this->db->limit((int) $limit)->get()->result();
+	}
+
+	/**
+	 * The general "Explore local businesses" feed.
+	 *
+	 * Complete listings first; if there aren't enough of those to fill the
+	 * grid it tops up with the rest, newest first, rather than rendering a
+	 * short row. Featured and spotlight listings are excluded — they have
+	 * their own row directly above and appearing twice was one of the
+	 * duplicates the 2026-08 review picked up.
+	 *
+	 * @param int   $limit       6–9 on the homepage; the brief caps it there
+	 * @param array $exclude_ids listing_ids already shown further up the page
+	 */
+	public function getHomepageListings($limit = 6, array $exclude_ids = array())
+	{
+		$limit = max(1, (int) $limit);
+
+		$fetch = function ($want, $skip, $require_description) {
+			$this->homepageListingQuery($skip, $require_description);
+			$this->db
+				->where('(listings.featured_listing IS NULL OR listings.featured_listing = 0)')
+				->where('(listings.spotlight_listing IS NULL OR listings.spotlight_listing = 0)')
+				->order_by('p411_no_image', 'ASC');
+			if ($this->db->field_exists('created_at', 'listings')) {
+				$this->db->order_by('listings.created_at', 'DESC');
+			}
+			return $this->db->order_by('listings.listing_id', 'DESC')->limit((int) $want)->get()->result();
+		};
+
+		$rows = $fetch($limit, $exclude_ids, true);
+		if (count($rows) >= $limit) return $rows;
+
+		// Short. Widen the net, skipping what we already have.
+		$seen = $exclude_ids;
+		foreach ($rows as $row) $seen[] = $row->listing_id;
+
+		foreach ($fetch($limit - count($rows), $seen, false) as $row) {
+			$rows[] = $row;
+		}
+
+		return $rows;
 	}
 
 	/* =====================================================================

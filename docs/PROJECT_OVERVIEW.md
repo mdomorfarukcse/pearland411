@@ -33,24 +33,40 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   two-column shell, cards, buttons, forms, notes, empty states, pager, rail, owner band — and its
   design tokens are declared on the three page scopes that opt in: `.p411-dir` (`/all-listing`),
   `.p411-ld` (`/listing-details`) and `.p411-ct` (events / news / videos + their detail pages, and
-  `/about-us`, which add `assets/css/content.css` on top). The homepage mirrors the same language in
-  `assets/css/home-sections.css` (`.p411-home`). The rule everywhere: **prefix every selector and
-  never edit the shared 345 KB `style.css`,** which ~200 views depend on. The one file without a
-  page scope is `assets/css/promo-cards.css` — it styles the two house promo cards below, whose
-  class names nothing else in the codebase emits, and it is shared by every page that renders
-  them so they can't drift apart.
+  `/about-us`, which add `assets/css/content.css` on top). The homepage is
+  `assets/css/home-sections.css` (`.p411-home`) — the **whole** page, header to newsletter band, so
+  it can be re-skinned without touching PHP. The rule everywhere: **prefix every selector and
+  never edit the shared 345 KB `style.css`,** which ~200 views depend on. Two files have no page
+  scope because nothing else emits their class names: `assets/css/promo-cards.css` (the two house
+  promo cards) and `assets/css/site-footer.css` (`.p411-foot`, the shared footer). Both are loaded
+  by every page that renders those blocks, so the blocks can't drift apart.
+- **Colour:** navy `#20245B` for header, headings, footer and structure; pear green `#79B82A` as an
+  **accent** on buttons, icons, links and labels; burgundy `#6D263D` for promotional and secondary
+  bands; cream `#F7F5F0` / light grey `#F2F3F5` for grounds. Green as a large background is what
+  the 2026-08 review asked to stop.
 - **Reusable blocks:** `partials/ad_slot.php` (one sellable ad zone; options `$slot_class`,
   `$slot_label`, `$slot_fallback`, `$slot_alias`, `$slot_creative`, `$slot_fallback_partial`),
-  `partials/service_promo.php` (the static website/hosting/SEO promo → `/contact-us`),
-  `partials/banner_design_promo.php` (the ad/banner-design promo → `/request-service`; the unsold
-  fallback for `right-side-banner-2` via `$slot_fallback_partial`) — neither is sold or rotated, so
-  neither is ever empty — plus `partials/web_dev_cta.php`, `partials/seo_head.php`.
+  `partials/site_footer.php` (the site footer — rendered by `views/footer.php` **and** by the
+  self-contained homepage, so the two can't diverge; contact details and the logo come from
+  `/admin/setting`), `partials/service_promo.php` (the static website/hosting/SEO promo →
+  `/contact-us`), `partials/banner_design_promo.php` (the ad/banner-design promo →
+  `/request-service`; the unsold fallback for `right-side-banner-2` via `$slot_fallback_partial`) —
+  neither promo is sold or rotated, so neither is ever empty — plus `partials/web_dev_cta.php`,
+  `partials/seo_head.php`.
+- **Brand artwork** is generated, not hand-drawn: `python3 scripts/generate_brand_art.py` writes
+  `assets/images/placeholders/*.svg` (one per kind of business, plus news — served by
+  `category_placeholder()`), `assets/images/ads/house-ad-{,burgundy-,navy-,cream-}{strip,wide,box,tall}.svg`
+  (the creative an unsold zone falls back to, four palettes so no two unsold zones on a page repeat)
+  and `assets/images/ads/templates/` (editable advertiser banners + README). It is deterministic and
+  safe to re-run. The hero illustration `assets/images/home/hero-pearland.svg` is hand-authored.
 - **Helpers** (autoloaded): `site_setting` (settings + feature flags), `image` (uploads/resize:
   `safe_upload_image`, `uploadAndResize`, `responsive_img`), `view` — escaping (`e`, `e_attr`,
-  `e_url`, `e_nl2br`), `json_ld`, `pearland_slug`, plus the content helpers the events/news/videos
-  pages share: `content_text()` / `content_excerpt()` (stored rich text → clean **unescaped** text;
-  escape at output), `youtube_id()` / `youtube_thumb_url()` / `youtube_embed_url()`, and
-  `embed_src()` (pull the `src` out of a pasted map iframe instead of echoing admin markup).
+  `e_url`, `e_nl2br`), `json_ld`, `pearland_slug`, `category_placeholder()` (a listing with no
+  photograph → the placeholder for its kind of business), plus the content helpers the
+  events/news/videos pages share: `content_text()` / `content_excerpt()` (stored rich text → clean
+  **unescaped** text; escape at output), `youtube_id()` / `youtube_thumb_url()` /
+  `youtube_embed_url()`, and `embed_src()` (pull the `src` out of a pasted map iframe instead of
+  echoing admin markup).
 - **Libraries:** `Helcim_lib` (payments), `Mailer` (SMTP email), `Rate_limit`.
 
 ## Routing
@@ -74,7 +90,7 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 ## Feature → where it lives
 | Area | Route(s) | Controller / model | Notes |
 |---|---|---|---|
-| Home | `/` | `User::index` → `index.php` | Self-contained homepage |
+| Home | `/` | `User::index` → `index.php` | Self-contained (own header; footer via `partials/site_footer.php`). Hotspot → Business of the Week → Featured → Explore are filled in that order and de-duplicated by id **and** name; Featured and Explore only take listings with a real description (`Usermodel::getHomepageFeatured` / `getHomepageListings`). 7 ad zones, 4 of which render nothing when unsold. |
 | About | `/about-us` | `User::about_us` → `about.php` | Shared kit; the figures in "Pearland411 today" are counted live and each links to its page |
 | Directory / listing | `/all-listing`, `/all_listing/<cat>[/<offset>]`, `/listing-details/<slug>` | `User::all_listing`, `listing_details` | Homepage layout + 6 ad zones each; `?sort=featured\|newest\|name\|rating` |
 | Claim a listing | `/claim-listing/<slug>` | `User::claim_listing`; admin `Admin::claim_approve` | transfers `listings.user_id` |

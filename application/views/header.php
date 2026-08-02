@@ -37,6 +37,9 @@
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/fonts.css">
 	<!-- Brand palette + typography overrides — loaded last so it wins. -->
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/pearland-brand.css?v=1">
+	<!-- The footer (partials/site_footer.php, rendered by views/footer.php).
+	     Every selector is a .p411-foot descendant, so this is safe on any page. -->
+	<link rel="stylesheet" href="<?= base_url() ?>assets/css/site-footer.css?v=1">
 
 	<?php
 	// Per-page stylesheets. A controller sets $data['page_css'] to one path or

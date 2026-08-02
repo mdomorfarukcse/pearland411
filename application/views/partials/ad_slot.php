@@ -20,10 +20,19 @@
  *   $slot_alias    (string|array) — older slot_key(s) this position replaced.
  *                  Only consulted when nothing is sold on $slot, so inventory
  *                  booked against a retired zone keeps running.
- *   $slot_creative (string) — force which house creative fills an unsold zone
- *                  ('house-ad' | 'scs-ad' | 'banner-design'), overriding the
- *                  per-slot map below. Used where the page already carries a
- *                  permanent web-services block and would otherwise repeat it.
+ *   $slot_creative (string) — force which house creative fills an unsold zone,
+ *                  overriding the per-slot map below. Used where the page
+ *                  already carries a permanent web-services block and would
+ *                  otherwise repeat it. One of:
+ *                    house-ad           pear green   "advertise where Pearland searches"
+ *                    house-ad-burgundy  burgundy     "reach thousands of Pearland customers"
+ *                    house-ad-navy      navy         "featured business placement available"
+ *                    house-ad-cream     cream        "get your business in front of local customers"
+ *                    scs-ad             web development
+ *                    banner-design      ad / banner artwork
+ *                  Four palettes exist because two unsold zones on one page
+ *                  used to show the same green rectangle twice, which is what
+ *                  made the site look like it had no advertisers.
  *   $slot_fallback_partial (string) — filename under views/partials/ to render
  *                  in place of the default creative when nothing is sold, e.g.
  *                  'banner_design_promo.php'. A card can say what the service
@@ -113,15 +122,24 @@ else                     $__shape = 'box';
 
 // Which house creative fills an unsold zone. Explicit per slot rather than
 // hashed: the sidebar deliberately carries one web-development ad and one
-// ad-design ad, and every other zone sells the space itself.
+// ad-design ad, and every other zone sells the space itself — in a palette
+// chosen per position, so no two unsold zones on a page repeat each other.
 $__house_map = array(
-	'right-side-banner-1' => 'scs-ad',        // website development
-	'right-side-banner-2' => 'banner-design', // ad / banner artwork
-	'listing-sidebar'     => 'scs-ad',
-	'news-sidebar'        => 'banner-design',
+	'top-banner-site-wide'    => 'house-ad-navy',
+	'middle-banner-category'  => 'house-ad-cream',
+	'bottom-banner-site-wide' => 'house-ad',
+	'right-side-banner-1'     => 'house-ad-burgundy',
+	'right-side-banner-2'     => 'banner-design', // ad / banner artwork
+	'right-side-banner-3'     => 'house-ad-navy',
+	'listing-sidebar'         => 'scs-ad',
+	'news-sidebar'            => 'banner-design',
+);
+$__creatives = array(
+	'house-ad', 'house-ad-burgundy', 'house-ad-navy', 'house-ad-cream',
+	'scs-ad', 'banner-design',
 );
 $__creative = isset($__house_map[$slot]) ? $__house_map[$slot] : 'house-ad';
-if (!empty($slot_creative) && in_array($slot_creative, array('house-ad', 'scs-ad', 'banner-design'), true)) {
+if (!empty($slot_creative) && in_array($slot_creative, $__creatives, true)) {
 	$__creative = $slot_creative;
 }
 $__default  = 'assets/images/ads/' . $__creative . '-' . $__shape . '.svg';
@@ -134,6 +152,10 @@ switch ($__creative) {
 	case 'banner-design':
 		$__href = base_url('request-service');
 		$__alt  = 'Need a banner designed? Pearland411 designs your ad artwork';
+		break;
+	case 'house-ad-navy':
+		$__href = base_url('pricing-plan');
+		$__alt  = 'Featured business placement available on Pearland411';
 		break;
 	default:
 		$__href = base_url('post-your-ads');
@@ -203,7 +225,7 @@ if ($__need_css) define('PEARLAND411_AD_SLOT_CSS', 1);
 <?php
 unset(
 	$__ci, $__ad, $__meta, $__fallback, $__w, $__h, $__size, $__m, $__ratio,
-	$__shape, $__creative, $__house_map, $__default, $__external, $__href, $__alt,
+	$__shape, $__creative, $__creatives, $__house_map, $__default, $__external, $__href, $__alt,
 	$__label, $__cls, $__style, $__need_css, $__alias_key,
 	// Per-include options must not leak into the next include on the page.
 	$slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative,
