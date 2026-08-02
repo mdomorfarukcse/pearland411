@@ -149,8 +149,15 @@
 .p411-home .hom-head::before,
 .p411-home .hom-head::after { content: none !important; display: none !important; }
 
+/* `relative`, not `static`: the theme has this fixed to the top of the window,
+   and the homepage wants it in the flow — but it also has to stay a
+   containing block, because the mega menu hangs off it with `top: 100%`. With
+   `static` the panel fell through to `.hom-head`, which wraps the whole hero,
+   and on a phone that put it 900px down the page. `relative` also keeps the
+   theme's `z-index: 20`, which `static` silently discards. */
 .p411-home .hom-top {
-	position: static !important;
+	position: relative !important;
+	z-index: 30;
 	padding: 10px 0 !important;
 	background: var(--nv);
 	box-shadow: 0 1px 0 rgba(255, 255, 255, .06);
@@ -162,19 +169,22 @@
 .p411-home .hom-nav .ic-logo { width: 168px; max-width: 46vw; display: block; }
 .p411-home .top-log { flex: none; line-height: 0; }
 
-/* "Explore" opens the theme's mega menu */
+/* "Explore" opens the theme's mega menu.
+   The theme gives `.menu` its own `::after` — an absolutely positioned 10px
+   down-arrow.svg pinned to `right: -16px`. That rule assumes the old floated
+   header, where `.menu` was much wider than its text; in this flex header the
+   element shrink-wraps "Explore" and the arrow lands on top of the E. It is
+   switched off here and the chevron is an <svg> in the markup instead, which
+   sits in the flow and cannot drift. */
 .p411-home .hom-nav .menu { flex: none; cursor: pointer; }
+.p411-home .hom-nav .menu::after { content: none !important; display: none !important; }
 .p411-home .hom-nav .menu h4 {
-	margin: 0; display: flex; align-items: center; gap: 6px;
+	margin: 0; display: inline-flex; align-items: center; gap: 7px;
 	font-size: 14.5px; font-weight: 600; color: #fff;
 	padding: 8px 12px; border-radius: 8px;
 	transition: background .16s ease;
 }
-.p411-home .hom-nav .menu h4::after {
-	content: ""; width: 7px; height: 7px; margin-top: -3px;
-	border-right: 2px solid var(--gr-l); border-bottom: 2px solid var(--gr-l);
-	transform: rotate(45deg);
-}
+.p411-home .hom-nav .menu h4 svg { flex: none; color: var(--gr-l); }
 .p411-home .hom-nav .menu:hover h4 { background: rgba(255, 255, 255, .1); }
 
 /* The header search box is hidden on the homepage — the hero carries the
@@ -203,9 +213,117 @@
 }
 .p411-home .hom-nav .bl li:last-child a:hover { background: var(--gr-d); border-color: var(--gr-d); }
 
-.p411-home .pop-menu { margin-top: 14px; border-radius: 0 0 var(--r) var(--r); }
-.p411-home .pop-menu .pmenu-cat h4,
-.p411-home .pop-menu .pmenu-spri h4 { color: var(--nv); }
+/* The mega menu hangs off the bottom of the header row.
+   `.pop-menu` is `position: absolute` with no `top`, so it falls back to its
+   static position — and it is a child of `.hom-nav`, which is now a flex row.
+   An absolutely positioned flex child takes its static position from the
+   container's alignment, so `align-items: center` was centring a 408px panel
+   on a 43px header row: the browser computed `top: -184px` and the top half of
+   the menu sat above the viewport, unreachable. An explicit `top` is the fix —
+   the containing block is `.hom-top .container`, which is `position: relative`
+   in the theme. */
+.p411-home .pop-menu {
+	border-top: 3px solid var(--gr);
+	padding: 22px 26px 20px;
+}
+/* Desktop: a panel hanging off the bottom of the header row.
+   Below 993px the theme turns `.pop-menu` into `position: fixed; height: 100%`
+   — a full-screen sheet — so `top: 100%` there would mean "one viewport down"
+   and the whole menu would open below the fold. Hence the two blocks. */
+@media (min-width: 993px) {
+	.p411-home .pop-menu {
+		top: 100%; margin-top: 10px;
+		border-radius: 0 0 var(--r) var(--r);
+		max-height: calc(100vh - 110px); overflow-y: auto;
+	}
+}
+@media (max-width: 992px) {
+	.p411-home .pop-menu {
+		top: 0; margin-top: 0; max-height: none; border-radius: 0;
+		padding-top: 26px;
+	}
+}
+/* The theme paints a grey cityscape strip across the foot of the panel; it
+   sits behind the phone number and reads as a rendering fault. */
+.p411-home .pop-menu::after { content: none !important; display: none !important; }
+
+/* Layout, desktop only. The two columns are floats and the category list's own
+   <li>s are floated too, so the <ul> collapses to zero height and the panel
+   ends up with 200-odd pixels of nothing in the middle of it. Flex and grid
+   give both real heights.
+   Kept inside the media query because below 993px the theme stacks the panel
+   and hides the services column: `flex: 1 1 0` there left the category column
+   0px wide and its contents spilling over the footer strip. */
+@media (min-width: 993px) {
+	.p411-home .pop-menu .row { display: flex; flex-wrap: wrap; margin: 0; }
+	.p411-home .pmenu-spri { float: none; flex: none; width: 210px; padding: 0; }
+	.p411-home .pmenu-cat  { float: none; flex: 1 1 auto; width: auto; min-width: 0; padding: 0 0 4px 26px; }
+	.p411-home .dir-home-nav-bot { flex: 1 0 100%; }
+}
+.p411-home .pmenu-cat #pg-resu {
+	display: grid; grid-template-columns: repeat(auto-fill, minmax(186px, 1fr));
+	gap: 1px 16px; margin: 0; padding: 0;
+}
+.p411-home .pmenu-cat #pg-resu li { float: none; width: auto; padding: 0; }
+
+/* Type + colour, so the panel belongs to the same site as the header. */
+.p411-home .pop-menu .pmenu-cat h4 {
+	color: var(--nv); font-size: 12.5px; font-weight: 700;
+	letter-spacing: .1em; text-transform: uppercase; margin-bottom: 12px;
+}
+.p411-home .pmenu-spri ul li a {
+	color: var(--nv); text-transform: none; font-size: 13.5px; border-radius: 8px;
+}
+.p411-home .pmenu-spri ul li a:hover,
+.p411-home .pmenu-spri ul li a.act { background: var(--gr-w); color: var(--gr-d); }
+.p411-home .pmenu-cat ul li a { color: var(--ink); font-size: 13.5px; }
+.p411-home .pmenu-cat ul li a:hover { color: var(--gr-d); background: none; }
+.p411-home .pop-menu .clopme { top: 18px; right: 22px; color: var(--ink-3); }
+.p411-home .pop-menu .clopme:hover { color: var(--nv); }
+
+/* Footer strip of the panel. Its phone number was set in 32px olive
+   ('Quicksand', #6f6347) and its two calls to action were square navy blocks
+   — both left over from the theme's demo. */
+.p411-home .dir-home-nav-bot {
+	width: 100%; padding: 18px 0 0; margin-top: 18px;
+	font-family: inherit; border-top: 1px solid var(--line);
+}
+.p411-home .dir-home-nav-bot ul {
+	display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0;
+}
+.p411-home .dir-home-nav-bot ul li { float: none; width: auto !important; margin: 0; }
+.p411-home .dir-home-nav-bot ul li:first-child {
+	flex: 1 1 260px; font-size: 13.5px; color: var(--ink-2); font-weight: 400;
+}
+.p411-home .dir-home-nav-bot ul li span {
+	display: block; font-size: 17px; font-weight: 700; color: var(--nv); padding-top: 2px;
+}
+.p411-home .dir-home-nav-bot ul li a {
+	display: inline-flex; align-items: center; gap: 7px;
+	background: var(--gr); color: #fff; border: 0; border-radius: 999px;
+	padding: 10px 18px; font-size: 13.5px; font-weight: 600; line-height: 1.3;
+}
+.p411-home .dir-home-nav-bot ul li a:hover { background: var(--gr-d); color: #fff; }
+.p411-home .dir-home-nav-bot ul li:nth-child(2) a { background: var(--bu); }
+.p411-home .dir-home-nav-bot ul li:nth-child(2) a:hover { background: var(--bu-l); }
+.p411-home .dir-home-nav-bot ul li a i { font-size: 17px; }
+
+/* Phone / tablet: one column, in normal flow. The theme hides the services
+   column outright below 993px, so the panel is the category grid plus the
+   footer strip. */
+@media (max-width: 992px) {
+	.p411-home .pop-menu { padding: 18px 16px 24px; }
+	.p411-home .pop-menu .row { display: block; margin: 0; }
+	.p411-home .pmenu-cat {
+		float: none; width: 100%; min-width: 0;
+		padding: 0 0 4px; margin: 0; border-left: 0; border-top: 0;
+	}
+	.p411-home .pmenu-cat #pg-resu { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px 14px; }
+	.p411-home .pmenu-cat #pg-resu li a { padding: 6px 0; }
+	.p411-home .dir-home-nav-bot ul { display: block; }
+	.p411-home .dir-home-nav-bot ul li { width: 100% !important; margin-bottom: 8px; }
+	.p411-home .dir-home-nav-bot ul li a { width: 100%; justify-content: center; }
+}
 
 @media (max-width: 991px) {
 	.p411-home .hom-nav .bl { display: none; }
@@ -230,16 +348,28 @@
 	padding: 66px 0 62px;
 	background: linear-gradient(168deg, var(--nv-d) 0%, var(--nv) 42%, #4A2450 74%, var(--bu) 100%);
 }
+/* The drawn fallback. A photograph at assets/images/home/hero-pearland.<ext>
+   replaces it — the view sets background-image inline when the file is there
+   (see $hero_photo) and adds .p411-hero--photo. */
 .p411-home .p411-hero__art {
 	position: absolute; inset: 0;
 	background: url("../images/home/hero-pearland.svg") center bottom / cover no-repeat;
 	opacity: .72;
+}
+/* A photograph carries its own detail and its own darkness: show it in full
+   and lighten the wash over it, or the picture the whole section exists for
+   disappears behind the overlay. */
+.p411-home .p411-hero--photo .p411-hero__art {
+	opacity: 1; background-position: center; background-size: cover;
 }
 /* the dark overlay the brief asks for — the headline sits on this, not on the
    illustration */
 .p411-home .p411-hero::after {
 	content: ""; position: absolute; inset: 0;
 	background: linear-gradient(180deg, rgba(15, 17, 45, .72) 0%, rgba(23, 20, 52, .42) 50%, rgba(78, 26, 43, .58) 100%);
+}
+.p411-home .p411-hero--photo::after {
+	background: linear-gradient(180deg, rgba(15, 17, 45, .80) 0%, rgba(23, 20, 52, .58) 46%, rgba(78, 26, 43, .68) 100%);
 }
 .p411-home .p411-hero > .container { position: relative; z-index: 2; }
 

@@ -6,6 +6,50 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-02 — Homepage: Explore menu fixes, hero photograph support
+
+Follow-up to the redesign below, from the client's review of the deployed page.
+
+### Fixed
+- **The Explore mega menu opened above the top of the window.** `.pop-menu` is
+  `position: absolute` with no `top`, so it fell back to its static position —
+  and it is a child of `.hom-nav`, which the redesign made a flex row. An
+  absolutely positioned flex child takes its static position from the
+  container's alignment, so `align-items: center` centred a 408px panel on a
+  43px header row: the browser computed `top: -184px` and the upper half of the
+  menu sat off-screen, unreachable. It now has an explicit `top: 100%`.
+  Below 993px the theme turns the same element into a full-screen
+  `position: fixed` sheet, where `top: 100%` would have meant "one viewport
+  down", so the two cases are separate media queries.
+- **`.hom-top` is `position: relative`, not `static`.** It has to stay a
+  containing block or the menu anchors to `.hom-head`, which wraps the whole
+  hero — on a phone that put the panel 900px down the page. `static` was also
+  silently discarding the theme's `z-index: 20`.
+- **Two arrows on "Explore".** The theme gives `.menu` its own `::after`, an
+  absolutely positioned `down-arrow.svg` pinned to `right: -16px`. That assumes
+  the old floated header, where `.menu` was much wider than its text; in the
+  flex header the element shrink-wraps and the arrow landed on top of the "E".
+  It is switched off and the chevron is an `<svg>` in the markup, in the flow.
+- The menu's own contents were still raw theme styling, which only became
+  visible once the panel was reachable: a 32px olive phone number in
+  'Quicksand', two square navy blocks for its calls to action, and a grey
+  cityscape strip behind them. Now navy/green type and pill buttons. Its
+  category `<ul>` had floated `<li>`s and no clearing, so the list collapsed to
+  zero height and left ~200px of blank panel; it is a grid.
+
+### Added
+- **Hero photograph.** Drop a file at `assets/images/home/hero-pearland.jpg`
+  (or `.jpeg` / `.webp` / `.png` / `.avif`) and the hero uses it; with no file
+  there the drawn illustration still shows. Detected in PHP (`$hero_photo` in
+  `views/index.php`) rather than layered in CSS, because a missing background
+  layer would 404 on every page view. A photograph gets the full-strength
+  image and a slightly heavier overlay (`.p411-hero--photo`).
+
+### Key files
+`application/views/index.php`, `assets/css/home-sections.css`.
+
+---
+
 ## 2026-08-02 — Homepage redesign: navy structure, green as an accent
 
 The homepage was pear green on pear green — green hero, green card frames,

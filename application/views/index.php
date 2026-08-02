@@ -176,6 +176,25 @@ $user_name    = ($is_logged_in && !empty($_SESSION['logged_user']['name']))
 // /admin/setting to serve it from assets/images/ instead of the third-party
 // host the site has always pointed at.
 $site_logo = site_setting('site_logo_url', '') ?: 'https://i.ibb.co/93BYZ4DZ/pp.png';
+
+/**
+ * Hero backdrop.
+ *
+ * Drop a photograph at assets/images/home/hero-pearland.<ext> and it is used;
+ * with no file there the hand-drawn illustration in the stylesheet shows
+ * instead. Checked in PHP rather than layered in CSS on purpose — a missing
+ * background layer would 404 on every single page view.
+ *
+ * The photograph the client supplied is Pearland Town Center at dusk with the
+ * water tower; anything wide and dark works, because the type sits on an
+ * overlay rather than on the image.
+ */
+$hero_photo = '';
+foreach (array('jpg', 'jpeg', 'webp', 'png', 'avif') as $__ext) {
+	$__rel = 'assets/images/home/hero-pearland.' . $__ext;
+	if (is_file(FCPATH . $__rel)) { $hero_photo = base_url($__rel); break; }
+}
+unset($__ext, $__rel);
 ?>
 
 <head>
@@ -237,7 +256,15 @@ $site_logo = site_setting('site_logo_url', '') ?: 'https://i.ibb.co/93BYZ4DZ/pp.
                     <img src="<?= e_attr($site_logo) ?>" alt="Pearland411 — local business directory" class="ic-logo">
                   </a>
 
-                  <div class="menu"><h4>Explore</h4></div>
+                  <?php // The chevron is markup, not a pseudo-element: the
+                        // theme's own `.menu::after` arrow is pinned to
+                        // `right:-16px`, which in this flex header lands on top
+                        // of the word. That rule is switched off in the CSS. ?>
+                  <div class="menu" role="button" tabindex="0" aria-haspopup="true">
+                    <h4>Explore
+                      <svg width="11" height="7" viewBox="0 0 12 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m1 1.5 5 5 5-5"/></svg>
+                    </h4>
+                  </div>
 
                   <!-- MEGA MENU -->
                   <div class="pop-menu">
@@ -356,8 +383,9 @@ $site_logo = site_setting('site_logo_url', '') ?: 'https://i.ibb.co/93BYZ4DZ/pp.
           </div>
 
           <!-- ================================================== HERO == -->
-          <section class="p411-hero">
-            <div class="p411-hero__art" aria-hidden="true"></div>
+          <section class="p411-hero<?= $hero_photo !== '' ? ' p411-hero--photo' : '' ?>">
+            <div class="p411-hero__art" aria-hidden="true"
+                 <?= $hero_photo !== '' ? 'style="background-image:url(' . e_attr($hero_photo) . ')"' : '' ?>></div>
             <div class="container px-10">
               <div class="p411-hero__inner">
                 <h1>Discover Pearland&rsquo;s<br>Best Local Businesses</h1>
