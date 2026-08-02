@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 500" width="600" height="500"
+     role="img" aria-label="Advertiser banner template">
+  <title>Advertiser banner template — 600x500</title>
+  <!--
+    EDITABLE ADVERTISER TEMPLATE — box (600x500)
+
+    Customise in four steps:
+      1. .brand-bg / .brand-bg-2  the advertiser's two background colours.
+         Use THEIR brand, not Pearland411 green — see README.md in this folder.
+      2. .brand-ink / .brand-mute text colours (keep 4.5:1 contrast on the ground).
+      3. .brand-btn / .brand-btn-ink the call-to-action pill.
+      4. Replace the five text strings and swap <image> in for the logo box.
+
+    Logo: drop the file in and keep the box, e.g.
+      <image href="logo.png" x="246" y="56" width="108" height="108"
+             preserveAspectRatio="xMidYMid meet"/>
+
+    Calls to action that fit this pill: Call Today · Request a Quote ·
+    Visit Our Website · Schedule an Appointment · Learn More · View Special Offer
+  -->
+  <style>
+    .brand-bg   { stop-color: #171A45; }
+    .brand-bg-2 { stop-color: #20245B; }
+    .brand-ink  { fill: #FFFFFF; }
+    .brand-mute { fill: #D9DCF0; }
+    .brand-btn  { fill: #79B82A; }
+    .brand-btn-ink { fill: #FFFFFF; }
+    .t-head { font-family: 'Poppins','Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif; font-weight: 700; }
+    .t-body { font-family: 'Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif; }
+  </style>
+  <defs>
+    <linearGradient id="tplbox" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" class="brand-bg"/>
+      <stop offset="1" class="brand-bg-2"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="600" height="500" fill="url(#tplbox)"/>
+
+  <!-- LOGO BOX — replace this rect with an <image> (see comment above) -->
+  <g>
+    <rect x="246" y="56" width="108" height="108" rx="12" fill="#FFFFFF" opacity="0.14"/>
+    <text x="300.0" y="115.0" text-anchor="middle" class="t-body brand-mute"
+          font-size="13">LOGO</text>
+  </g>
+
+  <text x="300" y="202" text-anchor="middle" class="t-body brand-mute"
+        font-size="13" font-weight="600" letter-spacing="2.4">CATEGORY OR TAGLINE</text>
+  <text x="300" y="248" text-anchor="middle" class="t-head brand-ink"
+        font-size="32">Business Name</text>
+  <text x="300" y="292" text-anchor="middle" class="t-body brand-ink"
+        font-size="20">Main service or offer</text>
+  <text x="300" y="336" text-anchor="middle" class="t-body brand-mute"
+        font-size="17">(281) 000-0000 &#183; yourbusiness.com</text>
+
+  <g transform="translate(174 386)">
+    <rect width="252" height="52" rx="26.0" class="brand-btn"/>
+    <text x="126.0" y="32.0" text-anchor="middle" class="t-head brand-btn-ink"
+          font-size="18">Call Today</text>
+  </g>
+</svg>

@@ -1,0 +1,124 @@
+/* ============================================================================
+ * Pearland411 — site footer
+ * ----------------------------------------------------------------------------
+ * Styles for application/views/partials/site_footer.php. That partial is the
+ * only thing that emits `.p411-foot` and its descendants, so — like
+ * promo-cards.css — this file needs no page scope: there is nothing else on
+ * any page for it to hit. Which matters, because the partial is rendered by
+ * the homepage AND by the shared views/footer.php, and the two must not drift.
+ *
+ * The old footer was near-black and disconnected from the page above it. This
+ * one is the lighter navy the 2026-08 brief asked for (#1E2F52), with a
+ * green-to-burgundy rule across the top, white headings, muted grey body copy
+ * and green links.
+ * ==========================================================================*/
+
+.p411-foot {
+	position: relative;
+	background: #1E2F52;
+	color: #C7CEDD;
+	padding: 46px 0 0;
+	font-size: 14px;
+	line-height: 1.6;
+}
+
+/* the thin accent line across the top */
+.p411-foot::before {
+	content: "";
+	position: absolute; left: 0; right: 0; top: 0; height: 4px;
+	background: linear-gradient(90deg, #79B82A 0%, #79B82A 42%, #6D263D 42%, #6D263D 100%);
+}
+
+.p411-foot a { color: #C7CEDD; text-decoration: none; }
+.p411-foot a:hover { color: #8FCB46; text-decoration: none; }
+
+.p411-foot__grid {
+	display: grid;
+	gap: 30px 26px;
+	grid-template-columns: 1.6fr repeat(4, 1fr);
+	padding-bottom: 38px;
+}
+
+.p411-foot h4 {
+	margin: 0 0 14px;
+	font-size: 14.5px;
+	font-weight: 700;
+	color: #FFFFFF;
+	letter-spacing: .01em;
+}
+
+.p411-foot ul { list-style: none; margin: 0; padding: 0; }
+.p411-foot li { margin: 0 0 9px; padding: 0; list-style: none; background: none; font-size: 13.5px; }
+.p411-foot li::before { content: none; }
+
+/* ---- brand column ---------------------------------------------------- */
+
+.p411-foot__brand img { width: 176px; max-width: 60%; margin-bottom: 14px; display: block; }
+.p411-foot__brand p { margin: 0 0 16px; font-size: 13.5px; color: #A9B3C6; max-width: 34ch; }
+
+.p411-foot__social { display: flex; gap: 10px; }
+.p411-foot__social a {
+	display: grid; place-items: center;
+	width: 36px; height: 36px; border-radius: 50%;
+	background: rgba(255, 255, 255, .08);
+	color: #FFFFFF;
+	transition: background .16s ease, transform .16s ease;
+}
+.p411-foot__social a:hover { background: #79B82A; color: #fff; transform: translateY(-2px); }
+.p411-foot__social svg { display: block; }
+
+/* ---- contact column --------------------------------------------------- */
+
+.p411-foot__contact li { display: flex; align-items: flex-start; gap: 9px; }
+.p411-foot__contact svg { flex: none; margin-top: 3px; color: #79B82A; }
+
+/* ---- "view all" style link ------------------------------------------- */
+
+.p411-foot__more { color: #8FCB46 !important; font-weight: 600; }
+.p411-foot__more:hover { text-decoration: underline !important; }
+
+/* ---- bottom bar ------------------------------------------------------- */
+
+.p411-foot__bar {
+	border-top: 1px solid rgba(255, 255, 255, .1);
+	padding: 16px 0 18px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 24px;
+	align-items: center;
+	justify-content: space-between;
+	font-size: 12.5px;
+	color: #8F9BB2;
+}
+.p411-foot__bar p { margin: 0; }
+.p411-foot__heart { color: #C4536F; }
+
+/* ---- the phone quick-bar that sits with the footer -------------------- */
+/*
+ * `.fqui-menu` is the theme's fixed bottom bar. It is not a `.p411-foot`
+ * descendant — it is a sibling emitted right after the footer by both
+ * views/index.php and views/footer.php — but it is the footer's companion on
+ * a phone and was the last near-black element on the page (#191919). Colour
+ * only; the theme still owns its layout.
+ */
+.fqui-menu { background: #1E2F52; }
+.fqui-menu ul li a,
+.fqui-menu ul li span { color: #DDE3EE; }
+.fqui-menu ul li a:hover,
+.fqui-menu ul li a.act { color: #8FCB46; }
+
+/* The items are `display:inline-block; width:20%`, so five of them plus the
+   whitespace between the <li> tags total more than 100% and the last one is
+   cut off at the right edge. Flex divides the row exactly. */
+.fqui-menu ul { display: flex; }
+.fqui-menu ul li { flex: 1 1 0; width: auto; min-width: 0; }
+
+@media (max-width: 1100px) {
+	.p411-foot__grid { grid-template-columns: 1.4fr repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+	.p411-foot { padding-top: 34px; }
+	.p411-foot__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 18px; }
+	.p411-foot__brand { grid-column: 1 / -1; }
+	.p411-foot__bar { justify-content: flex-start; }
+}

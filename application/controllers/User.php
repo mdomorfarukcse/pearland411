@@ -273,32 +273,86 @@ class User extends CI_Controller
 		$data['show_events'] = site_setting('service_events_enabled', '1') !== '0';
 
 		// --- Directory content -----------------------------------------
-		// getFeaturedListings() was never wired up, which is why the hero
-		// carousel only ever rendered its "coming soon" fallback slide.
-		$data['featured_listings'] = $this->usermodel->getFeaturedListings(6);
-		$data['latest_listings']   = $this->usermodel->getLatestListings(9);
+		//
+		// Four blocks on this page draw from `listings`, and until the
+		// 2026-08 rebuild none of them knew what the others had returned —
+		// which is how one tree surgeon ended up in the Hotspot rail, the
+		// Featured row and the newest-businesses grid on the same screen.
+		// They are now filled in priority order (paid placements first) and
+		// every block is told what has already been used.
+		//
+		// De-duplication is by listing_id AND by a flattened name: the
+		// directory carries genuine duplicate rows for some businesses, and
+		// two different ids for "Monster Tree Service of Pearland" look
+		// identical to a reader.
+		$seen_ids   = array();
+		$seen_names = array();
+		$dedupe = function ($rows) use (&$seen_ids, &$seen_names) {
+			$out = array();
+			foreach ((array) $rows as $row) {
+				$id   = isset($row->listing_id) ? (int) $row->listing_id : 0;
+				$name = isset($row->listing_name) ? (string) $row->listing_name : '';
+				$key  = preg_replace('/[^a-z0-9]+/', '', strtolower($name));
+
+				if ($id && in_array($id, $seen_ids, TRUE)) continue;
+				if ($key !== '' && isset($seen_names[$key]))  continue;
+
+				if ($id)          $seen_ids[] = $id;
+				if ($key !== '')  $seen_names[$key] = TRUE;
+				$out[] = $row;
+			}
+			return $out;
+		};
+
+		// The two homepage placements sold on /pricing-plan. Both are backed by
+		// a DATE column (migration 0018), so they expire on their own and both
+		// return empty until that migration has run. Paid placements are
+		// claimed first — they are what somebody has actually bought.
+		$data['home_hotspot'] = $dedupe($this->usermodel->getHotspotListings(8));
+
+		$week = $this->usermodel->getBusinessOfTheWeek();
+		$week = $week ? $dedupe(array($week)) : array();
+		$data['home_week'] = $week ? $week[0] : NULL;
+
+		// Featured: over-fetch, then de-dupe and cut to three. Only listings
+		// with a real description qualify — see getHomepageFeatured().
+		$data['featured_listings'] = array_slice(
+			$dedupe($this->usermodel->getHomepageFeatured(8, $seen_ids)), 0, 3
+		);
+
+		// The general feed. Six on the homepage, not nine and not everything:
+		// a long grid of business cards is what pushed the deals, events and
+		// news below the fold. "View all Pearland businesses" carries the rest.
+		$data['latest_listings'] = array_slice(
+			$dedupe($this->usermodel->getHomepageListings(14, $seen_ids)), 0, 6
+		);
 
 		$data['latest_videos'] = $data['show_videos'] ? $this->usermodel->getLatestVideos(3) : array();
-		$data['latest_news']   = $data['show_news']   ? $this->usermodel->getLatestNews(3)   : array();
+		// Five: one lead story with a large image plus four supporting rows.
+		$data['latest_news']   = $data['show_news']   ? $this->usermodel->getLatestNews(5)   : array();
 		$data['home_events']   = $data['show_events'] ? $this->usermodel->getUpcomingEvents(3) : array();
 
 		// Real coupons, replacing the four invented "hot deals".
 		// getDistinctActiveCoupons() de-dupes in PHP — see the model for why a
 		// GROUP BY here is fatal under ONLY_FULL_GROUP_BY.
-		$data['home_deals'] = $this->usermodel->getDistinctActiveCoupons(4);
-
-		// The two homepage placements sold on /pricing-plan. Both are backed by
-		// a DATE column (migration 0018), so they expire on their own and both
-		// return empty until that migration has run.
-		$data['home_hotspot'] = $this->usermodel->getHotspotListings(8);
-		$data['home_week']    = $this->usermodel->getBusinessOfTheWeek();
+		$data['home_deals'] = $this->usermodel->getDistinctActiveCoupons(3);
 
 		// Categories: stable, count-ordered for the strip and the sidebar.
 		$data['home_categories']        = $this->usermodel->getCategoriesWithCounts(12);
 		$data['all_listing_categories'] = $this->usermodel->getHeaderNavigationCategories(50);
 		$data['header_categories']      = $data['all_listing_categories'];
-		// Still consumed by the sidebar category widget in views/index.php.
-		$data['random_listing_categories'] = $this->usermodel->getRandomTenCategory(10);
+		// The footer partial takes whatever the page already loaded rather
+		// than running its own query.
+		$data['footer_categories']      = array_slice($data['home_categories'], 0, 7);
+
+		// Popular searches under the hero search box. Deliberately search
+		// terms rather than category links: the category names in this
+		// install run to things like "Glass-Circles & Other Special Shapes",
+		// which reads badly in a one-line list, and /search?q= always
+		// resolves to something.
+		$data['popular_searches'] = array(
+			'Restaurants', 'Plumbers', 'Hair Salons', 'Dentists', 'Auto Repair',
+		);
 
 		// --- Advertising ------------------------------------------------
 		// Prime every zone the view renders in ONE query; without this each

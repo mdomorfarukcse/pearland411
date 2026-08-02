@@ -39,8 +39,10 @@
 	margin-bottom: 18px;
 }
 
-/* Pear green — the web-services card. */
-.p411-promo { background: linear-gradient(150deg, #1F3D0F 0%, #35630F 55%, #4E8A28 100%); }
+/* Navy with green accents — the web-services card. It was pear green on pear
+   green, which put a third large green panel on a page the 2026-08 brief was
+   already asking to de-green; the accents below carry the brand instead. */
+.p411-promo { background: linear-gradient(150deg, #12143A 0%, #20245B 55%, #2C3178 100%); }
 /* Burgundy — the design card, matching assets/images/ads/banner-design-*.svg
    so the card and the fallback creative read as the same product. */
 .p411-bpromo { background: linear-gradient(150deg, #231018 0%, #5A2540 55%, #7C3357 100%); }
@@ -55,7 +57,7 @@
 	height: 150px;
 	border-radius: 50%;
 }
-.p411-promo::after  { background: rgba(140, 198, 63, .22); }
+.p411-promo::after  { background: rgba(121, 184, 42, .28); }
 .p411-bpromo::after { background: rgba(240, 200, 220, .16); }
 
 .p411-promo > *,
@@ -72,7 +74,7 @@
 	text-transform: uppercase;
 	margin-bottom: 7px;
 }
-.p411-promo__eyebrow  { color: #D6E7B2; }
+.p411-promo__eyebrow  { color: #8FCB46; }
 .p411-bpromo__eyebrow { color: #F0C8DC; }
 
 .p411-promo h3,
@@ -127,6 +129,8 @@
 	background: rgba(255, 255, 255, .14);
 	color: #fff;
 }
+/* green accents on the navy card */
+.p411-promo li i { background: rgba(121, 184, 42, .3); color: #C7E79A; }
 .p411-promo li b,
 .p411-bpromo li b { display: block; font-weight: 600; color: #fff; }
 .p411-promo li span,
@@ -156,10 +160,12 @@ a.p411-bpromo__cta {
 	background: #fff;
 	transition: background .16s ease, color .16s ease;
 }
-.p411-promo__cta,  a.p411-promo__cta  { color: #23430F; }
+/* Green pill on the navy card — the one place the brand colour appears at
+   full strength there. */
+.p411-promo__cta,  a.p411-promo__cta  { background: #79B82A; color: #FFFFFF; }
 .p411-bpromo__cta, a.p411-bpromo__cta { color: #4A1E35; }
 
-.p411-promo__cta:hover,  a.p411-promo__cta:hover  { background: #F3F8E8; color: #23430F; text-decoration: none; }
+.p411-promo__cta:hover,  a.p411-promo__cta:hover  { background: #5E9220; color: #FFFFFF; text-decoration: none; }
 .p411-bpromo__cta:hover, a.p411-bpromo__cta:hover { background: #FBEFF5; color: #4A1E35; text-decoration: none; }
 
 .p411-promo__foot,

@@ -67,7 +67,7 @@
 							<h4>#1 Business Directory and Service Provider</h4>
 							<p>A platform that connects businesses and service providers, helping users easily find trusted local services in one place.</p>
 						</div>
-						<div class="col-md-3 bb-link"> <a href="/pricing-plan">Add my business</a>
+						<div class="col-md-3 bb-link"> <a href="<?= base_url('pricing-plan') ?>">Add my business</a>
 						</div>
 					</div>
 				</div>
@@ -75,122 +75,50 @@
 		</div>
 	</section>
 	<!-- END -->
-	<section class=" wed-hom-footer">
-		<div class="container">
-			<div class="row foot-supp">
-				<h2><span>Free support:</span> 281-482-2031 &nbsp;&nbsp;|&nbsp;&nbsp; <span>Email:</span>info@pearland411.com</h2>
-			</div>
-			<div class="row wed-foot-link">
-				<div class="col-md-4 foot-tc-mar-t-o">
-					<h4>Top Category</h4>
-					<ul>
-						<li><a href="/all_listing/clothing-retail">Clothing-Retail</a>
-						</li>
-						<li><a href="/all_listing/tailors">Tailors</a>
-						</li>
-						<li><a href="/all_listing/glass-circles-other-special-shapes">Glass-Circles & Other Special Shapes</a>
-						</li>
-						<li><a href="/all_listing/apartments">Apartments</a>
-						</li>
-						<li><a href="/all_listing/chemicals-manufacturers">Chemicals-Manufacturers</a>
-						</li>
-						<li><a href="/all_listing/attorneys">Attorneys</a>
-						</li>
-						<li><a href="/all_listing/burglar-alarm-systems-whls">Burglar Alarm Systems (Whls)</a>
-						</li>
-						<li><a href="/all_listing/pipe-new-whls">Pipe New (Whls)</a>
-						</li>
-					</ul>
-				</div>
-				<div class="col-md-4">
-					<!-- <h4>Trending Category</h4> -->
-					<p>Address: Pearland, Texas, USA</p>
-					<p>Phone: <a href="tel:281-482-2031">281-482-2031</a>
-					</p>
-					<p>Email: <a href="mailto:sales@pearland411.com">sales@pearland411.com</a>
-					</p>
-					<?php
-					// Social icons render only when a URL is configured.
-					// Set them via /admin/setting (preferred) — falls back
-					// to SOCIAL_*_URL env vars and finally an empty string.
-					$__footer_socials = array(
-						'1.png' => array('Facebook',    site_setting('social_facebook_url',  '')),
-						'2.png' => array('Twitter / X', site_setting('social_twitter_url',   '')),
-						'3.png' => array('Instagram',   site_setting('social_instagram_url', '')),
-						'4.png' => array('LinkedIn',    site_setting('social_linkedin_url',  '')),
-					);
-					foreach ($__footer_socials as $icon => $row):
-						list($label, $url) = $row;
-						if ($url === '') continue;
-					?>
-						<a target="_blank" rel="noopener" href="<?= e_attr($url) ?>" aria-label="<?= e_attr($label) ?>">
-							<img src="<?= base_url() ?>assets/images/social/<?= e_attr($icon) ?>" alt="<?= e_attr($label) ?>">
-						</a>
-					<?php endforeach; unset($__footer_socials); ?>
-				</div>
-				<div class="col-md-4">
-					<h4>HELP &amp; SUPPORT</h4>
-					<ul>
-						<li><a href="/about-us">About us</a>
-						</li>
-						<li><a href="/faq">FAQ</a>
-						</li>
-						<li><a href="/privacy-policy">Privacy Policy</a>
-						</li>
-						<li><a href="/terms-of-use">Terms of Use</a>
-						</li>
-
-						<li><a href="/contact-us">Contact us</a>
-						</li>
-						<!--                    <li><a href="#">-->
-						<!--</a>-->
-						<!--                    </li>-->
-					</ul>
-				</div>
-			</div>
-
-		</div>
-	</section>
+	<?php
+	/*
+	 * The footer. Shared with the homepage through one partial — this used to
+	 * be a second, hand-kept copy that had drifted: a different phone number,
+	 * a different email, eight hard-coded category slugs (several of which no
+	 * longer resolve) and a copyright line reading "2025-2035".
+	 *
+	 * Styles: assets/css/site-footer.css, linked from views/header.php.
+	 */
+	include APPPATH . 'views/partials/site_footer.php';
+	?>
 	<!-- START -->
-	<section>
-		<div class="cr">
-			<div class="container">
-				<div class="row">
-					<p>Copyright © 2025-2035 <a href="<?= base_url() ?>">Pearland411</a>. Proudly powered by <a href="https://www.spacecentersystems.com/" target="_blank" rel="noopener">Space Center Systems</a>
-					</p>
-				</div>
-			</div>
-		</div>
-	</section>
-	<!-- END -->
-	<!-- START -->
+	<?php /* Every link in here pointed at a .html file — index.html,
+	         all-category.html, events.html — which is the static template this
+	         theme was cut from. None of them resolved. */ ?>
 	<div class="fqui-menu">
 		<ul>
 			<li>
-				<a href="index.html">
-					<img src="<?= base_url() ?>assets/images/icon/home.png">Home</a>
+				<a href="<?= base_url() ?>">
+					<img src="<?= base_url() ?>assets/images/icon/home.png" alt="">Home</a>
 			</li>
-			<li><span class="mob-sear"><img src="<?= base_url() ?>assets/images/icon/search1.png">Search</span>
+			<li><span class="mob-sear"><img src="<?= base_url() ?>assets/images/icon/search1.png" alt="">Search</span>
 			</li>
 			<li>
-				<a href="all-category.html" class="act">
-					<img src="<?= base_url() ?>assets/images/icon/shop.png">Services</a>
+				<a href="<?= base_url('all-category') ?>" class="act">
+					<img src="<?= base_url() ?>assets/images/icon/shop.png" alt="">Services</a>
 			</li>
 			<?php if (site_setting('service_events_enabled','1') !== '0'): ?>
 			<li>
-				<a href="events.html">
-					<img src="<?= base_url() ?>assets/images/icon/calendar.png">Events</a>
+				<a href="<?= base_url('event') ?>">
+					<img src="<?= base_url() ?>assets/images/icon/calendar.png" alt="">Events</a>
 			</li>
 			<?php endif; ?>
 
 			<li>
-				<a href="coupons.html">
-					<img src="<?= base_url() ?>assets/images/icon/coupons.png">Coupons</a>
+				<a href="<?= base_url('coupons') ?>">
+					<img src="<?= base_url() ?>assets/images/icon/coupons.png" alt="">Deals</a>
 			</li>
+			<?php if (site_setting('service_news_enabled','1') !== '0'): ?>
 			<li>
-				<a href="blog-posts.html">
-					<img src="<?= base_url() ?>assets/images/icon/blog1.png">Bolgs</a>
+				<a href="<?= base_url('news') ?>">
+					<img src="<?= base_url() ?>assets/images/icon/news.png" alt="">News</a>
 			</li>
+			<?php endif; ?>
 		</ul>
 	</div>
 	<!-- END -->

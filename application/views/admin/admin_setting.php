@@ -194,6 +194,10 @@ $s = isset($settings) ? $settings : array();
 				<input type="url" id="site_og_image" name="site_og_image" value="<?= e_attr($s['site_og_image'] ?? '') ?>" placeholder="https://pearland411.com/assets/images/og-default.jpg">
 			</div>
 			<div class="setting-row">
+				<label for="site_logo_url">Header &amp; footer logo<small>URL of the light logo used on the navy header and footer. Upload it to <code>assets/images/</code> and paste the address, or leave blank for the built-in default.</small></label>
+				<input type="url" id="site_logo_url" name="site_logo_url" value="<?= e_attr($s['site_logo_url'] ?? '') ?>" placeholder="https://pearland411.com/assets/images/pearland-logo-light.png">
+			</div>
+			<div class="setting-row">
 				<label for="contact_phone">Contact phone<small>Footer + tel: links</small></label>
 				<input type="tel" id="contact_phone" name="contact_phone" value="<?= e_attr($s['contact_phone'] ?? '') ?>" placeholder="281-482-2031">
 			</div>
