@@ -6075,6 +6075,151 @@ class Usermodel extends CI_Model
 		return $this->db->get()->result();
 	}
 
+	/**
+	 * One page of the /all-category index: every listing category, with the
+	 * number of listings the public can actually see in it.
+	 *
+	 * Replaces getAllCategoryWithPagination(), which selected no count and
+	 * ordered by `category_id DESC` — so the index opened on whichever
+	 * categories happened to be created last, and a visitor had no way to tell
+	 * a category holding 257 businesses from one holding none.
+	 *
+	 * The search runs in SQL. The page used to filter in PHP over the twenty
+	 * rows of the current page only, so searching for a category that lived on
+	 * page 3 returned "no categories found".
+	 *
+	 * @param int    $limit
+	 * @param int    $offset
+	 * @param string $search  matched against name and description
+	 */
+	public function getCategoriesPaged($limit = 20, $offset = 0, $search = '')
+	{
+		if (!$this->db->table_exists('listing_categories')) return array();
+
+		$has_desc  = $this->db->field_exists('category_description', 'listing_categories');
+		$has_image = $this->db->field_exists('category_image', 'listing_categories');
+
+		$cols = array('lc.category_id', 'lc.category_name', 'lc.category_slug');
+		if ($has_image) $cols[] = 'lc.category_image';
+		if ($has_desc)  $cols[] = 'lc.category_description';
+
+		$this->db
+			->select(implode(', ', $cols) . ', COUNT(l.listing_id) AS listing_count', false)
+			->from('listing_categories lc')
+			->join('listings l', 'l.category_id = lc.category_id AND ' . $this->publishedListingJoinCondition('l'), 'left');
+
+		$search = trim((string) $search);
+		if ($search !== '') {
+			$this->db->group_start()->like('lc.category_name', $search);
+			if ($has_desc) $this->db->or_like('lc.category_description', $search);
+			$this->db->group_end();
+		}
+
+		// Every non-aggregate column is grouped, so this survives
+		// ONLY_FULL_GROUP_BY (the MySQL 5.7+ default).
+		return $this->db
+			->group_by($cols)
+			->order_by('listing_count', 'DESC')
+			->order_by('lc.category_name', 'ASC')
+			->limit((int) $limit, (int) $offset)
+			->get()->result();
+	}
+
+	/** Must apply exactly the filters getCategoriesPaged() applies. */
+	public function countCategoriesWithSearch($search = '')
+	{
+		if (!$this->db->table_exists('listing_categories')) return 0;
+
+		$this->db->from('listing_categories lc');
+
+		$search = trim((string) $search);
+		if ($search !== '') {
+			$this->db->group_start()->like('lc.category_name', $search);
+			if ($this->db->field_exists('category_description', 'listing_categories')) {
+				$this->db->or_like('lc.category_description', $search);
+			}
+			$this->db->group_end();
+		}
+
+		return (int) $this->db->count_all_results();
+	}
+
+	/**
+	 * Find a category by a word in its name — for navigation links that need
+	 * to point at "whatever this site calls Healthcare" rather than at a slug
+	 * typed into a template.
+	 *
+	 * The header's Sports and Health links were hard-coded to
+	 * `all_listing/sports-clubs` and `all_listing/health-services`. Neither
+	 * slug is guaranteed to exist: categories are operator-editable, and a
+	 * link to a slug nothing matches lands on an empty directory page.
+	 *
+	 * $keywords is tried in order, so pass the specific term first
+	 * ('healthcare' before 'health'). With $must_have_listings the category is
+	 * only returned when the public can actually see something in it, which is
+	 * what lets a caller hide the link instead of pointing at an empty page.
+	 *
+	 * @param  array $keywords lower-case substrings of the category name
+	 * @param  bool  $must_have_listings
+	 * @return object|null  category_id / category_name / category_slug / listing_count
+	 */
+	public function findCategoryByKeywords(array $keywords, $must_have_listings = true)
+	{
+		static $cache = null;
+
+		if ($cache === null) {
+			$cache = array();
+			if ($this->db->table_exists('listing_categories')) {
+				$cache = $this->db
+					->select('lc.category_id, lc.category_name, lc.category_slug,
+					          COUNT(l.listing_id) AS listing_count', false)
+					->from('listing_categories lc')
+					->join('listings l', 'l.category_id = lc.category_id AND ' . $this->publishedListingJoinCondition('l'), 'left')
+					->group_by(array('lc.category_id', 'lc.category_name', 'lc.category_slug'))
+					->get()->result();
+			}
+		}
+
+		foreach ($keywords as $needle) {
+			$needle = strtolower(trim((string) $needle));
+			if ($needle === '') continue;
+
+			$best = null;
+			foreach ($cache as $row) {
+				if (strpos(strtolower((string) $row->category_name), $needle) === false) continue;
+				if ($must_have_listings && (int) $row->listing_count < 1) continue;
+				// Prefer the fullest category when several names match.
+				if ($best === null || (int) $row->listing_count > (int) $best->listing_count) {
+					$best = $row;
+				}
+			}
+			if ($best !== null) return $best;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Classifieds categories with the number of live adverts in each, for the
+	 * /classifieds sidebar. Empty categories are dropped — the rail is for
+	 * navigating, and a link to nothing is not navigation.
+	 */
+	public function getClassifiedsCategoriesWithCounts($limit = 10)
+	{
+		if (!$this->db->table_exists('classifieds_categories')) return array();
+
+		return $this->db
+			->select('cc.category_id, cc.category_name, COUNT(c.classifieds_id) AS item_count', false)
+			->from('classifieds_categories cc')
+			->join('classifieds c', 'c.classifieds_category_id = cc.category_id AND c.classifieds_status = 1', 'left')
+			->group_by(array('cc.category_id', 'cc.category_name'))
+			->having('item_count >', 0)
+			->order_by('item_count', 'DESC')
+			->order_by('cc.category_name', 'ASC')
+			->limit((int) $limit)
+			->get()->result();
+	}
+
 	/* =====================================================================
 	 * HOMEPAGE LISTING FEEDS
 	 * ---------------------------------------------------------------------

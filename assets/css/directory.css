@@ -451,6 +451,31 @@
 .p411-cats span { display: block; margin-top: 3px; font-size: 11px; color: var(--p411-ink-3); }
 @media (max-width: 480px) { .p411-cats { grid-template-columns: repeat(2, 1fr); } }
 
+/* Tinted variant, as on the homepage: a rounded icon plate and an accent that
+   rotates navy / green / burgundy, so a grid of two dozen tiles does not read
+   as one green block. Additive — the strip above emits none of these classes,
+   so it keeps the plain treatment. Used by /all-category. */
+.p411-cats--index { grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 14px; }
+.p411-cats a > i {
+	display: grid; place-items: center;
+	width: 46px; height: 46px; margin: 0 auto 10px;
+	border-radius: 14px; background: #fff;
+}
+.p411-cats a > i svg { display: block; }
+.p411-cats--index a { padding: 18px 12px 16px; }
+.p411-cats--index b { font-size: 14px; }
+
+.p411-cat--green      { background: var(--p411-green-w) !important; }
+.p411-cat--green > i  { color: var(--p411-green-d); }
+.p411-cat--green:hover { border-color: var(--p411-green) !important; }
+.p411-cat--bu         { background: var(--p411-bu-w) !important; }
+.p411-cat--bu > i     { color: var(--p411-bu); }
+.p411-cat--bu:hover   { border-color: var(--p411-bu-l) !important; }
+.p411-cat--navy       { background: var(--p411-navy-w) !important; }
+.p411-cat--navy > i   { color: var(--p411-navy); }
+.p411-cat--navy:hover { border-color: var(--p411-navy-l) !important; }
+@media (max-width: 420px) { .p411-cats--index { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
+
 /* ---- results toolbar ------------------------------------------------- */
 
 .p411-toolbar {

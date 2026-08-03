@@ -110,6 +110,13 @@ $route['claim-listing/(:any)']        = 'user/claim_listing/$1';
 $route['coupons']                     = 'user/coupons';
 $route['coupons/(:num)']              = 'user/coupon_details/$1';
 
+// Category index. The catch-all above already resolves the bare
+// /all-category, but it is `(:any)` = one segment, so the paginated form
+// needs its own rule — without it page 2 fell back to the long
+// /user/all_category/24 form.
+$route['all-category']                = 'user/all_category';
+$route['all-category/(:num)']         = 'user/all_category/$1';
+
 // IT / web services catalog (admin side)
 $route['admin/services']                       = 'admin/services_list';
 $route['admin/services/add']                   = 'admin/add_service';

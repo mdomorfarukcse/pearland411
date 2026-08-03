@@ -29,9 +29,13 @@
 	<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 
 	<!--== CSS FILES ==-->
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
+	<?php // Both of these were loaded from a CDN. The repository already ships
+	      // the same versions (jQuery UI 1.12.1, Bootstrap 4.3.1), so serving
+	      // them locally drops two render-blocking third-party requests from
+	      // every page on the site. views/index.php does the same. ?>
+	<link rel="stylesheet" href="<?= base_url() ?>assets/css/jquery-ui.css">
 
-	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+	<link rel="stylesheet" href="<?= base_url() ?>assets/css/bootstrap.css">
 	<link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/css/select2.min.css" rel="stylesheet" />
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/style.css">
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/fonts.css">
@@ -614,6 +618,30 @@
 
 	<!-- END -->
 
+	<?php
+	/*
+	 * The Sports and Health links used to be hard-coded to
+	 * `all_listing/sports-clubs` and `all_listing/health-services`. Categories
+	 * are operator-editable, so neither slug is guaranteed to exist — and a
+	 * slug that matches nothing lands the visitor on an empty directory page.
+	 * Both are resolved by name now, against categories that actually hold
+	 * published listings, and an item that resolves to nothing is left out
+	 * rather than pointing at an empty page.
+	 *
+	 * One query, cached for the request — see findCategoryByKeywords().
+	 */
+	$__nav_ci = get_instance();
+	$__nav_cat_url = function ($cat) {
+		$slug = !empty($cat->category_slug) ? (string) $cat->category_slug : pearland_slug($cat->category_name);
+		return base_url('all_listing/' . rawurlencode($slug));
+	};
+	$__nav_health = $__nav_sports = null;
+	if (isset($__nav_ci->usermodel) && method_exists($__nav_ci->usermodel, 'findCategoryByKeywords')) {
+		// "healthcare" first so it wins over "health services" / "mental health".
+		$__nav_health = $__nav_ci->usermodel->findCategoryByKeywords(array('healthcare', 'health'), true);
+		$__nav_sports = $__nav_ci->usermodel->findCategoryByKeywords(array('sport', 'recreation'), true);
+	}
+	?>
 	<section class="news-top-menu">
 
 		<div class="container">
@@ -636,11 +664,11 @@
 
 <?php if (site_setting('service_classifieds_enabled','1') !== '0'): ?><li><a href="<?= base_url() ?>classifieds" class="">Classifieds</a></li><?php endif; ?>
 
-						<li><a href="<?= base_url() ?>user/all_listing/sports-clubs" class="">Sports</a></li>
+						<?php if ($__nav_sports): ?><li><a href="<?= e_url($__nav_cat_url($__nav_sports)) ?>" class="">Sports</a></li><?php endif; ?>
 
-						<li><a href="<?= base_url() ?>user/all_listing/health-services" class="">Health</a></li>
+						<?php if ($__nav_health): ?><li><a href="<?= e_url($__nav_cat_url($__nav_health)) ?>" class="">Health</a></li><?php endif; ?>
 
-
+						<li><a href="<?= base_url() ?>all-category" class="">All categories</a></li>
 
 					</ul>
 
@@ -651,6 +679,7 @@
 		</div>
 
 	</section>
+	<?php unset($__nav_ci, $__nav_cat_url, $__nav_health, $__nav_sports); ?>
 
 	<script>
 		// select the elements
