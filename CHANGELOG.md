@@ -93,6 +93,39 @@ cannot drift.
 
 ---
 
+## 2026-08-03 — The "Add my business" band above the footer joins the palette
+
+### Changed
+- **`.full-bot-book`, the last band before the footer**, was the one stretch of
+  the theme's demo styling left on every inner page: a near-black `#191919`
+  strip carrying a card in a **yellow-to-orange gradient** (`#ffea31` →
+  `#ffbe5e`) with black text and a **navy-blue** pill — four colours that
+  appear nowhere in the brand, sitting directly on top of the new navy footer.
+  It is now a cream `#F7F5F0` band (so the page steps cream → navy rather than
+  slamming into black) carrying a rounded navy card with white copy and the
+  green pill the rest of the site uses for calls to action.
+- **Layout.** The theme floats all three children and Bootstrap gives them
+  `col-md-*` widths; the card is a flex row now, so the icon, the copy and the
+  button line up on one baseline at any width. Below 760px it stacks
+  left-aligned with a full-width button — the theme's own phone rules centred
+  the text, pushed the copy down by 30px and left the button shrink-wrapped.
+- **Gutters.** The theme strips the padding off `.container`, so below the
+  fixed-width breakpoint the card ran into both edges of the screen; the band
+  carries the same 15px gutter the footer's columns sit on.
+
+The wording ("#1 Business Directory and Service Provider") and the markup in
+`views/footer.php` are untouched — this is paint and layout only. Note that
+`views/user_footer.php` (the logged-in dashboard) has its own copy of this band
+still carrying the vendor's Lorem Ipsum and a dead `pricing-details.html` link,
+inside a footer that is still entirely theme demo content; it is left alone
+here rather than half-restyled.
+
+### Key files
+`assets/css/site-footer.css` (bumped to `?v=2` in `views/header.php` and
+`views/index.php`).
+
+---
+
 ## 2026-08-03 — One Explore menu and one header search across the site
 
 ### Fixed

@@ -226,7 +226,7 @@ unset($__ext, $__rel);
        listing-details pages so the cards can't drift. -->
   <link rel="stylesheet" href="<?= base_url() ?>assets/css/promo-cards.css?v=2">
   <!-- The footer (partials/site_footer.php), shared with every other page. -->
-  <link rel="stylesheet" href="<?= base_url() ?>assets/css/site-footer.css?v=1">
+  <link rel="stylesheet" href="<?= base_url() ?>assets/css/site-footer.css?v=2">
 
   <?php // Both of these were loaded from a CDN. The repository already ships
         // the same versions (Bootstrap 4.3.1, jQuery UI 1.12.1), so serving
