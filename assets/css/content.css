@@ -651,3 +651,455 @@
 	.p411-ab-panel { padding: 20px 17px; }
 	.p411-ab-stats b { font-size: 26px; }
 }
+
+/* ============================================================================
+ * 2026-08 — the last public pages to come onto the kit
+ * ----------------------------------------------------------------------------
+ * Sign in / register (.p411-ct--auth), contact (.p411-ct--contact), deals
+ * (.p411-ct--coupons + .p411-ld--coupon) and the services catalog
+ * (.p411-ct--services + .p411-ld--service). Each of those views used to carry
+ * its own <style> block in its own palette — the contact page alone had ~260
+ * lines of #180f5e/#7bb73f, and the services page ~370 of #180f5e/#2563eb.
+ * Everything below is built from the same tokens as the rest of the kit.
+ * ==========================================================================*/
+
+/* ---- shared odds and ends -------------------------------------------- */
+
+/* A lead paragraph under a section heading or at the top of a card. */
+.p411-lede {
+	margin: -6px 0 16px;
+	font-size: 15px;
+	line-height: 1.65;
+	color: var(--p411-ink-2);
+	max-width: 68ch;
+}
+.p411-prose .p411-lede { margin-top: 0; }
+
+/* Stored HTML — the admin-entered body of a service, an article, a listing —
+   only ever got paragraph and link styling from the kit. Headings came out at
+   browser defaults and every list lost its markers to the theme's global
+   `li { list-style: none; background: … }`. */
+.p411-prose h2, .p411-prose h3, .p411-prose h4 {
+	margin: 18px 0 8px;
+	font-weight: 700;
+	line-height: 1.3;
+	color: var(--p411-navy);
+}
+.p411-prose h2 { font-size: 20px; }
+.p411-prose h3 { font-size: 17px; }
+.p411-prose h4 { font-size: 15.5px; }
+.p411-prose > *:first-child { margin-top: 0; }
+.p411-prose ul, .p411-prose ol { margin: 10px 0 14px; padding-left: 22px; }
+.p411-prose ul { list-style: disc; }
+.p411-prose ol { list-style: decimal; }
+.p411-prose li {
+	list-style: inherit;
+	background: none;
+	margin: 0 0 6px;
+	padding: 0;
+	font-size: inherit;
+	line-height: 1.7;
+}
+.p411-prose li::before { content: none; }
+.p411-prose blockquote {
+	margin: 14px 0;
+	padding: 10px 16px;
+	border-left: 3px solid var(--p411-bu);
+	background: var(--p411-bu-w);
+	color: var(--p411-ink);
+	font-size: 14px;
+}
+
+/* The asterisk on a required field. Burgundy, not the theme's red. */
+.p411-req { color: var(--p411-bu); font-weight: 700; }
+
+/* Two fields side by side inside a .p411-form. */
+.p411-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+
+.p411-form label {
+	display: block;
+	margin: 0 0 5px;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--p411-ink-2);
+}
+.p411-form .formError:empty { display: none; }
+.p411-form .formError {
+	margin-top: 5px;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--p411-bu);
+}
+
+/* A label/value table inside a card. (`.p411-ld__facts` looks similar but is
+   the hero's white-on-navy version and drops the label entirely.) */
+.p411-facts { list-style: none; margin: 0; padding: 0; }
+.p411-facts li {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 16px;
+	margin: 0;
+	padding: 9px 0;
+	border-bottom: 1px dashed var(--p411-line);
+	background: none;
+	font-size: 13.5px;
+	list-style: none;
+}
+.p411-facts li:last-child { border-bottom: 0; padding-bottom: 0; }
+.p411-facts li::before { content: none; }
+.p411-facts span { flex: none; color: var(--p411-ink-3); }
+.p411-facts b { text-align: right; font-weight: 600; color: var(--p411-ink); }
+
+/* Radio pills — the register form's zip codes. */
+.p411-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.p411-choice {
+	position: relative;
+	margin: 0;
+	cursor: pointer;
+}
+.p411-choice input {
+	position: absolute;
+	opacity: 0;
+	width: 0;
+	height: 0;
+}
+.p411-choice span {
+	display: block;
+	padding: 9px 18px;
+	border: 1.5px solid var(--p411-line);
+	border-radius: 999px;
+	background: #fff;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--p411-ink-2);
+	transition: border-color .14s ease, background .14s ease, color .14s ease;
+}
+.p411-choice input:checked + span {
+	border-color: var(--p411-green);
+	background: var(--p411-green-w);
+	color: var(--p411-green-d);
+}
+.p411-choice input:focus-visible + span {
+	box-shadow: 0 0 0 3px rgba(121, 184, 42, .22);
+}
+
+/* Numbered list, used for "how the codes work". Same `position: static`
+   defence as .p411-ab-steps — style.css:139 makes every ::before absolute. */
+.p411-steps { counter-reset: p411s; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+.p411-steps li {
+	display: flex;
+	gap: 11px;
+	font-size: 13.5px;
+	line-height: 1.6;
+	color: var(--p411-ink-2);
+	background: none;
+	padding: 0;
+	margin: 0;
+}
+.p411-steps li::before {
+	counter-increment: p411s;
+	content: counter(p411s);
+	position: static;
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	background: var(--p411-navy-w);
+	color: var(--p411-navy);
+	font-family: inherit;
+	font-size: 12.5px;
+	font-weight: 700;
+	line-height: 1;
+}
+
+/* ---- sign in / register ---------------------------------------------- */
+
+.p411-ct--auth { padding-bottom: 44px; }
+/* The breadcrumb is normally white-on-hero; these two pages have no hero. */
+.p411-ct--auth .p411-crumb { padding: 22px 0 16px; color: var(--p411-ink-3); }
+.p411-ct--auth .p411-crumb a { color: var(--p411-ink-2); }
+.p411-ct--auth .p411-crumb a:hover { color: var(--p411-green-d); }
+.p411-ct--auth .p411-crumb .is-current { color: var(--p411-navy); font-weight: 600; }
+
+.p411-auth {
+	display: grid;
+	grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+	gap: 22px;
+	align-items: start;
+}
+
+.p411-auth__card {
+	background: var(--p411-card);
+	border: 1px solid var(--p411-line);
+	border-radius: var(--p411-r);
+	box-shadow: var(--p411-sh);
+	padding: 28px 30px 30px;
+}
+.p411-auth__card h1 {
+	margin: 0 0 6px;
+	font-size: 26px;
+	font-weight: 700;
+	color: var(--p411-navy);
+}
+
+.p411-auth__alt {
+	margin-top: 18px;
+	padding-top: 16px;
+	border-top: 1px solid var(--p411-line);
+	font-size: 13.5px;
+	color: var(--p411-ink-2);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+.p411-auth__alt a { color: var(--p411-green-d); font-weight: 600; }
+.p411-auth__alt a:hover { text-decoration: underline; color: var(--p411-green-d); }
+
+.p411-auth__side {
+	background: linear-gradient(150deg, var(--p411-navy-d) 0%, var(--p411-navy) 58%, var(--p411-navy-l) 100%);
+	border-radius: var(--p411-r);
+	padding: 28px 26px 30px;
+	color: rgba(255, 255, 255, .82);
+	box-shadow: var(--p411-sh);
+}
+.p411-auth__eyebrow {
+	display: block;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: .14em;
+	text-transform: uppercase;
+	color: var(--p411-green-l);
+	margin-bottom: 9px;
+}
+.p411-auth__side h2 {
+	margin: 0 0 16px;
+	font-size: 21px;
+	font-weight: 700;
+	line-height: 1.3;
+	color: #fff;
+}
+.p411-auth__side ul { list-style: none; margin: 0 0 18px; padding: 0; }
+.p411-auth__side li {
+	position: relative;
+	margin: 0 0 10px;
+	padding: 0 0 0 26px;
+	background: none;
+	font-size: 14px;
+	line-height: 1.55;
+}
+.p411-auth__side li::before {
+	content: "";
+	position: absolute;
+	left: 2px;
+	top: 6px;
+	width: 11px;
+	height: 6px;
+	border-left: 2px solid var(--p411-green-l);
+	border-bottom: 2px solid var(--p411-green-l);
+	transform: rotate(-45deg);
+	font-size: 0;
+}
+.p411-auth__side-note { margin: 0 0 14px; font-size: 13.5px; color: rgba(255, 255, 255, .68); }
+/* directory.css:366 carries `.p411-ct a.p411-btn--ghost { color: navy }`,
+   which is more specific than a plain class pair — hence the `a` here, or the
+   label stays navy on the navy panel and disappears. */
+.p411-ct--auth .p411-auth__side a.p411-btn--ghost {
+	border-color: rgba(255, 255, 255, .34);
+	color: #fff;
+	background: rgba(255, 255, 255, .06);
+}
+.p411-ct--auth .p411-auth__side a.p411-btn--ghost:hover {
+	border-color: var(--p411-green-l);
+	background: rgba(121, 184, 42, .18);
+	color: #fff;
+}
+
+.p411-auth__help {
+	margin: 20px 0 0;
+	text-align: center;
+	font-size: 13.5px;
+	color: var(--p411-ink-2);
+}
+.p411-auth__help a { color: var(--p411-green-d); font-weight: 600; }
+.p411-auth__help a:hover { text-decoration: underline; color: var(--p411-green-d); }
+
+/* ---- contact ---------------------------------------------------------- */
+
+.p411-contact { list-style: none; margin: 0; padding: 0; }
+.p411-contact li {
+	display: flex;
+	gap: 13px;
+	margin: 0 0 18px;
+	padding: 0 0 18px;
+	border-bottom: 1px solid var(--p411-line);
+	background: none;
+	list-style: none;
+}
+.p411-contact li:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+.p411-contact li::before { content: none; }
+.p411-contact i {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 10px;
+	background: var(--p411-green-w);
+	color: var(--p411-green-d);
+	font-style: normal;
+}
+.p411-contact li:nth-child(2) i { background: var(--p411-navy-w); color: var(--p411-navy); }
+.p411-contact li:nth-child(3) i { background: var(--p411-bu-w); color: var(--p411-bu); }
+.p411-contact h3 {
+	margin: 0 0 3px;
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--p411-ink-3);
+}
+.p411-contact p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--p411-ink); }
+.p411-contact p a { color: var(--p411-navy); font-weight: 700; }
+.p411-contact p a:hover { color: var(--p411-green-d); text-decoration: underline; }
+.p411-contact__sub { font-size: 12.5px !important; color: var(--p411-ink-3) !important; margin-top: 3px !important; }
+
+/* ---- deals & coupons -------------------------------------------------- */
+
+/* The card art when a deal has no photograph: a burgundy field with the
+   ticket glyph, rather than the grey "no photo" well used for businesses —
+   a coupon without a picture is normal, not missing. */
+.p411-coupon__art {
+	display: grid;
+	place-items: center;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(140deg, var(--p411-bu) 0%, var(--p411-bu-l) 100%);
+	color: rgba(255, 255, 255, .9);
+}
+
+.p411-code {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin-top: 12px;
+	padding: 9px 13px;
+	border: 1.5px dashed var(--p411-green);
+	border-radius: var(--p411-r-s);
+	background: var(--p411-green-w);
+}
+.p411-code__label {
+	font-size: 10.5px;
+	font-weight: 700;
+	letter-spacing: .12em;
+	text-transform: uppercase;
+	color: var(--p411-green-d);
+}
+.p411-code b {
+	font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+	font-size: 16px;
+	font-weight: 700;
+	letter-spacing: .08em;
+	color: var(--p411-navy);
+	word-break: break-all;
+}
+.p411-code--lg { margin: 16px 0 18px; padding: 16px 18px; }
+.p411-code--lg b { font-size: 24px; }
+
+.p411-coupon__valid { font-size: 12.5px; color: var(--p411-ink-3); }
+
+/* ---- services --------------------------------------------------------- */
+
+.p411-feat4--trust { margin: 24px 0 30px; }
+
+.p411-svcgrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	gap: 18px;
+}
+
+.p411-svc {
+	display: flex;
+	flex-direction: column;
+	background: var(--p411-card);
+	border: 1px solid var(--p411-line);
+	border-radius: var(--p411-r);
+	box-shadow: var(--p411-sh);
+	padding: 20px 20px 18px;
+	transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.p411-svc:hover {
+	transform: translateY(-3px);
+	box-shadow: var(--p411-sh-h);
+	border-color: var(--p411-line-d);
+}
+.p411-svc__top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin-bottom: 13px;
+}
+.p411-svc__icon {
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	border-radius: 12px;
+	background: var(--p411-navy-w);
+	color: var(--p411-navy);
+}
+.p411-svc__icon .material-icons { font-size: 23px; }
+.p411-svc h3 { margin: 0 0 7px; font-size: 17px; font-weight: 700; line-height: 1.35; }
+.p411-svc h3 a { color: var(--p411-navy); }
+.p411-svc h3 a:hover { color: var(--p411-green-d); }
+.p411-svc__desc {
+	margin: 0 0 16px;
+	font-size: 13.5px;
+	line-height: 1.6;
+	color: var(--p411-ink-2);
+}
+.p411-svc__foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin-top: auto;
+	padding-top: 14px;
+	border-top: 1px solid var(--p411-line);
+}
+.p411-svc__price b { display: block; font-size: 17px; font-weight: 700; color: var(--p411-navy); line-height: 1.2; }
+.p411-svc__price small { font-size: 12px; color: var(--p411-ink-3); }
+
+/* The price block on a service detail page. */
+.p411-price b { font-size: 30px; font-weight: 700; color: var(--p411-navy); line-height: 1; }
+.p411-price > span { margin-left: 6px; font-size: 13.5px; color: var(--p411-ink-3); }
+.p411-price p { margin: 10px 0 0; font-size: 13.5px; line-height: 1.65; color: var(--p411-ink-2); }
+
+/* The quote form rides down the page with the reader on a long service page. */
+@media (min-width: 992px) {
+	.p411-quote { position: sticky; top: 86px; }
+}
+
+/* ---- responsive ------------------------------------------------------- */
+
+@media (max-width: 900px) {
+	.p411-auth { grid-template-columns: 1fr; }
+	/* The sales pitch goes below the form on a phone — somebody who came here
+	   to sign in should not have to scroll past it. */
+	.p411-auth__side { order: 2; }
+	.p411-auth__card { order: 1; }
+}
+
+@media (max-width: 640px) {
+	.p411-auth__card { padding: 22px 18px 24px; }
+	.p411-auth__side { padding: 22px 18px 24px; }
+	.p411-form__row { grid-template-columns: 1fr; }
+	.p411-code { flex-direction: column; align-items: flex-start; gap: 4px; }
+	.p411-code--lg b { font-size: 20px; }
+	.p411-svcgrid { grid-template-columns: 1fr; }
+}

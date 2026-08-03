@@ -93,6 +93,90 @@ cannot drift.
 
 ---
 
+## 2026-08-03 — Sign in, register, contact, deals and services on the shared kit; buy by phone
+
+### Added
+- **A way to buy without checking out.** New `partials/sales_help.php`: the
+  phone number as a 25px green pill (a `tel:` link), opening hours, the email
+  address, and a short callback form — name, phone, email *optional*, "ask for
+  someone in particular" (the named reps), and what they need. It sits at the
+  foot of `/pricing-plan` with a one-line pointer to it in the hero
+  (`#talk-to-us`), and is linked from the register page's sidebar.
+
+  Behind it, three small changes so the form actually works for someone who
+  doesn't want to type an email address:
+  - `User::contact_submit()` takes a whitelisted **`return_to`**
+    (`pricing-plan` / `contact-us`), so a callback request lands back where it
+    was made instead of on /contact-us;
+  - **email is no longer `required`** — an address *or* a phone number is
+    enough, enforced after validation, and the acknowledgement email is only
+    sent when there is somewhere to send it;
+  - the enquiry is filed as **"Pricing plan — callback"** with the requested
+    representative in the message body (`enquiries` has no column for it).
+- **`sales_representatives()`** in `helpers/view_helper.php` — the nine names
+  that were hard-coded in `views/register.php`, now shared with the callback
+  panel and overridable through a `sales_representatives` site setting (one per
+  line or comma separated) so the list can change without a deploy.
+
+### Changed
+- **`/login` and `/register`** are on the shared kit (`.p411-ct--auth`): a
+  white form card beside a navy panel that says what an account is *for*,
+  labelled fields, real error notes and a "call us if you're stuck" line under
+  both. They were the theme's `login-reg` block — an unlabelled form on a white
+  page, a dead Google `g-signin2` placeholder (nothing loads Google's
+  platform.js, so it rendered an empty box) and a copy of the theme's unused
+  "Get quote" modal. Register also **shows its validation errors**: the model
+  returns them bare and the old view printed nothing at all, and the zip-code
+  radios posted **`1`** for 77581 instead of the zip.
+- **`/contact-us`** is on the kit. It carried ~260 lines of its own CSS inside a
+  doubled `<style><style>` tag — so the first line of it printed to the page as
+  text — in the old #180f5e/#7bb73f palette. Now: the standard hero, the form
+  in the main column, and a sidebar with phone / email / location / hours,
+  advertising links and the common questions.
+- **`/coupons` and `/coupons/<id>`** are on the kit, replacing ~110 lines of
+  inline `style="…"` in the old teal (#0e2a3a header, #fff7d6 code chip). The
+  code is a green dashed chip; a deal ending within a week gets an "Ends in N
+  days" flag; a deal with no photograph gets burgundy ticket art rather than
+  the grey "no photo" well; and there is a real empty state instead of a
+  Bootstrap alert. Five ad zones on the index, as on /event and /news.
+- **`/services` and `/services/<slug>`** are on the kit, replacing ~370 lines of
+  page-local CSS (a three-colour #180f5e → #2563eb → #7bb73f hero, blue-tinted
+  cards, a lime-gradient CTA). The category filter is the standard pill row,
+  and the quote form is a sticky card beside the copy.
+- **`/pricing-plan` keeps its layout but takes the brand palette**: `--brand`
+  #180f5e → navy #20245B, `--go` #21a179 teal → green #79B82A, the mint
+  headline → `#A9E060`, "most popular"/"best value" amber → burgundy, and the
+  page ground → cream. Structure and the bundle logic are untouched.
+- **New kit components** in `content.css`, all built from the existing tokens:
+  `.p411-auth*`, `.p411-contact`, `.p411-code` (coupon codes), `.p411-svc*`
+  (service cards), `.p411-facts` (a label/value table inside a card),
+  `.p411-choices` (radio pills), `.p411-steps`, `.p411-form__row`, `.p411-req`
+  and `.p411-lede`.
+- **Stored HTML finally gets styled.** `.p411-prose` only ever styled
+  paragraphs and links, so admin-entered `<h3>` came out at browser defaults
+  and every `<ul>` lost its bullets to the theme's global
+  `li { list-style: none }`. Headings, lists and blockquotes now paint — this
+  affects service bodies, article bodies and listing descriptions alike.
+
+### Fixed
+- **The white gap between the page and the footer** (client report). The
+  site-wide footer banner sat in a `background:#f9fafb` wrapper that was
+  printed whether or not the zone returned anything — with advertising switched
+  off in /admin/setting it was an empty near-white strip across the page.
+  `views/footer.php` buffers the slot and only prints the wrapper when there is
+  a banner in it; the band is cream, and the banner is capped at leaderboard
+  width (a zone with no size on record was stretching to the full container).
+- `/login` and `/register` never called `loadHeaderCategories()`, so the
+  Explore mega menu came up with an empty category column on both.
+
+### Key files
+`application/views/{login,register,contact-us,coupons,coupon_details,services_index,service_details,pricing_plan,footer}.php`,
+`application/views/partials/sales_help.php` (new),
+`application/controllers/User.php` (`contact_submit`, plus `page_css` on the seven rebuilt pages),
+`application/helpers/view_helper.php`, `assets/css/content.css`, `assets/css/site-footer.css`.
+
+---
+
 ## 2026-08-03 — The "Add my business" band above the footer joins the palette
 
 ### Changed

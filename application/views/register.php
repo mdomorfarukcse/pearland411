@@ -1,127 +1,185 @@
-<!-- START -->
-<!--PRICING DETAILS-->
-<section class=" login-reg">
+<?php
+/**
+ * /register — create an account.
+ *
+ * Same shell as /login, on the shared page kit (assets/css/directory.css +
+ * content.css through $page_css). Previously the theme's `login-reg` block: an
+ * unlabelled form on a white page, with the zip-code radios styled as the
+ * theme's `radi-v4` pills and a copy of the unused "Get quote" modal below.
+ *
+ * The sales-representative list now comes from sales_representatives()
+ * (application/helpers/view_helper.php) — the same list the callback panel on
+ * /pricing-plan offers, so the two cannot drift.
+ *
+ * From User::register(): $registrationSucess, $reset.
+ */
+
+$registrationSucess = (isset($registrationSucess) && is_array($registrationSucess))
+	? $registrationSucess
+	: array('status' => false);
+$reset = !empty($reset);
+$done  = !empty($registrationSucess['status']);
+
+/** Repopulate a field unless we've just wiped the form after a success. */
+$rv = function ($field) use ($reset) { return $reset ? '' : set_value($field); };
+
+$zip_codes = array('77581', '77584', '77588');
+$reps      = function_exists('sales_representatives') ? sales_representatives() : array();
+?>
+
+<section class="p411-ct p411-ct--auth">
 	<div class="container">
-		<div class="row">
-			<div class="login-main">
-				<div class="log-bor">&nbsp;</div>
-				<div class="log ">
-					<div class="login">
-						<?php 
-						if(isset($registrationSucess['status'])){ $reg = false; }
-            			if(!$registrationSucess['status']){ 
-						?>
-						<h4>Create an account</h4>
-						<p>Don't have an account? Create your account. It's take less then a minutes</p>
-						<form name="register_form" id="register_form" method="post">
-							<div class="form-group">
-								<input type="text" autocomplete="off" value="<?= (isset($reset) && $reset) ? "" : set_value('name'); ?>" name="name" id="name" class="form-control" placeholder="Name">
-								<div class='formError'><?= form_error('fname') ?></div>
-							</div>
-							<div class="form-group">
-								<input type="email" autocomplete="off" name="email_id" value="<?= (isset($reset) && $reset) ? "" : set_value('email_id'); ?>" id="email_id" class="form-control" placeholder="Email id*" required>
-								<div class='formError'><?= form_error('email_id') ?></div>
-							</div>
-							<div class="form-group">
-								<input type="password" name="password" id="password" value="<?= (isset($reset) && $reset) ? "" : set_value('password'); ?>" class="form-control" placeholder="Password*" required>
-								<div class='formError'><?= form_error('password') ?></div>
-							</div>
-							<div class="form-group">
-								<input type="text" onkeypress="return isNumber(event)" autocomplete="off" name="mobile_number" id="mobile_number" value="<?= (isset($reset) && $reset) ? "" : set_value('mobile_number'); ?>" class="form-control" placeholder="Phone">
-								<div class='formError'><?= form_error('mobile_number') ?></div>
-							</div>
-							<div class="form-group">
-								<input type="text" autocomplete="off" value="<?= (isset($reset) && $reset) ? "" : set_value('hear_us'); ?>" name="hear_us" id="hear_us" class="form-control" placeholder="How did you hear about us:">
-							</div>
-							<div class="form-group ">
-								<select name="sale_representative" id="sale_representative" class="form-control">
-									<option value="" disabled="disabled" selected="selected">Sales Representative:</option>
-									<option value="">None</option>
-									<option value="Joshua Hari">Joshua Hari</option>
-									<option value="Gloria Bennett-Green">Gloria Bennett-Green</option>
-									<option value="Shawn House">Shawn House</option>
-									<option value="Melinda Trussell">Melinda Trussell</option>
-									<option value="BJ Thomas">BJ Thomas</option>
-									<option value="Melissa Kelton">Melissa Kelton</option>
-									<option value="Rashad Ramkissoon">Rashad Ramkissoon</option>
-									<option value="Rafaela Ruffino">Rafaela Ruffino</option>
-									<option value="Eddie Noschese">Eddie Noschese</option>
-								</select>
-							</div>
-							<div class="form-group">
-                <h6>Zip Code</h6>
-                <div class="radi-v4">
-                  <input type="radio" id="77581" value="1"
-                  name="zip_code" checked="">
-                  <label for="77581">77581</label>
-                </div>
-                <div class="radi-v4">
-                  <input type="radio" id="77588" value="77588"
-                  name="zip_code" >
-                  <label for="77588">77588</label>
-                </div>    
-                <div class="radi-v4">
-                  <input type="radio" id="77584" value="77584"
-                  name="zip_code" >
-                  <label for="77584">77584</label>
-                </div> 
-              </div>
-							<button type="submit" name="register_submit" class="btn btn-primary">Register Now</button>
-						</form>
-						<?php }else{ ?>
-              <div class="text-center sucess">
-                <p class="regiDone">
-                  <i class="fa fa-check-square-o" aria-hidden="true"></i>
-                </p>
-                <h3>Registration successful.</h3>
-                
-              </div>
-            <?php } ?>
+
+		<nav class="p411-crumb" aria-label="Breadcrumb">
+			<a href="<?= base_url() ?>">Home</a>
+			<span aria-hidden="true">/</span>
+			<span class="is-current">Create an account</span>
+		</nav>
+
+		<div class="p411-auth">
+
+			<!-- ================================================ FORM CARD -->
+			<div class="p411-auth__card p411-form">
+				<?php if ($done): ?>
+					<div class="p411-empty p411-empty--inline">
+						<div class="p411-empty__icon">
+							<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+								<path d="M20 6 9 17l-5-5"/>
+							</svg>
+						</div>
+						<h3>Account created</h3>
+						<p>You're all set. Sign in and you can add your business straight away.</p>
+						<div class="p411-empty__actions">
+							<a class="p411-btn" href="<?= base_url('login') ?>">Sign in</a>
+							<a class="p411-btn p411-btn--ghost" href="<?= base_url('pricing-plan') ?>">See the packages</a>
+						</div>
 					</div>
-				</div>
-				<div class="log-bot">
-					<ul>
-						<li><a href="<?= base_url() ?>login"> <span class="ll-1">Login?</span></a> 
-						</li>
-						<li><a href="<?= base_url() ?>register"><span class="ll-2">Create an account?</span></a> 
-						</li>
-						<li><a href="<?= base_url() ?>forgot_password"> <span class="ll-3">Forgot password?</span></a>
-						</li>
-					</ul>
-				</div>
-			</div>
-		</div>
-	</div>
-</section>
-<!--END PRICING DETAILS-->
-<section>
-	<div class="pop-ups pop-quo">
-		<!-- The Modal -->
-		<div class="modal fade" id="quote">
-			<div class="modal-dialog">
-				<div class="modal-content">
-					<button type="button" class="close" data-dismiss="modal">&times;</button>
-					<!-- Modal Header -->
-					<div class="quote-pop">
-						<h4>Get quote</h4>
-						<form>
+				<?php else: ?>
+					<h1>Create an account</h1>
+					<p class="p411-form__hint">
+						It takes about a minute, and listing your business is free.
+					</p>
+
+					<?php
+					/* registerUser() returns a message only for a failed INSERT;
+					   a validation failure comes back bare, and the old view
+					   printed nothing at all for it. */
+					$reg_errors = trim(strip_tags(validation_errors()));
+					?>
+					<?php if (!empty($registrationSucess['message'])): ?>
+						<div class="p411-note p411-note--err" role="alert"><?= e($registrationSucess['message']) ?></div>
+					<?php elseif ($reg_errors !== ''): ?>
+						<div class="p411-note p411-note--err" role="alert"><?= nl2br(e($reg_errors)) ?></div>
+					<?php endif; ?>
+
+					<form name="register_form" id="register_form" method="post">
+						<div class="p411-form__row">
 							<div class="form-group">
-								<input type="text" class="form-control" placeholder="Enter name*" required>
+								<label for="name">Your name <span class="p411-req">*</span></label>
+								<input type="text" autocomplete="name" name="name" id="name"
+									   value="<?= $rv('name') ?>" class="form-control"
+									   placeholder="First and last name" minlength="3" required>
+								<div class="formError"><?= form_error('name') ?></div>
 							</div>
 							<div class="form-group">
-								<input type="email" class="form-control" placeholder="Enter email*" pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$" title="Invalid email address" required>
+								<label for="mobile_number">Phone <span class="p411-req">*</span></label>
+								<input type="text" onkeypress="return isNumber(event)" autocomplete="tel"
+									   name="mobile_number" id="mobile_number" value="<?= $rv('mobile_number') ?>"
+									   class="form-control" placeholder="281-000-0000" minlength="10" required>
+								<div class="formError"><?= form_error('mobile_number') ?></div>
 							</div>
+						</div>
+
+						<div class="form-group">
+							<label for="email_id">Email address <span class="p411-req">*</span></label>
+							<input type="email" autocomplete="email" name="email_id" id="email_id"
+								   value="<?= $rv('email_id') ?>" class="form-control"
+								   placeholder="you@example.com" required>
+							<div class="formError"><?= form_error('email_id') ?></div>
+						</div>
+
+						<div class="form-group">
+							<label for="password">Password <span class="p411-req">*</span></label>
+							<input type="password" name="password" id="password" autocomplete="new-password"
+								   class="form-control" placeholder="At least 8 characters" required>
+							<div class="formError"><?= form_error('password') ?></div>
+						</div>
+
+						<div class="form-group">
+							<label for="hear_us">How did you hear about us?</label>
+							<input type="text" autocomplete="off" value="<?= $rv('hear_us') ?>"
+								   name="hear_us" id="hear_us" class="form-control"
+								   placeholder="A friend, a flyer, a Pearland411 rep&hellip;">
+						</div>
+
+						<?php if (!empty($reps)): ?>
 							<div class="form-group">
-								<input type="text" class="form-control" placeholder="Enter mobile number *" pattern="[0-9+()\- ]{7,20}" title="Enter a phone number (7–20 characters, digits/+/()/-/space allowed)" required>
+								<label for="sale_representative">Sales representative</label>
+								<div class="p411-select">
+									<select name="sale_representative" id="sale_representative" class="form-control">
+										<option value="">None &mdash; I came here myself</option>
+										<?php foreach ($reps as $rep): ?>
+											<option value="<?= e_attr($rep) ?>"><?= e($rep) ?></option>
+										<?php endforeach; ?>
+									</select>
+								</div>
 							</div>
-							<div class="form-group">
-								<textarea class="form-control" rows="3" placeholder="Enter your query or message"></textarea>
+						<?php endif; ?>
+
+						<div class="form-group">
+							<label id="zip-label">Zip code</label>
+							<div class="p411-choices" role="radiogroup" aria-labelledby="zip-label">
+								<?php foreach ($zip_codes as $i => $zip): ?>
+									<label class="p411-choice" for="zip_<?= e_attr($zip) ?>">
+										<input type="radio" id="zip_<?= e_attr($zip) ?>" name="zip_code"
+											   value="<?= e_attr($zip) ?>" <?= $i === 0 ? 'checked' : '' ?>>
+										<span><?= e($zip) ?></span>
+									</label>
+								<?php endforeach; ?>
 							</div>
-							<button type="submit" class="btn btn-primary">Submit</button>
-						</form>
+						</div>
+
+						<button type="submit" name="register_submit" class="p411-btn p411-btn--block p411-btn--lg">
+							Create my account
+						</button>
+						<p class="p411-form__hint" style="margin:12px 0 0;">
+							By registering you agree to our
+							<a href="<?= base_url('terms-of-use') ?>">terms of use</a> and
+							<a href="<?= base_url('privacy-policy') ?>">privacy policy</a>.
+						</p>
+					</form>
+
+					<div class="p411-auth__alt">
+						Already have an account?
+						<a href="<?= base_url('login') ?>">Sign in</a>
 					</div>
-				</div>
+				<?php endif; ?>
 			</div>
+
+			<!-- ==================================================== ASIDE -->
+			<aside class="p411-auth__side">
+				<span class="p411-auth__eyebrow">Why register</span>
+				<h2>Put your business in front of Pearland</h2>
+				<ul>
+					<li>A free listing with your hours, photos and contact details</li>
+					<li>Post events, deals and classifieds all year</li>
+					<li>Collect and reply to customer reviews</li>
+					<li>Add banner advertising whenever you're ready</li>
+				</ul>
+				<p class="p411-auth__side-note">
+					Would you rather do this over the phone? We're happy to set it up for you.
+				</p>
+				<a class="p411-btn p411-btn--ghost p411-btn--block" href="<?= base_url('pricing-plan') ?>#talk-to-us">Talk to a representative</a>
+			</aside>
+
 		</div>
+
+		<p class="p411-auth__help">
+			Stuck? Call us on
+			<?php $auth_phone = trim((string) site_setting('contact_phone', '281-482-2031')); ?>
+			<a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', $auth_phone)) ?>"><?= e($auth_phone) ?></a>
+			or <a href="<?= base_url('contact-us') ?>">send us a message</a>.
+		</p>
+
 	</div>
 </section>

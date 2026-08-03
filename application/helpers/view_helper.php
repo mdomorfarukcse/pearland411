@@ -442,3 +442,39 @@ if (!function_exists('category_placeholder')) {
         return base_url('assets/images/placeholders/' . $file . '.svg');
     }
 }
+
+if (!function_exists('sales_representatives')) {
+    /**
+     * The named sales reps a caller can be put through to.
+     *
+     * The signup form (views/register.php) has carried this list inline since
+     * the site launched; the callback panel on /pricing-plan needs the same
+     * names, and two hand-kept copies is how one of them goes stale. Editable
+     * without a deploy through the `sales_representatives` setting in
+     * /admin/setting — one name per line, or comma separated.
+     *
+     * @return string[]
+     */
+    function sales_representatives()
+    {
+        $raw = trim((string) site_setting('sales_representatives', ''));
+
+        if ($raw !== '') {
+            $names = preg_split('/[\r\n,]+/', $raw);
+        } else {
+            $names = array(
+                'Joshua Hari', 'Gloria Bennett-Green', 'Shawn House', 'Melinda Trussell',
+                'BJ Thomas', 'Melissa Kelton', 'Rashad Ramkissoon', 'Rafaela Ruffino',
+                'Eddie Noschese',
+            );
+        }
+
+        $out = array();
+        foreach ($names as $name) {
+            $name = trim((string) $name);
+            if ($name !== '') $out[] = $name;
+        }
+
+        return $out;
+    }
+}

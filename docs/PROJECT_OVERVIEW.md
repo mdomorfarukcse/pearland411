@@ -32,8 +32,10 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   links them after the shared sheets. `assets/css/directory.css` is the **shared page kit** — hero,
   two-column shell, cards, buttons, forms, notes, empty states, pager, rail, owner band — and its
   design tokens are declared on the three page scopes that opt in: `.p411-dir` (`/all-listing`),
-  `.p411-ld` (`/listing-details`) and `.p411-ct` (events / news / videos + their detail pages, and
-  `/about-us`, which add `assets/css/content.css` on top). The homepage is
+  `.p411-ld` (`/listing-details`, `/coupons/<id>`, `/services/<slug>`) and `.p411-ct` (events /
+  news / videos + their detail pages, `/about-us`, `/all-category`, `/classifieds`, `/login`,
+  `/register`, `/contact-us`, `/coupons` and `/services` — all of which add
+  `assets/css/content.css` on top). The homepage is
   `assets/css/home-sections.css` (`.p411-home`) — the **whole** page, header to newsletter band, so
   it can be re-skinned without touching PHP. The kit's tokens are the **same values** as the
   homepage's, so the two cannot drift. The rule everywhere: **prefix every selector and
@@ -61,8 +63,10 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `/admin/setting`), `partials/service_promo.php` (the static website/hosting/SEO promo →
   `/contact-us`), `partials/banner_design_promo.php` (the ad/banner-design promo →
   `/request-service`; the unsold fallback for `right-side-banner-2` via `$slot_fallback_partial`) —
-  neither promo is sold or rotated, so neither is ever empty — plus `partials/web_dev_cta.php`,
-  `partials/seo_head.php`.
+  neither promo is sold or rotated, so neither is ever empty — `partials/sales_help.php` (phone,
+  email and a callback form for people who would rather not check out online; posts to
+  `/contact-submit` with `return_to`, and offers the `sales_representatives()` list) — plus
+  `partials/web_dev_cta.php`, `partials/seo_head.php`.
 - **Brand artwork** is generated, not hand-drawn: `python3 scripts/generate_brand_art.py` writes
   `assets/images/placeholders/*.svg` (one per kind of business, plus news — served by
   `category_placeholder()`), `assets/images/ads/house-ad-{,burgundy-,navy-,cream-}{strip,wide,box,tall}.svg`
@@ -105,7 +109,11 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Directory / listing | `/all-listing`, `/all_listing/<cat>[/<offset>]`, `/listing-details/<slug>` | `User::all_listing`, `listing_details` | Homepage layout + 6 ad zones each; `?sort=featured\|newest\|name\|rating` |
 | Claim a listing | `/claim-listing/<slug>` | `User::claim_listing`; admin `Admin::claim_approve` | transfers `listings.user_id` |
 | Edit own listing | `/user/edit-listing/<slug>` | `User::edit_listing` | ownership + capability gated |
-| Packages (customer) | `/pricing-plan` | `User::pricing_plan` → `pricing_plan.php` | lists all active `plans` |
+| Packages (customer) | `/pricing-plan` | `User::pricing_plan` → `pricing_plan.php` | lists all active `plans`; carries `partials/sales_help.php` (`#talk-to-us`) so a caller can buy by phone |
+| Sign in / register | `/login`, `/register` | `User::login`, `register` | Shared kit (`.p411-ct--auth`); the rep list comes from `sales_representatives()` |
+| Contact | `/contact-us` → `/contact-submit` | `User::contact_us`, `contact_submit` | Shared kit; an email address **or** a phone number is enough; `return_to` sends callback requests back to the page they came from |
+| Deals & coupons | `/coupons`, `/coupons/<id>` | `User::coupons`, `coupon_details` | Shared kit + 5 ad zones on the index |
+| Services (web/IT) | `/services[?category=]`, `/services/<slug>` | `User::services`, `service_details` → `/request-service` | Shared kit; quote form posts to `User::request_service` |
 | Checkout | `/checkout?plan_id=X` | `User::checkout` / `helcim_init` / `process_checkout` | HelcimPay.js |
 | Manage plan | `/user/my_account` | upgrade/downgrade/cancel | prorated upgrade |
 | Renewal cron | — | `Cli::renew_subscriptions` | daily |

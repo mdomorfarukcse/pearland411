@@ -66,15 +66,21 @@ function pp_features($plan, $cat)
 ?>
 
 <style>
-    .pp{--ink:#1c1b4b;--ink2:#5b5b7a;--line:#e7e7f2;--brand:#180f5e;--go:#21a179;}
-    .pp{background:#f7f8fc;padding:0 0 90px;color:var(--ink);}
+    /* Brand tokens (2026-08): the page was #180f5e navy with a #21a179 teal
+       accent and a mint headline — none of which appear anywhere else on the
+       site. Same values as assets/css/directory.css. Structure untouched. */
+    .pp{--ink:#20245B;--ink2:#5A6472;--line:#E4E6EC;--brand:#20245B;--go:#79B82A;--go-d:#5E9220;--bu:#6D263D;}
+    .pp{background:#F7F5F0;padding:0 0 90px;color:var(--ink);}
     .pp *{box-sizing:border-box;}
 
     /* Hero */
-    .pp-hero{background:linear-gradient(135deg,#180f5e 0%,#2d1f8f 100%);color:#fff;padding:56px 20px 44px;text-align:center;}
+    .pp-hero{background:linear-gradient(135deg,#171A45 0%,#20245B 55%,#6D263D 100%);color:#fff;padding:56px 20px 44px;text-align:center;}
     .pp-hero h1{font-size:34px;font-weight:800;margin:0 0 10px;color:#fff;}
-    .pp-hero h1 span{color:#7bdcb5;}
-    .pp-hero p{margin:0 auto;max-width:620px;font-size:15px;line-height:1.6;color:#cfcbe8;}
+    .pp-hero h1 span{color:#A9E060;}
+    .pp-hero p{margin:0 auto;max-width:620px;font-size:15px;line-height:1.6;color:#CDD4E6;}
+    .pp-callus{margin:18px auto 0 !important;font-size:15px;color:#fff !important;}
+    .pp-callus a{color:#A9E060;font-weight:700;text-decoration:underline;}
+    .pp-callus a:hover{color:#fff;}
 
     .pp-wrap{max-width:1180px;margin:0 auto;padding:0 20px;}
 
@@ -82,15 +88,15 @@ function pp_features($plan, $cat)
     .pp-err{display:none;background:#fdeceb;border:1px solid #f3c3bf;color:#8c2f26;padding:13px 16px;border-radius:11px;margin:-14px auto 22px;font-size:14px;font-weight:600;position:relative;}
 
     /* My packages */
-    .pp-mine{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:-28px auto 34px;box-shadow:0 8px 26px rgba(24,15,94,.08);position:relative;}
+    .pp-mine{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:-28px auto 34px;box-shadow:0 8px 26px rgba(31,36,48,.08);position:relative;}
     .pp-mine h3{font-size:15px;font-weight:800;margin:0 0 14px;color:var(--ink);}
     .pp-mine-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;}
-    .pp-mine-item{border:1px solid var(--line);border-left:3px solid var(--go);border-radius:10px;padding:11px 13px;background:#fbfbfe;}
+    .pp-mine-item{border:1px solid var(--line);border-left:3px solid var(--go);border-radius:10px;padding:11px 13px;background:#FBFCF9;}
     .pp-mine-item .n{font-weight:700;font-size:14px;}
     .pp-mine-item .e{font-size:12px;color:var(--ink2);margin-top:3px;}
-    .pp-mine-item.soon{border-left-color:#e8a33d;}
-    .pp-mine-item.soon .e{color:#b4791d;font-weight:600;}
-    .pp-mine .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#eaf7f2;color:var(--go);margin-left:6px;}
+    .pp-mine-item.soon{border-left-color:var(--bu);}
+    .pp-mine-item.soon .e{color:var(--bu);font-weight:600;}
+    .pp-mine .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#F1F7E5;color:var(--go);margin-left:6px;}
 
     /* Section heading */
     .pp-sec{margin:44px 0 0;}
@@ -102,38 +108,38 @@ function pp_features($plan, $cat)
     /* Cards */
     .pp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:20px;}
     .pp-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px 22px 22px;display:flex;flex-direction:column;transition:.18s;position:relative;}
-    .pp-card:hover{transform:translateY(-3px);box-shadow:0 14px 32px rgba(24,15,94,.11);border-color:#d5d5ea;}
-    .pp-card.is-selected{border-color:var(--go);box-shadow:0 0 0 2px rgba(33,161,121,.16);}
-    .pp-card.owned{border-color:#c9e6da;background:#fafffd;}
+    .pp-card:hover{transform:translateY(-3px);box-shadow:0 14px 32px rgba(31,36,48,.11);border-color:#D6DAE4;}
+    .pp-card.is-selected{border-color:var(--go);box-shadow:0 0 0 2px rgba(121,184,42,.20);}
+    .pp-card.owned{border-color:#CFE0AE;background:#FCFEF8;}
     .pp-badge{position:absolute;top:-10px;right:16px;background:var(--go);color:#fff;font-size:11px;font-weight:700;padding:4px 11px;border-radius:20px;letter-spacing:.3px;}
-    .pp-badge.pop{background:#e8a33d;}
+    .pp-badge.pop{background:var(--bu);}
     .pp-name{font-size:14px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--ink);margin:0 0 8px;line-height:1.35;}
     .pp-desc{font-size:13px;line-height:1.6;color:var(--ink2);margin:0 0 18px;}
     .pp-price{display:flex;align-items:baseline;gap:5px;margin-bottom:4px;}
     .pp-price .amt{font-size:36px;font-weight:800;color:var(--ink);line-height:1;}
     .pp-price .per{font-size:13px;color:var(--ink2);}
     .pp-feats{list-style:none;padding:0;margin:18px 0 22px;border-top:1px solid var(--line);padding-top:16px;}
-    .pp-feats li{position:relative;padding-left:23px;font-size:13.5px;line-height:1.5;color:#43425f;margin-bottom:9px;}
-    .pp-feats li:before{content:"";position:absolute;left:0;top:4px;width:15px;height:15px;border-radius:50%;background:#eaf7f2;}
+    .pp-feats li{position:relative;padding-left:23px;font-size:13.5px;line-height:1.5;color:#3F4657;margin-bottom:9px;}
+    .pp-feats li:before{content:"";position:absolute;left:0;top:4px;width:15px;height:15px;border-radius:50%;background:#F1F7E5;}
     .pp-feats li:after{content:"";position:absolute;left:4.5px;top:8px;width:5px;height:8px;border-right:2px solid var(--go);border-bottom:2px solid var(--go);transform:rotate(42deg);}
     .pp-cta{margin-top:auto;}
     .pp-buy{display:block;width:100%;text-align:center;background:var(--brand);color:#fff;border:none;padding:12px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer;text-decoration:none;transition:.15s;}
-    .pp-buy:hover{background:#241596;color:#fff;}
+    .pp-buy:hover{background:#171A45;color:#fff;}
     .pp-buy.free{background:#fff;color:var(--brand);border:1.5px solid var(--brand);}
-    .pp-buy.ownedbtn{background:#eaf7f2;color:var(--go);cursor:default;}
-    .pp-add{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:9px;background:none;border:1.5px dashed #cfcfe4;color:#5b5b7a;padding:9px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;}
+    .pp-buy.ownedbtn{background:#F1F7E5;color:var(--go);cursor:default;}
+    .pp-add{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:9px;background:none;border:1.5px dashed #D6DAE4;color:#5A6472;padding:9px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;}
     .pp-add:hover{border-color:var(--go);color:var(--go);}
-    .pp-add.on{background:#eaf7f2;border:1.5px solid var(--go);color:var(--go);}
+    .pp-add.on{background:#F1F7E5;border:1.5px solid var(--go);color:var(--go);}
 
     /* Sticky bundle bar */
-    .pp-bar{position:fixed;left:0;right:0;bottom:0;background:#161540;color:#fff;padding:13px 20px;display:none;z-index:9999;box-shadow:0 -6px 24px rgba(0,0,0,.22);}
+    .pp-bar{position:fixed;left:0;right:0;bottom:0;background:#171A45;color:#fff;padding:13px 20px;display:none;z-index:9999;box-shadow:0 -6px 24px rgba(0,0,0,.22);}
     .pp-bar.show{display:block;}
     .pp-bar-in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
     .pp-bar .sum{font-size:14px;flex:1;min-width:180px;}
     .pp-bar .sum b{font-size:19px;margin-left:6px;}
-    .pp-bar .items{font-size:12px;color:#a9a7d0;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:640px;}
+    .pp-bar .items{font-size:12px;color:#AEB7CC;display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:640px;}
     .pp-bar a.co{background:var(--go);color:#fff;padding:11px 26px;border-radius:9px;font-weight:700;text-decoration:none;font-size:14.5px;}
-    .pp-bar button.clr{background:none;border:none;color:#a9a7d0;font-size:13px;cursor:pointer;text-decoration:underline;}
+    .pp-bar button.clr{background:none;border:none;color:#AEB7CC;font-size:13px;cursor:pointer;text-decoration:underline;}
 
     @media(max-width:640px){
         .pp-hero h1{font-size:26px;}
@@ -148,6 +154,20 @@ function pp_features($plan, $cat)
     <div class="pp-hero">
         <h1>Advertise on <span>Pearland411</span></h1>
         <p>Get in front of local customers searching for businesses like yours. Choose a listing tier, then boost it with banners, videos and add-ons.</p>
+        <?php
+        /* Not everyone buying a listing wants to check out online. The line
+           here catches them before they scroll; the full panel with the
+           callback form is at the foot of the catalog. */
+        $pp_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
+        ?>
+        <?php if ($pp_phone !== ''): ?>
+            <p class="pp-callus">
+                Rather order over the phone? Call
+                <a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', $pp_phone)) ?>"><?= e($pp_phone) ?></a>
+                and we will set it up for you &mdash; or
+                <a href="#talk-to-us">ask us to call you back</a>.
+            </p>
+        <?php endif; ?>
     </div>
 
     <div class="pp-wrap">
@@ -182,7 +202,7 @@ function pp_features($plan, $cat)
         <?php endif; ?>
 
         <?php if (empty($plans)): ?>
-            <div class="pp-sec"><p style="color:#5b5b7a;">Packages are being updated — please check back shortly.</p></div>
+            <div class="pp-sec"><p style="color:#5A6472;">Packages are being updated — please check back shortly.</p></div>
         <?php endif; ?>
 
         <?php foreach ($catLabels as $catKey => $catLabel): ?>
@@ -251,6 +271,12 @@ function pp_features($plan, $cat)
                 </div>
             </section>
         <?php endforeach; ?>
+
+        <?php
+        /* Talk to a person: phone, email and a callback form. Shared partial —
+           see views/partials/sales_help.php. */
+        include APPPATH . 'views/partials/sales_help.php';
+        ?>
     </div>
 </div>
 
