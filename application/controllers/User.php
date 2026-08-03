@@ -1662,76 +1662,65 @@ class User extends CI_Controller
 
 	public function all_category($offset = 0)
 	{
-
+		// $offset is accepted and ignored: the index is not paginated any more
+		// (see below), but /user/all_category/20 links are in the wild and must
+		// not 404.
 		if ($this->session->userdata('logged_user')) {
 
 			$data['user'] = $this->usermodel->getUserInformation();
 		}
 
-		// Pagination configuration
-		$limit = 24; // categories per page — a 3-column grid, eight rows
-		$offset = (int)$offset;
-
-		// The search runs in SQL now. The view used to filter the twenty rows
-		// of the current page in PHP, so a category that lived on page 3 came
-		// back as "no categories found".
+		// The search runs in SQL, for visitors without JavaScript and for
+		// shareable ?q= links. The view used to filter the twenty rows of the
+		// current page in PHP, so a category that lived on page 3 came back as
+		// "no categories found".
 		$search = trim((string) $this->input->get('q', TRUE));
 		$data['search_query'] = $search;
 
-		// Categories carry a live listing count, and sort by it: the index
-		// used to order by `category_id DESC`, so it opened on whichever
-		// categories happened to have been created last and gave a visitor no
-		// way to tell a category holding 257 businesses from an empty one.
-		$data['AllCategory'] = $this->usermodel->getCategoriesPaged($limit, $offset, $search);
+		// ONE query, the WHOLE index, no pagination. A category list is a
+		// lookup table, not a feed: paged, a visitor hunting for "Plumbers"
+		// had to guess which of eight pages held it, and find-in-page could
+		// only ever see a twentieth of the list. The view renders all of it,
+		// groups it A-Z and filters in the browser.
+		$categories = $this->usermodel->getAllCategoriesWithCounts($search);
+		$data['AllCategory']      = $categories;
+		$data['total_categories'] = count($categories);
 
-		$total_categories = $this->usermodel->countCategoriesWithSearch($search);
+		// Split once here rather than twice in the view: the busiest dozen get
+		// picture tiles, everything else goes in the A-Z index.
+		$live = array();
+		foreach ($categories as $category) {
+			if ((int) ($category->listing_count ?? 0) > 0) $live[] = $category;
+		}
+		$data['live_categories'] = count($live);
+		$data['popular_categories'] = array_slice($live, 0, 12);
 
-		// Load pagination library
-		$this->load->library('pagination');
+		// A-Z buckets, in name order inside each letter. getAllCategoriesWithCounts()
+		// returns busiest-first, which is what the tiles want and not what an
+		// index wants.
+		$by_letter = array();
+		foreach ($categories as $category) {
+			$name   = trim((string) $category->category_name);
+			$letter = strtoupper(substr($name, 0, 1));
+			if ($letter === '' || !preg_match('/[A-Z]/', $letter)) $letter = '#';
+			$by_letter[$letter][] = $category;
+		}
+		ksort($by_letter);
+		foreach ($by_letter as $letter => $rows) {
+			usort($rows, function ($a, $b) {
+				return strcasecmp((string) $a->category_name, (string) $b->category_name);
+			});
+			$by_letter[$letter] = $rows;
+		}
+		// '#' collects digits and punctuation; it belongs after Z, not before A.
+		if (isset($by_letter['#'])) {
+			$hash = $by_letter['#'];
+			unset($by_letter['#']);
+			$by_letter['#'] = $hash;
+		}
+		$data['categories_by_letter'] = $by_letter;
 
-		// Pagination config
-		$config['base_url'] = base_url('all-category');
-		$config['total_rows'] = $total_categories;
-		$config['per_page'] = $limit;
-		$config['uri_segment'] = 2;
-		$config['reuse_query_string'] = TRUE;
-
-		// Pagination styling (same as all-listing)
-		$config['full_tag_open'] = '<ul class="pagination">';
-		$config['full_tag_close'] = '</ul>';
-		$config['first_link'] = 'First';
-		$config['last_link'] = 'Last';
-		$config['first_tag_open'] = '<li class="page-item">';
-		$config['first_tag_close'] = '</li>';
-		$config['prev_link'] = '&laquo; Previous';
-		$config['prev_tag_open'] = '<li class="page-item">';
-		$config['prev_tag_close'] = '</li>';
-		$config['next_link'] = 'Next &raquo;';
-		$config['next_tag_open'] = '<li class="page-item">';
-		$config['next_tag_close'] = '</li>';
-		$config['last_tag_open'] = '<li class="page-item">';
-		$config['last_tag_close'] = '</li>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a class="page-link" href="#">';
-		$config['cur_tag_close'] = '</a></li>';
-		$config['num_tag_open'] = '<li class="page-item">';
-		$config['num_tag_close'] = '</li>';
-		$config['attributes'] = array('class' => 'page-link');
-
-		$this->pagination->initialize($config);
-		$data['link'] = $this->pagination->create_links();
-
-		// Pagination info
-		$data['total_categories'] = $total_categories;
-		$data['per_page']     = $limit;
-		$data['current_page'] = $limit > 0 ? (int) floor($offset / $limit) + 1 : 1;
-		$data['total_pages']  = $limit > 0 ? (int) ceil($total_categories / $limit) : 1;
-		$data['showing_from'] = $total_categories > 0 ? $offset + 1 : 0;
-		$data['showing_to']   = min($offset + $limit, $total_categories);
-
-		// How many categories hold at least one published listing — the same
-		// figure /about-us and the homepage strip count.
-		$data['live_categories'] = count($this->usermodel->getCategoriesWithCounts(1000));
-		$data['total_listings']  = (int) $this->usermodel->countListingsByCategory(NULL);
+		$data['total_listings'] = (int) $this->usermodel->countListingsByCategory(NULL);
 
 		// Same six zones as the directory and the content pages.
 		$data['ad_slots'] = array(

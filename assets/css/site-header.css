@@ -171,8 +171,19 @@
  */
 /* Both elements, deliberately: with the rule on <body> alone the computed
    value propagates to the viewport only while <html> is `overflow: visible`,
-   and it is not here — the page still scrolled to 2028px in a 1440px window. */
+   and it is not here — the page still scrolled to 2028px in a 1440px window.
+ *
+ * `clip`, not `hidden`. `overflow-x: hidden` makes the element a scroll
+ * container, and a scroll-container ancestor silently disables
+ * `position: sticky` for everything inside it — which is what stopped the
+ * A-Z control on /all-category from sticking. `clip` crops without
+ * scrolling, so sticky keeps working. `hidden` stays as the fallback for
+ * browsers without it: they lose sticky, not the layout.
+ */
 html, body { overflow-x: hidden; }
+@supports (overflow: clip) {
+	html, body { overflow-x: clip; }
+}
 html { max-width: 100%; }
 
 @media (prefers-reduced-motion: reduce) {

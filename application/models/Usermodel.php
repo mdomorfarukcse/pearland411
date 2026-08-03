@@ -6076,23 +6076,31 @@ class Usermodel extends CI_Model
 	}
 
 	/**
-	 * One page of the /all-category index: every listing category, with the
-	 * number of listings the public can actually see in it.
+	 * Every listing category, with the number of listings the public can
+	 * actually see in each — the whole /all-category index in ONE query.
 	 *
 	 * Replaces getAllCategoryWithPagination(), which selected no count and
-	 * ordered by `category_id DESC` — so the index opened on whichever
-	 * categories happened to be created last, and a visitor had no way to tell
+	 * ordered by `category_id DESC`, so the index opened on whichever
+	 * categories happened to be created last and a visitor had no way to tell
 	 * a category holding 257 businesses from one holding none.
 	 *
-	 * The search runs in SQL. The page used to filter in PHP over the twenty
-	 * rows of the current page only, so searching for a category that lived on
-	 * page 3 returned "no categories found".
+	 * Deliberately unpaginated. A category index is a lookup table, not a feed:
+	 * paging it meant a visitor hunting for "Plumbers" had to guess which of
+	 * eight pages it was on, and browser find-in-page — the tool people
+	 * actually reach for — could only ever see a twentieth of the list. The
+	 * page renders all of it and filters in the browser instead. The cost is
+	 * one row of markup per category (~120 bytes, and it gzips to far less),
+	 * against one HTTP round trip per page of twenty.
 	 *
-	 * @param int    $limit
-	 * @param int    $offset
+	 * The search still runs in SQL for the no-JavaScript case and for
+	 * shareable /all-category?q= links. The page used to filter in PHP over
+	 * the twenty rows of the current page only, so searching for a category
+	 * that lived on page 3 returned "no categories found".
+	 *
 	 * @param string $search  matched against name and description
+	 * @param int    $limit   0 = no limit (the index); >0 caps the result
 	 */
-	public function getCategoriesPaged($limit = 20, $offset = 0, $search = '')
+	public function getAllCategoriesWithCounts($search = '', $limit = 0)
 	{
 		if (!$this->db->table_exists('listing_categories')) return array();
 
@@ -6117,31 +6125,14 @@ class Usermodel extends CI_Model
 
 		// Every non-aggregate column is grouped, so this survives
 		// ONLY_FULL_GROUP_BY (the MySQL 5.7+ default).
-		return $this->db
+		$this->db
 			->group_by($cols)
 			->order_by('listing_count', 'DESC')
-			->order_by('lc.category_name', 'ASC')
-			->limit((int) $limit, (int) $offset)
-			->get()->result();
-	}
+			->order_by('lc.category_name', 'ASC');
 
-	/** Must apply exactly the filters getCategoriesPaged() applies. */
-	public function countCategoriesWithSearch($search = '')
-	{
-		if (!$this->db->table_exists('listing_categories')) return 0;
+		if ((int) $limit > 0) $this->db->limit((int) $limit);
 
-		$this->db->from('listing_categories lc');
-
-		$search = trim((string) $search);
-		if ($search !== '') {
-			$this->db->group_start()->like('lc.category_name', $search);
-			if ($this->db->field_exists('category_description', 'listing_categories')) {
-				$this->db->or_like('lc.category_description', $search);
-			}
-			$this->db->group_end();
-		}
-
-		return (int) $this->db->count_all_results();
+		return $this->db->get()->result();
 	}
 
 	/**

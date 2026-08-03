@@ -93,6 +93,47 @@ cannot drift.
 
 ---
 
+## 2026-08-03 — /all-category shows every category on one page
+
+Follow-up to the rebuild below: the index is no longer paginated.
+
+A category list is a lookup table, not a feed. Paged twenty at a time, a
+visitor hunting for "Plumbers" had to guess which of eight pages held it, and
+find-in-page — the tool people actually reach for — could only ever see a
+twentieth of the list.
+
+- **One query, the whole index** (`getAllCategoriesWithCounts()`), then the
+  busiest twelve as picture tiles and everything else as a dense A–Z index:
+  name, count, nothing else. Tiles do not scale past a couple of dozen; 500 of
+  them is a beautiful way to make a category impossible to find.
+- **Filter in the browser.** Typing narrows the whole list instantly — no
+  request, no reload — hiding empty letters as it goes and reporting the match
+  count. The form still submits for visitors without JavaScript, which is what
+  the SQL search is for, and `?q=` links still work.
+- **A sticky filter + A–Z jump bar** that clears the theme's fixed header, so
+  the controls stay reachable however far down the page you are.
+- **`content-visibility: auto` on each letter group**, so the browser skips
+  layout and paint for the groups off screen; `contain-intrinsic-size` stops
+  the scrollbar jumping while it does.
+- Categories with no listings are still listed — somebody has to be first —
+  but dimmed, with a dash instead of a count, so they don't compete.
+- The hero's search box is gone: the filter is the search on this page, and
+  two search boxes on one screen is one too many.
+
+### Fixed
+- **`overflow-x: hidden` on `html`/`body` was silently disabling
+  `position: sticky`** everywhere below it — a scroll-container ancestor does
+  that. It is `overflow-x: clip` now (behind `@supports`, with `hidden` as the
+  fallback), which crops without scrolling.
+
+### Key files
+`application/views/all-category.php`, `application/controllers/User.php`
+(`all_category`), `application/models/Usermodel.php`,
+`application/config/routes.php`, `assets/css/directory.css`,
+`assets/css/site-header.css`.
+
+---
+
 ## 2026-08-03 — /all-category and /classifieds on the shared page kit
 
 The last two public pages still on the old theme. Both are rebuilt on the same
