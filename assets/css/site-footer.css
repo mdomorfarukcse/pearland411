@@ -93,6 +93,22 @@
 .p411-foot__bar p { margin: 0; }
 .p411-foot__heart { color: #C4536F; }
 
+/* ---- the site-wide footer banner ------------------------------------- */
+/*
+ * views/footer.php only prints this wrapper when the zone actually returned a
+ * banner. Cream, not the near-white #f9fafb it carried, so it reads as part of
+ * the run-in to the footer instead of a white gap across the page.
+ */
+.p411-footad {
+	background: #F7F5F0;
+	padding: 20px 15px 0;
+}
+.p411-footad .ad-slot { margin: 0 auto; }
+/* A zone with no size on record has no pixel box to constrain it, and the
+   banner then stretches to the full width of the container — a 1200px-wide
+   house ad under a 400px-tall page. Leaderboard width is the sane ceiling. */
+.p411-footad .ad-slot__link { max-width: 970px; }
+
 /* ---- the call-to-action band above the footer ------------------------ */
 /*
  * `.full-bot-book` is the theme's last band before the footer, rendered by

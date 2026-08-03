@@ -199,7 +199,7 @@ class User extends CI_Controller
 	{
 		return array(
 			'assets/css/directory.css?v=2',
-			'assets/css/content.css?v=2',
+			'assets/css/content.css?v=3',
 			'assets/css/promo-cards.css?v=1',
 		);
 	}
@@ -558,6 +558,9 @@ class User extends CI_Controller
 	{
 		$data = array();
 		$data['title'] = 'Contact Us';
+		$data['meta_description'] = 'Call, email or message Pearland411 — the local business directory for Pearland, Texas.';
+		$data['canonical_url']    = base_url('contact-us');
+		$data['page_css'] = $this->contentPageCss();
 		$this->loadHeaderCategories($data);
 		$this->load->view('header', $data);
 		$this->load->view('contact-us', $data);
@@ -585,14 +588,26 @@ class User extends CI_Controller
 			return;
 		}
 
+		// Where to send the visitor afterwards. The callback panel on
+		// /pricing-plan posts here too, and dumping someone on /contact-us
+		// after they asked to be phoned back about a package loses their
+		// place. Whitelisted — never redirect to a posted URL.
+		$return_to = (string) $this->input->post('return_to');
+		$back = in_array($return_to, array('pricing-plan', 'contact-us'), true)
+			? $return_to
+			: 'contact-us';
+
 		$this->form_validation->set_rules('fullName', 'Name',  'trim|required|min_length[2]');
-		$this->form_validation->set_rules('email',    'Email', 'trim|required|valid_email');
+		// Not `required`: the callback panel is aimed at people who would
+		// rather be phoned than type an address. One of the two is enforced
+		// below instead.
+		$this->form_validation->set_rules('email',    'Email', 'trim|valid_email');
 		$this->form_validation->set_rules('message',  'Message', 'trim|required|min_length[10]');
 
 		if (!$this->form_validation->run()) {
 			$this->session->set_flashdata('contact_error',
 				strip_tags(validation_errors()) ?: 'Please complete the required fields.');
-			redirect('contact-us');
+			redirect($back);
 			return;
 		}
 
@@ -602,12 +617,31 @@ class User extends CI_Controller
 		$subject = (string) $this->input->post('subject');
 		$message = (string) $this->input->post('message');
 
+		if (trim($email) === '' && trim($phone) === '') {
+			$this->session->set_flashdata('contact_error',
+				'Please leave either an email address or a phone number so we can reply.');
+			redirect($back);
+			return;
+		}
+
+		// Where it came from, so the sales team can see a callback request for
+		// what it is rather than reading it as a general enquiry.
+		$source = $back === 'pricing-plan' ? 'Pricing plan — callback' : 'Contact Us';
+
+		// The callback panel lets a caller ask for the representative they
+		// already deal with. Carried in the message so it reaches whoever
+		// picks the enquiry up — `enquiries` has no column for it.
+		$rep = trim((string) $this->input->post('sales_representative'));
+		if ($rep !== '') {
+			$message = 'Asked for: ' . $rep . "\n\n" . $message;
+		}
+
 		$this->db->insert('enquiries', array(
 			'enquiry_name'       => $name,
 			'enquiry_email'      => $email,
 			'enquiry_mobile'     => $phone,
 			'enquiry_message'    => ($subject !== '' ? '[' . $subject . '] ' : '') . $message,
-			'enquiry_source'     => 'Contact Us',
+			'enquiry_source'     => $source,
 			'enquiry_type'       => 'contact',
 			'enquiry_save'       => 0,
 			'enquiry_created_at' => date('Y-m-d H:i:s'),
@@ -615,11 +649,13 @@ class User extends CI_Controller
 
 		$this->load->library('mailer');
 
-		// Acknowledge to the sender.
-		$ack = '<p>Thanks — we received your message and will get back to you shortly.</p>'
-			. '<p>For reference, you sent:</p>'
-			. '<blockquote>' . nl2br(html_escape($message)) . '</blockquote>';
-		$this->mailer->send($email, 'We received your message', $ack);
+		// Acknowledge to the sender — only when they left an address.
+		if (trim($email) !== '') {
+			$ack = '<p>Thanks — we received your message and will get back to you shortly.</p>'
+				. '<p>For reference, you sent:</p>'
+				. '<blockquote>' . nl2br(html_escape($message)) . '</blockquote>';
+			$this->mailer->send($email, 'We received your message', $ack);
+		}
 
 		// Notify the admin address.
 		$admin_to = env('MAIL_FROM_ADDRESS', '');
@@ -636,8 +672,10 @@ class User extends CI_Controller
 		}
 
 		$this->session->set_flashdata('contact_success',
-			'Thanks! We received your message and will be in touch soon.');
-		redirect('contact-us');
+			$back === 'pricing-plan'
+				? 'Thanks! One of our sales representatives will call you back shortly.'
+				: 'Thanks! We received your message and will be in touch soon.');
+		redirect($back);
 	}
 
 
@@ -2369,10 +2407,14 @@ class User extends CI_Controller
 		}
 
 		$data['title'] = "Pearland | Registration";
+		$data['page_css'] = $this->contentPageCss();
+		// The mega menu is emitted by header.php on every page; without this
+		// the categories column came up empty on signup and sign-in.
+		$this->loadHeaderCategories($data);
 
 		$this->load->view('header', $data);
 
-		$this->load->view('register');
+		$this->load->view('register', $data);
 
 		$this->load->view('footer');
 	}
@@ -2433,6 +2475,10 @@ class User extends CI_Controller
 
 		// Fix: Safely handle HTTP_REFERER to prevent undefined index error
 		$data['http_referer'] = $this->getServerVar('HTTP_REFERER', base_url());
+
+		$data['title'] = isset($data['title']) ? $data['title'] : 'Sign in — Pearland411';
+		$data['page_css'] = $this->contentPageCss();
+		$this->loadHeaderCategories($data);
 
 		$this->load->view('header', $data);
 
@@ -7851,6 +7897,7 @@ class User extends CI_Controller
 		$data['categories'] = $this->usermodel->getServiceCategories();
 		$data['selected_category'] = $category;
 		$data['title']      = 'IT & Web Services for Local Businesses';
+		$data['page_css']   = $this->contentPageCss();
 		$this->loadHeaderCategories($data);
 
 		$this->load->view('header', $data);
@@ -7893,7 +7940,8 @@ class User extends CI_Controller
 				'priceCurrency' => 'USD',
 			);
 		}
-		$data['json_ld'] = json_ld($ld);
+		$data['json_ld']  = json_ld($ld);
+		$data['page_css'] = $this->contentPageCss();
 
 		$this->loadHeaderCategories($data);
 
@@ -8002,7 +8050,9 @@ class User extends CI_Controller
 	public function coupons()
 	{
 		$data = array();
-		$data['coupons'] = $this->usermodel->getActiveCoupons(60);
+		$data['coupons']  = $this->usermodel->getActiveCoupons(60);
+		$data['ad_slots'] = $this->contentAdSlots();
+		$data['page_css'] = $this->contentPageCss();
 		$this->loadHeaderCategories($data);
 		$data['title']         = 'Local Coupons &amp; Deals — Pearland411';
 		$data['meta_description'] = 'Current coupons and deals from Pearland-area businesses listed on Pearland411.';
@@ -8029,7 +8079,8 @@ class User extends CI_Controller
 		}
 
 		$data = array();
-		$data['coupon'] = $coupon;
+		$data['coupon']   = $coupon;
+		$data['page_css'] = $this->contentPageCss();
 		$this->loadHeaderCategories($data);
 		$data['title']            = $coupon->coupon_name . ' — Coupon — Pearland411';
 		$data['meta_description'] = 'Coupon code ' . $coupon->coupon_code . ' for ' . ($coupon->listing_name ?? $coupon->owner_name);

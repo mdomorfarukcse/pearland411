@@ -47,12 +47,29 @@
 	</div>
 	<!-- END -->
 
-	<!-- Site-wide footer banner ad slot -->
-	<section style="background:#f9fafb;padding:24px 0;">
-		<div class="container">
-			<?php $slot = 'footer-banner'; include APPPATH . 'views/partials/ad_slot.php'; ?>
-		</div>
-	</section>
+	<?php
+	/*
+	 * Site-wide footer banner.
+	 *
+	 * Buffered, and the wrapper only printed when something came back:
+	 * ad_slot.php renders NOTHING when advertising is switched off in
+	 * /admin/setting, and the wrapper was left behind as an empty near-white
+	 * (#f9fafb) strip between the page and the band below it — the gap the
+	 * client reported. The band is cream now for the same reason: even with a
+	 * banner in it, a white strip between a cream page and the cream
+	 * call-to-action band read as a rendering fault.
+	 */
+	ob_start();
+	$slot = 'footer-banner';
+	include APPPATH . 'views/partials/ad_slot.php';
+	$__footer_ad = trim(ob_get_clean());
+	?>
+	<?php if ($__footer_ad !== ''): ?>
+		<section class="p411-footad">
+			<div class="container"><?= $__footer_ad ?></div>
+		</section>
+	<?php endif; ?>
+	<?php unset($__footer_ad); ?>
 
 	<!-- START -->
 	<section>
