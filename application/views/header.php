@@ -37,6 +37,9 @@
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/fonts.css">
 	<!-- Brand palette + typography overrides — loaded last so it wins. -->
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/pearland-brand.css?v=1">
+	<!-- The header strip below (.hom-top / .news-top-menu), painted in the
+	     homepage's navy + green. Paint only — the theme keeps the geometry. -->
+	<link rel="stylesheet" href="<?= base_url() ?>assets/css/site-header.css?v=1">
 	<!-- The footer (partials/site_footer.php, rendered by views/footer.php).
 	     Every selector is a .p411-foot descendant, so this is safe on any page. -->
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/site-footer.css?v=1">
@@ -216,7 +219,7 @@
 
 														<!-- Explore All Categories Button - Bottom Right -->
 														<div style="text-align: right; margin-top: 20px; padding-top: 15px;">
-															<a href="<?= base_url('all-category') ?>" class="waves-effect waves-light btn" style="background: #7bb73f; color: white; padding: 8px 20px; border-radius: 20px; text-decoration: none; font-weight: 500; transition: all 0.3s ease; display: inline-block; font-size: 13px;">
+															<a href="<?= base_url('all-category') ?>" class="waves-effect waves-light btn" style="background: #79B82A; color: white; padding: 8px 20px; border-radius: 999px; text-decoration: none; font-weight: 500; transition: all 0.3s ease; display: inline-block; font-size: 13px;">
 																<i class="material-icons" style="vertical-align: middle; margin-right: 3px; font-size: 16px;">explore</i>
 																Explore All
 															</a>

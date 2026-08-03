@@ -63,9 +63,16 @@ $dir_cat_slug = function ($cat) {
 	return isset($cat->category_id) ? (string) $cat->category_id : '';
 };
 
-/** Stable colour for a letter avatar, so a listing keeps the same one. */
+/**
+ * Stable colour for a letter avatar, so a listing keeps the same one.
+ *
+ * Brand palette only — navy, green and burgundy in their light and dark
+ * shades. The old array was eight unrelated hues (a bright blue, a teal, a
+ * violet, a pink) picked to be distinguishable rather than to belong here,
+ * and a column of them beside the navy sidebar looked like a colour test.
+ */
 $dir_swatch = function ($name) {
-	$palette = array('#4E8A28', '#2563EB', '#0E7490', '#B45309', '#7C3AED', '#BE185D', '#0F766E', '#180F5E');
+	$palette = array('#20245B', '#5E9220', '#6D263D', '#2C3178', '#79B82A', '#8A3D59');
 	return $palette[crc32((string) $name) % count($palette)];
 };
 
