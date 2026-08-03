@@ -474,7 +474,7 @@ if ($related_events)                      $ev_nav['related']  = 'More events';
 									<?php if (!empty($item->event_image)): ?>
 										<span class="p411-rail__thumb"><?= responsive_img($item->event_image, (string) ($item->event_name ?? '')) ?></span>
 									<?php else: ?>
-										<span class="p411-rail__thumb" style="background:var(--p411-green-dd);" aria-hidden="true"><?= $item_ts ? e(date('d', $item_ts)) : '&bull;' ?></span>
+										<span class="p411-rail__thumb" style="background:var(--p411-bu);" aria-hidden="true"><?= $item_ts ? e(date('d', $item_ts)) : '&bull;' ?></span>
 									<?php endif; ?>
 									<span class="p411-rail__body">
 										<b><?= e($item->event_name ?? '') ?></b>
@@ -560,7 +560,7 @@ if ($related_events)                      $ev_nav['related']  = 'More events';
 			var el = document.createElement('div');
 			el.textContent = message;
 			el.setAttribute('role', 'status');
-			el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:10000;background:#4E8A28;color:#fff;'
+			el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:10000;background:#5E9220;color:#fff;'
 				+ 'padding:13px 18px;border-radius:9px;font-size:14px;box-shadow:0 8px 26px rgba(0,0,0,.22);';
 			document.body.appendChild(el);
 			setTimeout(function () { el.remove(); }, 2600);

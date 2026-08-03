@@ -176,7 +176,11 @@ $ld_stars = function ($value) {
 							<a class="p411-tag" href="<?= e_url(base_url('all_listing/' . rawurlencode((string) ($listing_category->category_slug ?: $listing_category->category_id)))) ?>"><?= e($listing_category->category_name) ?></a>
 						<?php endif; ?>
 						<?php if ($ld_verified): ?>
-							<span class="p411-tag p411-tag--green"><i class="material-icons" aria-hidden="true">verified</i> Featured</span>
+							<?php // `stars`, not `verified`: the classic Material Icons font that
+						      // header.php loads has no `verified` ligature, so the browser fell
+						      // back to rendering the eight letters of the word in the icon face
+						      // — 112px of blank badge in front of the label. ?>
+						<span class="p411-tag p411-tag--bu"><i class="material-icons" aria-hidden="true">stars</i> Featured</span>
 						<?php endif; ?>
 						<?php if (!$ld_claimed): ?>
 							<span class="p411-tag p411-tag--amber">Unclaimed</span>
@@ -232,7 +236,8 @@ $ld_stars = function ($value) {
 							   href="https://www.google.com/maps/dir/?api=1&amp;destination=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>">Directions</a>
 						<?php endif; ?>
 						<?php if (!$ld_claimed): ?>
-							<a class="p411-btn p411-btn--navy" href="<?= e_url(base_url('claim-listing/' . rawurlencode($ld_slug))) ?>">Claim this listing</a>
+							<?php // Burgundy, not navy: this row of buttons sits on the navy hero. ?>
+							<a class="p411-btn p411-btn--bu" href="<?= e_url(base_url('claim-listing/' . rawurlencode($ld_slug))) ?>">Claim this listing</a>
 						<?php endif; ?>
 					</div>
 				</div>
@@ -889,7 +894,7 @@ $ld_stars = function ($value) {
 			var el = document.createElement('div');
 			el.textContent = message;
 			el.setAttribute('role', 'status');
-			el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:10000;background:#4E8A28;color:#fff;'
+			el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:10000;background:#5E9220;color:#fff;'
 				+ 'padding:13px 18px;border-radius:9px;font-size:14px;box-shadow:0 8px 26px rgba(0,0,0,.22);';
 			document.body.appendChild(el);
 			setTimeout(function () { el.remove(); }, 2600);

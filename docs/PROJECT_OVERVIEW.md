@@ -35,15 +35,25 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `.p411-ld` (`/listing-details`) and `.p411-ct` (events / news / videos + their detail pages, and
   `/about-us`, which add `assets/css/content.css` on top). The homepage is
   `assets/css/home-sections.css` (`.p411-home`) — the **whole** page, header to newsletter band, so
-  it can be re-skinned without touching PHP. The rule everywhere: **prefix every selector and
-  never edit the shared 345 KB `style.css`,** which ~200 views depend on. Two files have no page
-  scope because nothing else emits their class names: `assets/css/promo-cards.css` (the two house
-  promo cards) and `assets/css/site-footer.css` (`.p411-foot`, the shared footer). Both are loaded
-  by every page that renders those blocks, so the blocks can't drift apart.
+  it can be re-skinned without touching PHP. The kit's tokens are the **same values** as the
+  homepage's, so the two cannot drift. The rule everywhere: **prefix every selector and
+  never edit the shared 345 KB `style.css`,** which ~200 views depend on. Three files have no page
+  scope because nothing else emits their class names, or (the header) because there is no scope
+  class to hang them off: `assets/css/promo-cards.css` (the two house promo cards),
+  `assets/css/site-footer.css` (`.p411-foot`, the shared footer) and `assets/css/site-header.css`
+  (the theme's `.hom-top` / `.news-top-menu` strip, **paint only** — the geometry stays the
+  theme's, because `.news-top-menu` clears the fixed bar with a hard-coded `margin-top: 60px`).
+  The footer and header sheets are loaded by `header.php` for every page, so those two blocks
+  can't drift; the homepage loads neither, painting the same markup itself.
 - **Colour:** navy `#20245B` for header, headings, footer and structure; pear green `#79B82A` as an
   **accent** on buttons, icons, links and labels; burgundy `#6D263D` for promotional and secondary
-  bands; cream `#F7F5F0` / light grey `#F2F3F5` for grounds. Green as a large background is what
-  the 2026-08 review asked to stop.
+  bands (Featured/paid flags, section rules, date blocks); cream `#F7F5F0` / light grey `#F2F3F5`
+  for grounds. Green as a large background is what the 2026-08 review asked to stop.
+  Two traps when adding styles to any of these pages: `style.css` carries **bare `:before` /
+  `:after` rules** (`position: absolute; font-family: "Material Icons"`) that apply to every
+  element on the site, so every pseudo-element must state its own position, font and size; and
+  `pearland-brand.css` paints the pager and `.form-control:focus` with `!important` in the 2025
+  style sheet's olive `#909D3E`, which specificity cannot outrank.
 - **Reusable blocks:** `partials/ad_slot.php` (one sellable ad zone; options `$slot_class`,
   `$slot_label`, `$slot_fallback`, `$slot_alias`, `$slot_creative`, `$slot_fallback_partial`),
   `partials/site_footer.php` (the site footer — rendered by `views/footer.php` **and** by the

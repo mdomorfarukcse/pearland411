@@ -6,6 +6,93 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-03 — The rest of the site follows the homepage: navy structure, green as an accent
+
+The homepage was rebuilt yesterday (entry below) but the pages it links to were
+not: the directory, listing details, events, news, videos and About were still
+the previous scheme — a **dark-green hero**, green card frames, green tinted
+"no photo" wells and a green rule under every heading — under a **medium-blue**
+header and a **black** section bar. Clicking a business on the new homepage
+landed you on what looked like a different website.
+
+Those pages take their design from two stylesheets (`directory.css`, the shared
+page kit, and `content.css` on top of it), so this is a re-skin of the kit
+rather than a rewrite of the views: **the markup is unchanged except where a
+colour was hard-coded in it.** Same tokens as `home-sections.css`, so the two
+cannot drift.
+
+### Changed
+- **Design tokens.** `--p411-green` `#8CC63F` → `#79B82A` and demoted to an
+  accent; navy `#20245B`, burgundy `#6D263D`, cream `#F7F5F0` and light grey
+  `#F2F3F5` added. The token *names* were kept — several views set
+  `style="background:var(--p411-navy)"` inline on rail thumbnails, and renaming
+  a custom property silently paints its users transparent.
+- **Heroes** (directory, listing details, events, news, videos, About and the
+  three detail pages) are the homepage hero: navy blending into burgundy over
+  the page's photograph, with a dark wash so the headline stays readable
+  whatever picture an editor uploaded, and a green-to-burgundy rule along the
+  foot — the same motif the footer wears along its top. They were `#1d2b12`,
+  a dark olive-green.
+- **Section headings** take the homepage's burgundy rule; sidebar panel titles
+  take its green tab. **Cards** (business results, articles, events, videos,
+  related, About) take its white/`#E4E6EC`/12px/soft-shadow frame and hover
+  lift. **Featured** is burgundy — a burgundy rule across the top of the card
+  and a burgundy flag — because burgundy is the promotional colour everywhere
+  else; **New** is the one green flag; the category chip on artwork is navy.
+- **The event calendar chip** is the homepage's block: a burgundy month band
+  over the day on white. It was a translucent dark-green square.
+- **Category strip, filter tabs, toolbar, pager, rail, forms, notes, empty
+  states, chips, review bars, the owner band** — all repainted. The pager's
+  current page is navy (a state), links and buttons stay green (actions). The
+  owner band's four icons rotate green / burgundy / navy instead of four
+  identical green tiles.
+- **About**: the vision/mission band is navy-to-burgundy rather than dark green.
+- **Letter avatars** in the directory sidebar were eight unrelated hues (a
+  bright blue, a teal, a violet, a pink) chosen to be distinguishable; they are
+  now six shades of the three brand colours.
+- **The site header and section bar** are painted to match the homepage:
+  navy `#20245B` with a 3px green rule under it, a green pill for the last
+  nav item, and the section strip in `#171A45` with a green underline on the
+  current page. They were `#1e68ac` and `#000000` with `#b71d16` red
+  underlines — three colours that appear nowhere in the brand. New file
+  `assets/css/site-header.css`, loaded from `header.php` for every page that
+  uses it, exactly as `site-footer.css` already is. **Paint only** — the bar
+  stays `position: fixed` at its current height, because `.news-top-menu`
+  clears it with a hard-coded `margin-top: 60px`.
+
+### Fixed
+- **The "Featured" badge on a listing page had 112px of blank space in front of
+  the word.** The classic Material Icons font that `header.php` loads has no
+  `verified` ligature, so the browser rendered the eight letters of the word in
+  the icon face — invisible, but not weightless. It is `stars` now. Every other
+  icon name these pages use was checked against the served font; `verified` was
+  the only one missing.
+- **The burgundy rule on a Featured card has never actually painted**, on the
+  homepage either. `style.css` carries bare `:before` / `:after` rules —
+  `{ position: absolute; font-family: "Material Icons"; … }` — that apply to
+  *every* element on the site, so `content: ""; height: 3px` inherits
+  `position: absolute`, shrink-wraps to zero width and draws nothing. Both the
+  homepage's rule and the kit's new one now state `position: static` and an
+  explicit width.
+- **The pager's current page was olive `#909D3E`** and so was the focus ring on
+  every form in the kit: `pearland-brand.css` sets those with `!important`, and
+  an important declaration cannot be outranked by specificity. The kit now
+  matches `!important` in those two places (and only those two), with a comment
+  saying why.
+- **Links inside stored copy** — a listing description, an article body — fell
+  through to `pearland-brand.css`'s bare `a { color: … }` and came out olive.
+  `.p411-prose a` is green now.
+- **"Claim this listing"** was a navy button sitting on what is now a navy hero.
+  It is burgundy.
+
+### Key files
+`assets/css/directory.css`, `assets/css/content.css`, `assets/css/site-header.css`
+(new), `assets/css/home-sections.css`, `application/views/header.php`,
+`application/views/{all-listing,listing_details,events,event_details,news_details,video_details}.php`,
+`application/controllers/User.php` (cache-busting `?v=2`).
+
+---
+
 ## 2026-08-02 — Homepage: Explore menu fixes, hero photograph support
 
 Follow-up to the redesign below, from the client's review of the deployed page.

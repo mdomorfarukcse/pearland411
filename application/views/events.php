@@ -207,7 +207,7 @@ $window_label = array(
 									<?php if ($is_upcoming): ?>
 										<span class="p411-flag p411-flag--featured">Upcoming</span>
 									<?php elseif ($date_ts !== null): ?>
-										<span class="p411-flag p411-flag--featured" style="background:#3A4046;">Past event</span>
+										<span class="p411-flag p411-flag--featured p411-flag--muted">Past event</span>
 									<?php endif; ?>
 								</div>
 
@@ -346,7 +346,7 @@ $window_label = array(
 									<?php if (!empty($item->event_image)): ?>
 										<span class="p411-rail__thumb"><?= responsive_img($item->event_image, (string) ($item->event_name ?? '')) ?></span>
 									<?php else: ?>
-										<span class="p411-rail__thumb" style="background:var(--p411-green-dd);" aria-hidden="true"><?= $item_ts ? e(date('d', $item_ts)) : '&bull;' ?></span>
+										<span class="p411-rail__thumb" style="background:var(--p411-bu);" aria-hidden="true"><?= $item_ts ? e(date('d', $item_ts)) : '&bull;' ?></span>
 									<?php endif; ?>
 									<span class="p411-rail__body">
 										<b><?= e($item->event_name ?? '') ?></b>

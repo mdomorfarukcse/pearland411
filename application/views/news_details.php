@@ -409,7 +409,7 @@ $nw_url = function ($row) {
 			var el = document.createElement('div');
 			el.textContent = message;
 			el.setAttribute('role', 'status');
-			el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:10000;background:#4E8A28;color:#fff;'
+			el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:10000;background:#5E9220;color:#fff;'
 				+ 'padding:13px 18px;border-radius:9px;font-size:14px;box-shadow:0 8px 26px rgba(0,0,0,.22);';
 			document.body.appendChild(el);
 			setTimeout(function () { el.remove(); }, 2600);

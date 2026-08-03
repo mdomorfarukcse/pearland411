@@ -1,0 +1,160 @@
+/* ============================================================================
+ * Pearland411 — the shared site header
+ * ----------------------------------------------------------------------------
+ * The theme's header markup (application/views/header.php: .hom-top / .hom-nav
+ * / .pop-menu, plus the .news-top-menu section strip under it) painted in the
+ * homepage's colours, so an inner page doesn't announce itself with a
+ * different header from the one the visitor just left.
+ *
+ * Before this file the strip read: a medium-blue bar (#1e68ac, style.css
+ * :29418) over a pure black section nav with red active/hover underlines —
+ * three colours that appear nowhere else in the brand.
+ *
+ *   Navy       #20245B   the bar
+ *   Navy dark  #171A45   scrolled state + the section strip
+ *   Pear green #79B82A   the rule under the bar, the CTA pill, active nav
+ *
+ * PAINT ONLY. Everything here is colour, radius or type. The geometry is left
+ * exactly as the theme has it — in particular `.hom-top` stays
+ * `position: fixed` and the logo stays 90px wide, because `.news-top-menu`
+ * clears the fixed bar with a hard-coded `margin-top: 60px`; grow the bar and
+ * the first band of every page slides under it.
+ *
+ * SCOPE. There is no page-scope class to hang these off — header.php emits a
+ * bare <body> — so the selectors are the theme's own and this file is loaded
+ * from header.php for every page that uses it. That is deliberate and matches
+ * assets/css/site-footer.css, which is loaded the same way so the footer can't
+ * drift between pages. It loads AFTER style.css, so equal-specificity rules
+ * win on order and no !important is needed.
+ *
+ * The homepage does NOT load this file: views/index.php is self-contained and
+ * paints the same markup itself through `.p411-home .hom-top` in
+ * assets/css/home-sections.css, which is more specific in any case.
+ * ==========================================================================*/
+
+/* ---- the bar --------------------------------------------------------- */
+
+.hom-top {
+	background: #20245B;
+	border-bottom: 3px solid #79B82A;
+	box-shadow: 0 2px 14px rgba(15, 17, 45, .22);
+}
+/* .dmact is added by the theme's scroll handler; it needs the extra class in
+   the selector or style.css's own `.hom-top.dmact` wins on specificity. */
+.hom-top.dmact {
+	background: #171A45;
+	box-shadow: 0 4px 18px rgba(15, 17, 45, .32);
+}
+
+/* "All Categories" — the mega-menu / modal trigger. */
+.hom-nav .menu h4,
+.hom-nav .menu h4 a {
+	color: #fff;
+	font-family: 'Poppins', 'Open Sans', sans-serif;
+	font-weight: 600;
+}
+.hom-nav .menu h4 a:hover { color: #8FCB46; }
+
+/* Account links. The theme sets these in Quicksand at weight 800; the brand
+   face is Poppins and 600 is enough at 13.5px. */
+.hom-nav .bl li a {
+	font-family: 'Poppins', 'Open Sans', sans-serif;
+	font-weight: 600;
+	color: #fff;
+	padding: 6px 11px;
+	border-radius: 8px;
+}
+.hom-nav .bl li a:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+/* The last item is the call to action — a green pill, as on the homepage.
+   The theme turns it blue on hover, which is the one colour the palette
+   doesn't contain. */
+.hom-nav .bl li:last-child a {
+	background: #79B82A;
+	border: 1px solid #79B82A;
+	border-radius: 999px;
+	padding: 9px 22px;
+}
+.hom-nav .bl li:last-child a:hover {
+	background: #5E9220;
+	border-color: #5E9220;
+	color: #fff;
+}
+
+/* Header search, when the theme reveals it. */
+.top-ser input[type="text"] {
+	border: 0;
+	border-radius: 8px 0 0 8px;
+	font-family: 'Open Sans', sans-serif;
+}
+.top-ser .sbtn .btn-success {
+	background: #79B82A;
+	border-color: #79B82A;
+	border-radius: 0 8px 8px 0;
+}
+.top-ser .sbtn .btn-success:hover { background: #5E9220; border-color: #5E9220; }
+
+/* ---- the mega menu panel --------------------------------------------- */
+/* Hidden (`visibility: hidden`) until the theme's script opens it, but it is
+   in the DOM on every page, so it is painted here too rather than left in the
+   demo's olive-and-cityscape styling. */
+
+.pop-menu { border-top: 3px solid #79B82A; }
+/* The theme paints a grey cityscape strip across the foot of the panel; it
+   sits behind the contact block and reads as a rendering fault. */
+.pop-menu::after { content: none !important; display: none !important; }
+.pop-menu .pmenu-cat h4 {
+	color: #20245B;
+	font-size: 12.5px;
+	font-weight: 700;
+	letter-spacing: .1em;
+	text-transform: uppercase;
+}
+.pop-menu .pmenu-spri ul li a { color: #20245B; text-transform: none; border-radius: 8px; }
+.pop-menu .pmenu-spri ul li a:hover,
+.pop-menu .pmenu-spri ul li a.act { background: #F1F7E5; color: #5E9220; }
+.pop-menu .pmenu-cat ul li a { color: #1F2430; }
+.pop-menu .pmenu-cat ul li a:hover { color: #5E9220; background: none; }
+.pop-menu .clopme { color: #8B93A1; }
+.pop-menu .clopme:hover { color: #20245B; }
+.dir-home-nav-bot { font-family: 'Open Sans', sans-serif; border-top: 1px solid #E4E6EC; }
+.dir-home-nav-bot ul li span { font-size: 17px; font-weight: 700; color: #20245B; }
+.dir-home-nav-bot ul li a {
+	background: #79B82A;
+	color: #fff;
+	border: 0;
+	border-radius: 999px;
+	font-weight: 600;
+}
+.dir-home-nav-bot ul li a:hover { background: #5E9220; color: #fff; }
+.dir-home-nav-bot ul li:nth-child(2) a { background: #6D263D; }
+.dir-home-nav-bot ul li:nth-child(2) a:hover { background: #8A3D59; }
+
+/* ---- section strip --------------------------------------------------- */
+/* Home · Directory · Events · News · Videos · … The theme styles this as a
+   newspaper masthead: pure black, with #b71d16 red under the active tab and
+   #dc4e41 on hover. */
+
+.news-top-menu { background: #171A45; }
+.news-menu ul li a {
+	color: rgba(255, 255, 255, .78);
+	font-family: 'Poppins', 'Open Sans', sans-serif;
+	font-size: 13.5px;
+	font-weight: 500;
+	border-bottom: 2px solid transparent;
+}
+.news-menu ul li a:after { background: rgba(255, 255, 255, .16); }
+.news-menu ul li a:hover {
+	color: #fff;
+	border-bottom-color: #8FCB46;
+	background: rgba(255, 255, 255, .06);
+}
+.news-menu ul li a.act {
+	color: #fff;
+	font-weight: 600;
+	background: transparent;
+	border-bottom-color: #79B82A;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.hom-top, .hom-nav .bl li a, .news-menu ul li a { transition: none !important; }
+}

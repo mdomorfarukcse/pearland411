@@ -220,7 +220,7 @@ unset($__ext, $__rel);
   <link rel="stylesheet" href="<?= base_url() ?>assets/css/pearland-brand.css?v=1">
   <!-- The homepage. Every selector is scoped to .p411-home and no other view
        loads this file, so it cannot affect the rest of the site. -->
-  <link rel="stylesheet" href="<?= base_url() ?>assets/css/home-sections.css?v=3">
+  <link rel="stylesheet" href="<?= base_url() ?>assets/css/home-sections.css?v=4">
   <!-- The two house promo cards (partials/service_promo.php and
        partials/banner_design_promo.php), shared with the directory and
        listing-details pages so the cards can't drift. -->

@@ -6,10 +6,24 @@
  * and their detail pages, which add their own components in content.css and
  * take the hero, cards, buttons, forms, pager and empty states from here.
  *
- * Same design language as the reorganised homepage: the logo's pear green,
- * white cards on a light band, a 3px green underline on section headings and
- * the same pill buttons. The tokens below are deliberately identical to
- * assets/css/home-sections.css so the pages read as one site.
+ * COLOUR BALANCE (2026-08 brief) — the same rebalance the homepage went
+ * through, applied to every other public page so the site reads as one thing.
+ * These pages were pear green on green: a dark-green hero, green card frames,
+ * green tinted "no photo" boxes, a green rule under every heading. Green is
+ * now an ACCENT only — buttons, icons, links, selected labels — and the
+ * structure is navy, with burgundy for promotional and secondary bands.
+ *
+ *   Navy       #20245B   heroes, headings, structure
+ *   Pear green #79B82A   buttons, icons, links, selected labels
+ *   Burgundy   #6D263D   section rules, featured/paid flags, promo bands
+ *   Cream      #F7F5F0   page ground
+ *   Light grey #F2F3F5   media wells, placeholders
+ *
+ * The tokens below are deliberately the same values as
+ * assets/css/home-sections.css. They keep their historical `--p411-green*`
+ * names because a handful of views set `style="background:var(--p411-navy)"`
+ * inline on rail thumbnails, and renaming a token silently paints those
+ * transparent.
  *
  * SCOPING RULE — every class name starts `p411-`, the design tokens are
  * declared on the page-scope classes below (`.p411-dir` directory, `.p411-ld`
@@ -18,25 +32,51 @@
  * is optional: style.css is shared by ~200 other views and must stay
  * untouched. A page that wants these components carries one of those three
  * classes on its wrapper — that is the whole opt-in.
+ *
+ * ONE TRAP WORTH KNOWING: style.css:139 and :153 carry bare
+ * `:before` / `:after` rules — `{ position: absolute; font-family:
+ * "Material Icons"; font-size: 18px; color: … }` — that apply to EVERY
+ * element on the site. Any pseudo-element below therefore states its own
+ * position, font and colour; an "obvious" `content: ""; height: 3px` rule
+ * inherits `position: absolute`, collapses to zero width and never paints.
  * ==========================================================================*/
 
 .p411-dir,
 .p411-ld,
 .p411-ct {
-	--p411-green: #8CC63F;
-	--p411-green-d: #6BA935;
-	--p411-green-dd: #4E8A28;
-	--p411-green-w: #F3F8E8;
-	--p411-green-l: #D6E7B2;
-	--p411-ink: #2E3338;
-	--p411-ink-2: #5D6469;
-	--p411-ink-3: #8A9095;
-	--p411-line: #E4E7DE;
-	--p411-card: #fff;
-	--p411-bg: #F7F8F4;
+	/* navy — structure */
+	--p411-navy: #20245B;
+	--p411-navy-d: #171A45;
+	--p411-navy-l: #2C3178;
+	--p411-navy-w: #EEF0F7;
+	/* pear green — accent */
+	--p411-green: #79B82A;
+	--p411-green-d: #5E9220;
+	--p411-green-dd: #5E9220;   /* historical name, still used inline in views */
+	--p411-green-l: #8FCB46;
+	--p411-green-w: #F1F7E5;
+	/* burgundy — promotional + secondary */
+	--p411-bu: #6D263D;
+	--p411-bu-l: #8A3D59;
+	--p411-bu-d: #4E1A2B;
+	--p411-bu-w: #FBF1F5;
+	--p411-bu-line: #E2CBD5;
+	/* neutrals */
+	--p411-ink: #1F2430;
+	--p411-ink-2: #5A6472;
+	--p411-ink-3: #8B93A1;
+	--p411-line: #E4E6EC;
+	--p411-line-d: #D6DAE4;
+	--p411-card: #FFFFFF;
+	--p411-bg: #F7F5F0;
+	--p411-gray: #F2F3F5;
 	--p411-amber: #C8871B;
 	--p411-amber-w: #FDF6E7;
-	--p411-navy: #180F5E;
+
+	--p411-r: 12px;
+	--p411-r-s: 8px;
+	--p411-sh: 0 1px 2px rgba(31, 36, 48, .05), 0 6px 20px rgba(31, 36, 48, .06);
+	--p411-sh-h: 0 2px 4px rgba(31, 36, 48, .06), 0 14px 30px rgba(31, 36, 48, .10);
 
 	background: var(--p411-bg);
 	color: var(--p411-ink);
@@ -62,11 +102,13 @@
 .p411-ld img,
 .p411-ct img { max-width: 100%; }
 
+/* Navy headings, as on the homepage. The theme leaves these at its own
+   charcoal, which is what made a navy hero sit over grey-black type. */
 .p411-dir h1, .p411-dir h2, .p411-dir h3, .p411-dir h4, .p411-dir h5,
 .p411-ld h1, .p411-ld h2, .p411-ld h3, .p411-ld h4, .p411-ld h5,
 .p411-ct h1, .p411-ct h2, .p411-ct h3, .p411-ct h4, .p411-ct h5 {
 	margin: 0;
-	color: var(--p411-ink);
+	color: var(--p411-navy);
 	line-height: 1.3;
 }
 
@@ -88,53 +130,74 @@
 }
 
 /* ---- page hero ------------------------------------------------------- */
+/* The homepage hero: navy at the top blending into burgundy, a photograph
+   behind it, and a dark wash over the photograph so the type stays readable
+   whatever the picture happens to be — on the detail pages that picture is
+   whatever the article or the event was uploaded with, so the wash cannot be
+   optional. */
 
 .p411-hero {
 	position: relative;
-	background: #1d2b12;
-	color: #fff;
 	overflow: hidden;
+	color: #fff;
+	background: linear-gradient(168deg, var(--p411-navy-d) 0%, var(--p411-navy) 45%, #4A2450 76%, var(--p411-bu) 100%);
 }
 .p411-hero__bg {
 	position: absolute;
 	inset: 0;
 	background-size: cover;
 	background-position: center;
-	opacity: .38;
+	opacity: .5;
 }
-.p411-hero__bg::after {
+/* The wash is a pseudo of the hero, not of the picture: inside `__bg` it would
+   be multiplied by that layer's own opacity and stop being a wash. */
+.p411-hero::after {
 	content: "";
 	position: absolute;
 	inset: 0;
-	background: linear-gradient(100deg, rgba(20, 30, 12, .92) 0%, rgba(20, 30, 12, .55) 60%, rgba(20, 30, 12, .25) 100%);
+	background: linear-gradient(180deg, rgba(15, 17, 45, .82) 0%, rgba(23, 20, 52, .6) 52%, rgba(78, 26, 43, .7) 100%);
+}
+/* Green-to-burgundy rule along the foot, the same motif the site footer wears
+   along its top. */
+.p411-hero::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 3px;
+	z-index: 3;
+	background: linear-gradient(90deg, var(--p411-green) 0%, var(--p411-bu) 100%);
 }
 .p411-hero > .container {
 	position: relative;
 	z-index: 2;
-	padding-top: 34px;
-	padding-bottom: 34px;
+	padding-top: 38px;
+	padding-bottom: 38px;
 }
 .p411-hero h1 {
 	color: #fff;
-	font-size: 32px;
+	font-size: 33px;
 	font-weight: 700;
-	margin: 0 0 8px;
+	letter-spacing: -0.4px;
+	margin: 0 0 10px;
+	text-shadow: 0 2px 18px rgba(0, 0, 0, .35);
 }
 .p411-hero__lede {
 	max-width: 62ch;
 	font-size: 15px;
-	color: rgba(255, 255, 255, .86);
+	color: rgba(255, 255, 255, .88);
 }
 .p411-hero__stats {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 10px 26px;
-	margin-top: 16px;
+	margin-top: 18px;
 }
-.p411-hero__stats div { font-size: 13px; color: rgba(255, 255, 255, .8); }
+.p411-hero__stats div { font-size: 12.5px; color: rgba(255, 255, 255, .78); }
 .p411-hero__stats b {
 	display: block;
-	font-size: 20px;
+	font-size: 21px;
 	font-weight: 700;
 	color: #fff;
 	line-height: 1.2;
@@ -148,11 +211,11 @@
 	align-items: center;
 	gap: 6px;
 	font-size: 12.5px;
-	margin-bottom: 12px;
-	color: rgba(255, 255, 255, .72);
+	margin-bottom: 14px;
+	color: rgba(255, 255, 255, .7);
 }
-.p411-crumb a { color: rgba(255, 255, 255, .92); }
-.p411-crumb a:hover { color: #fff; text-decoration: underline; }
+.p411-crumb a { color: rgba(255, 255, 255, .9); }
+.p411-crumb a:hover { color: var(--p411-green-l); text-decoration: underline; }
 .p411-crumb span[aria-hidden] { opacity: .5; }
 .p411-crumb .is-current { color: #fff; font-weight: 600; }
 
@@ -161,9 +224,9 @@
 .p411-shell {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
-	gap: 26px;
+	gap: 28px;
 	align-items: start;
-	padding: 26px 0 8px;
+	padding: 28px 0 8px;
 }
 @media (min-width: 992px) {
 	.p411-shell { grid-template-columns: minmax(0, 1fr) 320px; }
@@ -183,8 +246,9 @@
 .p411-card {
 	background: var(--p411-card);
 	border: 1px solid var(--p411-line);
-	border-radius: 12px;
+	border-radius: var(--p411-r);
 	padding: 18px;
+	box-shadow: var(--p411-sh);
 }
 .p411-card--flush { padding: 0; overflow: hidden; }
 
@@ -199,14 +263,15 @@
 .p411-card__head h2,
 .p411-card__head h3 {
 	margin: 0;
-	font-size: 13px;
+	font-size: 12.5px;
 	font-weight: 700;
-	letter-spacing: .08em;
+	letter-spacing: .1em;
 	text-transform: uppercase;
-	color: var(--p411-ink-2);
+	color: var(--p411-navy);
 	position: relative;
 	padding-left: 11px;
 }
+/* Green tab, matching the rule under the homepage's sidebar titles. */
 .p411-card__head h2::before,
 .p411-card__head h3::before {
 	content: "";
@@ -223,13 +288,14 @@
 	margin-left: auto;
 	font-size: 12.5px;
 	font-weight: 600;
-	color: var(--p411-green-dd);
+	color: var(--p411-green-d);
 	text-transform: none;
 	letter-spacing: 0;
 }
-.p411-card__head .p411-more:hover { text-decoration: underline; }
+.p411-card__head .p411-more:hover { text-decoration: underline; color: var(--p411-green-d); }
 
-/* section heading in the main column — same rule the homepage uses */
+/* Section heading in the main column — burgundy rule, exactly as the
+   homepage's `.p411-sec__head h2::after`. */
 .p411-sec { margin-bottom: 26px; }
 .p411-sec__head {
 	display: flex;
@@ -241,29 +307,30 @@
 }
 .p411-sec__head h2 {
 	margin: 0;
-	font-size: 21px;
+	font-size: 22px;
 	font-weight: 700;
 	line-height: 1.25;
+	color: var(--p411-navy);
 	position: relative;
-	padding-bottom: 9px;
+	padding-bottom: 10px;
 }
 .p411-sec__head h2::after {
 	content: "";
 	position: absolute;
 	left: 0;
 	bottom: 0;
-	width: 42px;
+	width: 44px;
 	height: 3px;
 	border-radius: 2px;
-	background: var(--p411-green);
+	background: var(--p411-bu);
 }
 .p411-sec__head .p411-more {
-	font-size: 14px;
+	font-size: 13.5px;
 	font-weight: 600;
-	color: var(--p411-green-dd);
+	color: var(--p411-green-d);
 	white-space: nowrap;
 }
-.p411-sec__head .p411-more:hover { text-decoration: underline; }
+.p411-sec__head .p411-more:hover { text-decoration: underline; color: var(--p411-green-d); }
 
 /* ---- buttons --------------------------------------------------------- */
 
@@ -271,8 +338,8 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: 7px;
-	padding: 9px 20px;
+	gap: 8px;
+	padding: 10px 20px;
 	border-radius: 999px;
 	font-size: 14px;
 	font-weight: 600;
@@ -280,30 +347,38 @@
 	text-align: center;
 	border: 1px solid transparent;
 	cursor: pointer;
+	white-space: nowrap;
 	background: var(--p411-green);
 	color: #fff;
-	transition: background .16s ease, box-shadow .16s ease;
+	transition: background .16s ease, border-color .16s ease, color .16s ease;
 }
 .p411-dir a.p411-btn, .p411-ld a.p411-btn, .p411-ct a.p411-btn { color: #fff; }
 .p411-btn:hover { background: var(--p411-green-d); color: #fff; }
-.p411-btn--ghost { background: #fff; color: var(--p411-ink); border-color: var(--p411-line); }
-.p411-dir a.p411-btn--ghost, .p411-ld a.p411-btn--ghost, .p411-ct a.p411-btn--ghost { color: var(--p411-ink); }
-.p411-btn--ghost:hover { background: var(--p411-green-w); border-color: var(--p411-green); color: var(--p411-green-dd); }
+
+.p411-btn--navy { background: var(--p411-navy); }
+.p411-btn--navy:hover { background: var(--p411-navy-l); }
+.p411-btn--bu { background: var(--p411-bu); }
+.p411-btn--bu:hover { background: var(--p411-bu-l); }
 .p411-btn--wa { background: #25D366; }
 .p411-btn--wa:hover { background: #1EBE57; }
-.p411-btn--navy { background: var(--p411-navy); }
-.p411-btn--navy:hover { background: #241a7a; }
+
+.p411-btn--ghost { background: #fff; color: var(--p411-navy); border-color: var(--p411-line); }
+.p411-dir a.p411-btn--ghost, .p411-ld a.p411-btn--ghost, .p411-ct a.p411-btn--ghost { color: var(--p411-navy); }
+.p411-btn--ghost:hover { background: var(--p411-green-w); border-color: var(--p411-green); color: var(--p411-green-d); }
+
 .p411-btn--sm { padding: 7px 15px; font-size: 13px; }
+.p411-btn--lg { padding: 13px 28px; font-size: 15.5px; }
 .p411-btn--block { display: flex; width: 100%; }
 .p411-btn svg { flex: none; }
 
 /* ---- empty states ---------------------------------------------------- */
+/* Never a big blank white box: a tinted panel that says what to do next. */
 
 .p411-empty {
-	background: var(--p411-card);
-	border: 1px dashed var(--p411-line);
-	border-radius: 12px;
-	padding: 34px 22px;
+	background: var(--p411-green-w);
+	border: 1px dashed #CFE0AE;
+	border-radius: var(--p411-r);
+	padding: 32px 22px;
 	text-align: center;
 }
 .p411-empty__icon {
@@ -313,10 +388,10 @@
 	height: 62px;
 	margin: 0 auto 16px;
 	border-radius: 50%;
-	background: var(--p411-green-w);
-	color: var(--p411-green-dd);
+	background: #fff;
+	color: var(--p411-green-d);
 }
-.p411-empty h3 { margin: 0 0 7px; font-size: 18px; font-weight: 700; }
+.p411-empty h3 { margin: 0 0 7px; font-size: 18px; font-weight: 700; color: var(--p411-navy); }
 .p411-empty p { margin: 0 auto; max-width: 52ch; font-size: 14px; color: var(--p411-ink-2); }
 .p411-empty__actions {
 	display: flex;
@@ -327,19 +402,23 @@
 }
 /* compact variant used inside a panel */
 .p411-empty--inline {
-	padding: 20px 16px;
+	padding: 18px 16px;
 	text-align: left;
-	background: var(--p411-bg);
-	border-radius: 10px;
+	background: var(--p411-navy-w);
+	border-color: #CDD4E6;
+	border-radius: var(--p411-r-s);
 }
 .p411-empty--inline h3 { font-size: 15px; }
 .p411-empty--inline p { margin: 0; font-size: 13.5px; }
 .p411-empty--inline .p411-empty__actions { justify-content: flex-start; margin-top: 12px; }
+/* burgundy variant for promotional dead ends */
+.p411-empty--bu { background: var(--p411-bu-w); border-color: var(--p411-bu-line); }
+.p411-empty--bu .p411-empty__icon { color: var(--p411-bu); }
 
 /* ---- category strip (mirrors the homepage) --------------------------- */
 
 .p411-catstrip { background: #fff; border-bottom: 1px solid var(--p411-line); }
-.p411-catstrip > .container { padding-top: 16px; padding-bottom: 16px; }
+.p411-catstrip > .container { padding-top: 18px; padding-bottom: 18px; }
 .p411-cats {
 	display: grid;
 	gap: 10px;
@@ -348,16 +427,27 @@
 .p411-cats a {
 	display: block;
 	text-align: center;
-	padding: 13px 9px;
-	background: var(--p411-card);
-	border: 1px solid var(--p411-line);
-	border-radius: 8px;
-	color: var(--p411-ink);
+	padding: 14px 9px;
+	background: var(--p411-gray);
+	border: 1px solid transparent;
+	border-radius: var(--p411-r);
+	color: var(--p411-navy);
+	transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease;
 }
-.p411-cats a:hover,
-.p411-cats a.is-active { border-color: var(--p411-green); background: var(--p411-green-w); }
-.p411-cats a.is-active b { color: var(--p411-green-dd); }
-.p411-cats b { display: block; font-size: 13px; font-weight: 600; line-height: 1.3; }
+.p411-cats a:hover {
+	transform: translateY(-3px);
+	box-shadow: var(--p411-sh-h);
+	border-color: var(--p411-line-d);
+	color: var(--p411-navy);
+}
+.p411-cats a.is-active {
+	background: var(--p411-green-w);
+	border-color: var(--p411-green);
+	box-shadow: none;
+	transform: none;
+}
+.p411-cats a.is-active b { color: var(--p411-green-d); }
+.p411-cats b { display: block; font-size: 13px; font-weight: 600; line-height: 1.3; color: inherit; }
 .p411-cats span { display: block; margin-top: 3px; font-size: 11px; color: var(--p411-ink-3); }
 @media (max-width: 480px) { .p411-cats { grid-template-columns: repeat(2, 1fr); } }
 
@@ -371,20 +461,21 @@
 	flex-wrap: wrap;
 	background: var(--p411-card);
 	border: 1px solid var(--p411-line);
-	border-left: 4px solid var(--p411-green);
-	border-radius: 10px;
+	border-left: 4px solid var(--p411-bu);
+	border-radius: var(--p411-r-s);
 	padding: 12px 16px;
 	margin-bottom: 18px;
+	box-shadow: var(--p411-sh);
 }
-.p411-toolbar__count { font-size: 14.5px; font-weight: 600; }
-.p411-toolbar__count b { color: var(--p411-green-dd); }
+.p411-toolbar__count { font-size: 14.5px; font-weight: 600; color: var(--p411-navy); }
+.p411-toolbar__count b { color: var(--p411-green-d); }
 .p411-toolbar__meta { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 400; color: var(--p411-ink-3); }
 .p411-toolbar__right { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--p411-ink-2); }
 
 .p411-select {
 	height: 40px;
 	border: 1.5px solid var(--p411-line);
-	border-radius: 9px;
+	border-radius: var(--p411-r-s);
 	background: #fff;
 	font-size: 13.5px;
 	color: var(--p411-ink);
@@ -393,7 +484,7 @@
 }
 .p411-select:focus {
 	border-color: var(--p411-green);
-	box-shadow: 0 0 0 3px rgba(140, 198, 63, .18);
+	box-shadow: 0 0 0 3px rgba(121, 184, 42, .22);
 	outline: none;
 }
 
@@ -401,7 +492,7 @@
 
 .p411-results {
 	display: grid;
-	gap: 16px;
+	gap: 18px;
 	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 
@@ -410,21 +501,34 @@
 	flex-direction: column;
 	background: var(--p411-card);
 	border: 1px solid var(--p411-line);
-	border-radius: 12px;
+	border-radius: var(--p411-r);
 	overflow: hidden;
+	box-shadow: var(--p411-sh);
 	transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 .p411-biz:hover {
-	transform: translateY(-3px);
-	border-color: var(--p411-green-l);
-	box-shadow: 0 12px 28px rgba(46, 51, 56, .09);
+	transform: translateY(-4px);
+	border-color: var(--p411-line-d);
+	box-shadow: var(--p411-sh-h);
 }
-.p411-biz--featured { border-color: var(--p411-green-l); background: #FCFEF8; }
+/* Featured is the paid placement, so it reads as one — a burgundy rule across
+   the top, as on the homepage. `position: static` and an explicit width are
+   both required: the bare `:before` in style.css would otherwise make this an
+   absolutely positioned, zero-width box that never paints. */
+.p411-biz--featured { border-color: var(--p411-bu-line); }
+.p411-biz--featured::before {
+	content: "";
+	position: static;
+	display: block;
+	width: 100%;
+	height: 3px;
+	background: linear-gradient(90deg, var(--p411-bu), var(--p411-bu-l));
+}
 
 .p411-biz__media {
 	position: relative;
 	aspect-ratio: 16 / 9;
-	background: var(--p411-green-w);
+	background: var(--p411-gray);
 	overflow: hidden;
 }
 .p411-biz__media img {
@@ -442,23 +546,26 @@
 	left: 10px;
 	display: inline-block;
 	max-width: calc(100% - 20px);
-	padding: 4px 10px;
-	border-radius: 999px;
-	font-size: 11px;
+	padding: 4px 9px;
+	border-radius: 4px;
+	font-size: 10.5px;
 	font-weight: 700;
-	letter-spacing: .04em;
+	letter-spacing: .05em;
 	text-transform: uppercase;
 	line-height: 1.4;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	background: rgba(20, 30, 12, .78);
+	background: rgba(32, 36, 91, .92);
 	color: #fff;
 	backdrop-filter: blur(4px);
 }
-.p411-dir a.p411-flag:hover { background: var(--p411-green-dd); color: #fff; }
-.p411-flag--featured { top: auto; bottom: 10px; left: 10px; background: var(--p411-green-dd); }
-.p411-flag--new { left: auto; right: 10px; background: #1D4ED8; }
+.p411-dir a.p411-flag:hover,
+.p411-ct a.p411-flag:hover { background: var(--p411-navy); color: #fff; }
+/* Paid / promotional state is burgundy; "new" is the one green flag. */
+.p411-flag--featured { top: auto; bottom: 10px; left: 10px; background: var(--p411-bu); }
+.p411-flag--new { left: auto; right: 10px; background: var(--p411-green-d); }
+.p411-flag--muted { background: rgba(58, 64, 70, .85); }
 
 .p411-biz__body {
 	display: flex;
@@ -468,11 +575,11 @@
 	flex: 1;
 }
 .p411-biz__body h3 { font-size: 16px; font-weight: 700; }
-.p411-biz__body h3 a { color: var(--p411-ink); }
-.p411-biz__body h3 a:hover { color: var(--p411-green-dd); }
+.p411-biz__body h3 a { color: var(--p411-navy); }
+.p411-biz__body h3 a:hover { color: var(--p411-green-d); }
 .p411-biz__rate { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--p411-ink-3); }
 .p411-biz__rate b { color: var(--p411-amber); font-size: 13px; }
-.p411-biz__rate .material-icons { font-size: 15px; color: var(--p411-amber); }
+.p411-biz__rate .material-icons { font-size: 15px; color: #E8A33D; }
 
 .p411-biz__meta { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
 .p411-biz__meta span {
@@ -486,7 +593,7 @@
 .p411-biz__meta span > i.material-icons {
 	font-size: 15px;
 	line-height: 1.5;
-	color: var(--p411-ink-3);
+	color: var(--p411-green-d);
 	flex: none;
 }
 .p411-biz__meta span > em {
@@ -508,6 +615,24 @@
 
 .p411-adrow { margin: 0 0 18px; }
 .p411-adrow--grid { grid-column: 1 / -1; margin: 2px 0; }
+.p411-dir .ad-slot__label,
+.p411-ld .ad-slot__label,
+.p411-ct .ad-slot__label {
+	font-size: 9.5px;
+	letter-spacing: .16em;
+	color: var(--p411-ink-3);
+	margin-bottom: 6px;
+}
+.p411-dir .ad-slot__link,
+.p411-ld .ad-slot__link,
+.p411-ct .ad-slot__link {
+	border-color: var(--p411-line);
+	background: var(--p411-gray);
+	border-radius: var(--p411-r);
+}
+.p411-dir .ad-slot__link:hover,
+.p411-ld .ad-slot__link:hover,
+.p411-ct .ad-slot__link:hover { border-color: var(--p411-line-d); }
 
 /* ---- pagination ------------------------------------------------------ */
 
@@ -528,23 +653,34 @@
 	min-width: 42px;
 	padding: 8px 13px;
 	border: 1px solid var(--p411-line);
-	border-radius: 8px;
+	border-radius: var(--p411-r-s);
 	background: #fff;
 	color: var(--p411-ink-2);
 	font-size: 14px;
 	font-weight: 600;
 	text-align: center;
 }
-.p411-pager a.page-link:hover {
-	border-color: var(--p411-green);
-	background: var(--p411-green-w);
-	color: var(--p411-green-dd);
+/* `!important` under protest, and only here. pearland-brand.css paints
+   `.pagination .page-link:hover` and `.pagination .page-item.active .page-link`
+   with `background: var(--brand-green) !important` — the 2025 style sheet's
+   olive #909D3E, which is neither this page's green nor its navy. An important
+   declaration cannot be outranked by specificity, so matching it is the only
+   way to keep the pager in the palette. */
+.p411-pager a.page-link:hover,
+.p411-pager .pagination li > a:hover {
+	border-color: var(--p411-green) !important;
+	background: var(--p411-green-w) !important;
+	color: var(--p411-green-d) !important;
 }
+/* The page you are on is a state, not an action — navy, like the rest of the
+   structure, so the green pills stay the things worth clicking. */
 .p411-pager .page-item.active .page-link,
-.p411-pager .page-item.active span {
-	background: var(--p411-green);
-	border-color: var(--p411-green);
-	color: #fff;
+.p411-pager .page-item.active span,
+.p411-pager .pagination li.active a,
+.p411-pager .pagination li.active span {
+	background: var(--p411-navy) !important;
+	border-color: var(--p411-navy) !important;
+	color: #fff !important;
 }
 
 /* ---- sidebar: featured rail ----------------------------------------- */
@@ -556,7 +692,7 @@
 	gap: 11px;
 	padding: 8px;
 	border: 1px solid var(--p411-line);
-	border-radius: 10px;
+	border-radius: var(--p411-r-s);
 	color: var(--p411-ink);
 	transition: border-color .16s ease, background .16s ease;
 }
@@ -565,9 +701,9 @@
 	flex: none;
 	width: 46px;
 	height: 46px;
-	border-radius: 9px;
+	border-radius: var(--p411-r-s);
 	overflow: hidden;
-	background: var(--p411-green-w);
+	background: var(--p411-gray);
 	display: grid;
 	place-items: center;
 	color: #fff;
@@ -581,6 +717,7 @@
 	font-size: 13.5px;
 	font-weight: 600;
 	line-height: 1.3;
+	color: var(--p411-navy);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -601,10 +738,10 @@
 	width: 24px;
 	height: 24px;
 	border-radius: 50%;
-	background: var(--p411-bg);
+	background: var(--p411-gray);
 	color: var(--p411-ink-3);
 }
-.p411-rail__item:hover .p411-rail__go { background: var(--p411-green-dd); color: #fff; }
+.p411-rail__item:hover .p411-rail__go { background: var(--p411-green-d); color: #fff; }
 .p411-rail__go .material-icons { font-size: 17px; }
 
 /* ---- sidebar: category list ----------------------------------------- */
@@ -617,17 +754,17 @@
 	gap: 10px;
 	padding: 9px 2px;
 	font-size: 13.5px;
-	color: var(--p411-ink-2);
+	color: var(--p411-ink);
 }
-.p411-catlist a:hover { color: var(--p411-green-dd); }
-.p411-catlist a.is-active { color: var(--p411-green-dd); font-weight: 600; }
+.p411-catlist a:hover { color: var(--p411-green-d); }
+.p411-catlist a.is-active { color: var(--p411-green-d); font-weight: 600; }
 .p411-catlist em {
 	font-style: normal;
 	flex: none;
 	min-width: 26px;
 	padding: 1px 7px;
 	border-radius: 999px;
-	background: var(--p411-bg);
+	background: var(--p411-gray);
 	color: var(--p411-ink-3);
 	font-size: 11.5px;
 	text-align: center;
@@ -646,7 +783,7 @@
 	min-height: 44px;
 	height: auto;
 	border: 1.5px solid var(--p411-line);
-	border-radius: 9px;
+	border-radius: var(--p411-r-s);
 	background: #fff;
 	font-size: 14px;
 	color: var(--p411-ink);
@@ -656,24 +793,28 @@
 }
 .p411-form textarea { min-height: 92px; resize: vertical; }
 .p411-form .form-control::placeholder { color: var(--p411-ink-3); }
+/* Same story as the pager: pearland-brand.css carries
+   `.form-control:focus { border-color: var(--brand-green) !important; box-shadow:
+   … !important }` in olive, so the focus ring has to match `!important` to stay
+   the page's green. */
 .p411-form .form-control:focus,
 .p411-form input:focus,
 .p411-form textarea:focus {
-	border-color: var(--p411-green);
-	box-shadow: 0 0 0 3px rgba(140, 198, 63, .18);
+	border-color: var(--p411-green) !important;
+	box-shadow: 0 0 0 3px rgba(121, 184, 42, .22) !important;
 	outline: none;
 }
 .p411-form__hint { font-size: 12.5px; color: var(--p411-ink-3); margin-bottom: 12px; }
 
 .p411-note {
-	border-radius: 9px;
+	border-radius: var(--p411-r-s);
 	padding: 10px 13px;
 	font-size: 13.5px;
 	margin-bottom: 12px;
 }
-.p411-note--ok { background: #EAF6E2; color: #2F6B18; border: 1px solid #CBE6B4; }
-.p411-note--err { background: #FDECEC; color: #96201F; border: 1px solid #F5C6C5; }
-.p411-note--info { background: var(--p411-amber-w); color: #7A5310; border: 1px solid #F0DDB4; }
+.p411-note--ok { background: var(--p411-green-w); color: #3E6B15; border: 1px solid #CFE0AE; }
+.p411-note--err { background: var(--p411-bu-w); color: var(--p411-bu); border: 1px solid var(--p411-bu-line); }
+.p411-note--info { background: var(--p411-navy-w); color: var(--p411-navy); border: 1px solid #CDD4E6; }
 
 /* ---- static services promo ------------------------------------------- */
 /* Moved to assets/css/promo-cards.css — the same two cards now render on the
@@ -682,31 +823,42 @@
 
 /* ---- owner band (matches the homepage's) ----------------------------- */
 
-.p411-owner { background: #fff; border-top: 1px solid var(--p411-line); padding: 38px 0; margin-top: 30px; }
-.p411-owner__head { text-align: center; max-width: 62ch; margin: 0 auto 24px; }
-.p411-owner__head h2 { margin: 0 0 8px; font-size: 24px; font-weight: 700; }
-.p411-owner__head p { font-size: 15px; color: var(--p411-ink-2); }
-.p411-feat4 { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.p411-owner {
+	background: var(--p411-bg);
+	border-top: 1px solid var(--p411-line);
+	border-bottom: 1px solid var(--p411-line);
+	padding: 42px 0;
+	margin-top: 30px;
+}
+.p411-owner__head { text-align: center; max-width: 66ch; margin: 0 auto 26px; }
+.p411-owner__head h2 { margin: 0 0 9px; font-size: 26px; font-weight: 700; color: var(--p411-navy); }
+.p411-owner__head p { font-size: 15px; line-height: 1.65; color: var(--p411-ink-2); }
+.p411-feat4 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .p411-feat4 > div {
 	background: #fff;
 	border: 1px solid var(--p411-line);
-	border-radius: 10px;
+	border-radius: var(--p411-r);
 	padding: 20px 16px;
 	text-align: center;
 }
 .p411-feat4 i {
 	display: grid;
 	place-items: center;
-	width: 44px;
-	height: 44px;
+	width: 46px;
+	height: 46px;
 	margin: 0 auto 12px;
-	border-radius: 12px;
-	background: var(--p411-green-w);
-	color: var(--p411-green-dd);
+	border-radius: 50%;
+	background: var(--p411-navy);
+	color: #fff;
 }
-.p411-feat4 h3 { margin: 0 0 6px; font-size: 15.5px; font-weight: 700; }
-.p411-feat4 p { font-size: 13.5px; color: var(--p411-ink-2); }
-.p411-owner__cta { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 24px; }
+/* Rotate the accent so four tiles don't read as one block of colour — the
+   same three-colour rotation the homepage's category strip uses. */
+.p411-feat4 > div:nth-child(3n + 1) i { background: var(--p411-green); }
+.p411-feat4 > div:nth-child(3n + 2) i { background: var(--p411-bu); }
+.p411-feat4 > div:nth-child(3n + 3) i { background: var(--p411-navy); }
+.p411-feat4 h3 { margin: 0 0 6px; font-size: 15.5px; font-weight: 700; color: var(--p411-navy); }
+.p411-feat4 p { font-size: 13.5px; line-height: 1.55; color: var(--p411-ink-2); }
+.p411-owner__cta { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 26px; }
 
 /* ============================================================================
  * LISTING DETAILS ONLY
@@ -714,59 +866,83 @@
 
 /* ---- hero ------------------------------------------------------------ */
 
-.p411-ld__hero { position: relative; background: #1d2b12; overflow: hidden; }
+.p411-ld__hero {
+	position: relative;
+	overflow: hidden;
+	background: linear-gradient(168deg, var(--p411-navy-d) 0%, var(--p411-navy) 45%, #4A2450 78%, var(--p411-bu) 100%);
+}
 .p411-ld__cover {
 	position: absolute;
 	inset: 0;
 	background-size: cover;
 	background-position: center;
-	opacity: .42;
+	opacity: .45;
 }
-.p411-ld__cover::after {
+.p411-ld__hero::after {
 	content: "";
 	position: absolute;
 	inset: 0;
-	background: linear-gradient(180deg, rgba(18, 26, 11, .72) 0%, rgba(18, 26, 11, .88) 100%);
+	background: linear-gradient(180deg, rgba(15, 17, 45, .8) 0%, rgba(38, 22, 52, .82) 60%, rgba(78, 26, 43, .84) 100%);
 }
-.p411-ld__hero > .container { position: relative; z-index: 2; padding-top: 26px; padding-bottom: 28px; }
+.p411-ld__hero::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 3px;
+	z-index: 3;
+	background: linear-gradient(90deg, var(--p411-green) 0%, var(--p411-bu) 100%);
+}
+.p411-ld__hero > .container { position: relative; z-index: 2; padding-top: 28px; padding-bottom: 30px; }
 
 .p411-ld__ident { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
 .p411-ld__logo {
 	flex: none;
 	width: 104px;
 	height: 104px;
-	border-radius: 14px;
+	border-radius: var(--p411-r);
 	background: #fff;
 	border: 3px solid rgba(255, 255, 255, .85);
 	overflow: hidden;
 	display: grid;
 	place-items: center;
+	box-shadow: 0 10px 26px rgba(10, 12, 34, .35);
 }
 .p411-ld__logo img { width: 100%; height: 100%; object-fit: contain; padding: 6px; }
 .p411-ld__head { flex: 1; min-width: 260px; color: #fff; }
-.p411-ld__head h1 { color: #fff; font-size: 28px; font-weight: 700; margin: 0 0 8px; }
+.p411-ld__head h1 {
+	color: #fff;
+	font-size: 29px;
+	font-weight: 700;
+	letter-spacing: -0.3px;
+	margin: 0 0 8px;
+	text-shadow: 0 2px 18px rgba(0, 0, 0, .35);
+}
 .p411-ld__badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .p411-tag {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
-	padding: 4px 11px;
-	border-radius: 999px;
-	font-size: 11.5px;
+	padding: 4px 10px;
+	border-radius: 4px;
+	font-size: 10.5px;
 	font-weight: 700;
-	letter-spacing: .04em;
+	letter-spacing: .07em;
 	text-transform: uppercase;
 	background: rgba(255, 255, 255, .16);
 	color: #fff;
 }
 .p411-tag .material-icons { font-size: 14px; }
-.p411-tag--green { background: var(--p411-green-dd); }
+.p411-tag--green { background: var(--p411-green-d); }
+.p411-tag--bu { background: var(--p411-bu); }
+.p411-tag--navy { background: var(--p411-navy); }
 .p411-tag--amber { background: var(--p411-amber); }
-.p411-ld a.p411-tag:hover { background: rgba(255, 255, 255, .3); color: #fff; }
+.p411-ld a.p411-tag:hover, .p411-ct a.p411-tag:hover { background: rgba(255, 255, 255, .3); color: #fff; }
 
 .p411-ld__rate { display: flex; align-items: center; gap: 7px; font-size: 13.5px; color: rgba(255, 255, 255, .84); margin-bottom: 10px; }
 .p411-ld__rate b { font-size: 16px; color: #fff; }
-.p411-ld__rate .material-icons { font-size: 17px; color: #F5B301; }
+.p411-ld__rate .material-icons { font-size: 17px; color: #E8A33D; }
 
 .p411-ld__facts { display: flex; flex-direction: column; gap: 5px; }
 .p411-ld__facts a,
@@ -779,9 +955,10 @@
 	word-break: break-word;
 }
 .p411-ld__facts a:hover { color: #fff; text-decoration: underline; }
-.p411-ld__facts .material-icons { font-size: 16px; color: var(--p411-green); flex: none; margin-top: 2px; }
+.p411-ld__facts .material-icons { font-size: 16px; color: var(--p411-green-l); flex: none; margin-top: 2px; }
 
-.p411-ld__cta { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
+.p411-ld__cta { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+.p411-ld__cta .p411-btn { box-shadow: 0 8px 22px rgba(10, 12, 34, .3); }
 
 /* ---- sub-nav --------------------------------------------------------- */
 
@@ -802,7 +979,7 @@
 	color: var(--p411-ink-2);
 	border-bottom: 3px solid transparent;
 }
-.p411-ld__nav a:hover { color: var(--p411-green-dd); border-bottom-color: var(--p411-green-l); }
+.p411-ld__nav a:hover { color: var(--p411-green-d); border-bottom-color: var(--p411-green); }
 
 /* ---- content blocks -------------------------------------------------- */
 
@@ -810,6 +987,11 @@
 .p411-ld__body > .p411-card { scroll-margin-top: 70px; }
 .p411-prose { font-size: 14.5px; line-height: 1.7; color: var(--p411-ink-2); }
 .p411-prose p + p { margin-top: 10px; }
+/* Links inside stored copy (a listing description, an article body). Without
+   this they fall through to pearland-brand.css's bare `a { color: … }`, which
+   is the 2025 olive. */
+.p411-prose a { color: var(--p411-green-d); text-decoration: underline; text-underline-offset: 2px; }
+.p411-prose a:hover { color: var(--p411-navy); }
 
 .p411-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .p411-chips span {
@@ -817,12 +999,12 @@
 	padding: 6px 13px;
 	border-radius: 999px;
 	background: var(--p411-green-w);
-	border: 1px solid var(--p411-green-l);
-	color: var(--p411-green-dd);
+	border: 1px solid #CFE0AE;
+	color: var(--p411-green-d);
 	font-size: 13px;
 	font-weight: 600;
 }
-.p411-chips--plain span { background: var(--p411-bg); border-color: var(--p411-line); color: var(--p411-ink-2); }
+.p411-chips--plain span { background: var(--p411-gray); border-color: var(--p411-line); color: var(--p411-ink-2); }
 
 .p411-share { display: flex; flex-wrap: wrap; gap: 9px; }
 .p411-share a {
@@ -841,7 +1023,7 @@
 .p411-share .so-wa { background: #25D366; }
 .p411-share .so-li { background: #0A66C2; }
 .p411-share .so-pi { background: #E60023; }
-.p411-share .so-link { background: #3A4046; }
+.p411-share .so-link { background: var(--p411-navy); }
 
 /* ---- gallery --------------------------------------------------------- */
 
@@ -849,52 +1031,51 @@
 .p411-gallery a {
 	display: block;
 	aspect-ratio: 4 / 3;
-	border-radius: 10px;
+	border-radius: var(--p411-r-s);
 	overflow: hidden;
-	background: var(--p411-green-w);
+	background: var(--p411-gray);
 	border: 1px solid var(--p411-line);
 }
 .p411-gallery img { width: 100%; height: 100%; object-fit: cover; transition: transform .3s ease; }
 .p411-gallery a:hover img { transform: scale(1.05); }
 
 .p411-video { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-.p411-embed { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; background: #000; }
+.p411-embed { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: var(--p411-r-s); background: #000; }
 .p411-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 
 /* ---- reviews --------------------------------------------------------- */
 
 .p411-revsum { display: grid; gap: 20px; grid-template-columns: 1fr; align-items: center; }
 @media (min-width: 620px) { .p411-revsum { grid-template-columns: 170px 1fr; } }
-.p411-revsum__score { text-align: center; padding: 14px; border-radius: 12px; background: var(--p411-green-w); }
-.p411-revsum__score b { display: block; font-size: 38px; font-weight: 700; line-height: 1.1; color: var(--p411-ink); }
+.p411-revsum__score { text-align: center; padding: 16px 14px; border-radius: var(--p411-r); background: var(--p411-navy-w); }
+.p411-revsum__score b { display: block; font-size: 38px; font-weight: 700; line-height: 1.1; color: var(--p411-navy); }
 .p411-revsum__score .p411-stars { justify-content: center; margin: 5px 0 3px; }
 .p411-revsum__score span { font-size: 12.5px; color: var(--p411-ink-2); }
 
-.p411-stars { display: flex; gap: 1px; color: #F5B301; }
+.p411-stars { display: flex; gap: 1px; color: #E8A33D; }
 .p411-stars .material-icons { font-size: 17px; }
 
 .p411-revbar { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--p411-ink-2); }
 .p411-revbar + .p411-revbar { margin-top: 7px; }
 .p411-revbar__label { flex: none; width: 72px; }
-.p411-revbar__track { flex: 1; height: 8px; border-radius: 4px; background: #EDEFE8; overflow: hidden; }
+.p411-revbar__track { flex: 1; height: 8px; border-radius: 4px; background: var(--p411-gray); overflow: hidden; }
 .p411-revbar__fill { display: block; height: 100%; border-radius: 4px; background: var(--p411-green); }
 .p411-revbar__n { flex: none; width: 26px; text-align: right; color: var(--p411-ink-3); }
 
 .p411-revlist li { display: flex; gap: 13px; padding: 15px 0; border-bottom: 1px solid var(--p411-line); }
 .p411-revlist li:last-child { border-bottom: 0; padding-bottom: 0; }
-.p411-revlist__ava { flex: none; width: 44px; height: 44px; border-radius: 50%; overflow: hidden; background: var(--p411-green-w); }
+.p411-revlist__ava { flex: none; width: 44px; height: 44px; border-radius: 50%; overflow: hidden; background: var(--p411-gray); }
 .p411-revlist__ava img { width: 100%; height: 100%; object-fit: cover; }
 .p411-revlist__body { min-width: 0; flex: 1; }
-.p411-revlist__body h4 { font-size: 14.5px; font-weight: 700; }
+.p411-revlist__body h4 { font-size: 14.5px; font-weight: 700; color: var(--p411-navy); }
 .p411-revlist__when { font-size: 12px; color: var(--p411-ink-3); }
 .p411-revlist__body p { margin-top: 6px; font-size: 13.5px; line-height: 1.6; color: var(--p411-ink-2); }
 
-/* Star picker. style.css line 139 carries a bare `:before { position:absolute;
-   font-family:"Material Icons"; font-size:18px; color:#9d9a98 }` that applies to
-   EVERY element on the site, so a ::before meant to sit in the text flow has to
-   undo all of it — otherwise the five stars pile up on one point and their
-   labels collapse to 0x0. Same reason every other ::before/::after in this file
-   is positioned deliberately. */
+/* Star picker. The bare `:before` in style.css (see the header of this file)
+   carries `position: absolute; font-family: "Material Icons"; font-size: 18px`,
+   so a ::before meant to sit in the text flow has to undo all of it —
+   otherwise the five stars pile up on one point and their labels collapse to
+   0x0. Same reason every other pseudo-element here is stated in full. */
 .p411-rating { display: inline-flex; flex-direction: row-reverse; gap: 2px; border: 0; margin: 0 0 6px; padding: 0; }
 .p411-rating input { position: absolute; opacity: 0; width: 0; height: 0; }
 .p411-rating label {
@@ -911,12 +1092,12 @@
 	line-height: 1;
 	color: inherit;
 }
-.p411-rating input:checked ~ label { color: #F5B301; }
+.p411-rating input:checked ~ label { color: #E8A33D; }
 /* While the row is hovered the pointer wins, so hovering a lower star dims
    the higher ones instead of leaving the previous selection lit. */
 .p411-rating:hover input:checked ~ label { color: #DDE0D6; }
 .p411-rating label:hover,
-.p411-rating label:hover ~ label { color: #F5B301; }
+.p411-rating label:hover ~ label { color: #E8A33D; }
 .p411-rating input:focus-visible + label { outline: 2px solid var(--p411-green); outline-offset: 2px; }
 .p411-rating__value { font-size: 13px; font-weight: 600; color: var(--p411-ink-2); }
 
@@ -944,22 +1125,22 @@
 	word-break: break-word;
 	min-width: 0;
 }
-.p411-info li a:hover { color: var(--p411-green-dd); }
+.p411-info li a:hover { color: var(--p411-green-d); }
 
 .p411-profile { text-align: center; }
 .p411-profile__img {
 	width: 78px;
 	height: 78px;
 	margin: 0 auto 11px;
-	border-radius: 14px;
+	border-radius: var(--p411-r);
 	overflow: hidden;
-	background: var(--p411-green-w);
+	background: var(--p411-gray);
 	border: 1px solid var(--p411-line);
 	display: grid;
 	place-items: center;
 }
 .p411-profile__img img { width: 100%; height: 100%; object-fit: contain; padding: 5px; }
-.p411-profile h3 { font-size: 16px; font-weight: 700; }
+.p411-profile h3 { font-size: 16px; font-weight: 700; color: var(--p411-navy); }
 .p411-profile p { margin-top: 5px; font-size: 13px; color: var(--p411-ink-2); }
 .p411-profile__soc { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
 .p411-profile__soc a {
@@ -968,15 +1149,15 @@
 	width: 34px;
 	height: 34px;
 	border-radius: 50%;
-	background: var(--p411-bg);
+	background: var(--p411-gray);
 	border: 1px solid var(--p411-line);
 }
-.p411-profile__soc a:hover { background: var(--p411-green-w); border-color: var(--p411-green-l); }
+.p411-profile__soc a:hover { background: var(--p411-green-w); border-color: var(--p411-green); }
 .p411-profile__soc img { width: 15px; height: 15px; }
 
 /* ---- map ------------------------------------------------------------- */
 
-.p411-map { border-radius: 10px; overflow: hidden; border: 1px solid var(--p411-line); line-height: 0; }
+.p411-map { border-radius: var(--p411-r-s); overflow: hidden; border: 1px solid var(--p411-line); line-height: 0; }
 .p411-map iframe { display: block; width: 100%; height: 220px; border: 0; }
 .p411-map__actions { display: grid; gap: 8px; margin-top: 11px; }
 
@@ -986,34 +1167,35 @@
 .p411-rel__item {
 	display: block;
 	border: 1px solid var(--p411-line);
-	border-radius: 11px;
+	border-radius: var(--p411-r);
 	overflow: hidden;
 	background: #fff;
 	color: var(--p411-ink);
+	box-shadow: var(--p411-sh);
 	transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 .p411-rel__item:hover {
 	transform: translateY(-3px);
-	border-color: var(--p411-green-l);
-	box-shadow: 0 10px 24px rgba(46, 51, 56, .09);
+	border-color: var(--p411-line-d);
+	box-shadow: var(--p411-sh-h);
 }
-.p411-rel__thumb { aspect-ratio: 16 / 10; background: var(--p411-green-w); overflow: hidden; }
+.p411-rel__thumb { aspect-ratio: 16 / 10; background: var(--p411-gray); overflow: hidden; }
 .p411-rel__thumb img { width: 100%; height: 100%; object-fit: cover; }
 .p411-rel__body { padding: 11px 13px 13px; }
-.p411-rel__body b { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.p411-rel__body b { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--p411-navy); }
 .p411-rel__body span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--p411-ink-3); }
 
 /* ---- responsive ------------------------------------------------------ */
 
 @media (max-width: 767px) {
 	.p411-hero h1 { font-size: 25px; }
-	.p411-hero > .container { padding-top: 24px; padding-bottom: 24px; }
+	.p411-hero > .container { padding-top: 26px; padding-bottom: 26px; }
 	.p411-ld__head h1 { font-size: 22px; }
 	.p411-ld__logo { width: 78px; height: 78px; }
 	.p411-sec__head h2 { font-size: 19px; }
 	.p411-card { padding: 16px 14px; }
 	.p411-results { grid-template-columns: 1fr; }
-	.p411-owner { padding: 30px 0; }
+	.p411-owner { padding: 32px 0; }
 	.p411-ld__cta .p411-btn { flex: 1 1 auto; }
 }
 

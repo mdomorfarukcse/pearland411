@@ -580,10 +580,15 @@
 }
 
 /* Featured is the paid placement, so it reads as one: burgundy top rule and a
-   slightly stronger frame. */
+   slightly stronger frame.
+   `position: static` and an explicit width are both load-bearing. style.css
+   carries a bare `:before { position: absolute; … }` that applies to every
+   element on the site, and an absolutely positioned box with no offsets and
+   `width: auto` shrink-wraps to zero — the rule was in the stylesheet but has
+   never actually painted. */
 .p411-home .p411-card--featured { border-color: #E2CBD5; }
 .p411-home .p411-card--featured::before {
-	content: ""; display: block; height: 3px;
+	content: ""; position: static; display: block; width: 100%; height: 3px;
 	background: linear-gradient(90deg, var(--bu), var(--bu-l));
 }
 

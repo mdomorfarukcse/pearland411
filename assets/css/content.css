@@ -10,21 +10,27 @@
  * the foot of the file) the About page's split sections, stat strip and
  * vision/mission panels.
  *
+ * COLOUR — the tokens come from directory.css and follow the same 2026-08
+ * rebalance as the homepage: navy structure, green as an accent, burgundy for
+ * promotional and dated things (the calendar chip, the section rules). What
+ * used to be here was green on green: green card frames, green tinted
+ * thumbnails, a dark-green About band.
+ *
  * SCOPING RULE — the views wrap themselves in `.p411-ct`, which is where
  * directory.css declares the design tokens, and every class name below starts
  * `p411-ct` (content sections) or `p411-ab` (About). Nothing here leaks into
  * the ~200 views that share style.css, and style.css itself is never edited.
  *
- * ONE TRAP WORTH KNOWING: style.css:139 carries a bare
- * `:before { position: absolute; font-family: "Material Icons"; ... }` that
- * applies to EVERY element on the site. Any ::before here that is meant to sit
- * in the text flow has to undo all of it — see .p411-ct-card__date::before.
+ * ONE TRAP WORTH KNOWING: style.css:139 and :153 carry bare `:before` /
+ * `:after` rules — `{ position: absolute; font-family: "Material Icons"; … }` —
+ * that apply to EVERY element on the site. Any pseudo-element here that is
+ * meant to sit in the text flow has to undo all of it; see .p411-ab-steps.
  * ==========================================================================*/
 
 /* ---- hero extras ----------------------------------------------------- */
 
 .p411-ct-hero__search {
-	margin-top: 18px;
+	margin-top: 20px;
 	max-width: 560px;
 }
 .p411-ct-search {
@@ -32,9 +38,14 @@
 	align-items: center;
 	gap: 6px;
 	background: #fff;
+	border: 2px solid rgba(121, 184, 42, .55);
 	border-radius: 999px;
-	padding: 6px;
-	box-shadow: 0 12px 30px rgba(15, 23, 42, .18);
+	padding: 5px;
+	box-shadow: 0 14px 34px rgba(10, 12, 34, .28);
+}
+.p411-ct-search:focus-within {
+	border-color: var(--p411-green);
+	box-shadow: 0 14px 34px rgba(10, 12, 34, .28), 0 0 0 4px rgba(121, 184, 42, .28);
 }
 .p411-ct-search input[type="search"],
 .p411-ct-search input[type="text"] {
@@ -81,7 +92,7 @@
 	border-radius: 50%;
 	color: var(--p411-ink-3);
 }
-.p411-ct-search__clear:hover { background: var(--p411-bg); color: var(--p411-ink); }
+.p411-ct-search__clear:hover { background: var(--p411-gray); color: var(--p411-navy); }
 .p411-ct-search__clear .material-icons { font-size: 19px; }
 
 /* ---- filter strip ---------------------------------------------------- */
@@ -111,13 +122,15 @@
 	background: #fff;
 	transition: background .16s ease, border-color .16s ease, color .16s ease;
 }
-.p411-ct-tabs a:hover { border-color: var(--p411-green); background: var(--p411-green-w); color: var(--p411-green-dd); }
+.p411-ct-tabs a:hover { border-color: var(--p411-green); background: var(--p411-green-w); color: var(--p411-green-d); }
+/* The selected filter is one of the few places green is a ground rather than
+   an accent — the brief keeps green for selected labels. */
 .p411-ct-tabs a.is-active { background: var(--p411-green); border-color: var(--p411-green); color: #fff; }
 .p411-ct-tabs em {
 	font-style: normal;
 	padding: 1px 8px;
 	border-radius: 999px;
-	background: var(--p411-bg);
+	background: var(--p411-gray);
 	color: var(--p411-ink-3);
 	font-size: 11.5px;
 	font-weight: 700;
@@ -129,7 +142,7 @@
 
 .p411-ct-grid {
 	display: grid;
-	gap: 16px;
+	gap: 18px;
 	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 .p411-ct-grid--wide { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
@@ -140,14 +153,15 @@
 	flex-direction: column;
 	background: var(--p411-card);
 	border: 1px solid var(--p411-line);
-	border-radius: 12px;
+	border-radius: var(--p411-r);
 	overflow: hidden;
+	box-shadow: var(--p411-sh);
 	transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 .p411-ct-card:hover {
-	transform: translateY(-3px);
-	border-color: var(--p411-green-l);
-	box-shadow: 0 12px 28px rgba(46, 51, 56, .09);
+	transform: translateY(-4px);
+	border-color: var(--p411-line-d);
+	box-shadow: var(--p411-sh-h);
 }
 
 /* A DIV, never an <a>: the badges sitting on top of the artwork include a link
@@ -159,7 +173,7 @@
 	display: block;
 	position: relative;
 	aspect-ratio: 16 / 9;
-	background: var(--p411-green-w);
+	background: var(--p411-gray);
 	overflow: hidden;
 }
 /* Matched by class, not by `> a`: the category badge is a link too, and a bare
@@ -174,32 +188,35 @@
 	transition: transform .35s ease;
 }
 .p411-ct-card:hover .p411-ct-card__media img { transform: scale(1.04); }
-.p411-ct a.p411-flag:hover { background: var(--p411-green-dd); color: #fff; }
 
-/* Calendar chip — month over day, top-left of the artwork. */
+/* Calendar chip — month band over the day, top-left of the artwork. The same
+   block the homepage's events list uses, so an event reads the same wherever
+   it appears. */
 .p411-ct-card__date {
 	position: absolute;
 	top: 10px;
 	left: 10px;
-	min-width: 46px;
-	padding: 5px 8px 6px;
-	border-radius: 9px;
-	background: rgba(20, 30, 12, .82);
-	color: #fff;
+	min-width: 48px;
+	border-radius: var(--p411-r-s);
+	overflow: hidden;
+	background: #fff;
 	text-align: center;
 	line-height: 1.05;
-	backdrop-filter: blur(4px);
+	box-shadow: 0 6px 18px rgba(10, 12, 34, .28);
 }
 .p411-ct-card__date span {
 	display: block;
+	background: var(--p411-bu);
+	color: #fff;
 	font-size: 10px;
 	font-weight: 700;
-	letter-spacing: .1em;
+	letter-spacing: .09em;
 	text-transform: uppercase;
-	opacity: .88;
+	padding: 3px 7px;
 }
-.p411-ct-card__date b { display: block; font-size: 17px; font-weight: 700; }
-.p411-ct-card__date--past { background: rgba(58, 64, 70, .82); }
+.p411-ct-card__date b { display: block; padding: 4px 7px 5px; font-size: 18px; font-weight: 700; color: var(--p411-bu); }
+.p411-ct-card__date--past span { background: var(--p411-ink-2); }
+.p411-ct-card__date--past b { color: var(--p411-ink-2); }
 
 /* Play badge on video artwork. Never intercepts the click — it covers the
    whole thumbnail and the link underneath is what people are aiming at. */
@@ -208,22 +225,22 @@
 	inset: 0;
 	display: grid;
 	place-items: center;
-	background: rgba(15, 23, 42, .18);
+	background: rgba(23, 26, 69, .28);
 	transition: background .2s ease;
 	pointer-events: none;
 }
-.p411-ct-card:hover .p411-ct-card__play { background: rgba(15, 23, 42, .3); }
+.p411-ct-card:hover .p411-ct-card__play { background: rgba(23, 26, 69, .4); }
 .p411-ct-card__play i {
 	display: grid;
 	place-items: center;
 	width: 54px;
 	height: 54px;
 	border-radius: 50%;
-	background: rgba(0, 0, 0, .58);
+	background: rgba(23, 26, 69, .62);
 	border: 2px solid rgba(255, 255, 255, .85);
 	transition: transform .2s ease, background .2s ease;
 }
-.p411-ct-card:hover .p411-ct-card__play i { transform: scale(1.08); background: var(--p411-green-dd); }
+.p411-ct-card:hover .p411-ct-card__play i { transform: scale(1.08); background: var(--p411-green); }
 .p411-ct-card__play svg { width: 22px; height: 22px; margin-left: 3px; }
 
 .p411-ct-card__body {
@@ -234,8 +251,8 @@
 	flex: 1;
 }
 .p411-ct-card__body h3 { font-size: 16px; font-weight: 700; line-height: 1.35; }
-.p411-ct-card__body h3 a { color: var(--p411-ink); }
-.p411-ct-card__body h3 a:hover { color: var(--p411-green-dd); }
+.p411-ct-card__body h3 a { color: var(--p411-navy); }
+.p411-ct-card__body h3 a:hover { color: var(--p411-green-d); }
 
 .p411-ct-excerpt {
 	font-size: 13.5px;
@@ -260,7 +277,7 @@
 .p411-ct-meta .material-icons {
 	font-size: 15px;
 	line-height: 1.5;
-	color: var(--p411-green-dd);
+	color: var(--p411-green-d);
 	flex: none;
 }
 .p411-ct-meta em {
@@ -290,10 +307,10 @@
 	height: 30px;
 	border-radius: 50%;
 	object-fit: cover;
-	background: var(--p411-green-w);
+	background: var(--p411-navy-w);
 	display: grid;
 	place-items: center;
-	color: var(--p411-green-dd);
+	color: var(--p411-navy);
 	font-size: 12px;
 	font-weight: 700;
 }
@@ -301,7 +318,7 @@
 	display: block;
 	font-size: 12.5px;
 	font-weight: 600;
-	color: var(--p411-ink);
+	color: var(--p411-navy);
 	line-height: 1.25;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -311,7 +328,7 @@
 
 /* ---- lead story (news index, first item) ----------------------------- */
 
-.p411-ct-card--lead { margin-bottom: 16px; }
+.p411-ct-card--lead { margin-bottom: 18px; }
 @media (min-width: 700px) {
 	.p411-ct-card--lead { display: grid; grid-template-columns: minmax(0, 46%) minmax(0, 1fr); }
 	.p411-ct-card--lead .p411-ct-card__media { aspect-ratio: auto; height: 100%; min-height: 240px; }
@@ -325,7 +342,7 @@
 
 .p411-ct-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 
-.p411-ct-facts { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 12px; }
+.p411-ct-facts { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 14px; }
 .p411-ct-facts a,
 .p411-ct-facts span {
 	display: inline-flex;
@@ -336,9 +353,10 @@
 	word-break: break-word;
 }
 .p411-ct-facts a:hover { color: #fff; text-decoration: underline; }
-.p411-ct-facts .material-icons { font-size: 16px; color: var(--p411-green); flex: none; margin-top: 2px; }
+.p411-ct-facts .material-icons { font-size: 16px; color: var(--p411-green-l); flex: none; margin-top: 2px; }
 
 .p411-ct-cta { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+.p411-ct-cta .p411-btn { box-shadow: 0 8px 22px rgba(10, 12, 34, .3); }
 
 /* Chip row that jumps to the sections further down. Deliberately not sticky:
    the theme's own header is `position: fixed` at z-index 20, and a second
@@ -354,12 +372,12 @@
 	font-weight: 600;
 	color: var(--p411-ink-2);
 }
-.p411-ct-jump a:hover { border-color: var(--p411-green); background: var(--p411-green-w); color: var(--p411-green-dd); }
+.p411-ct-jump a:hover { border-color: var(--p411-green); background: var(--p411-green-w); color: var(--p411-green-d); }
 
 .p411-ct-body { display: flex; flex-direction: column; gap: 18px; }
 .p411-ct-body > .p411-card { scroll-margin-top: 80px; }
 
-.p411-ct-figure { margin: 0 0 16px; border-radius: 12px; overflow: hidden; border: 1px solid var(--p411-line); background: var(--p411-green-w); }
+.p411-ct-figure { margin: 0 0 16px; border-radius: var(--p411-r); overflow: hidden; border: 1px solid var(--p411-line); background: var(--p411-gray); }
 .p411-ct-figure img { display: block; width: 100%; height: auto; }
 .p411-ct-figure figcaption { padding: 8px 12px; font-size: 12px; color: var(--p411-ink-3); background: #fff; }
 
@@ -375,8 +393,8 @@
 	color: var(--p411-ink-3);
 }
 .p411-ct-byline span { display: inline-flex; align-items: center; gap: 6px; }
-.p411-ct-byline b { color: var(--p411-ink); font-weight: 600; }
-.p411-ct-byline .material-icons { font-size: 16px; color: var(--p411-green-dd); }
+.p411-ct-byline b { color: var(--p411-navy); font-weight: 600; }
+.p411-ct-byline .material-icons { font-size: 16px; color: var(--p411-green-d); }
 
 /* ---- video player ---------------------------------------------------- */
 
@@ -385,7 +403,7 @@
 	padding-bottom: 56.25%;
 	height: 0;
 	overflow: hidden;
-	border-radius: 12px;
+	border-radius: var(--p411-r);
 	background: #000;
 	/* The theme has a .fclick overlay pattern and the sidebar cards sit in the
 	   same stacking context; without a z-index of its own the player used to
@@ -403,7 +421,7 @@
 
 /* ---- map ------------------------------------------------------------- */
 
-.p411-ct-map { border-radius: 10px; overflow: hidden; border: 1px solid var(--p411-line); line-height: 0; }
+.p411-ct-map { border-radius: var(--p411-r-s); overflow: hidden; border: 1px solid var(--p411-line); line-height: 0; }
 .p411-ct-map iframe { display: block; width: 100%; height: 320px; border: 0; }
 .p411-ct-map__actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 12px; }
 
@@ -416,7 +434,7 @@
 	min-width: 42px;
 	padding: 8px 13px;
 	border: 1px solid var(--p411-line);
-	border-radius: 8px;
+	border-radius: var(--p411-r-s);
 	background: #fff;
 	color: var(--p411-ink-2);
 	font-size: 14px;
@@ -426,7 +444,7 @@
 .p411-pager .pagination li > a:hover {
 	border-color: var(--p411-green);
 	background: var(--p411-green-w);
-	color: var(--p411-green-dd);
+	color: var(--p411-green-d);
 }
 .p411-pager__hint { margin-top: 10px; font-size: 12.5px; color: var(--p411-ink-3); }
 
@@ -434,20 +452,23 @@
  * ABOUT PAGE (/about-us)
  * ----------------------------------------------------------------------------
  * Editorial bands rather than a two-column shell: alternating text/media
- * splits, a strip of live figures, the vision + mission panels on a dark band,
+ * splits, a strip of live figures, the vision + mission panels on a navy band,
  * and the compact "why choose" grid. The section heading, cards, buttons,
  * chips and the closing owner band all come from the kit.
  * ==========================================================================*/
 
-.p411-ab-band { padding: 40px 0; }
+.p411-ab-band { padding: 42px 0; }
 .p411-ab-band--tint { background: #fff; border-top: 1px solid var(--p411-line); border-bottom: 1px solid var(--p411-line); }
-.p411-ab-band--dark { background: #1d2b12; }
+.p411-ab-band--dark {
+	background: linear-gradient(150deg, var(--p411-navy-d) 0%, var(--p411-navy) 52%, var(--p411-bu-d) 100%);
+}
 
-.p411-ab-head { text-align: center; max-width: 64ch; margin: 0 auto 26px; }
+.p411-ab-head { text-align: center; max-width: 64ch; margin: 0 auto 28px; }
 .p411-ab-head h2 {
 	margin: 0 0 10px;
 	font-size: 26px;
 	font-weight: 700;
+	color: var(--p411-navy);
 	position: relative;
 	padding-bottom: 12px;
 }
@@ -460,11 +481,12 @@
 	width: 52px;
 	height: 3px;
 	border-radius: 2px;
-	background: var(--p411-green);
+	background: var(--p411-bu);
 }
-.p411-ab-head p { font-size: 15px; color: var(--p411-ink-2); }
+.p411-ab-head p { font-size: 15px; line-height: 1.65; color: var(--p411-ink-2); }
 .p411-ab-band--dark .p411-ab-head h2 { color: #fff; }
-.p411-ab-band--dark .p411-ab-head p { color: rgba(255, 255, 255, .8); }
+.p411-ab-band--dark .p411-ab-head h2::after { background: var(--p411-green); }
+.p411-ab-band--dark .p411-ab-head p { color: rgba(255, 255, 255, .82); }
 
 /* ---- text + media split ---------------------------------------------- */
 
@@ -477,15 +499,16 @@
 }
 .p411-ab-split__media {
 	margin: 0;
-	border-radius: 14px;
+	border-radius: var(--p411-r);
 	overflow: hidden;
 	border: 1px solid var(--p411-line);
-	background: var(--p411-green-w);
+	background: var(--p411-gray);
+	box-shadow: var(--p411-sh);
 }
 .p411-ab-split__media img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; }
 .p411-ab-split__media figcaption { padding: 9px 14px; font-size: 12px; color: var(--p411-ink-3); background: #fff; }
 
-.p411-ab-split h2 { font-size: 26px; font-weight: 700; margin: 0 0 14px; position: relative; padding-bottom: 11px; }
+.p411-ab-split h2 { font-size: 26px; font-weight: 700; color: var(--p411-navy); margin: 0 0 14px; position: relative; padding-bottom: 11px; }
 .p411-ab-split h2::after {
 	content: "";
 	position: absolute;
@@ -494,7 +517,7 @@
 	width: 44px;
 	height: 3px;
 	border-radius: 2px;
-	background: var(--p411-green);
+	background: var(--p411-bu);
 }
 .p411-ab-lede { font-size: 15.5px; line-height: 1.75; color: var(--p411-ink-2); }
 .p411-ab-lede p + p { margin-top: 12px; }
@@ -503,13 +526,13 @@
 	margin-top: 20px;
 	padding: 15px 18px;
 	border-left: 4px solid var(--p411-green);
-	border-radius: 0 10px 10px 0;
+	border-radius: 0 var(--p411-r-s) var(--p411-r-s) 0;
 	background: var(--p411-green-w);
 	font-size: 14px;
 	line-height: 1.65;
 	color: var(--p411-ink);
 }
-.p411-ab-note b { color: var(--p411-green-dd); }
+.p411-ab-note b { color: var(--p411-green-d); }
 
 .p411-ab-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 
@@ -519,14 +542,15 @@
 .p411-ab-stats > div {
 	background: #fff;
 	border: 1px solid var(--p411-line);
-	border-radius: 12px;
+	border-radius: var(--p411-r);
 	padding: 20px 16px;
 	text-align: center;
+	box-shadow: var(--p411-sh);
 }
-.p411-ab-stats b { display: block; font-size: 30px; font-weight: 700; line-height: 1.1; color: var(--p411-green-dd); }
+.p411-ab-stats b { display: block; font-size: 30px; font-weight: 700; line-height: 1.1; color: var(--p411-navy); }
 .p411-ab-stats span { display: block; margin-top: 5px; font-size: 13px; color: var(--p411-ink-2); }
-.p411-ab-stats a { display: inline-block; margin-top: 9px; font-size: 12.5px; font-weight: 600; color: var(--p411-green-dd); }
-.p411-ab-stats a:hover { text-decoration: underline; }
+.p411-ab-stats a { display: inline-block; margin-top: 9px; font-size: 12.5px; font-weight: 600; color: var(--p411-green-d); }
+.p411-ab-stats a:hover { text-decoration: underline; color: var(--p411-green-d); }
 
 /* ---- vision / mission ------------------------------------------------ */
 
@@ -535,7 +559,7 @@
 .p411-ab-panel {
 	background: rgba(255, 255, 255, .07);
 	border: 1px solid rgba(255, 255, 255, .17);
-	border-radius: 14px;
+	border-radius: var(--p411-r);
 	padding: 24px;
 }
 .p411-ab-panel h3 { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; color: #fff; font-size: 19px; font-weight: 700; }
@@ -545,15 +569,16 @@
 	place-items: center;
 	width: 38px;
 	height: 38px;
-	border-radius: 11px;
+	border-radius: 50%;
 	background: var(--p411-green);
 	color: #fff;
 }
+.p411-ab-panel:nth-child(2) h3 i { background: var(--p411-bu-l); }
 .p411-ab-panel p { color: rgba(255, 255, 255, .85); font-size: 14.5px; line-height: 1.75; }
 .p411-ab-panel p + p { margin-top: 11px; }
 .p411-ab-panel ul { display: flex; flex-direction: column; gap: 12px; }
 .p411-ab-panel li { display: flex; gap: 11px; color: rgba(255, 255, 255, .88); font-size: 14.5px; line-height: 1.6; }
-.p411-ab-panel li svg { flex: none; margin-top: 3px; color: var(--p411-green); }
+.p411-ab-panel li svg { flex: none; margin-top: 3px; color: var(--p411-green-l); }
 
 /* ---- why choose ------------------------------------------------------ */
 
@@ -563,20 +588,24 @@
 	gap: 13px;
 	background: #fff;
 	border: 1px solid var(--p411-line);
-	border-radius: 12px;
+	border-radius: var(--p411-r);
 	padding: 17px 16px;
+	box-shadow: var(--p411-sh);
 }
 .p411-ab-why i {
 	flex: none;
 	display: grid;
 	place-items: center;
-	width: 40px;
-	height: 40px;
-	border-radius: 11px;
-	background: var(--p411-green-w);
-	color: var(--p411-green-dd);
+	width: 42px;
+	height: 42px;
+	border-radius: 50%;
+	background: var(--p411-navy);
+	color: #fff;
 }
-.p411-ab-why h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+.p411-ab-why > div:nth-child(3n + 1) i { background: var(--p411-green); }
+.p411-ab-why > div:nth-child(3n + 2) i { background: var(--p411-bu); }
+.p411-ab-why > div:nth-child(3n + 3) i { background: var(--p411-navy); }
+.p411-ab-why h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--p411-navy); }
 .p411-ab-why p { font-size: 13.5px; line-height: 1.6; color: var(--p411-ink-2); }
 
 /* ---- numbered steps -------------------------------------------------- */
@@ -604,7 +633,7 @@
 	font-weight: 700;
 	line-height: 1;
 }
-.p411-ab-steps b { display: block; font-size: 15px; font-weight: 700; }
+.p411-ab-steps b { display: block; font-size: 15px; font-weight: 700; color: var(--p411-navy); }
 .p411-ab-steps span { display: block; margin-top: 3px; font-size: 13.5px; line-height: 1.6; color: var(--p411-ink-2); }
 
 /* ---- responsive ------------------------------------------------------ */
