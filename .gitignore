@@ -47,3 +47,6 @@ composer.phar
 # Build output
 node_modules/
 dist/
+
+# throw-away offline render harness output
+_preview_*.html

@@ -46,7 +46,7 @@
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/site-header.css?v=1">
 	<!-- The footer (partials/site_footer.php, rendered by views/footer.php).
 	     Every selector is a .p411-foot descendant, so this is safe on any page. -->
-	<link rel="stylesheet" href="<?= base_url() ?>assets/css/site-footer.css?v=1">
+	<link rel="stylesheet" href="<?= base_url() ?>assets/css/site-footer.css?v=2">
 
 	<?php
 	// Per-page stylesheets. A controller sets $data['page_css'] to one path or
@@ -111,152 +111,83 @@
 										<img src="<?= base_url() ?>assets/images/pearland-logo.png" alt="" class="ic-logo">
 									</a>
 									<div class="mt30">
-										<div class="menu">
-											<h4><a href="#" data-toggle="modal" data-target="#categoriesModal" style="color: inherit; text-decoration: none;">All Categories</a></h4>
+										<?php
+										/*
+										 * The mega menu, identical to the homepage's (views/index.php).
+										 * It used to differ in three ways that all showed: the trigger was
+										 * an <a href="#" data-toggle="modal"> pointing at a Bootstrap modal
+										 * — while assets/js/custom.js ALSO opened the panel beneath it, so
+										 * one click did two things — its service column linked to
+										 * `all_products` and `all_blog`, neither of which is a route, and it
+										 * ignored the /admin/setting service switches, so it advertised
+										 * sections that 404.
+										 */
+										?>
+										<div class="menu" role="button" tabindex="0" aria-haspopup="true">
+											<h4>Explore
+												<svg width="11" height="7" viewBox="0 0 12 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m1 1.5 5 5 5-5"/></svg>
+											</h4>
 										</div>
+
 										<div class="pop-menu">
 											<div class="container">
-												<div class="row"> <i class="material-icons clopme">close</i>
+												<div class="row">
+													<i class="material-icons clopme">close</i>
 													<div class="pmenu-spri">
 														<ul>
-															<li>
-																<a href="<?= base_url('all-category') ?>" class="act"><img src="<?= base_url() ?>assets/images/icon/shop.png">All Services</a>
-															</li>
-															<li>
-																<a href="<?= base_url('event') ?>">
-
-																	<img src="<?= base_url() ?>assets/images/icon/calendar.png">Events</a>
-
-															</li>
-
-															<li>
-
-																<a href="<?= base_url('all_products') ?>">
-
-																	<img src="<?= base_url() ?>assets/images/icon/cart.png">Products</a>
-
-															</li>
-
-
-															<li>
-
-																<a href="<?= base_url('all_blog') ?>">
-
-																	<img src="<?= base_url() ?>assets/images/icon/blog1.png">Blogs</a>
-
-															</li>
-
-															<li>
-																<a href="<?= base_url('services') ?>">
-																	<img src="<?= base_url() ?>assets/images/icon/blog1.png">Services</a>
-															</li>
-
-															<li>
-																<a href="<?= base_url('coupons') ?>">
-																	<img src="<?= base_url() ?>assets/images/icon/blog1.png">Coupons</a>
-															</li>
-
-
-
+															<li><a href="<?= base_url('all-category') ?>" class="act"><img src="<?= base_url() ?>assets/images/icon/shop.png" loading="lazy" alt="">All Services</a></li>
+															<?php if (site_setting('service_news_enabled', '1') !== '0'): ?>
+																<li><a href="<?= base_url('news') ?>"><img src="<?= base_url() ?>assets/images/icon/news.png" loading="lazy" alt="">Local News</a></li>
+															<?php endif; ?>
+															<?php if (site_setting('service_events_enabled', '1') !== '0'): ?>
+																<li><a href="<?= base_url('event') ?>"><img src="<?= base_url() ?>assets/images/icon/calendar.png" loading="lazy" alt="">Events</a></li>
+															<?php endif; ?>
+															<li><a href="<?= base_url('coupons') ?>"><img src="<?= base_url() ?>assets/images/icon/cart.png" loading="lazy" alt="">Deals &amp; Coupons</a></li>
+															<?php if (site_setting('service_videos_enabled', '1') !== '0'): ?>
+																<li><a href="<?= base_url('videos') ?>"><img src="<?= base_url() ?>assets/images/icon/blog1.png" loading="lazy" alt="">Videos</a></li>
+															<?php endif; ?>
 														</ul>
-
 													</div>
-
 													<div class="pmenu-cat">
-
 														<h4>All Categories</h4>
-
 														<ul id="pg-resu">
 															<?php
-															// Use controller-passed categories
-															if (isset($allCategories) && !empty($allCategories)) {																// Render categories from data (limit to 25 for mobile menu)
-																$limited_categories = array_slice($allCategories, 0, 25);
-																foreach ($limited_categories as $category) {
-																	// Generate category URL
-																	if (!empty($category->category_slug)) {
-																		$category_url = $category->category_slug;
-																	} else {
-																		// Shared slug rule. This block used to map "&" to "and"
-																		// while the directory dropped it, so "Medical & Dental"
-																		// opened an empty page from this menu only.
-																		$category_url = pearland_slug($category->category_name);
-																	}
+															$__hdr_cats = array();
+															if (!empty($header_categories))  $__hdr_cats = $header_categories;
+															elseif (!empty($allCategories))  $__hdr_cats = $allCategories;
 
-																	echo '<li><a href="' . base_url('user/all_listing/' . htmlspecialchars($category_url)) . '">' . htmlspecialchars($category->category_name) . '</a></li>';
+															if ($__hdr_cats) {
+																foreach (array_slice($__hdr_cats, 0, 30) as $__cat) {
+																	// Shared slug rule — this block used to map "&" to "and"
+																	// while the directory dropped it, so "Medical & Dental"
+																	// opened an empty page from this menu only.
+																	$__slug = !empty($__cat->category_slug)
+																		? (string) $__cat->category_slug
+																		: pearland_slug($__cat->category_name);
+																	echo '<li><a href="' . e_url(base_url('all_listing/' . rawurlencode($__slug))) . '">'
+																		. e($__cat->category_name) . '</a></li>';
 																}
 															} else {
-																// Fallback categories only if no dynamic data available
-																$fallback_categories = [
-																	'business' => 'Business Services',
-																	'food' => 'Food & Dining',
-																	'health' => 'Health & Medical',
-																	'automotive' => 'Automotive',
-																	'shopping' => 'Shopping',
-																	'real-estate' => 'Real Estate',
-																	'education' => 'Education',
-																	'travel' => 'Travel & Tourism',
-																	'legal' => 'Legal Services',
-																	'financial' => 'Financial Services',
-																	'technology' => 'Technology',
-																	'beauty' => 'Beauty & Spa',
-																	'fitness' => 'Fitness & Gym',
-																	'home-services' => 'Home Services',
-																	'entertainment' => 'Entertainment',
-																	'pets' => 'Pet Services',
-																	'sports' => 'Sports & Recreation',
-																	'arts' => 'Arts & Crafts',
-																	'clothing' => 'Clothing & Fashion',
-																	'photography' => 'Photography',
-																	'music' => 'Music & Audio',
-																	'construction' => 'Construction',
-																	'agriculture' => 'Agriculture',
-																	'transport' => 'Transportation',
-																	'nonprofit' => 'Non-Profit'
-																];
-
-																foreach ($fallback_categories as $slug => $name) {
-																	echo '<li><a href="' . base_url('user/all_listing/' . $slug) . '">' . $name . '</a></li>';
-																}
+																echo '<li><a href="' . base_url('all_listing') . '">Browse all businesses</a></li>';
 															}
+															unset($__hdr_cats, $__cat, $__slug);
 															?>
 														</ul>
-
-														<!-- Explore All Categories Button - Bottom Right -->
-														<div style="text-align: right; margin-top: 20px; padding-top: 15px;">
-															<a href="<?= base_url('all-category') ?>" class="waves-effect waves-light btn" style="background: #79B82A; color: white; padding: 8px 20px; border-radius: 999px; text-decoration: none; font-weight: 500; transition: all 0.3s ease; display: inline-block; font-size: 13px;">
-																<i class="material-icons" style="vertical-align: middle; margin-right: 3px; font-size: 16px;">explore</i>
-																Explore All
-															</a>
+														<div style="text-align:right;margin-top:20px;padding-top:15px;">
+															<a href="<?= base_url('all-category') ?>" class="p411-btn p411-btn--sm">Explore all categories</a>
 														</div>
-
 													</div>
-
 													<div class="dir-home-nav-bot">
-
 														<ul>
-
-															<li>A few reasons you’ll love Online Business Directory <span>Call us on: 281-482-2031</span>
-
+															<li>A few reasons you&rsquo;ll love the Pearland411 directory
+																<span>Call us on: <?= e(site_setting('contact_phone', '281-482-2031')) ?></span>
 															</li>
-
-															<li><a href="/ads-summery" class="waves-effect waves-light btn-large"><i class="material-icons">font_download</i> Advertise with us</a>
-
-															</li>
-
-															<li>
-
-																<a href="<?= base_url() ?>pricing-plan" class="waves-effect waves-light btn-large"> <i class="material-icons">store</i> Add your business</a>
-
-															</li>
-
+															<li><a href="<?= base_url('post-your-ads') ?>" class="waves-effect waves-light btn-large"><i class="material-icons">font_download</i> Advertise with us</a></li>
+															<li><a href="<?= base_url('pricing-plan') ?>" class="waves-effect waves-light btn-large"><i class="material-icons">store</i> Add your business</a></li>
 														</ul>
-
 													</div>
-
 												</div>
-
 											</div>
-
 										</div>
 
 										<!--END MOBILE MENU-->
