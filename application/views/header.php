@@ -43,7 +43,7 @@
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/pearland-brand.css?v=1">
 	<!-- The header strip below (.hom-top / .news-top-menu), painted in the
 	     homepage's navy + green. Paint only — the theme keeps the geometry. -->
-	<link rel="stylesheet" href="<?= base_url() ?>assets/css/site-header.css?v=1">
+	<link rel="stylesheet" href="<?= base_url() ?>assets/css/site-header.css?v=2">
 	<!-- The footer (partials/site_footer.php, rendered by views/footer.php).
 	     Every selector is a .p411-foot descendant, so this is safe on any page. -->
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/site-footer.css?v=2">

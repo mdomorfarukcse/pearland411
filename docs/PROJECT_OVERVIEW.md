@@ -29,7 +29,10 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `admin/`; shared partials `header.php` / `footer.php` / `user_left_sidebar.php`.
   Note: the **homepage `index.php` is self-contained** (its own header), separate from `header.php`.
 - **Per-page CSS:** a controller sets `$data['page_css']` (path or array of paths) and `header.php`
-  links them after the shared sheets. `assets/css/directory.css` is the **shared page kit** — hero,
+  links them after the shared sheets. **Bump the `?v=` on a sheet's URL in the same commit that
+  edits the sheet** — every link is cached hard, and an edited file behind an unchanged query
+  string reaches nobody who has visited before. (That is how the theme's second "Explore" arrow
+  came back: the rule switching it off shipped in `site-header.css` while the URL stayed `?v=1`.) `assets/css/directory.css` is the **shared page kit** — hero,
   two-column shell, cards, buttons, forms, notes, empty states, pager, rail, owner band — and its
   design tokens are declared on the three page scopes that opt in: `.p411-dir` (`/all-listing`),
   `.p411-ld` (`/listing-details`, `/coupons/<id>`, `/services/<slug>`) and `.p411-ct` (events /
