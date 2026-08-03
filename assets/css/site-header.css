@@ -80,18 +80,95 @@
 	color: #fff;
 }
 
-/* Header search, when the theme reveals it. */
-.top-ser input[type="text"] {
-	border: 0;
-	border-radius: 8px 0 0 8px;
-	font-family: 'Open Sans', sans-serif;
+/* ---- header search --------------------------------------------------- */
+/*
+ * One pill, with the button inside it. The theme builds this as a 33px input
+ * with a 40px square `position: absolute` button pinned to its right edge, so
+ * the two never lined up: a rounded white field with a hard-cornered green
+ * block hanging off the end of it, and the magnifier drawn in the theme's grey
+ * (#596873) on top of the green. Flex puts the button in the flow, and the
+ * field and the pill then share one shape by construction.
+ */
+.top-ser form ul {
+	display: flex;
+	align-items: center;
+	margin: 0;
+	padding: 4px;
+	background: #fff;
+	border-radius: 999px;
+	box-shadow: 0 2px 12px rgba(10, 12, 34, .18);
 }
+.top-ser form ul li { list-style: none; margin: 0; padding: 0; background: none; }
+.top-ser form ul li::after { content: none; }
+.top-ser form ul li.sr-sea { position: relative; flex: 1 1 auto; min-width: 0; }
+
+.top-ser form ul li input[type="text"] {
+	width: 100%;
+	height: 36px;
+	padding: 0 10px 0 15px;
+	border: 0;
+	border-radius: 999px;
+	background: none;
+	font-family: 'Open Sans', sans-serif;
+	font-size: 14px;
+	color: #1F2430;
+}
+.top-ser form ul li input[type="text"]:focus { outline: 0; }
+
+/* Static, not absolute: it is a flex item now. */
+.top-ser form ul li.sbtn { position: static; flex: none; }
+.top-ser form ul li.sbtn button,
 .top-ser .sbtn .btn-success {
+	display: grid;
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
 	background: #79B82A;
-	border-color: #79B82A;
-	border-radius: 0 8px 8px 0;
+	color: #fff;
+	transition: background .16s ease;
 }
 .top-ser .sbtn .btn-success:hover { background: #5E9220; border-color: #5E9220; }
+/* The theme draws a search.png behind a Material "search" glyph, at 14x14 with
+   0.6 opacity — two icons in one box, both too small and both grey. */
+.top-ser form ul li.sbtn button i {
+	width: auto;
+	height: auto;
+	margin: 0;
+	background: none;
+	font-size: 19px;
+	line-height: 1;
+	color: #fff;
+	opacity: 1;
+}
+/* The autocomplete panel hangs off the field, so it has to clear the pill. */
+.top-ser .tser-res { border-radius: 10px; margin-top: 6px; }
+
+/* ---- the "Explore" trigger ------------------------------------------- */
+/*
+ * The theme gives `.menu` its own `::after` — an absolutely positioned 10px
+ * down-arrow.svg pinned to `right: -16px`. views/header.php now emits the
+ * chevron as an <svg> inside the <h4>, the same as the homepage does, so the
+ * theme's arrow would be a second one sitting on top of the word.
+ */
+.menu::after { content: none !important; display: none !important; }
+.menu h4 {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	margin: 0;
+	padding: 8px 12px;
+	border-radius: 8px;
+	font-family: 'Poppins', 'Open Sans', sans-serif;
+	font-size: 14.5px;
+	font-weight: 600;
+	color: #fff;
+	transition: background .16s ease;
+}
+.menu h4 svg { flex: none; color: #8FCB46; }
+.menu:hover h4 { background: rgba(255, 255, 255, .1); }
 
 /* ---- the mega menu panel --------------------------------------------- */
 /* Hidden (`visibility: hidden`) until the theme's script opens it, but it is

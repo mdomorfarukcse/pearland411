@@ -93,6 +93,37 @@ cannot drift.
 
 ---
 
+## 2026-08-03 — One Explore menu and one header search across the site
+
+### Fixed
+- **The header search was two shapes fighting.** The theme builds it as a 33px
+  input with a 40px square `position: absolute` button pinned to its right
+  edge, so a rounded white field had a hard-cornered green block hanging off
+  the end of it — and the magnifier was drawn in the theme's grey (#596873) on
+  top of the green, from a 14px `search.png` sitting behind a Material
+  `search` glyph. It is one pill now, with the button in the flow as a flex
+  item and a single white icon.
+- **The mega menu was a different menu on inner pages.** Three differences,
+  all of them visible:
+  - its trigger was `<a href="#" data-toggle="modal" data-target="#categoriesModal">`,
+    pointing at a Bootstrap modal **that does not exist anywhere in the
+    codebase** — while `assets/js/custom.js` also opened the panel underneath
+    it, so one click did two things and one of them did nothing;
+  - its services column linked to `all_products` and `all_blog`, neither of
+    which is a route;
+  - it ignored the `/admin/setting` service switches, so it advertised
+    sections that 404 when they are turned off.
+
+  `views/header.php` now emits the homepage's menu verbatim — same trigger
+  ("Explore" with the chevron as markup, not the theme's stray
+  `right: -16px` `::after`), same service column behind the same flags, same
+  category list through the shared slug rule, same pill buttons.
+
+### Key files
+`application/views/header.php`, `assets/css/site-header.css`.
+
+---
+
 ## 2026-08-03 — /all-category shows every category on one page
 
 Follow-up to the rebuild below: the index is no longer paginated.
