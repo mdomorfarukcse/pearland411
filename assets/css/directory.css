@@ -451,6 +451,142 @@
 .p411-cats span { display: block; margin-top: 3px; font-size: 11px; color: var(--p411-ink-3); }
 @media (max-width: 480px) { .p411-cats { grid-template-columns: repeat(2, 1fr); } }
 
+/* Tinted variant, as on the homepage: a rounded icon plate and an accent that
+   rotates navy / green / burgundy, so a grid of two dozen tiles does not read
+   as one green block. Additive — the strip above emits none of these classes,
+   so it keeps the plain treatment. Used by /all-category. */
+.p411-cats--index { grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 14px; }
+.p411-cats a > i {
+	display: grid; place-items: center;
+	width: 46px; height: 46px; margin: 0 auto 10px;
+	border-radius: 14px; background: #fff;
+}
+.p411-cats a > i svg { display: block; }
+.p411-cats--index a { padding: 18px 12px 16px; }
+.p411-cats--index b { font-size: 14px; }
+
+.p411-cat--green      { background: var(--p411-green-w) !important; }
+.p411-cat--green > i  { color: var(--p411-green-d); }
+.p411-cat--green:hover { border-color: var(--p411-green) !important; }
+.p411-cat--bu         { background: var(--p411-bu-w) !important; }
+.p411-cat--bu > i     { color: var(--p411-bu); }
+.p411-cat--bu:hover   { border-color: var(--p411-bu-l) !important; }
+.p411-cat--navy       { background: var(--p411-navy-w) !important; }
+.p411-cat--navy > i   { color: var(--p411-navy); }
+.p411-cat--navy:hover { border-color: var(--p411-navy-l) !important; }
+@media (max-width: 420px) { .p411-cats--index { grid-template-columns: repeat(2, 1fr); gap: 10px; } }
+
+/* ---- A–Z category index (/all-category) ------------------------------ */
+/*
+ * The whole category list on one page. Tiles do not scale past a couple of
+ * dozen — 500 of them is a beautiful way to make a category impossible to
+ * find — so the busiest get tiles and everything else is a dense text index
+ * with a jump bar and a browser-side filter.
+ */
+
+.p411-azsec { margin-top: 26px; }
+
+/* Filter box and jump bar in one block, pinned to the top of the window: on an
+   index this long the controls have to stay reachable from wherever you have
+   scrolled to. */
+.p411-azctl {
+	/* Clear of the theme's fixed header (67px at desktop widths, 55px on a
+	   phone — it is `position: fixed` in site-header.css). */
+	position: sticky; top: 75px; z-index: 3;
+	margin-bottom: 18px; padding: 12px 14px;
+	background: #fff; border: 1px solid var(--p411-line); border-radius: var(--p411-r);
+	box-shadow: var(--p411-sh);
+}
+.p411-azctl .p411-catfilter { margin-bottom: 10px; box-shadow: none; }
+
+.p411-azbar { display: flex; flex-wrap: wrap; gap: 6px; }
+.p411-azbar a {
+	display: grid; place-items: center;
+	min-width: 30px; height: 30px; padding: 0 6px;
+	border-radius: 8px; background: var(--p411-gray);
+	font-size: 13px; font-weight: 700; color: var(--p411-navy);
+}
+.p411-azbar a:hover { background: var(--p411-green); color: #fff; }
+
+.p411-azgroup {
+	margin-bottom: 20px;
+	/* Let the browser skip layout and paint for the groups that are off
+	   screen. On an index of several hundred rows this is the difference
+	   between a page that renders instantly and one that stutters as you
+	   scroll. The size hint stops the scrollbar jumping while it does. */
+	content-visibility: auto;
+	contain-intrinsic-size: auto 260px;
+}
+.p411-azgroup__letter {
+	margin: 0 0 10px;
+	font-size: 15px; font-weight: 700; color: var(--p411-bu);
+	letter-spacing: .06em;
+	padding-bottom: 7px; border-bottom: 2px solid var(--p411-bu-line);
+}
+
+.p411-azlist {
+	list-style: none; margin: 0; padding: 0;
+	display: grid; gap: 2px 22px;
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+.p411-azlist li { margin: 0; padding: 0; list-style: none; background: none; }
+.p411-azlist li::before { content: none; }
+.p411-azlist a {
+	display: flex; align-items: baseline; gap: 10px;
+	padding: 7px 10px; border-radius: 8px;
+	font-size: 14px; color: var(--p411-ink);
+	text-decoration: none;
+}
+.p411-azlist a:hover { background: var(--p411-green-w); color: var(--p411-green-d); }
+.p411-azlist a > span { flex: 1 1 auto; min-width: 0; }
+/* A dotted leader ties a long name to its count without a table. */
+.p411-azlist a > span::after {
+	content: ""; display: inline-block; width: 100%; margin-left: 6px;
+	border-bottom: 1px dotted var(--p411-line);
+	transform: translateY(-4px);
+}
+.p411-azlist a > em {
+	flex: none; font-style: normal; font-size: 12.5px; font-weight: 600;
+	color: var(--p411-ink-3); font-variant-numeric: tabular-nums;
+}
+/* A category nobody has listed in yet is still worth showing — somebody has
+   to be first — but it should not compete with the ones that have businesses. */
+.p411-azlist li.is-empty a { color: var(--p411-ink-3); }
+.p411-azlist li.is-empty a > em { opacity: .55; }
+
+.p411-catfilter {
+	display: flex; align-items: center; gap: 10px;
+	padding: 8px 10px 8px 14px; margin-bottom: 20px;
+	background: #fff; border: 1px solid var(--p411-line); border-radius: 999px;
+	box-shadow: var(--p411-sh);
+}
+.p411-catfilter svg { flex: none; color: var(--p411-ink-3); }
+.p411-catfilter input {
+	flex: 1 1 auto; min-width: 0;
+	border: 0; outline: 0; background: none;
+	font-size: 14.5px; color: var(--p411-ink); padding: 6px 0;
+}
+.p411-catfilter input::-webkit-search-cancel-button { cursor: pointer; }
+.p411-catfilter:focus-within { border-color: var(--p411-green); box-shadow: 0 0 0 3px rgba(121, 184, 42, .18); }
+
+.p411-aznone { margin: 18px 0 0; font-size: 14.5px; color: var(--p411-ink-2); }
+.p411-aznone a { font-weight: 600; color: var(--p411-green-d); }
+
+/* A group jumped to must clear the fixed header AND the sticky control. */
+.p411-azgroup { scroll-margin-top: 190px; }
+
+@media (max-width: 767px) {
+	.p411-azctl { top: 63px; }
+	.p411-azgroup { scroll-margin-top: 175px; }
+}
+
+@media (max-width: 560px) {
+	.p411-azlist { grid-template-columns: 1fr; }
+	.p411-catfilter button { display: none; }
+	/* One column is wide enough that the count needs no leader to find. */
+	.p411-azlist a > span::after { content: none; }
+}
+
 /* ---- results toolbar ------------------------------------------------- */
 
 .p411-toolbar {

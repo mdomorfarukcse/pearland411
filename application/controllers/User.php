@@ -1662,63 +1662,83 @@ class User extends CI_Controller
 
 	public function all_category($offset = 0)
 	{
-
+		// $offset is accepted and ignored: the index is not paginated any more
+		// (see below), but /user/all_category/20 links are in the wild and must
+		// not 404.
 		if ($this->session->userdata('logged_user')) {
 
 			$data['user'] = $this->usermodel->getUserInformation();
 		}
 
-		// Pagination configuration
-		$limit = 20; // 20 categories per page
-		$offset = (int)$offset;
+		// The search runs in SQL, for visitors without JavaScript and for
+		// shareable ?q= links. The view used to filter the twenty rows of the
+		// current page in PHP, so a category that lived on page 3 came back as
+		// "no categories found".
+		$search = trim((string) $this->input->get('q', TRUE));
+		$data['search_query'] = $search;
 
-		// Get categories with pagination
-		$data['AllCategory'] = $this->usermodel->getAllCategoryWithPagination($limit, $offset);
+		// ONE query, the WHOLE index, no pagination. A category list is a
+		// lookup table, not a feed: paged, a visitor hunting for "Plumbers"
+		// had to guess which of eight pages held it, and find-in-page could
+		// only ever see a twentieth of the list. The view renders all of it,
+		// groups it A-Z and filters in the browser.
+		$categories = $this->usermodel->getAllCategoriesWithCounts($search);
+		$data['AllCategory']      = $categories;
+		$data['total_categories'] = count($categories);
 
-		// Get total count for pagination
-		$total_categories = $this->usermodel->countAllCategories();
+		// Split once here rather than twice in the view: the busiest dozen get
+		// picture tiles, everything else goes in the A-Z index.
+		$live = array();
+		foreach ($categories as $category) {
+			if ((int) ($category->listing_count ?? 0) > 0) $live[] = $category;
+		}
+		$data['live_categories'] = count($live);
+		$data['popular_categories'] = array_slice($live, 0, 12);
 
-		// Load pagination library
-		$this->load->library('pagination');
+		// A-Z buckets, in name order inside each letter. getAllCategoriesWithCounts()
+		// returns busiest-first, which is what the tiles want and not what an
+		// index wants.
+		$by_letter = array();
+		foreach ($categories as $category) {
+			$name   = trim((string) $category->category_name);
+			$letter = strtoupper(substr($name, 0, 1));
+			if ($letter === '' || !preg_match('/[A-Z]/', $letter)) $letter = '#';
+			$by_letter[$letter][] = $category;
+		}
+		ksort($by_letter);
+		foreach ($by_letter as $letter => $rows) {
+			usort($rows, function ($a, $b) {
+				return strcasecmp((string) $a->category_name, (string) $b->category_name);
+			});
+			$by_letter[$letter] = $rows;
+		}
+		// '#' collects digits and punctuation; it belongs after Z, not before A.
+		if (isset($by_letter['#'])) {
+			$hash = $by_letter['#'];
+			unset($by_letter['#']);
+			$by_letter['#'] = $hash;
+		}
+		$data['categories_by_letter'] = $by_letter;
 
-		// Pagination config
-		$config['base_url'] = base_url('user/all_category/');
-		$config['total_rows'] = $total_categories;
-		$config['per_page'] = $limit;
-		$config['uri_segment'] = 3;
+		$data['total_listings'] = (int) $this->usermodel->countListingsByCategory(NULL);
 
-		// Pagination styling (same as all-listing)
-		$config['full_tag_open'] = '<ul class="pagination">';
-		$config['full_tag_close'] = '</ul>';
-		$config['first_link'] = 'First';
-		$config['last_link'] = 'Last';
-		$config['first_tag_open'] = '<li class="page-item">';
-		$config['first_tag_close'] = '</li>';
-		$config['prev_link'] = '&laquo; Previous';
-		$config['prev_tag_open'] = '<li class="page-item">';
-		$config['prev_tag_close'] = '</li>';
-		$config['next_link'] = 'Next &raquo;';
-		$config['next_tag_open'] = '<li class="page-item">';
-		$config['next_tag_close'] = '</li>';
-		$config['last_tag_open'] = '<li class="page-item">';
-		$config['last_tag_close'] = '</li>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a class="page-link" href="#">';
-		$config['cur_tag_close'] = '</a></li>';
-		$config['num_tag_open'] = '<li class="page-item">';
-		$config['num_tag_close'] = '</li>';
-		$config['attributes'] = array('class' => 'page-link');
+		// Same six zones as the directory and the content pages.
+		$data['ad_slots'] = array(
+			'top'      => 'top-banner-site-wide',
+			'inline'   => 'middle-banner-category',
+			'side_1'   => 'right-side-banner-1',
+			'side_2'   => 'right-side-banner-2',
+			'side_sky' => 'right-panel-skyscraper',
+			'bottom'   => 'bottom-banner-site-wide',
+		);
+		$this->usermodel->primeAdSlots(array_values($data['ad_slots']));
 
-		$this->pagination->initialize($config);
-		$data['link'] = $this->pagination->create_links();
+		$data['page_css'] = $this->contentPageCss();
 
-		// Pagination info
-		$data['total_categories'] = $total_categories;
-		$data['current_page'] = floor($offset / $limit) + 1;
-		$data['total_pages'] = ceil($total_categories / $limit);
-		$data['showing_from'] = $offset + 1;
-		$data['showing_to'] = min($offset + $limit, $total_categories);
-
-		$data['title'] = "Pearland | All Category";
+		$data['title']            = 'All Business Categories in Pearland, TX | Pearland411';
+		$data['meta_description'] = 'Browse every business category on Pearland411 — home services, healthcare, '
+			. 'restaurants, automotive, professional services and more, with the number of local businesses in each.';
+		$data['canonical_url']    = base_url('all-category');
 
 		// Load header categories using professional MVC approach
 		$this->loadHeaderCategories($data);
@@ -2273,7 +2293,37 @@ class User extends CI_Controller
 		$data['all_classifieds'] = $all_classifieds;
 		$data['pagination_links'] = $pagination_links;
 		$data['search_query'] = $search_query;
-		$data['title'] = "Pearland | Classifieds";
+
+		// What the toolbar and the pager label themselves with. The view used
+		// to print `count($all_classifieds)` as the result count, so a search
+		// with 68 matches reported "10 classifieds found".
+		$data['total_classifieds'] = (int) $total_rows;
+		$data['per_page']       = $per_page;
+		$data['current_page']   = $page;
+		$data['total_pages']    = $per_page > 0 ? (int) ceil($total_rows / $per_page) : 1;
+		$data['current_offset'] = $offset;
+
+		$data['classifieds_categories'] = $this->usermodel->getClassifiedsCategoriesWithCounts(8);
+
+		// Same six zones as the directory and the other content pages.
+		$data['ad_slots'] = array(
+			'top'      => 'top-banner-site-wide',
+			'inline'   => 'middle-banner-category',
+			'side_1'   => 'right-side-banner-1',
+			'side_2'   => 'right-side-banner-2',
+			'side_sky' => 'right-panel-skyscraper',
+			'bottom'   => 'bottom-banner-site-wide',
+		);
+		$this->usermodel->primeAdSlots(array_values($data['ad_slots']));
+
+		$data['page_css'] = $this->contentPageCss();
+
+		$data['title'] = $search_query !== ''
+			? 'Classifieds matching "' . $search_query . '" | Pearland411'
+			: 'Pearland Classifieds — Buy, Sell, Rent and Hire Locally | Pearland411';
+		$data['meta_description'] = 'Local classifieds for Pearland, Texas — vehicles, property, furniture, '
+			. 'jobs and services posted by people and businesses in the area.';
+		$data['canonical_url'] = base_url('classifieds');
 
 		// Load header categories using professional MVC approach
 		$this->loadHeaderCategories($data);

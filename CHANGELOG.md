@@ -93,6 +93,107 @@ cannot drift.
 
 ---
 
+## 2026-08-03 — /all-category shows every category on one page
+
+Follow-up to the rebuild below: the index is no longer paginated.
+
+A category list is a lookup table, not a feed. Paged twenty at a time, a
+visitor hunting for "Plumbers" had to guess which of eight pages held it, and
+find-in-page — the tool people actually reach for — could only ever see a
+twentieth of the list.
+
+- **One query, the whole index** (`getAllCategoriesWithCounts()`), then the
+  busiest twelve as picture tiles and everything else as a dense A–Z index:
+  name, count, nothing else. Tiles do not scale past a couple of dozen; 500 of
+  them is a beautiful way to make a category impossible to find.
+- **Filter in the browser.** Typing narrows the whole list instantly — no
+  request, no reload — hiding empty letters as it goes and reporting the match
+  count. The form still submits for visitors without JavaScript, which is what
+  the SQL search is for, and `?q=` links still work.
+- **A sticky filter + A–Z jump bar** that clears the theme's fixed header, so
+  the controls stay reachable however far down the page you are.
+- **`content-visibility: auto` on each letter group**, so the browser skips
+  layout and paint for the groups off screen; `contain-intrinsic-size` stops
+  the scrollbar jumping while it does.
+- Categories with no listings are still listed — somebody has to be first —
+  but dimmed, with a dash instead of a count, so they don't compete.
+- The hero's search box is gone: the filter is the search on this page, and
+  two search boxes on one screen is one too many.
+
+### Fixed
+- **`overflow-x: hidden` on `html`/`body` was silently disabling
+  `position: sticky`** everywhere below it — a scroll-container ancestor does
+  that. It is `overflow-x: clip` now (behind `@supports`, with `hidden` as the
+  fallback), which crops without scrolling.
+
+### Key files
+`application/views/all-category.php`, `application/controllers/User.php`
+(`all_category`), `application/models/Usermodel.php`,
+`application/config/routes.php`, `assets/css/directory.css`,
+`assets/css/site-header.css`.
+
+---
+
+## 2026-08-03 — /all-category and /classifieds on the shared page kit
+
+The last two public pages still on the old theme. Both are rebuilt on the same
+shell as the directory, events, news and videos — hero band, filter strip,
+main column plus sidebar, six ad zones, owner band — with their styling in
+`directory.css` + `content.css` through `$page_css`. Between them they carried
+five `<style>` blocks and about 740 lines of CSS, including two hand-copied
+versions of the pagination rules the kit already provides; there are none now.
+
+### Fixed
+- **The category index searched only the page you were on.** `/all-category`
+  filtered its twenty rows in PHP, so a category that lived on page 3 came back
+  as "No Categories Found". The search runs in SQL now
+  (`Usermodel::getCategoriesPaged()`), across names and descriptions.
+- **It ordered by `category_id DESC`,** i.e. by whichever categories happened to
+  be created last, and showed no counts — a visitor could not tell a category
+  holding 257 businesses from an empty one. Busiest first, with the live count
+  on every tile.
+- **Its pager pointed at `/user/all_category/`.** `/all-category/(:num)` is a
+  route now, so page 2 keeps the clean URL, and the search term survives paging.
+- **`/classifieds` reported the wrong result count** — it printed
+  `count($all_classifieds)`, the size of the current page, so a search with 68
+  matches said "10 classifieds found".
+- **The Sports and Health links in the section strip were hard-coded slugs**
+  (`all_listing/sports-clubs`, `all_listing/health-services`). Categories are
+  operator-editable, so neither was guaranteed to resolve, and a slug that
+  matches nothing lands on an empty directory page. Both resolve by name now
+  through `Usermodel::findCategoryByKeywords()` — Health prefers a category
+  called Healthcare — and only against categories that hold published listings,
+  so an item with nowhere to go is left out instead of pointing at an empty
+  page. An "All categories" link joins them.
+- **Every inner page scrolled sideways.** Two of the theme's chrome elements
+  sit outside the viewport — `.mob-me-all`, the off-canvas menu parked a full
+  screen to the right, and `.ani-quo-form`, the help slide-out. Both are
+  `position: fixed`, so they ignore any ancestor's overflow and the guard has to
+  be on `<html>`/`<body>`; it is in `site-header.css`, which every page loads.
+  The homepage has had the same line since its rebuild.
+- Bootstrap and jQuery UI were pulled from CDNs on every page although the
+  repository ships the same versions. Served locally now, as on the homepage.
+
+### Added
+- `Usermodel::getCategoriesPaged()` / `countCategoriesWithSearch()` — the
+  category index with live counts and a SQL search.
+- `Usermodel::findCategoryByKeywords()` — resolve "whatever this site calls
+  Healthcare" for navigation, one cached query per request.
+- `Usermodel::getClassifiedsCategoriesWithCounts()` — the classifieds sidebar
+  and its filter tabs.
+- A tinted variant of the shared category tile (`.p411-cats--index` +
+  `.p411-cat--green|bu|navy`) in `directory.css`, matching the homepage strip.
+  Additive: the plain strip emits none of those classes and is unchanged.
+
+### Key files
+`application/views/all-category.php` (rewritten), `application/views/classifieds.php`
+(rewritten), `application/views/header.php`, `application/controllers/User.php`
+(`all_category`, `classifieds`), `application/models/Usermodel.php`,
+`application/config/routes.php`, `assets/css/directory.css`,
+`assets/css/site-header.css`.
+
+---
+
 ## 2026-08-02 — Homepage: Explore menu fixes, hero photograph support
 
 Follow-up to the redesign below, from the client's review of the deployed page.

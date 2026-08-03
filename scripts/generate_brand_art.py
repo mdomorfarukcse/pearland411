@@ -347,7 +347,7 @@ def house_ad(palette_key, shape):
         letter-spacing="2.4" fill="{p['eyebrow']}">{c['eyebrow']}</text>
   <text x="98" y="66" font-family="{HEAD}" font-size="23" font-weight="700"
         letter-spacing="-0.3" fill="{p['ink']}">{c['big'][0]} {c['big'][1]}</text>
-  <text x="640" y="55" font-family="{HEAD}" font-size="20" font-weight="700"
+  <text x="616" y="55" font-family="{HEAD}" font-size="19" font-weight="700"
         fill="{p['ink']}">{c['price']}</text>
   <g transform="translate(766 21)">
     <rect width="168" height="48" rx="24" fill="{p['btn']}"/>

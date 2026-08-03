@@ -110,6 +110,11 @@ $route['claim-listing/(:any)']        = 'user/claim_listing/$1';
 $route['coupons']                     = 'user/coupons';
 $route['coupons/(:num)']              = 'user/coupon_details/$1';
 
+// Category index. The catch-all above already resolves this, but naming it
+// keeps the page findable from this file. It takes no page number: the index
+// is a single unpaginated page.
+$route['all-category']                = 'user/all_category';
+
 // IT / web services catalog (admin side)
 $route['admin/services']                       = 'admin/services_list';
 $route['admin/services/add']                   = 'admin/add_service';

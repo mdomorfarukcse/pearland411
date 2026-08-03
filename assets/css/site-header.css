@@ -155,6 +155,37 @@
 	border-bottom-color: #79B82A;
 }
 
+/* ---- the one rule here that is not paint ------------------------------ */
+/*
+ * Every inner page scrolls sideways. Two of the theme's own chrome elements
+ * sit outside the viewport: `.mob-me-all`, the off-canvas menu parked one full
+ * screen to the right, and `.ani-quo-form`, the help slide-out. Both are
+ * `position: fixed`, so they ignore any ancestor's overflow and the guard has
+ * to be on <body> itself — which is why it cannot live in directory.css with
+ * the rest of the page kit.
+ *
+ * The homepage has carried the same line since its rebuild
+ * (`.p411-home { overflow-x: hidden }` in home-sections.css); this is that fix
+ * for the pages that use the shared header. Geometry, not colour — noted here
+ * rather than quietly bundled in above, because the file's rule is paint only.
+ */
+/* Both elements, deliberately: with the rule on <body> alone the computed
+   value propagates to the viewport only while <html> is `overflow: visible`,
+   and it is not here — the page still scrolled to 2028px in a 1440px window.
+ *
+ * `clip`, not `hidden`. `overflow-x: hidden` makes the element a scroll
+ * container, and a scroll-container ancestor silently disables
+ * `position: sticky` for everything inside it — which is what stopped the
+ * A-Z control on /all-category from sticking. `clip` crops without
+ * scrolling, so sticky keeps working. `hidden` stays as the fallback for
+ * browsers without it: they lose sticky, not the layout.
+ */
+html, body { overflow-x: hidden; }
+@supports (overflow: clip) {
+	html, body { overflow-x: clip; }
+}
+html { max-width: 100%; }
+
 @media (prefers-reduced-motion: reduce) {
 	.hom-top, .hom-nav .bl li a, .news-menu ul li a { transition: none !important; }
 }
