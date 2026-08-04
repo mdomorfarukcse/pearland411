@@ -198,7 +198,7 @@ class User extends CI_Controller
 	private function contentPageCss()
 	{
 		return array(
-			'assets/css/directory.css?v=2',
+			'assets/css/directory.css?v=3',
 			'assets/css/content.css?v=3',
 			'assets/css/promo-cards.css?v=1',
 		);
@@ -1988,7 +1988,7 @@ class User extends CI_Controller
 
 		// promo-cards.css carries the two house promo cards this page
 		// includes; it is shared with the homepage so they can't drift.
-		$data['page_css'] = array('assets/css/directory.css?v=2', 'assets/css/promo-cards.css?v=1');
+		$data['page_css'] = array('assets/css/directory.css?v=3', 'assets/css/promo-cards.css?v=1');
 
 		$this->load->view('header', $data);
 		$this->load->view('all-listing', $data);
@@ -3038,7 +3038,7 @@ class User extends CI_Controller
 		));
 
 		// See all_listing() — the promo cards are shared with the homepage.
-		$data['page_css'] = array('assets/css/directory.css?v=2', 'assets/css/promo-cards.css?v=1');
+		$data['page_css'] = array('assets/css/directory.css?v=3', 'assets/css/promo-cards.css?v=1');
 
 		// Load views
 		$this->load->view('header', $data);

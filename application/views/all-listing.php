@@ -104,8 +104,11 @@ $showing_to   = $current_offset + count($allListings);
 					Every <?= e(strtolower($cat_name)) ?> business listed on Pearland411 — with phone numbers,
 					addresses, reviews and directions.
 				<?php else: ?>
-					Find local businesses and service providers across Pearland, TX. Search by category,
-					call them straight from the listing, or send one enquiry and let them come to you.
+					Find local businesses and service providers across Pearland, TX.
+					<?php // Second sentence on its own line: wrapped as one paragraph it broke
+					      // after "Search by", stranding those two words at the end of line one. ?>
+					<span class="p411-hero__lede-line">Search by category, call them straight from
+					the listing, or send one enquiry and let them come to you.</span>
 				<?php endif; ?>
 			</p>
 

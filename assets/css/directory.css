@@ -188,6 +188,10 @@
 	font-size: 15px;
 	color: rgba(255, 255, 255, .88);
 }
+/* Opt-in: a sentence inside the lede that should always start its own line,
+   rather than picking up whatever the wrap gives it. A block element, not a
+   <br>, so it still reflows normally at every width. */
+.p411-hero__lede-line { display: block; }
 .p411-hero__stats {
 	display: flex;
 	flex-wrap: wrap;
