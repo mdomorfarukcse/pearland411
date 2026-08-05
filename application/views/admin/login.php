@@ -11,7 +11,9 @@
 	<meta name="description" content="">
 	<meta name="keyword" content="">
 	<!--== FAV ICON(BROWSER TAB ICON) ==-->
-	<link rel="shortcut icon" href="../images/fav.ico" type="image/x-icon">
+	<?php // Was ../images/fav.ico — a relative path that 404s on this page. ?>
+	<link rel="icon" href="<?= base_url() ?>assets/images/favicon-32.png" sizes="32x32" type="image/png">
+	<link rel="shortcut icon" href="<?= base_url() ?>assets/images/favicon.ico" type="image/x-icon">
 	<!--== GOOGLE FONTS ==-->
 	<link href="https://fonts.googleapis.com/css?family=Oswald:700|Source+Sans+Pro:300,400,600,700&display=swap" rel="stylesheet">
 	<!--== CSS FILES ==-->

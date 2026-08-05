@@ -230,7 +230,9 @@ $ld_stars = function ($value) {
 						<?php if ($show_wa): ?>
 							<a class="p411-btn p411-btn--wa" href="https://wa.me/<?= e_attr($wa_number) ?>" target="_blank" rel="noopener nofollow">WhatsApp</a>
 						<?php endif; ?>
-						<button type="button" class="p411-btn p411-btn--ghost" data-toggle="modal" data-target="#quote">Get a quote</button>
+						<?php // Scrolls to the enquiry form in the sidebar. It used to open a
+						      // modal holding a second, identical copy of that same form. ?>
+						<a class="p411-btn p411-btn--ghost" href="#detail_enquiry_form">Get a quote</a>
 						<?php if (!empty($listing->listing_lat) && !empty($listing->listing_lng)): ?>
 							<a class="p411-btn p411-btn--ghost" target="_blank" rel="noopener"
 							   href="https://www.google.com/maps/dir/?api=1&amp;destination=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>">Directions</a>
@@ -813,55 +815,11 @@ $ld_stars = function ($value) {
 	</div>
 </section>
 
-<!-- ================================================ GET QUOTE MODAL -->
-<section>
-	<div class="pop-ups pop-quo">
-		<div class="modal fade" id="quote" tabindex="-1" role="dialog" aria-labelledby="quoteTitle" aria-hidden="true">
-			<div class="modal-dialog" role="document">
-				<div class="modal-content">
-					<div class="log-bor">&nbsp;</div>
-					<span class="udb-inst" id="quoteTitle">Send enquiry</span>
-					<button type="button" class="close" data-dismiss="modal" aria-label="Close">&times;</button>
-					<div class="quote-pop p411-form">
-						<h4>Get a quote from <?= e($ld_name) ?></h4>
-
-						<form method="post" name="enquiry_form" id="enquiry_form"
-							  action="<?= base_url('user/add-enquiry/listing_details/' . rawurlencode($ld_slug)) ?>">
-							<input type="hidden" name="listing_id" value="<?= (int) ($listing->listing_id ?? 0) ?>">
-							<input type="hidden" name="receiving_user_id" value="<?= (int) ($listing->user_id ?? 0) ?>">
-							<input type="hidden" name="enquiry_sender_id" value="<?= (int) ($logged_id ?: 0) ?>">
-							<input type="hidden" name="enquiry_source" value="<?= e_attr($ld_name) ?>">
-							<input type="hidden" name="enquiry_type" value="listing">
-
-							<div class="form-group">
-								<label class="sr-only" for="modal_enq_name">Your name</label>
-								<input id="modal_enq_name" type="text" class="form-control" name="enquiry_name" required
-									   placeholder="Enter name*" value="<?= e_attr($user->name ?? '') ?>">
-							</div>
-							<div class="form-group">
-								<label class="sr-only" for="modal_enq_email">Email</label>
-								<input id="modal_enq_email" type="email" class="form-control" name="enquiry_email" required
-									   placeholder="Enter email*" value="<?= e_attr($user->email_id ?? '') ?>">
-							</div>
-							<div class="form-group">
-								<label class="sr-only" for="modal_enq_phone">Phone</label>
-								<input id="modal_enq_phone" type="tel" class="form-control" name="enquiry_mobile" required
-									   placeholder="Enter mobile number*" pattern="[0-9+\-\s()]{7,20}"
-									   title="7 to 20 characters: digits, spaces, + ( ) and - are allowed"
-									   value="<?= e_attr($user->mobile_number ?? '') ?>">
-							</div>
-							<div class="form-group">
-								<label class="sr-only" for="modal_enq_msg">Your message</label>
-								<textarea id="modal_enq_msg" class="form-control" rows="3" name="enquiry_message" placeholder="Enter your query or message"></textarea>
-							</div>
-							<button type="submit" class="p411-btn p411-btn--block">Send enquiry</button>
-						</form>
-					</div>
-				</div>
-			</div>
-		</div>
-	</div>
-</section>
+<?php // The "Get a quote" modal used to live here: a second copy of the
+      // sidebar enquiry form, same action, same five hidden inputs, same
+      // four visible fields, same heading. Two identical forms on one page
+      // is the reported "double entry"; the hero button scrolls to the one
+      // in the sidebar instead. ?>
 
 <script>
 	(function () {

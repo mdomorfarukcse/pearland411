@@ -463,7 +463,10 @@
 	background: linear-gradient(150deg, var(--p411-navy-d) 0%, var(--p411-navy) 52%, var(--p411-bu-d) 100%);
 }
 
-.p411-ab-head { text-align: center; max-width: 64ch; margin: 0 auto 28px; }
+/* 18px, not 28px. Every band on /about-us opens with this intro block, so
+   the gap under it set the rhythm for the whole page — "please decrease
+   the spacing below the text". */
+.p411-ab-head { text-align: center; max-width: 64ch; margin: 0 auto 18px; }
 .p411-ab-head h2 {
 	margin: 0 0 10px;
 	font-size: 26px;
@@ -538,7 +541,15 @@
 
 /* ---- live figures ---------------------------------------------------- */
 
-.p411-ab-stats { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); }
+/* Same orphan-row rule as .p411-ab-why — the figure count varies with how
+   many sections are switched on, so a short last row is normal here. */
+.p411-ab-stats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+	justify-content: center;
+}
+.p411-ab-stats > div { flex: 1 1 158px; max-width: 260px; }
 .p411-ab-stats > div {
 	background: #fff;
 	border: 1px solid var(--p411-line);
@@ -582,7 +593,21 @@
 
 /* ---- why choose ------------------------------------------------------ */
 
-.p411-ab-why { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+/*
+ * justify-content centres the TRACKS when the last row is short.
+ * "Why people use Pearland411" holds six cards; at desktop width auto-fit
+ * resolves to four columns, so cards five and six sat hard left with a
+ * half-width hole beside them — the reported "please center the second
+ * row". auto-fit collapses empty tracks, so the row centres once the
+ * columns stop being told to stretch to 1fr.
+ */
+.p411-ab-why {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+	justify-content: center;
+}
+.p411-ab-why > div { flex: 1 1 250px; max-width: 360px; }
 .p411-ab-why > div {
 	display: flex;
 	gap: 13px;
