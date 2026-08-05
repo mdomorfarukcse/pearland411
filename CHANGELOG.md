@@ -6,6 +6,58 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-05 — The header fix that never reached anyone's browser
+
+The header showed **two dropdown carets** beside "Explore" and a search box whose
+green button was a hard-cornered block hanging off the end of a rounded white
+field, the magnifier drawn in the theme's grey on top of the green.
+
+Both were fixed on 2026-08-03 ("Use one Explore menu and one header search
+across the site"). That commit added 87 lines to `assets/css/site-header.css`
+— including `.menu::after { content: none }`, which switches off the theme's
+own absolutely-positioned arrow now that the chevron is an `<svg>` in the
+markup — but left `header.php` asking for `site-header.css?v=1`, the key set
+two commits earlier. Every browser that had visited before kept serving the old
+copy from cache. The navy bar and green rule *were* in that cached copy, which
+is why the header looked half-converted rather than untouched.
+
+Reproduced by rendering the real header markup against `git show
+4530678:assets/css/site-header.css`: two carets, square green button, grey
+glyph — a pixel match for the report.
+
+### Fixed
+- **`site-header.css`** — the doubled caret and the unstyled search box above.
+- **`site-footer.css`** — carried the same defect. The white strip above the
+  footer, reported by the client and fixed on 2026-08-03, was still on the
+  `?v=2` key set the day before, so that fix had not reached a returning
+  visitor either.
+- **`promo-cards.css`** — changed on 2026-08-02 and bumped to `?v=2` in
+  `index.php` only; the four other call sites (`/all-listing`,
+  `/listing-details`, the content pages, admin's listing preview) still asked
+  for `?v=1`.
+
+### Changed
+- **Stylesheet versions are no longer written by hand.** New
+  `asset_css('assets/css/x.css')` in `application/helpers/view_helper.php`
+  stamps the file's own `filemtime()`, so the key changes exactly when the
+  bytes do. It strips any incoming `?query` (a caller still passing `?v=3` gets
+  the mtime, not a doubled string) and falls back to the bare URL when the file
+  is not on disk. All 9 link tags and the `page_css` loop now use it, and
+  `page_css` entries in the controllers are plain paths.
+
+  This had already been fixed once by hand, for `directory.css` on 2026-08-04.
+  Four occurrences of one bug is the argument for the helper.
+
+### Key files
+`application/helpers/view_helper.php` (`asset_css()`),
+`application/views/header.php`, `application/views/index.php`,
+`application/views/admin/header.php`, `application/controllers/User.php`
+(`contentPageCss()` + 2 `page_css` literals), `application/controllers/Admin.php`.
+
+No CSS was edited — the stylesheets were already correct.
+
+---
+
 ## 2026-08-05 — "You've reached your limit: ∞ Unlimited", and the free plan that asked you to register
 
 Two dead ends in the same journey: a member with no plan clicked **Add New

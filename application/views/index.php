@@ -217,16 +217,16 @@ unset($__ext, $__rel);
   <!-- Theme base. Shared by ~200 views; never edited. -->
   <link rel="stylesheet" href="<?= base_url() ?>assets/css/style.css">
   <!-- Brand palette + typography overrides — loaded after the theme so it wins. -->
-  <link rel="stylesheet" href="<?= base_url() ?>assets/css/pearland-brand.css?v=1">
+  <link rel="stylesheet" href="<?= asset_css('assets/css/pearland-brand.css') ?>">
   <!-- The homepage. Every selector is scoped to .p411-home and no other view
        loads this file, so it cannot affect the rest of the site. -->
-  <link rel="stylesheet" href="<?= base_url() ?>assets/css/home-sections.css?v=4">
+  <link rel="stylesheet" href="<?= asset_css('assets/css/home-sections.css') ?>">
   <!-- The two house promo cards (partials/service_promo.php and
        partials/banner_design_promo.php), shared with the directory and
        listing-details pages so the cards can't drift. -->
-  <link rel="stylesheet" href="<?= base_url() ?>assets/css/promo-cards.css?v=2">
+  <link rel="stylesheet" href="<?= asset_css('assets/css/promo-cards.css') ?>">
   <!-- The footer (partials/site_footer.php), shared with every other page. -->
-  <link rel="stylesheet" href="<?= base_url() ?>assets/css/site-footer.css?v=2">
+  <link rel="stylesheet" href="<?= asset_css('assets/css/site-footer.css') ?>">
 
   <?php // Both of these were loaded from a CDN. The repository already ships
         // the same versions (Bootstrap 4.3.1, jQuery UI 1.12.1), so serving
