@@ -6,6 +6,73 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-05 — Blog detail page rebuilt, and `<p>` stops showing up in the text
+
+Two reports: the detail page rendered as a white page, and `<p>` and `&rsquo;`
+were printed as visible text in the excerpts on the index.
+
+### Fixed
+- **`<p>` and `&rsquo;` shown as text.** `Admin::add_blog()` and `edit_blog()`
+  saved the CKEditor body through `htmlentities()`, so the column held
+  `&lt;p&gt;Why Pearland is one of America&amp;rsquo;s…` instead of the markup.
+  `content_text()` then found no tags to strip and decoded once at the end,
+  producing a literal `<p>` and `&rsquo;`, which the view escaped and printed.
+  The public form (`User::add_blog`) never did this, so it only affected
+  admin-created posts.
+
+  Both ends are fixed. **Existing rows display correctly without a migration:**
+  `content_text()` now decodes an entity-encoded body *before* the tag work.
+  The signal is an encoded closing tag (`&lt;/p&gt;`) rather than a bare
+  `&lt;`, so a post explaining "use the `&lt;p&gt;` tag" still shows what it
+  typed. And the admin write paths store the body as typed, like the public
+  form, with escaping at the point of display as everywhere else.
+- Because bodies are now stored as real markup, the four places that echoed
+  `blog_name` / `blog_description` unescaped were fixed — including the two
+  CKEditor textareas, which need the body escaped *into* the field.
+
+### Changed
+- **`/blog-details/<slug>` is rebuilt on the shared page kit**, the same shell
+  as `/news-details`: hero with breadcrumb, title, byline and read time; the
+  post in a card with its figure, prose and share row; "More from the blog"
+  as proper cards; a sidebar with the enquiry form, promos and ad zones.
+
+  What it replaces: ~130 lines of its own `<style>` over the theme's
+  `eve-deta-*` classes, including `margin-top:-96px !important` on the related
+  posts, which dragged them up over their own images. The body was rendered
+  with `strip_tags(html_entity_decode($blog->blog_description))` — every
+  paragraph break in the post collapsed into a single run of text. It now goes
+  through `content_text()` + `nl2br(e())` like every other detail page, so the
+  paragraphs survive and nothing stored can inject markup.
+- **The author query moved out of the template.** The view ran
+  `$this->db->select('name')->from('user')…` inline. Resolved in
+  `User::blog_details()` and passed in as `$blog_author`.
+
+### On the white page
+Rendered against the real stylesheets, the old page came up as a tall pale band
+with the content pushed far below the fold and the related posts collapsed onto
+their own images — consistent with "white page" on a first look. The exact
+production failure could not be reproduced here without the live database, so
+this is a rebuild rather than a one-line fix: the old view's dependencies on
+theme classes, the negative-margin hacks and the in-template query are all
+gone, and the page now renders from the same kit as the sections that work.
+
+### Verified
+The rebuilt page renders with no PHP errors and no horizontal scroll; the body
+shows both paragraphs with a real apostrophe, and the page contains no literal
+`<p>` or `&rsquo;`. `content_excerpt()` was checked against four storage
+shapes: admin-stored (entity-encoded), user-stored (raw markup), plain text,
+and a body that deliberately shows `&lt;p&gt;` — the last still displays it.
+
+### Key files
+`application/views/blog_details.php` (rebuilt), `application/helpers/view_helper.php`
+(`content_text()`), `application/controllers/Admin.php` (`add_blog`, `edit_blog`),
+`application/controllers/User.php` (`blog_details`), plus the four views that
+echoed blog fields unescaped.
+
+No migrations.
+
+---
+
 ## 2026-08-05 — The blog index joins the rest of the site, and its dates become real
 
 Three reports on `/all-blog`: it didn't look like the other pages, every post

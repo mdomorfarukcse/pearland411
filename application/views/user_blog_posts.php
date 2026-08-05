@@ -144,7 +144,7 @@
 					?>
 							<tr>
 								<td><?= $i; ?></td>
-								<td><?= $blog->blog_name; ?> <span><?= ($__d = us_date($blog->created_at ?? null)) !== '' ? e($__d) : 'No date set' ?></span>
+								<td><?= e($blog->blog_name); ?> <span><?= ($__d = us_date($blog->created_at ?? null)) !== '' ? e($__d) : 'No date set' ?></span>
 								</td>
 								<td>
 									<span class="db-list-ststus"><?= $blog->blog_status == 1 ? 'Active' : 'In-active'; ?></span>

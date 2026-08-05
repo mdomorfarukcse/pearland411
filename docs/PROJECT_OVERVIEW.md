@@ -135,7 +135,7 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Events | `/event[?when=upcoming\|past\|all&q=]`, `/event-details/<slug>` | `User::event`, `event_details` | Homepage layout + 6 ad zones each; defaults to **upcoming**, widens to the archive by itself when nothing is scheduled |
 | News | `/news[?category=<slug>&q=]`, `/news-details/<slug>` | `User::news`, `news_details` | Same shell; counted section strip; both hyphen and underscore detail URLs route, hyphen is canonical |
 | Videos | `/videos[?category=<slug>&q=]`, `/video-details/<slug>` | `User::videos`, `video_details` | Same shell; YouTube thumbnail fallback when no still was uploaded |
-| Blog | `/all-blog[?q=&page=]`, `/blog-details/<slug>` | `User::all_blog`, `blog_details` | Index is on the shared kit (same shell as `/news`); the **detail page is still the old theme**. Publish date is editable in admin — see migration 0021 |
+| Blog | `/all-blog[?q=&page=]`, `/blog-details/<slug>` | `User::all_blog`, `blog_details` | Both on the shared kit (same shells as `/news` and `/news-details`). Publish date editable in admin — see migration 0021. Bodies are CKEditor markup; render with `content_text()` + `nl2br(e())`, never raw |
 | Other content types | products/classifieds/houses/rentals | `User::*` + admin CRUD | gated by `service_*_enabled`; still on the old theme layout |
 
 ## Key DB tables

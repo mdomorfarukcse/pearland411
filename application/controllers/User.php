@@ -1378,6 +1378,20 @@ class User extends CI_Controller
 		// Get 3 related blogs (excluding current)
 		$data['related_blogs'] = $this->usermodel->getRelatedBlogs($data['blog']->blog_id, 3);
 
+		// Author. This was a raw `$this->db->select('name')` inside the view —
+		// a query in the template, and one that blew up whenever the loader had
+		// not copied `db` across. Resolved here, where the model belongs.
+		$data['blog_author'] = '';
+		if (!empty($data['blog']->user_id)) {
+			$author = $this->usermodel->getSingleValue((int) $data['blog']->user_id, 'user_id', 'user');
+			if ($author && !empty($author->name)) {
+				$data['blog_author'] = (string) $author->name;
+			}
+		}
+
+		$data['ad_slots'] = $this->contentAdSlots();
+		$data['page_css'] = $this->contentPageCss();
+
 		// SEO: per-page meta + BlogPosting JSON-LD. Prefer admin-set
 		// seo_* columns; fall back to trimmed body.
 		$blog = $data['blog'];
