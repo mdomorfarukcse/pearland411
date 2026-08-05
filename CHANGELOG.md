@@ -6,6 +6,29 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-04 — Directory hero: the second sentence gets its own line
+
+### Fixed
+- **The directory hero lede split mid-sentence.** `/all-listing` (no category
+  filter) reads "Find local businesses and service providers across Pearland,
+  TX. Search by category, call them straight from the listing…", and at the
+  hero's `62ch` measure the wrap landed between "Search by" and "category",
+  stranding those two words at the end of line one. The second sentence is now
+  a `<span class="p411-hero__lede-line">`, and the kit gives that class
+  `display: block`, so it always begins its own line. A block element rather
+  than a `<br>`: the sentence still reflows normally at every width, and the
+  class is opt-in, so the other nine views that share `.p411-hero__lede`
+  (news, events, videos, classifieds, coupons, about, contact, services,
+  all-category) are untouched.
+
+### Key files
+`application/views/all-listing.php`, `assets/css/directory.css`,
+`application/controllers/User.php` + `application/controllers/Admin.php`
+(cache-busting `directory.css?v=3` — Admin's listing preview was still asking
+for `?v=1`, so the shared sheet now has one cache key across the site).
+
+---
+
 ## 2026-08-03 — The rest of the site follows the homepage: navy structure, green as an accent
 
 The homepage was rebuilt yesterday (entry below) but the pages it links to were
