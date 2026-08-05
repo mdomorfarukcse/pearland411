@@ -250,7 +250,25 @@
 	padding: 14px 16px 4px;
 	flex: 1;
 }
-.p411-ct-card__body h3 { font-size: 16px; font-weight: 700; line-height: 1.35; }
+/*
+ * Two lines, always. The excerpt below has clamped to three lines since
+ * this kit was built, but the title was free to run to one line or four —
+ * and every card in the row is a grid item of the same height, so a long
+ * headline pushed that card's meta list and excerpt down while its
+ * neighbours' stayed put. Across a row of events that reads as content and
+ * images that do not line up. min-height reserves the second line so a
+ * short title does not pull everything else up either.
+ */
+.p411-ct-card__body h3 {
+	font-size: 16px;
+	font-weight: 700;
+	line-height: 1.35;
+	min-height: calc(2 * 1.35em);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
 .p411-ct-card__body h3 a { color: var(--p411-navy); }
 .p411-ct-card__body h3 a:hover { color: var(--p411-green-d); }
 

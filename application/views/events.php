@@ -250,8 +250,8 @@ $window_label = array(
 								</div>
 							</article>
 
-							<?php // One in-list banner after the fourth card, on pages that
-							      // have more than four results. ?>
+							<?php // One in-list banner after the sixth card, on pages that
+							      // have more than six results. ?>
 							<?php if ($index === 5 && count($Allevent) > 6): ?>
 								<div class="p411-adrow">
 									<?php $slot = $ad_slots['inline'];
