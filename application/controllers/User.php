@@ -2031,7 +2031,7 @@ class User extends CI_Controller
 		$total_pages = ceil($total_blogs / $per_page);
 		if ($total_pages > 1) {
 			$pagination_links .= '<ul class="pagination">';
-			$base_url = base_url('user/all-blog');
+			$base_url = base_url('all-blog');
 			$query = $_GET;
 			for ($i = 1; $i <= $total_pages; $i++) {
 				$query['page'] = $i;
@@ -2042,6 +2042,29 @@ class User extends CI_Controller
 			$pagination_links .= '</ul>';
 		}
 		$data['pagination_links'] = $pagination_links;
+
+		// The page kit's shell wants the same counters the news and video
+		// indexes get, so the toolbar can say what it is showing.
+		$data['total_blogs']    = $total_blogs;
+		$data['per_page']       = $per_page;
+		$data['current_page']   = $page;
+		$data['total_pages']    = (int) $total_pages;
+		$data['current_offset'] = $offset;
+
+		// Most-read rail. Read off the same set rather than another query —
+		// the whole list is already in memory here.
+		$popular = $all_blogs;
+		usort($popular, function ($a, $b) {
+			return ((int) ($b->views ?? 0)) <=> ((int) ($a->views ?? 0));
+		});
+		$data['popular_blogs'] = array_slice(array_filter($popular, function ($b) {
+			return (int) ($b->views ?? 0) > 0;
+		}), 0, 5);
+
+		$data['ad_slots'] = $this->contentAdSlots();
+		$data['page_css'] = $this->contentPageCss();
+		$data['meta_description'] = 'Stories, guides and updates from Pearland businesses and the Pearland411 community.';
+		$data['canonical_url']    = base_url('all-blog');
 
 		// Load header categories using professional MVC approach
 		$this->loadHeaderCategories($data);

@@ -47,6 +47,26 @@
 										</div>
 										<!--FILED END-->
 										<!--FILED START-->
+										<?php
+										// Publish date. Posts created before this field existed have no
+										// usable date stored and nothing in the row to recover it from,
+										// so the box comes up empty and an admin types the real one.
+										$blog_dt = us_date_ts($blog->created_at ?? null);
+										?>
+										<div class="row">
+											<div class="col-md-12">
+												<div class="form-group">
+													<label for="blog_created_at">Publish date</label>
+													<input type="datetime-local" name="created_at" id="blog_created_at" class="form-control"
+														   value="<?= e_attr(set_value('created_at', $blog_dt ? date('Y-m-d\TH:i', $blog_dt) : '')) ?>">
+													<?php if (!$blog_dt): ?>
+														<small class="text-danger">No date recorded for this post &mdash; it shows without one until you set it.</small>
+													<?php endif; ?>
+												</div>
+											</div>
+										</div>
+										<!--FILED END-->
+										<!--FILED START-->
 										<div class="row">
 											<div class="col-md-12">
 												<div class="form-group">

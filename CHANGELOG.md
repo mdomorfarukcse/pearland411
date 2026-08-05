@@ -6,6 +6,81 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-05 — The blog index joins the rest of the site, and its dates become real
+
+Three reports on `/all-blog`: it didn't look like the other pages, every post
+showed the same date with no way to change it, and the date wasn't written the
+way Americans write dates.
+
+### Fixed
+- **Every post showed the same date.** `Admin::add_blog()` never wrote
+  `blogs.created_at` — the payload it builds has user_id, name, description,
+  status, isenquiry and slug, and nothing else. (`User::add_blog()`, the public
+  form, does write it, which is why only admin-created posts were affected.)
+  With nothing supplied the column took its default, and the index printed
+  `date('d, M Y', strtotime($blog->created_at))`. `strtotime()` returns FALSE
+  for NULL, `''` and the zero date, and `date()` renders FALSE as the epoch —
+  so every dateless post printed the *same* string: `01, Jan 1970`, or
+  `30, Nov -0001` from a zero date. Not the same date. **No** date, printed
+  identically. The admin add path now writes it, and migration
+  `0021_blog_dates.sql` makes the column nullable with `DEFAULT
+  CURRENT_TIMESTAMP` and turns existing zero dates into NULL.
+- **No way to set a custom date.** Neither admin blog form had a date field.
+  Both now carry **Publish date** (`datetime-local`): blank on the add form
+  means "now"; on the edit form it holds the stored value, and a post that has
+  none says so in red so it can be found and fixed. `Admin::edit_blog()` writes
+  it, keeping the stored value when the field is left alone.
+
+  The migration deliberately does **not** invent dates for existing posts —
+  there is no signal in the row for what the real publication date was. NULL is
+  honest, the views omit the line, and an admin sets the true date per post.
+
+### Changed
+- **`/all-blog` is rebuilt on the shared page kit** — the same shell as `/news`,
+  `/event` and `/videos`: hero band with search, results toolbar, a lead card
+  over a card grid with date badges, a sidebar (most-read rail, "write for us",
+  ad zones) and the owner band. It was the last public content section still on
+  the theme's own `blog-head`/`blog-body` markup: a bare heading over a plain
+  grid with inline `padding-bottom:170px`, no hero, no sidebar, no ad slots.
+- **Dates are US-formatted** via a new `us_date()` / `us_date_ts()` pair in
+  `view_helper.php`. `Aug 5, 2026` rather than `05, Aug 2026`, and — the part
+  that matters — `''` rather than the epoch for a value that isn't a date, so
+  callers omit the line instead of printing a wrong one. Applied across all six
+  blog surfaces: the index, the detail page, the user dashboard list, the admin
+  list, the admin detail and the admin edit form.
+- **`/blog-details/<slug>` is routed.** Only `blogs-details/(:any)` existed, so
+  the singular form 404'd — CI3's catch-all `(:any)` is `[^/]+` and matches one
+  segment. All three spellings now resolve, as they already do for news, videos
+  and events.
+
+### Still on the old theme
+The blog **detail** page (`views/blog_details.php`, 481 lines) was not rebuilt —
+only its dates were fixed. Clicking a post from the new index still lands on the
+old layout.
+
+### Verified
+The rebuilt index was rendered against the real stylesheets and screenshotted:
+five posts including one with a zero date, which shows **no** date rather than
+1970, while the others read `Jul 28, 2026`. Links resolve to the new route, no
+horizontal scroll. `us_date()` was exercised across nine inputs — real dates,
+zero dates, NULL, empty, 0, a numeric timestamp and junk — alongside the old
+expression, which is where the identical `01, Jan 1970` / `30, Nov -0001`
+outputs above come from.
+
+### Key files
+`application/views/blog-posts.php` (rebuilt), `application/helpers/view_helper.php`
+(`us_date()`, `us_date_ts()`), `application/controllers/Admin.php`
+(`blogPublishDate()`, `add_blog()`, `edit_blog()`), `application/controllers/User.php`
+(`all_blog()`), `application/views/admin/add_new_blogs.php`,
+`application/views/admin/user_edit_blog.php`, `application/views/admin/all_blogs.php`,
+`application/views/admin/blog_details.php`, `application/views/blog_details.php`,
+`application/views/user_blog_posts.php`, `application/config/routes.php`.
+
+Migration: `database/migrations/0021_blog_dates.sql` (mirrored into
+`migrations_combined_phpmyadmin.sql`).
+
+---
+
 ## 2026-08-05 — "Request a custom quote" now has somewhere to go
 
 The button on `/services` did nothing. It pointed at `/request-service`, which

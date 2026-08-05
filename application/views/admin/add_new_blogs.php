@@ -47,6 +47,21 @@
                   </div>
                   <!--FILED END-->
                   <!--FILED START-->
+                  <?php // Publish date. Left blank this stamps "now" — the same
+                        // thing that used to happen by accident, except it now
+                        // actually gets written. Backdating an older post is
+                        // what this is really for. ?>
+                  <div class="row">
+                    <div class="col-md-12">
+                      <div class="form-group">
+                        <label for="blog_created_at">Publish date <small>(leave blank for now)</small></label>
+                        <input type="datetime-local" name="created_at" id="blog_created_at" class="form-control"
+                               value="<?= e_attr(set_value('created_at')) ?>">
+                      </div>
+                    </div>
+                  </div>
+                  <!--FILED END-->
+                  <!--FILED START-->
                   <div class="row">
                     <div class="col-md-12">
                       <div class="form-group">

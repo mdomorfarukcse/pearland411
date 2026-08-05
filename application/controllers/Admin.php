@@ -2813,6 +2813,33 @@ class Admin extends CI_Controller
 	}
 
 	/* Add new Blog */
+	/**
+	 * Read the blog form's publish-date field into a storable datetime.
+	 *
+	 * The input is `datetime-local`, so it arrives as "2026-08-05T14:30" —
+	 * which MySQL will not take. Anything unparseable is treated as blank
+	 * rather than written through, so a typo cannot put another unusable date
+	 * in the column.
+	 *
+	 * @param  string     $posted
+	 * @param  mixed      $empty  what a blank field means: the default stamps
+	 *                            "now" (adding), NULL means "leave it alone"
+	 *                            (editing).
+	 * @return string|null
+	 */
+	private function blogPublishDate($posted, $empty = 'now')
+	{
+		$posted = trim((string) $posted);
+		if ($posted !== '') {
+			$ts = strtotime(str_replace('T', ' ', $posted));
+			if ($ts !== false && $ts > 0) {
+				return date('Y-m-d H:i:s', $ts);
+			}
+		}
+
+		return $empty === 'now' ? date('Y-m-d H:i:s') : $empty;
+	}
+
 	public function add_blog()
 	{
 		$data['users']             = $this->adminmodel->getActiveUsersForDropdown();
@@ -2831,7 +2858,12 @@ class Admin extends CI_Controller
 				'blog_description'  => htmlentities($this->input->post('blog_description'), ENT_QUOTES),
 				'blog_status'		=> 1,
 				'isenquiry'         => $isenquiry,
-				'blog_slug'			=> $blog_slug
+				'blog_slug'			=> $blog_slug,
+				// This was missing, which is why every admin-created post showed
+				// the same date: with nothing supplied the column took the zero
+				// date, and the index printed the epoch for all of them.
+				// The form's date field wins; an empty one means "now".
+				'created_at'		=> $this->blogPublishDate($this->input->post('created_at')),
 			);
 
 			if ($_FILES && $_FILES['blog_image']['name']) {
@@ -2882,6 +2914,19 @@ class Admin extends CI_Controller
 				'isenquiry'         => $isenquiry,
 				'blog_slug'			=> $blog_slug
 			);
+
+			// Publish date is editable here — posts that predate this field
+			// carry no usable date at all, and there is nothing in the row to
+			// recover it from, so an admin has to be able to say what it was.
+			// Left blank on a post that already has one: keep what is stored.
+			$posted_date = $this->blogPublishDate($this->input->post('created_at'), null);
+			if ($posted_date !== null) {
+				$info['created_at'] = $posted_date;
+			} elseif (us_date_ts($data['blog']->created_at ?? null) === false) {
+				// No date stored and none given — stamp it now rather than
+				// leaving another row that prints as the epoch.
+				$info['created_at'] = date('Y-m-d H:i:s');
+			}
 
 			if ($_FILES && $_FILES['blog_image']['name']) {
 				$img_info = [

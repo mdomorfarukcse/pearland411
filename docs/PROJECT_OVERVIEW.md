@@ -28,6 +28,10 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `edit_listings.php`, `checkout.php`, `pricing_plan.php`, `user_account.php`, …); admin views in
   `admin/`; shared partials `header.php` / `footer.php` / `user_left_sidebar.php`.
   Note: the **homepage `index.php` is self-contained** (its own header), separate from `header.php`.
+- **Dates:** print them with `us_date($value)` (`application/helpers/view_helper.php`) — US order
+  (`Aug 5, 2026`), and `''` rather than the epoch when the stored value is NULL, empty or MySQL's zero
+  date. `us_date_ts()` gives the timestamp for the same rules. Applied on the blog pages; the other
+  sections still call `date('j M Y', strtotime(...))` directly and print 1970 for a missing date.
 - **Cache busting:** stylesheet `<link>`s go through `asset_css('assets/css/x.css')`
   (`application/helpers/view_helper.php`), which stamps the file's mtime as `?v=`. Never hand-write a
   `?v=N` — the numbers this replaced went stale four times, shipping fixes that returning visitors
@@ -131,7 +135,8 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Events | `/event[?when=upcoming\|past\|all&q=]`, `/event-details/<slug>` | `User::event`, `event_details` | Homepage layout + 6 ad zones each; defaults to **upcoming**, widens to the archive by itself when nothing is scheduled |
 | News | `/news[?category=<slug>&q=]`, `/news-details/<slug>` | `User::news`, `news_details` | Same shell; counted section strip; both hyphen and underscore detail URLs route, hyphen is canonical |
 | Videos | `/videos[?category=<slug>&q=]`, `/video-details/<slug>` | `User::videos`, `video_details` | Same shell; YouTube thumbnail fallback when no still was uploaded |
-| Other content types | blogs/products/classifieds/houses/rentals | `User::*` + admin CRUD | gated by `service_*_enabled`; still on the old theme layout |
+| Blog | `/all-blog[?q=&page=]`, `/blog-details/<slug>` | `User::all_blog`, `blog_details` | Index is on the shared kit (same shell as `/news`); the **detail page is still the old theme**. Publish date is editable in admin — see migration 0021 |
+| Other content types | products/classifieds/houses/rentals | `User::*` + admin CRUD | gated by `service_*_enabled`; still on the old theme layout |
 
 ## Key DB tables
 `user`, `listings` (+ `listing_categories`, `listing_sub_categories`, `listing_other_info`),
