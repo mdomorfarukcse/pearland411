@@ -295,6 +295,26 @@ $s = isset($settings) ? $settings : array();
 			<?php endforeach; ?>
 		</section>
 
+		<!-- Listings tools ---------------------------------------------- -->
+		<section class="setting-card">
+			<h2>Listings</h2>
+			<p class="hint">Optional tools on the listings admin. These are off unless you switch them on.</p>
+
+			<?php // Unlike the service toggles above, this one defaults to OFF, so
+			      // an unset value must read as unticked rather than ticked.
+			$dup_on = (($s['feature_duplicate_listing_enabled'] ?? '0') === '1'); ?>
+			<div class="setting-row">
+				<label for="feature_duplicate_listing_enabled">
+					Create duplicate listings
+					<span class="hint" style="display:block;font-weight:400;">Copies an existing listing into a new one. Off by default — it sat next to "Create listing from scratch" and one mis-click made a duplicate business record.</span>
+				</label>
+				<span>
+					<input type="hidden" name="feature_duplicate_listing_enabled" value="0">
+					<input type="checkbox" id="feature_duplicate_listing_enabled" name="feature_duplicate_listing_enabled" value="1" <?= $dup_on ? 'checked' : '' ?>>
+				</span>
+			</div>
+		</section>
+
 		<div class="setting-actions">
 			<button type="submit" class="btn-save">Save settings</button>
 		</div>

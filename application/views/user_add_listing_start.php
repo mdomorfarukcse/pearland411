@@ -6,12 +6,19 @@
 					<div class="log">
 						<div class="login">
 							<h4>Add New Listing</h4>
+							<?php // This view is not loaded by any controller — the live one is
+							      // add_new_listing_start.php, which has no duplicate option — but
+							      // the block below is kept behind the same flag as the admin tool
+							      // so wiring this file up later can't quietly bring it back. ?>
 							<div class="row cre-dup">
-								<div class="col-md-6"> <a href="<?= base_url('user/add_listing_scratch');?>">Create listing from scratch</a>
+								<div class="<?= duplicate_listing_enabled() ? 'col-md-6' : 'col-md-12' ?>"> <a href="<?= base_url('user/add_listing_scratch');?>">Create listing from scratch</a>
 								</div>
+								<?php if (duplicate_listing_enabled()): ?>
 								<div class="col-md-6"> <span class="cre-dup-btn">Create duplicate listing</span>
 								</div>
+								<?php endif; ?>
 							</div>
+							<?php if (duplicate_listing_enabled()): ?>
 							<form name="duplicate_listing_form" action="<?= base_url('user/duplicate-listing'); ?>" id="duplicate_listing_form" method="post" class="cre-dup-form cre-dup-form-show">
 								<!--FILED START-->
 								<div class="row">
@@ -44,6 +51,7 @@
 								<!--FILED END-->
 								<button type="submit" name="listing_submit" class="btn btn-primary">Create Now</button>
 							</form>
+							<?php endif; ?>
 							<div class="col-md-12"> <a href="<?= base_url('user/dashboard');?>" class="skip">Go to user dashboard >></a>
 							</div>
 						</div>

@@ -519,3 +519,24 @@ if (!function_exists('asset_css')) {
             : base_url($path);
     }
 }
+
+if (!function_exists('duplicate_listing_enabled')) {
+    /**
+     * Is the "create duplicate listing" tool switched on?
+     *
+     * Off by default. The tool copies an existing listing row wholesale, and
+     * sitting one click from "Create listing from scratch" it was an easy
+     * mis-click away from a duplicate business record — the directory already
+     * carries enough of those that the homepage de-duplicates by name (see
+     * User::index). The code is left in place rather than deleted; this flag
+     * is what hides it.
+     *
+     * Note the inverted default: every `service_*_enabled` key defaults to '1'
+     * so an un-migrated site keeps working, but this one has to be switched on
+     * deliberately. Flip it at /admin/setting.
+     */
+    function duplicate_listing_enabled()
+    {
+        return site_setting('feature_duplicate_listing_enabled', '0') === '1';
+    }
+}

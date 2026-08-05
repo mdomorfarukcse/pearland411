@@ -6,6 +6,56 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-05 — Duplicate listings hidden behind a switch; "Add new listing" goes straight to the form
+
+QA flagged that **"Create duplicate listing"** sat one click from "Create
+listing from scratch" on `/admin/add_new_listings`, so a mis-click made a
+duplicate business record. The directory already carries enough of those that
+the homepage de-duplicates by flattened name (`User::index`).
+
+The tool is **not deleted** — it is switched off and hidden, and can be brought
+back from `/admin/setting` without a code change.
+
+### Changed
+- New `feature_duplicate_listing_enabled` setting, read through
+  `duplicate_listing_enabled()` (`application/helpers/view_helper.php`). Note
+  the inverted default: every `service_*_enabled` key defaults to `'1'` so an
+  un-migrated site keeps working, but this one must be switched on
+  deliberately, so an unset value reads as off.
+- **`/admin/add_new_listings` now redirects to `admin/add_listing_scratch`.**
+  That page existed only to offer the scratch/duplicate choice; with
+  duplication off there is nothing to choose, so the admin lands on the form
+  instead of clicking twice. Same for the singular `add_new_listing` URL. The
+  three places that link to it — the admin top menu, the sidebar and the trash
+  page's "Add new listing" button — all now end on the form.
+- **`Admin::create_duplicate_listing()` refuses to render when the flag is
+  off**, redirecting to the same form. Hiding the menu links alone would only
+  mean "not linked" — the URL was still typeable. The method's body is
+  untouched below the guard.
+- The two menu entries ("Create duplicate listings", in `admin/header.php` and
+  `admin/inc/left_sidebar.php`) are wrapped in the flag.
+- `views/user_add_listing_start.php` carries a user-facing duplicate form. It
+  is dead — no controller loads it (the live view is
+  `add_new_listing_start.php`, which has no duplicate option) and its form
+  posts to `user/duplicate-listing`, which does not exist — but its block is
+  behind the same flag now, so wiring the file up later cannot quietly bring
+  the feature back.
+
+Nothing else in the app offers duplication: events, news, blogs, coupons,
+products, videos, classifieds, rentals, houses and ads have no clone action.
+
+### Key files
+`application/helpers/view_helper.php` (`duplicate_listing_enabled()`),
+`application/controllers/Admin.php` (`add_new_listings`, `add_new_listing`,
+`create_duplicate_listing`, `admin_setting`'s `$known_keys`),
+`application/views/admin/admin_setting.php` (the new Listings card),
+`application/views/admin/header.php`, `application/views/admin/inc/left_sidebar.php`,
+`application/views/user_add_listing_start.php`.
+
+No migrations — `site_settings` (0007) already stores arbitrary keys.
+
+---
+
 ## 2026-08-05 — The header fix that never reached anyone's browser
 
 The header showed **two dropdown carets** beside "Explore" and a search box whose

@@ -632,6 +632,9 @@ class Admin extends CI_Controller
 			'service_classifieds_enabled', 'service_news_enabled',
 			'service_blog_enabled', 'service_products_enabled',
 			'service_videos_enabled',
+			// Listings tools. Unlike the service keys above this one defaults
+			// to OFF — see duplicate_listing_enabled() in view_helper.php.
+			'feature_duplicate_listing_enabled',
 		);
 
 		if ($this->input->method() === 'post') {
@@ -1204,6 +1207,13 @@ class Admin extends CI_Controller
 	=====================*/
 	public function add_new_listings()
 	{
+		// This page exists only to offer the choice between "from scratch" and
+		// "duplicate". With duplication switched off there is nothing to choose,
+		// so go straight to the form rather than making the admin click twice.
+		if (!duplicate_listing_enabled()) {
+			redirect('admin/add_listing_scratch');
+			return;
+		}
 
 		$this->load->view('admin/header');
 		$this->load->view('admin/add_new_listings');
@@ -1215,7 +1225,12 @@ class Admin extends CI_Controller
 	=====================*/
 	public function add_new_listing()
 	{
-		// Redirect to the plural version or render the same page
+		// Same page under the singular URL — same shortcut.
+		if (!duplicate_listing_enabled()) {
+			redirect('admin/add_listing_scratch');
+			return;
+		}
+
 		$this->load->view('admin/header');
 		$this->load->view('admin/add_new_listings');
 		$this->load->view('admin/footer');
@@ -1948,6 +1963,13 @@ class Admin extends CI_Controller
 	=====================*/
 	public function create_duplicate_listing()
 	{
+		// Hidden from every menu, and unreachable by URL too — otherwise
+		// "hidden" only means "not linked". The tool itself is untouched below;
+		// switch feature_duplicate_listing_enabled on at /admin/setting to use it.
+		if (!duplicate_listing_enabled()) {
+			redirect('admin/add_listing_scratch');
+			return;
+		}
 
 		$data['users'] 		  	= $this->adminmodel->getActiveUsersForDropdown();
 		$data['listings']		= $this->adminmodel->getAllListingNames();
