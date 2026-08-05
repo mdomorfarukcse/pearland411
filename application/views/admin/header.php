@@ -93,7 +93,10 @@
 
                   </li>
 
+                  <?php // Off unless feature_duplicate_listing_enabled is switched on at /admin/setting. ?>
+                  <?php if (duplicate_listing_enabled()): ?>
                   <li> <a href="<?= base_url() ?>admin/create_duplicate_listing">Create duplicate listings</a></li>
+                  <?php endif; ?>
 
                   <li> <a href="<?= base_url() ?>admin/claimed_listings">All Claim Requests</a>
 

@@ -123,7 +123,8 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Manage plan | `/user/my_account` | upgrade/downgrade/cancel | prorated upgrade |
 | Renewal cron | — | `Cli::renew_subscriptions` | daily |
 | Admin | `/admin` | `Admin::*` | |
-| Site settings / services | `/admin/setting` | `Admin::admin_setting` | feature flags |
+| Site settings / services | `/admin/setting` | `Admin::admin_setting` | feature flags. `service_*_enabled` default **on**; `feature_duplicate_listing_enabled` defaults **off** (see `duplicate_listing_enabled()`) |
+| Add a listing (admin) | `/admin/add_new_listings` | `Admin::add_new_listings` | with duplication off it redirects straight to `add_listing_scratch`; the chooser page only appears when the flag is on |
 | Plan pricing/capabilities | `/admin/pricing` | `Admin::add/edit_pricing_plan` | |
 | Events | `/event[?when=upcoming\|past\|all&q=]`, `/event-details/<slug>` | `User::event`, `event_details` | Homepage layout + 6 ad zones each; defaults to **upcoming**, widens to the archive by itself when nothing is scheduled |
 | News | `/news[?category=<slug>&q=]`, `/news-details/<slug>` | `User::news`, `news_details` | Same shell; counted section strip; both hyphen and underscore detail URLs route, hyphen is canonical |
