@@ -1009,11 +1009,23 @@
 
 		public function updateVideoCategory($slug, $info)
 		{
-			if ($this->db->where('category_slug', $slug)->update('video_categories', $info)) {
-				return true;
-			} else {
+			// Confirm the row is actually there before reporting success.
+			// CI3's update() returns TRUE whenever the query *runs*, so an
+			// UPDATE that matched nothing still read as a save — which is how
+			// renaming a video category could report "Successfully Updated"
+			// without changing anything. affected_rows() alone is not enough:
+			// MySQL reports 0 when the submitted values equal the stored ones,
+			// and re-saving an unchanged form is not a failure.
+			$exists = $this->db->select('category_id')
+				->from('video_categories')
+				->where('category_slug', $slug)
+				->get()->row();
+
+			if (!$exists) {
 				return false;
 			}
+
+			return (bool) $this->db->where('category_slug', $slug)->update('video_categories', $info);
 		}
 
 		/*===================================

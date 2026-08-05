@@ -87,7 +87,7 @@
 											<div class="col-md-12">
 												<div class="form-group">
 													<label>Choose banner image</label>
-													<input type="file" name="event_image" required="required" class="form-control">
+													<input type="file" name="event_image" class="form-control">
 												</div>
 											</div>
 										</div>
@@ -97,14 +97,14 @@
 										<div class="row">
 											<div class="col-md-6">
 												<div class="form-group">
-													<input type="text" name="event_contact_name" required="required" class="form-control" placeholder="Contact person*">
+													<input type="text" name="event_contact_name" class="form-control" placeholder="Contact person">
 												</div>
 												<span class="text-danger"><?= form_error("event_contact_name")?form_error("event_contact_name"):'' ;?></span>
 											</div>
 
 											<div class="col-md-6">
 												<div class="form-group">
-													<input type="text" name="event_mobile" required="required" class="form-control" placeholder="Contact phone number*">
+													<input type="text" name="event_mobile" class="form-control" placeholder="Contact phone number">
 												</div>
 												<span class="text-danger"><?= form_error("event_mobile")?form_error("event_mobile"):'' ;?></span>
 											</div>
@@ -115,7 +115,7 @@
 										<div class="row">
 											<div class="col-md-6">
 												<div class="form-group">
-													<input type="email" name="event_email" required="required" class="form-control" placeholder="Contact Email Id *">
+													<input type="email" name="event_email" class="form-control" placeholder="Contact Email Id">
 												</div>
 												<span class="text-danger"><?= form_error("event_email")?form_error("event_email"):'' ;?></span>
 											</div>

@@ -2239,11 +2239,26 @@ class Usermodel extends CI_Model
 		return array_merge($upcoming, $past);
 	}
 
+	/**
+	 * Insert a row, defaulting user_id to the signed-in member.
+	 *
+	 * The default only applies when the caller did NOT supply a user_id. It
+	 * used to overwrite one unconditionally, from `userdata('logged_user')` —
+	 * but an admin session carries `logged_admin`, never `logged_user`, so for
+	 * every admin-side caller that read NULL and blanked the author the admin
+	 * had just picked from the "Choose a user" dropdown. Admin::add_blog() goes
+	 * through here, which is why blog bylines came out as "Unknown" while news
+	 * (which uses Adminmodel::add()) was fine. That is the reported "User Name
+	 * still not updated across the entire website".
+	 */
 	public function add($tableName, $data)
 	{
-		$session = $this->session->userdata('logged_user');
-		$logged_id = $session['logged_id'];
-		$data['user_id'] = $logged_id;
+		if (!array_key_exists('user_id', $data) || $data['user_id'] === NULL || $data['user_id'] === '') {
+			$session = $this->session->userdata('logged_user');
+			if (is_array($session) && isset($session['logged_id'])) {
+				$data['user_id'] = $session['logged_id'];
+			}
+		}
 
 		if ($this->db->insert($tableName, $data)) {
 			return TRUE;

@@ -134,8 +134,8 @@
                 <div class="row">
                   <div class="col-md-12">
                     <div class="form-group">
-                      <label class="field-label" for="event_image">Banner image <span class="req-star">*</span></label>
-                      <input type="file" id="event_image" name="event_image" required="required" class="form-control" accept="image/*">
+                      <label class="field-label" for="event_image">Banner image</label>
+                      <input type="file" id="event_image" name="event_image" class="form-control" accept="image/*">
                       <div class="formError"><?= form_error('event_image') ?></div>
                     </div>
                   </div>
@@ -145,15 +145,15 @@
                 <div class="row">
                   <div class="col-md-6">
                     <div class="form-group">
-                      <label class="field-label" for="event_contact_name">Contact person <span class="req-star">*</span></label>
-                      <input type="text" id="event_contact_name" name="event_contact_name" required="required" class="form-control" placeholder="Contact person" value="<?= set_value('event_contact_name') ?>">
+                      <label class="field-label" for="event_contact_name">Contact person</label>
+                      <input type="text" id="event_contact_name" name="event_contact_name" class="form-control" placeholder="Contact person" value="<?= set_value('event_contact_name') ?>">
                       <div class="formError"><?= form_error('event_contact_name') ?></div>
                     </div>
                   </div>
                   <div class="col-md-6">
                     <div class="form-group">
-                      <label class="field-label" for="event_mobile">Contact phone number <span class="req-star">*</span></label>
-                      <input type="text" id="event_mobile" name="event_mobile" required="required" class="form-control" placeholder="Contact phone number" value="<?= set_value('event_mobile') ?>">
+                      <label class="field-label" for="event_mobile">Contact phone number</label>
+                      <input type="text" id="event_mobile" name="event_mobile" class="form-control" placeholder="Contact phone number" value="<?= set_value('event_mobile') ?>">
                       <div class="formError"><?= form_error('event_mobile') ?></div>
                     </div>
                   </div>
@@ -163,8 +163,8 @@
                 <div class="row">
                   <div class="col-md-6">
                     <div class="form-group">
-                      <label class="field-label" for="event_email">Contact email <span class="req-star">*</span></label>
-                      <input  type="email" id="event_email" name="event_email" required="required" class="form-control"
+                      <label class="field-label" for="event_email">Contact email</label>
+                      <input  type="email" id="event_email" name="event_email" class="form-control"
                       placeholder="Contact Email Id" value="<?= set_value('event_email') ?>">
                       <div class="formError"><?= form_error('event_email') ?></div>
                     </div>

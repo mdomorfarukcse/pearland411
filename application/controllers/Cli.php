@@ -179,4 +179,107 @@ class Cli extends CI_Controller
             log_message('error', 'Renewal notification failed: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Decode news and video rows that were stored entity-encoded.
+     *
+     * Admin::add_news()/edit_news()/add_video()/edit_video() used to save the
+     * editor's markup through htmlentities(), so the columns hold
+     * "&lt;p&gt;…" and "America&#039;s" rather than markup and an apostrophe.
+     * Those write paths now store the text as typed, and content_text()
+     * already decodes a legacy BODY on the way out — but titles never pass
+     * through it, so an existing headline still renders a visible "&#039;".
+     *
+     * This walks the rows and decodes them in place, once.
+     *
+     *   php index.php cli decode_content_entities            # report only
+     *   php index.php cli decode_content_entities apply      # write
+     *   php index.php cli decode_content_entities apply force # write again
+     *
+     * Run once, and it records that it has run in `site_settings`. Decoding is
+     * NOT safe to repeat blindly: a body containing a literal "&amp;" decodes
+     * to "&" on the first pass and would keep unwrapping on later ones. The
+     * flag is the guard; `force` overrides it deliberately.
+     */
+    public function decode_content_entities($mode = 'report', $force = '')
+    {
+        $apply = ($mode === 'apply');
+        $this->load->helper('view');
+        $this->load->helper('site_setting');
+
+        $already = site_setting('content_entities_decoded_at', '');
+        if ($apply && $already !== '' && $force !== 'force') {
+            echo "Already run on {$already}. Decoding twice would unwrap literal entities\n";
+            echo "(\"&amp;\" -> \"&\"). Re-run with:  php index.php cli decode_content_entities apply force\n";
+            return;
+        }
+
+        $targets = array(
+            array('table' => 'news',  'key' => 'news_id',  'cols' => array('news_title', 'news_description')),
+            array('table' => 'video', 'key' => 'video_id', 'cols' => array('video_title', 'video_description')),
+            array('table' => 'blogs', 'key' => 'blog_id',  'cols' => array('blog_name', 'blog_description')),
+        );
+
+        echo $apply ? "Mode: APPLY (writing changes)\n" : "Mode: REPORT ONLY (pass 'apply' to write)\n";
+
+        foreach ($targets as $t) {
+            if (!$this->db->table_exists($t['table'])) {
+                echo "-- {$t['table']}: table not present, skipped\n";
+                continue;
+            }
+
+            $rows = $this->db->select(implode(',', array_merge(array($t['key']), $t['cols'])))
+                ->from($t['table'])->get()->result();
+
+            $changed = 0;
+            foreach ($rows as $row) {
+                $update = array();
+                foreach ($t['cols'] as $col) {
+                    $value = (string) ($row->$col ?? '');
+                    if ($value === '' || !$this->looksEntityEncoded($value)) {
+                        continue;
+                    }
+                    $decoded = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    if ($decoded !== $value) {
+                        $update[$col] = $decoded;
+                    }
+                }
+
+                if ($update) {
+                    $changed++;
+                    if ($apply) {
+                        $this->db->where($t['key'], $row->{$t['key']})->update($t['table'], $update);
+                    }
+                }
+            }
+
+            echo sprintf("-- %-6s %d of %d row(s) %s\n", $t['table'] . ':', $changed, count($rows), $apply ? 'decoded' : 'would be decoded');
+        }
+
+        if ($apply) {
+            site_setting_save('content_entities_decoded_at', date('Y-m-d H:i:s'));
+            echo "\nDone. Recorded in site_settings so this cannot be run twice by accident.\n";
+        } else {
+            echo "\nNothing was written. Re-run with:  php index.php cli decode_content_entities apply\n";
+        }
+    }
+
+    /**
+     * True when a stored value is HTML that was run through htmlentities().
+     *
+     * A value already containing real "<" is left alone — that is content the
+     * fixed write paths stored as typed, and decoding it again would be wrong.
+     * Otherwise any HTML entity is enough: an encoded closing tag ("&lt;/p&gt;")
+     * for a body, but also a bare "&#039;" or "&eacute;" for a headline, which
+     * never passes through content_text() and so shows up verbatim on the page.
+     */
+    private function looksEntityEncoded($value)
+    {
+        if (strpos($value, '<') !== false) {
+            return false;
+        }
+
+        // Named (&amp; &eacute;), decimal (&#039;) or hex (&#x27;) entities.
+        return (bool) preg_match('/&(?:#\d{1,7}|#x[0-9a-f]{1,6}|[a-z][a-z0-9]{1,31});/i', $value);
+    }
 }

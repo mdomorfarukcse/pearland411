@@ -2864,11 +2864,10 @@ class Admin extends CI_Controller
 			$this->load->view('admin/add_new_blogs');
 			$this->load->view('admin/footer');
 		} else {
-			$isenquiry = htmlentities($this->input->post('isenquiry'), ENT_QUOTES) == 'on' ? 1 : 0;
-			$blog_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('blog_name'));
+			$isenquiry = $this->input->post('isenquiry') == 'on' ? 1 : 0;
+			$blog_slug = pearland_slug($this->input->post('blog_name'));
 			$info = array(
-				// 'blog_id'			=> htmlentities($this->input->post('blog_id'), ENT_QUOTES),
-				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
+				'user_id'			=> $this->input->post('user_id'),
 				// Stored as typed. These used to go through htmlentities(), which
 				// encoded the editor's markup — so the column held
 				// "&lt;p&gt;…" and, since every read escapes again on output,
@@ -2925,16 +2924,21 @@ class Admin extends CI_Controller
 			$this->load->view('admin/user_edit_blog');
 			$this->load->view('admin/footer');
 		} else {
-			$isenquiry = htmlentities($this->input->post('isenquiry'), ENT_QUOTES) == 'on' ? 1 : 0;
-			$blog_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('blog_name'));
+			$isenquiry = $this->input->post('isenquiry') == 'on' ? 1 : 0;
+			// The slug is NOT regenerated. It is this post's permalink, and the
+			// URL of the page the admin is standing on. Rewriting it from the
+			// title on every save meant that saving once changed the address,
+			// so going back to the bookmarked edit URL hit "Blog not found." —
+			// which is what "the date is not updated, where can I change it?"
+			// looked like from the outside. It also escalated: a title holding
+			// an encoded apostrophe produced "America-039-s", then
+			// "America-amp-039-s" the next time round.
 			$info = array(
-				'blog_id'			=> htmlentities($this->input->post('blog_id'), ENT_QUOTES),
-				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
+				'user_id'			=> $this->input->post('user_id'),
 				// Stored as typed — see the note in add_blog().
 				'blog_name'    		=> $this->input->post('blog_name'),
 				'blog_description'  => $this->input->post('blog_description'),
 				'isenquiry'         => $isenquiry,
-				'blog_slug'			=> $blog_slug
 			);
 
 			// Publish date is editable here — posts that predate this field
@@ -3092,16 +3096,22 @@ class Admin extends CI_Controller
 			$this->load->view('admin/add_new_news');
 			$this->load->view('admin/footer');
 		} else {
-			$news_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('news_title'));
+			$news_slug = pearland_slug($this->input->post('news_title'));
 			$info = array(
-				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'news_title'    	=> htmlentities($this->input->post('news_title'), ENT_QUOTES),
-				'news_description'  => htmlentities($this->input->post('news_description'), ENT_QUOTES),
-				'news_category_id'  => htmlentities($this->input->post('news_category_id'), ENT_QUOTES),
-				'news_seo_title'  	=> htmlentities($this->input->post('news_seo_title'), ENT_QUOTES),
-				'news_seo_description' => htmlentities($this->input->post('news_seo_description'), ENT_QUOTES),
-				'news_seo_keywords' => htmlentities($this->input->post('news_seo_keywords'), ENT_QUOTES),
-				'featured_news'  	=> htmlentities($this->input->post('featured_news'), ENT_QUOTES),
+				'user_id'			=> $this->input->post('user_id'),
+				// Stored as typed, like the blog paths and like events. These used
+				// to go through htmlentities(), so the column held "&lt;p&gt;…"
+				// rather than markup — and because every read escapes again on
+				// output, the reader saw a literal "<p>" on the News page. The
+				// title had the same treatment, which is why an apostrophe showed
+				// up as "&#039;".
+				'news_title'    	=> $this->input->post('news_title'),
+				'news_description'  => $this->input->post('news_description'),
+				'news_category_id'  => $this->input->post('news_category_id'),
+				'news_seo_title'  	=> $this->input->post('news_seo_title'),
+				'news_seo_description' => $this->input->post('news_seo_description'),
+				'news_seo_keywords' => $this->input->post('news_seo_keywords'),
+				'featured_news'  	=> $this->input->post('featured_news'),
 				'news_slug'			=> $news_slug
 			);
 
@@ -3144,15 +3154,18 @@ class Admin extends CI_Controller
 			$this->load->view('admin/user_edit_news', $data);
 			$this->load->view('admin/footer');
 		} else {
+			// Stored as typed — see the note in add_news(). The slug is
+			// deliberately NOT regenerated here: it is this article's permalink,
+			// and rewriting it on every save broke the admin's own edit URL.
 			$info = array(
-				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'news_title'    		=> htmlentities($this->input->post('news_title'), ENT_QUOTES),
-				'news_description'  => htmlentities($this->input->post('news_description'), ENT_QUOTES),
-				'news_category_id'  => htmlentities($this->input->post('news_category_id'), ENT_QUOTES),
-				'news_seo_title'  => htmlentities($this->input->post('news_seo_title'), ENT_QUOTES),
-				'news_seo_description'  => htmlentities($this->input->post('news_seo_description'), ENT_QUOTES),
-				'news_seo_keywords'  => htmlentities($this->input->post('news_seo_keywords'), ENT_QUOTES),
-				'featured_news'  => htmlentities($this->input->post('featured_news'), ENT_QUOTES)
+				'user_id'			=> $this->input->post('user_id'),
+				'news_title'    		=> $this->input->post('news_title'),
+				'news_description'  => $this->input->post('news_description'),
+				'news_category_id'  => $this->input->post('news_category_id'),
+				'news_seo_title'  => $this->input->post('news_seo_title'),
+				'news_seo_description'  => $this->input->post('news_seo_description'),
+				'news_seo_keywords'  => $this->input->post('news_seo_keywords'),
+				'featured_news'  => $this->input->post('featured_news')
 			);
 
 			if ($_FILES && $_FILES['news_image']['name']) {
@@ -3454,12 +3467,19 @@ class Admin extends CI_Controller
 				$info['category_image'] = $old_image;
 			}
 
-			if ($this->adminmodel->updatemarketplaceCategory($slug, $info)) {
-				$this->session->set_flashdata('message', 'Successfully Updated Video Category!!');
+			// updateVideoCategory(), not updatemarketplaceCategory(). This used
+			// to call the marketplace one, which updates a different TABLE
+			// (marketplace_categories) on a different KEY (category_id, an INT,
+			// compared against a slug string that MySQL casts to 0). Nothing
+			// ever matched — but CI3's update() returns TRUE whenever the query
+			// runs, so renaming a video category reported "Successfully Updated"
+			// every time while the name never changed.
+			if ($this->adminmodel->updateVideoCategory($slug, $info)) {
+				$this->session->set_flashdata('message', 'Video category updated.');
 				redirect('admin/all_video_category', 'refresh');
 			} else {
-				$this->session->set_flashdata('message', 'Sorry, Update Video Category failed!!');
-				redirect('admin/edit_video_category', 'refresh');
+				$this->session->set_flashdata('error', 'Sorry, updating the video category failed. ' . $this->adminmodel->lastDbError());
+				redirect('admin/edit_video_category/' . rawurlencode((string) $slug), 'refresh');
 			}
 		}
 	}
@@ -3567,18 +3587,21 @@ class Admin extends CI_Controller
 			$this->load->view('admin/add_new_video');
 			$this->load->view('admin/footer');
 		} else {
-			$video_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('video_title'));
+			$video_slug = pearland_slug($this->input->post('video_title'));
+			// Stored as typed — see the note in add_news(). video_code in
+			// particular must not be encoded: youtube_id() parses it, and an
+			// encoded "&" in a watch URL stops the id being found.
 			$info = array(
-				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'video_title'    		=> htmlentities($this->input->post('video_title'), ENT_QUOTES),
-				'video_code'    		=> htmlentities($this->input->post('video_code'), ENT_QUOTES),
-				'featured_video'    		=> htmlentities($this->input->post('featured_video'), ENT_QUOTES),
-				'video_description'  => htmlentities($this->input->post('video_description'), ENT_QUOTES),
-				'video_category_id'  => htmlentities($this->input->post('video_category_id'), ENT_QUOTES),
-				'video_seo_title'  => htmlentities($this->input->post('video_seo_title'), ENT_QUOTES),
-				'video_seo_description'  => htmlentities($this->input->post('video_seo_description'), ENT_QUOTES),
-				'video_seo_keywords'  => htmlentities($this->input->post('video_seo_keywords'), ENT_QUOTES),
-				'video_slug'  => htmlentities($video_slug, ENT_QUOTES)
+				'user_id'			=> $this->input->post('user_id'),
+				'video_title'    		=> $this->input->post('video_title'),
+				'video_code'    		=> $this->input->post('video_code'),
+				'featured_video'    		=> $this->input->post('featured_video'),
+				'video_description'  => $this->input->post('video_description'),
+				'video_category_id'  => $this->input->post('video_category_id'),
+				'video_seo_title'  => $this->input->post('video_seo_title'),
+				'video_seo_description'  => $this->input->post('video_seo_description'),
+				'video_seo_keywords'  => $this->input->post('video_seo_keywords'),
+				'video_slug'  => $video_slug
 			);
 
 			if ($_FILES && $_FILES['video_image']['name']) {
@@ -3612,18 +3635,18 @@ class Admin extends CI_Controller
 			$this->load->view('admin/edit_video', $data);
 			$this->load->view('admin/footer');
 		} else {
-			$video_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('video_title'));
+			// Stored as typed — see the note in add_news(). The slug is not
+			// regenerated: it is this video's permalink.
 			$info = array(
-				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'video_title'    		=> htmlentities($this->input->post('video_title'), ENT_QUOTES),
-				'video_code'    		=> htmlentities($this->input->post('video_code'), ENT_QUOTES),
-				'featured_video'    		=> htmlentities($this->input->post('featured_video'), ENT_QUOTES),
-				'video_description'  => htmlentities($this->input->post('video_description'), ENT_QUOTES),
-				'video_category_id'  => htmlentities($this->input->post('video_category_id'), ENT_QUOTES),
-				'video_seo_title'  => htmlentities($this->input->post('video_seo_title'), ENT_QUOTES),
-				'video_seo_description'  => htmlentities($this->input->post('video_seo_description'), ENT_QUOTES),
-				'video_seo_keywords'  => htmlentities($this->input->post('video_seo_keywords'), ENT_QUOTES),
-				'video_slug'  => htmlentities($video_slug, ENT_QUOTES)
+				'user_id'			=> $this->input->post('user_id'),
+				'video_title'    		=> $this->input->post('video_title'),
+				'video_code'    		=> $this->input->post('video_code'),
+				'featured_video'    		=> $this->input->post('featured_video'),
+				'video_description'  => $this->input->post('video_description'),
+				'video_category_id'  => $this->input->post('video_category_id'),
+				'video_seo_title'  => $this->input->post('video_seo_title'),
+				'video_seo_description'  => $this->input->post('video_seo_description'),
+				'video_seo_keywords'  => $this->input->post('video_seo_keywords')
 			);
 
 			if ($_FILES && $_FILES['video_image']['name']) {

@@ -149,7 +149,7 @@
 									<div class="row">
 										<div class="col-md-6">
 											<div class="form-group">
-												<input type="text" name="event_contact_name" required="required" class="form-control" value="<?= $event->event_contact_name; ?>" placeholder="Contact person*">
+												<input type="text" name="event_contact_name" class="form-control" value="<?= $event->event_contact_name; ?>" placeholder="Contact person*">
 											</div>
 
 											<span class="text-danger"><?= form_error("event_contact_name") ? form_error("event_contact_name") : ''; ?></span>
@@ -157,7 +157,7 @@
 
 										<div class="col-md-6">
 											<div class="form-group">
-												<input type="text" name="event_mobile" required="required" class="form-control" value="<?= $event->event_mobile; ?>" placeholder="Contact phone number*">
+												<input type="text" name="event_mobile" class="form-control" value="<?= $event->event_mobile; ?>" placeholder="Contact phone number*">
 
 											</div>
 											<span class="text-danger"><?= form_error("event_mobile") ? form_error("event_mobile") : ''; ?></span>
@@ -169,7 +169,7 @@
 									<div class="row">
 										<div class="col-md-6">
 											<div class="form-group">
-												<input type="email" name="event_email" required="required" class="form-control" value="<?= $event->event_email; ?>" placeholder="Contact Email Id *">
+												<input type="email" name="event_email" class="form-control" value="<?= $event->event_email; ?>" placeholder="Contact Email Id *">
 											</div>
 											<span class="text-danger"><?= form_error("event_email") ? form_error("event_email") : ''; ?></span>
 										</div>

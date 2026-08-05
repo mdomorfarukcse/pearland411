@@ -761,4 +761,38 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 UPDATE `blogs` SET `created_at` = NULL WHERE `created_at` = '0000-00-00 00:00:00';
 
+
+-- ===========================================================================
+-- 0022_listing_deleted_date.sql
+-- ---------------------------------------------------------------------------
+-- "Deleted listings cannot be restored — HTTP 500 Internal Server Error."
+-- Admin::restore_listing() wrote `listings.deleted_date`, a column that
+-- appeared exactly once in the whole application — on that line. Nothing
+-- created it and nothing else wrote it (the soft delete set only
+-- is_deleted = 1, and the trash page's "Deleted Date" heading was being filled
+-- with postal_code), so the UPDATE hit MySQL 1054 and the request 500'd.
+--
+-- The column is worth keeping rather than dropping from the code: a trash page
+-- that cannot say when something was deleted is not much of a trash page. The
+-- soft delete now sets it and restore clears it.
+--
+-- phpMyAdmin cannot run DELIMITER blocks, so the guard is a prepared statement
+-- built from INFORMATION_SCHEMA rather than a stored procedure.
+-- ===========================================================================
+
+SET @p411_listing_deleted_date_missing = (
+    SELECT COUNT(*) = 0 FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings' AND COLUMN_NAME = 'deleted_date');
+
+SET @sql = IF(@p411_listing_deleted_date_missing,
+    'ALTER TABLE `listings` ADD COLUMN `deleted_date` DATETIME NULL DEFAULT NULL COMMENT ''When the listing was moved to trash; NULL once restored''',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- A listing that is not in the trash must not carry a deletion stamp.
+UPDATE `listings`
+   SET `deleted_date` = NULL
+ WHERE `deleted_date` IS NOT NULL
+   AND (`is_deleted` = 0 OR `is_deleted` IS NULL);
+
 SET FOREIGN_KEY_CHECKS = 1;

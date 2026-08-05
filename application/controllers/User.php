@@ -1207,7 +1207,7 @@ class User extends CI_Controller
 
 			// Generate slug
 			$blog_name = $_POST['blog_name'];
-			$blog_slug = strtolower(str_replace(' ', '-', $blog_name)) . '-' . time();
+			$blog_slug = pearland_slug($blog_name . '-' . time());
 
 			// Handle image upload
 			$blog_image = '';
@@ -4814,7 +4814,7 @@ class User extends CI_Controller
 
 			// Generate slug
 			$house_title = $_POST['house_title'];
-			$house_slug = strtolower(str_replace(' ', '-', $house_title)) . '-' . time();
+			$house_slug = pearland_slug($house_title . '-' . time());
 
 			// Handle image upload
 			$house_image = '';
@@ -5498,7 +5498,7 @@ class User extends CI_Controller
 
 			// Generate slug
 			$video_title = $_POST['video_title'];
-			$video_slug = strtolower(str_replace(' ', '-', $video_title)) . '-' . time();
+			$video_slug = pearland_slug($video_title . '-' . time());
 
 			// Handle image upload
 			$video_image = '';
@@ -5740,7 +5740,7 @@ class User extends CI_Controller
 
 			// Generate slug
 			$classifieds_title = $_POST['classifieds_title'];
-			$classifieds_slug = strtolower(str_replace(' ', '-', $classifieds_title)) . '-' . time();
+			$classifieds_slug = pearland_slug($classifieds_title . '-' . time());
 
 			// Handle image upload
 			$classifieds_image = '';
@@ -6039,7 +6039,7 @@ class User extends CI_Controller
 
 			// Generate slug
 			$rental_title = $_POST['rental_title'];
-			$rental_slug = strtolower(str_replace(' ', '-', $rental_title)) . '-' . time();
+			$rental_slug = pearland_slug($rental_title . '-' . time());
 
 			// Handle image upload
 			$rental_image = '';
@@ -6389,16 +6389,16 @@ class User extends CI_Controller
 		// Handle form submission
 		if (isset($_POST['event_submit'])) {
 
-			// Basic validation
+			// Basic validation. Contact name, phone and email are deliberately
+			// NOT here: plenty of events have no named contact, and requiring
+			// all three meant those events could not be listed at all. Same
+			// change in the admin_event_rules / event_rules groups.
 			$required_fields = [
 				'event_name',
 				'event_address',
 				'event_start_date',
 				'event_time',
-				'event_description',
-				'event_contact_name',
-				'event_mobile',
-				'event_email'
+				'event_description'
 			];
 
 			$validation_errors = [];
@@ -6416,7 +6416,7 @@ class User extends CI_Controller
 
 			// Generate slug
 			$event_name = $_POST['event_name'];
-			$event_slug = strtolower(str_replace(' ', '-', $event_name)) . '-' . time();
+			$event_slug = pearland_slug($event_name . '-' . time());
 
 			// Handle image upload via the safe helper — MIME-sniffed,
 			// extension allow-listed, random filename, target dir

@@ -68,9 +68,11 @@
 										<div class="row">
 											<div class="col-md-12">
 												<div class="form-group">
-													<textarea name="news_description" id="news_description" required="required" class="form-control" placeholder="Post Details">
-														<?= $news->news_description;?>
-													</textarea>
+													<?php // Escaped into the field. The body is real markup now, so an
+      // unescaped echo would let a "</textarea>" in the copy break out
+      // of the field; and the surrounding indentation was part of the
+      // textarea's value, so it was saved back on every edit. ?>
+<textarea name="news_description" id="news_description" required="required" class="form-control" placeholder="Post Details"><?= e($news->news_description) ?></textarea>
 												</div>
 
 												<span class="text-danger"><?= form_error("news_description")?form_error("news_description"):'' ;?></span>

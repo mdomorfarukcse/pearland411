@@ -82,7 +82,7 @@ $config = [
 
       'label' => 'Contact Person Name',
 
-      'rules' => 'trim|required|min_length[3]'
+      'rules' => 'trim'
 
     ],
 
@@ -92,7 +92,7 @@ $config = [
 
       'label' => 'Contact Phone Number',
 
-      'rules' => 'trim|required'
+      'rules' => 'trim'
 
     ],
 
@@ -102,7 +102,7 @@ $config = [
 
       'label' => 'Contact Email',
 
-      'rules' => 'trim|required|valid_email'
+      'rules' => 'trim|valid_email'
 
     ],
 
@@ -626,7 +626,7 @@ $config = [
 
       'label' => 'Contact Person Name',
 
-      'rules' => 'trim|required|min_length[3]'
+      'rules' => 'trim'
 
     ],
 
@@ -636,7 +636,7 @@ $config = [
 
       'label' => 'Contact Phone Number',
 
-      'rules' => 'trim|required'
+      'rules' => 'trim'
 
     ],
 
@@ -646,7 +646,7 @@ $config = [
 
       'label' => 'Contact Email',
 
-      'rules' => 'trim|required|valid_email'
+      'rules' => 'trim|valid_email'
 
     ],
 
