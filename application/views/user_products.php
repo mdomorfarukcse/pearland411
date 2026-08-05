@@ -103,34 +103,10 @@
 			<?php endif; ?>
 		</div>
 
-		<!-- Upgrade Modal (shown only when limit reached) -->
-		<div class="modal fade" id="upgradeModal" tabindex="-1" role="dialog" aria-labelledby="upgradeModalLabel" aria-hidden="true">
-			<div class="modal-dialog modal-dialog-centered" role="document">
-				<div class="modal-content">
-					<div class="modal-header" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;">
-						<h5 class="modal-title" id="upgradeModalLabel">Upgrade your plan</h5>
-						<button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-					</div>
-					<div class="modal-body">
-						<p style="margin-bottom:0.75rem;color:#495057;">You've reached your current plan's <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?> limit.</p>
-						<div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:12px;">
-							<strong>Usage:</strong>
-							<span class="<?= $limit_reached ? 'text-danger' : 'text-success' ?>">
-								<?php if (!$is_unlimited): ?>
-									<?= (int)$used_count ?> / <?= (int)$limit ?>
-								<?php else: ?>
-									∞ Unlimited
-								<?php endif; ?>
-							</span>
-						</div>
-					</div>
-					<div class="modal-footer">
-						<a href="<?= site_url('pricing-plan') ?>" class="btn btn-primary">View upgrade options</a>
-						<button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-					</div>
-				</div>
-			</div>
-		</div>
+		<!-- Upgrade / choose-a-plan modal (shown only when the add button is gated).
+		     Shared partial so every dashboard tells the same story — see
+		     views/partials/plan_limit_modal.php. -->
+		<?php include APPPATH . 'views/partials/plan_limit_modal.php'; ?>
 
 		<script>
 			// Gate the existing "Add new post" button if limit is reached, without moving elements

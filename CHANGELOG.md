@@ -6,6 +6,62 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-05 — "You've reached your limit: ∞ Unlimited", and the free plan that asked you to register
+
+Two dead ends in the same journey: a member with no plan clicked **Add New
+Listing**, got a modal telling them they had exhausted an unlimited allowance,
+followed it to `/pricing-plan`, chose the free tier — and was shown a signup
+form they had no use for, because they were already signed in.
+
+### Fixed
+- **The plan-limit modal described the wrong situation when there was no plan.**
+  The dashboards read the cap out of `subscription_limits`, which is `null`
+  without a subscription, so `$limit` fell back to `-1` — the sentinel for
+  *unlimited*. `$limit_reached` was separately true because
+  `!$has_subscription`. The modal therefore rendered both halves at once:
+  "You've reached your current plan's Listings limit" over "Usage: ∞ Unlimited".
+  Nothing was unlimited; the member simply had no plan. The modal now tells the
+  two states apart — *Choose a plan* / "You don't have an active plan yet"
+  when there is no subscription, *Upgrade your plan* / `used / limit` when a
+  real cap is full — and the usage line is printed only when there is a
+  countable cap to print.
+- **The free plan's button sent signed-in members to `/register`.** The pricing
+  card chose its link from `$user_subscription`, which is empty both for a
+  guest *and* for a logged-in member who has not bought anything, so the second
+  group was bounced to a signup form. Free plans are excluded from the cart and
+  checkout (`User::cart_add`, `buy_now`), so there was no other route to one.
+  The card now branches on being signed in: guests still get `/register`;
+  someone already on a plan gets a link to their listings (the free tier would
+  be a downgrade); a signed-in member with no plan gets a POST button that
+  activates the plan and lands them on their dashboard with the allowance live.
+- **Flash messages on `/pricing-plan` had nowhere to render.** `buy_now()`
+  already redirected there with `flashdata('error')` and the page never printed
+  it. It now renders server-side notices in the existing `.pp-err` area.
+
+### Changed
+- The upgrade modal was copy-pasted into **11 dashboard views** with two
+  divergent variants of the usage line. It is now one partial,
+  `views/partials/plan_limit_modal.php`, included by all 11 — the fix above
+  applies everywhere rather than only on the page it was reported from.
+- `Usermodel::activateFreePlan()` gives free subscriptions an open-ended term
+  rather than the plan's `duration_days`. Renewal is card-driven
+  (`getRenewableSubscriptions()` only picks up `auto_renew` rows with a
+  `next_billing_date`), so a 30-day end date would have stranded free members
+  after a month with no way to renew.
+
+### Key files
+`application/views/partials/plan_limit_modal.php` (new), the 11 dashboard views
+that now include it (`user_listing`, `user_events`, `user_blog_posts`,
+`user_news`, `user_products`, `user_videos`, `user_enquiry`, `post_ads`,
+`all_classifieds`, `all_rental`, `all_house`), `application/views/pricing_plan.php`,
+`application/controllers/User.php` (`start_free_plan()`, `pricing_plan()` now
+passes `is_logged_in`), `application/models/Usermodel.php`
+(`activateFreePlan()`), `application/config/routes.php` (`start-free`).
+
+No migrations.
+
+---
+
 ## 2026-08-04 — Directory hero: the second sentence gets its own line
 
 ### Fixed

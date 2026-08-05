@@ -7002,6 +7002,7 @@ class User extends CI_Controller
 
 		// Get user subscription info (if logged in)
 		$data['user_subscription'] = null;
+		$data['is_logged_in'] = (bool) $this->session->userdata('logged_user');
 		if ($this->session->userdata('logged_user')) {
 			$user_data = $this->session->userdata('logged_user');
 			$user_id = $user_data['logged_id']; // Use logged_id based on the User model pattern
@@ -7024,6 +7025,53 @@ class User extends CI_Controller
 		$this->load->view('header', $data);
 		$this->load->view('pricing_plan', $data);
 		$this->load->view('footer', $data);
+	}
+
+	/**
+	 * POST /start-free — put a signed-in visitor on a zero-cost plan.
+	 *
+	 * The pricing page's "Get started free" button used to point at /register
+	 * whenever `$user_subscription` was empty, which is also true for a member
+	 * who is logged in but has not bought anything — so choosing the free tier
+	 * showed them a signup form. Free plans are excluded from the cart and
+	 * checkout (see cart_add()), so there was no other way to actually get one.
+	 * This gives them one: it creates the subscription and drops them on their
+	 * listings dashboard, where the plan's allowance is now live.
+	 */
+	public function start_free_plan()
+	{
+		if (!$this->session->userdata('logged_user')) {
+			redirect('register');
+			return;
+		}
+		$session = $this->session->userdata('logged_user');
+		$user_id = (int) $session['logged_id'];
+
+		$plan_id = (int) $this->input->post('plan_id');
+		$plan    = $plan_id ? $this->usermodel->getPlanByIdForPricing($plan_id) : null;
+
+		// Only ever hand out an active, genuinely free plan this way.
+		if (!$plan || (float) $plan->price > 0) {
+			$this->session->set_flashdata('message', 'That plan is not available for free signup.');
+			redirect('pricing-plan');
+			return;
+		}
+
+		// Never downgrade somebody who is already paying for something.
+		$current = $this->usermodel->getUserSubscription($user_id);
+		if ($current) {
+			$this->session->set_flashdata('message', 'You are already on the ' . $current->name . ' plan.');
+			redirect('user/user-listing');
+			return;
+		}
+
+		if ($this->usermodel->activateFreePlan($user_id, (int) $plan->id)) {
+			$this->session->set_flashdata('message', 'You are on the ' . $plan->name . ' plan. You can add your listing now.');
+			redirect('user/user-listing');
+		} else {
+			$this->session->set_flashdata('message', 'We could not start your free plan. Please try again.');
+			redirect('pricing-plan');
+		}
 	}
 
 	/**
