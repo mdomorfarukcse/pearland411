@@ -629,3 +629,33 @@ if (!function_exists('us_date_ts')) {
         return ($ts === false || $ts <= 0) ? false : $ts;
     }
 }
+
+if (!function_exists('listing_gallery_paths')) {
+    /**
+     * The gallery image paths stored on a listing, as a clean list.
+     *
+     * `listings.listing_image_gallery` holds a JSON array of paths. Four places
+     * decoded it by hand — the two admin views, the public listing page and the
+     * member's edit form — and the admin update path did not decode it at all,
+     * which is how adding one photograph wiped the rest of the gallery. One
+     * function so the read and the write agree on what the column contains.
+     *
+     * Returns [] for NULL, '', malformed JSON, or a JSON scalar.
+     *
+     * @param  mixed $value Raw column value.
+     * @return array<int,string>
+     */
+    function listing_gallery_paths($value)
+    {
+        if (empty($value)) {
+            return array();
+        }
+
+        $decoded = json_decode((string) $value, true);
+        if (!is_array($decoded)) {
+            return array();
+        }
+
+        return array_values(array_filter(array_map('trim', array_map('strval', $decoded)), 'strlen'));
+    }
+}

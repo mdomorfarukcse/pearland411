@@ -113,7 +113,9 @@
                     <td><?= admin_actions(array(
                       'view'   => base_url('listing-details/' . rawurlencode((string) $value->listing_slug)),
                       'edit'   => base_url('admin/edit-listing/' . rawurlencode((string) $value->listing_slug)),
-                      'delete' => base_url('admin/delete_listing/' . rawurlencode((string) $value->listing_slug)),
+                      // Delete by id, not slug: two businesses with the same name
+                      // share a slug, and deleting by slug took both of them.
+                      'delete' => base_url('admin/delete_listing/' . (int) $value->listing_id),
                       'delete_confirm' => 'Delete this listing?',
                     ), 'listing') ?></td>
                   </tr>

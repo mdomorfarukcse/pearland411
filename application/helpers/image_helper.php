@@ -268,8 +268,16 @@ function uploadAndResize($data)
         $config['quality']		 = '60%';
         $config['new_image']	 = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
 
+        // initialize(), not just load(). CI3's loader ignores a second
+        // load->library() for a class it already holds ("Second attempt
+        // ignored"), so on the 2nd..Nth image of a multi-file gallery upload
+        // image_lib still carried the FIRST image's source_image/new_image and
+        // re-processed that file instead of this one. `upload` above is rescued
+        // by its own initialize() call; image_lib had none.
         $CI->load->library('image_lib',$config);
+        $CI->image_lib->initialize($config);
         $CI->image_lib->resize();
+        $CI->image_lib->clear();
 
         $avatar_name = 'assets/'.$data['upload_path'].'/'.$avatar['file_name']; 
 
@@ -302,8 +310,16 @@ function uploadWithoutResize($data)
         $config['quality']       = '60%';
         $config['new_image']     = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
 
+        // initialize(), not just load(). CI3's loader ignores a second
+        // load->library() for a class it already holds ("Second attempt
+        // ignored"), so on the 2nd..Nth image of a multi-file gallery upload
+        // image_lib still carried the FIRST image's source_image/new_image and
+        // re-processed that file instead of this one. `upload` above is rescued
+        // by its own initialize() call; image_lib had none.
         $CI->load->library('image_lib',$config);
+        $CI->image_lib->initialize($config);
         $CI->image_lib->resize();
+        $CI->image_lib->clear();
 
         $avatar_name = 'assets/'.$data['upload_path'].'/'.$avatar['file_name']; 
 
@@ -363,8 +379,13 @@ function uploadWithoutResize($data)
                     $config['quality']       = '60%';
                     $config['new_image']     = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
 
+                    // See the note in uploadWithoutResize(): image_lib must be
+                    // re-initialised per file or every image after the first is
+                    // processed with the first one's paths.
                     $CI->load->library('image_lib',$config);
+                    $CI->image_lib->initialize($config);
                     $CI->image_lib->resize();
+                    $CI->image_lib->clear();
 
                     $avatar_name = 'assets/'.$data['upload_path'].'/'.$avatar['file_name'];
 

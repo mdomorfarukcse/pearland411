@@ -1245,22 +1245,23 @@ class Admin extends CI_Controller
 	{
 		$data['categories'] 	= $this->usermodel->getAllValues('listing_categories');
 		$data['users'] 		  	= $this->adminmodel->getActiveUsersForDropdown();
-		if (!empty($this->input->post('user_id'))) {
-			// Debug: Log form submission
-			error_log("Form submitted with user_id: " . $this->input->post('user_id'));
-			error_log("Files uploaded: " . print_r($_FILES, true));
-
-			// Temporary: Skip validation to focus on upload logic
-			$skip_validation = isset($_POST['listing_name']) && !empty($_POST['listing_name']);
-
-			if (!$skip_validation && $this->form_validation->run('admin_listing_scratch') == FALSE) {
-				error_log("Form validation failed");
+		// Every POST goes through validation. This used to be gated on a
+		// non-empty user_id, so submitting with no user selected fell straight
+		// through to the render at the bottom: the form came back blank, with
+		// no error and no listing created, which is what "the Submit Listing
+		// button does nothing" was. user_id is a required rule, so an empty one
+		// is now reported like any other missing field.
+		if ($this->input->method(TRUE) === 'POST') {
+			if ($this->form_validation->run('admin_listing_scratch') == FALSE) {
 				$this->load->view('admin/header', $data);
 				$this->load->view('admin/add_new_listings_start');
 				$this->load->view('admin/footer');
+				return;
 			} else {
-				error_log("Processing listing (validation " . ($skip_validation ? "skipped" : "passed") . ")");
-				$listing_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('listing_name'));
+				// Two businesses with the same name produced the same slug, and
+				// both the delete and the restore paths key on the slug — so one
+				// delete took out both rows. Same helper the CSV importer uses.
+				$listing_slug = $this->makeUniqueListingSlug($this->input->post('listing_name'));
 				$info = array(
 					'user_id' => $this->input->post('user_id'),
 					'listing_name' => $this->input->post('listing_name'),
@@ -1286,7 +1287,13 @@ class Admin extends CI_Controller
 					'listing_seo_title' => $this->input->post('listing_seo_title'),
 					'listing_seo_keywords' => $this->input->post('listing_seo_keywords'),
 					'listing_seo_description' => $this->input->post('listing_seo_description'),
-					'listing_slug' => $listing_slug
+					'listing_slug' => $listing_slug,
+					// Publish it. The column's default is the unpublished value,
+					// so a listing added here used to save successfully and then
+					// be invisible to every public query — the same defect
+					// 0020_listing_status_normalise.sql fixed for the CSV import,
+					// which is why import_listings() writes this explicitly too.
+					'listing_status' => 1
 				);
 
 				// Auto-generate Google Map embed URL from lat/lng
@@ -1310,14 +1317,8 @@ class Admin extends CI_Controller
 					$gallery_images = [];
 					$files_count = count($_FILES['listing_image_gallery']['name']);
 
-					// Debug: Log gallery upload attempt
-					error_log("Gallery upload attempt - Files count: " . $files_count);
-
 					for ($i = 0; $i < $files_count; $i++) {
 						if (!empty($_FILES['listing_image_gallery']['name'][$i])) {
-							// Debug: Log each file
-							error_log("Processing gallery file: " . $_FILES['listing_image_gallery']['name'][$i]);
-
 							// Create temporary file array for each image
 							$_FILES['gallery_temp'] = array(
 								'name' => $_FILES['listing_image_gallery']['name'][$i],
@@ -1337,26 +1338,21 @@ class Admin extends CI_Controller
 							if ($uploaded_image) {
 								// Store path with assets prefix like logo image
 								$gallery_images[] = 'assets/images/listings/' . basename($uploaded_image);
-								error_log("Gallery image uploaded: " . $uploaded_image);
-							} else {
-								error_log("Gallery image upload failed for: " . $_FILES['listing_image_gallery']['name'][$i]);
 							}
 						}
 					}
 					if (!empty($gallery_images)) {
 						$info['listing_image_gallery'] = json_encode($gallery_images);
-						error_log("Gallery images stored in DB: " . $info['listing_image_gallery']);
-					} else {
-						error_log("No gallery images to store");
 					}
-				} else {
-					error_log("No gallery files detected in upload");
 				}
 
 				if ($this->adminmodel->addListing($info)) {
-					$this->session->set_flashdata('message', 'Lisitng Added Successfully.');
+					$this->session->set_flashdata('message', 'Listing added successfully.');
 					redirect('admin/all_listings', 'refresh');
 				} else {
+					// Say why. This used to redirect with no flashdata at all, so a
+					// rejected insert looked exactly like the button doing nothing.
+					$this->session->set_flashdata('error', 'Could not save the listing. ' . $this->adminmodel->lastDbError());
 					redirect('admin/add_listing_scratch', 'refresh');
 				}
 			}
@@ -1784,13 +1780,10 @@ class Admin extends CI_Controller
 		}
 
 		if ($this->form_validation->run('admin_listing_scratch') == FALSE) {
-			error_log("EDIT Form validation failed");
 			$this->load->view('admin/header', $data);
 			$this->load->view('admin/edit_listings');
 			$this->load->view('admin/footer');
 		} else {
-			error_log("EDIT Form validation passed, processing listing update");
-			error_log("EDIT Files uploaded: " . print_r($_FILES, true));
 			$listing_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('listing_name'));
 			$info = array(
 				'user_id' => $this->input->post('user_id'),
@@ -1836,19 +1829,25 @@ class Admin extends CI_Controller
 				$info['listing_image'] = uploadWithoutResize($img_info);
 			}
 
-			// Handle Gallery Images Upload for Edit
+			// Gallery: keep what is already there, drop what was ticked for
+			// removal, append what was just uploaded.
+			//
+			// This block used to build a fresh array from the POST alone and
+			// json_encode it over the column, never reading the stored value —
+			// so adding one photograph deleted every photograph already on the
+			// listing, and there was no way to remove a single image because the
+			// only way to change the gallery at all was to replace all of it.
+			$existing_gallery = listing_gallery_paths($data['listing']->listing_image_gallery ?? null);
+			$remove_gallery   = (array) $this->input->post('remove_gallery');
+			$kept_gallery     = array_values(array_diff($existing_gallery, $remove_gallery));
+			$gallery_changed  = (count($kept_gallery) !== count($existing_gallery));
+
 			if ($_FILES && isset($_FILES['listing_image_gallery']['name'][0]) && !empty($_FILES['listing_image_gallery']['name'][0])) {
 				$gallery_images = [];
 				$files_count = count($_FILES['listing_image_gallery']['name']);
 
-				// Debug: Log gallery upload attempt for edit
-				error_log("EDIT Gallery upload attempt - Files count: " . $files_count);
-
 				for ($i = 0; $i < $files_count; $i++) {
 					if (!empty($_FILES['listing_image_gallery']['name'][$i])) {
-						// Debug: Log each file
-						error_log("EDIT Processing gallery file: " . $_FILES['listing_image_gallery']['name'][$i]);
-
 						// Create temporary file array for each image
 						$_FILES['gallery_temp'] = array(
 							'name' => $_FILES['listing_image_gallery']['name'][$i],
@@ -1868,27 +1867,25 @@ class Admin extends CI_Controller
 						if ($uploaded_image) {
 							// Store path with assets prefix like logo image
 							$gallery_images[] = 'assets/images/listings/' . basename($uploaded_image);
-							error_log("EDIT Gallery image uploaded: " . $uploaded_image);
-						} else {
-							error_log("EDIT Gallery image upload failed for: " . $_FILES['listing_image_gallery']['name'][$i]);
 						}
 					}
 				}
 				if (!empty($gallery_images)) {
-					$info['listing_image_gallery'] = json_encode($gallery_images);
-					error_log("EDIT Gallery images stored in DB: " . $info['listing_image_gallery']);
-				} else {
-					error_log("EDIT No gallery images to store");
+					$kept_gallery    = array_merge($kept_gallery, $gallery_images);
+					$gallery_changed = TRUE;
 				}
-			} else {
-				error_log("EDIT No gallery files detected in upload");
+			}
+
+			if ($gallery_changed) {
+				$info['listing_image_gallery'] = empty($kept_gallery) ? NULL : json_encode(array_values($kept_gallery));
 			}
 
 			if ($this->adminmodel->update($slug, $info, 'listing_slug', 'listings')) {
-				$this->session->set_flashdata('message', 'Lisitng Updated Successfully.');
+				$this->session->set_flashdata('message', 'Listing updated successfully.');
 				redirect('admin/all-listings');
 			} else {
-				redirect('admin/edit-listing');
+				$this->session->set_flashdata('error', 'Could not update the listing. ' . $this->adminmodel->lastDbError());
+				redirect('admin/edit-listing/' . rawurlencode((string) $slug));
 			}
 		}
 	}
@@ -2054,33 +2051,45 @@ class Admin extends CI_Controller
 	/*=================== 
     	Restore Listing 
 	===================*/
-	public function restore_listing($listing_slug)
+	public function restore_listing($listing_id = NULL)
 	{
-		$listings = $this->adminmodel->getSingleValue($listing_slug, 'listing_slug', 'listings');
-
-		$listings->is_deleted 	= 0;
-		$listings->deleted_date = date('Y-m-d H:i:s');
-
-		if ($this->adminmodel->update($listing_slug, $listings, 'listing_slug', 'listings')) {
-			$this->session->set_flashdata('message', 'Successfully Listing Restored!!');
+		// Restore used to read the whole row, set two properties on it and write
+		// every column back keyed on the slug. Three ways that 500'd: a slug that
+		// matched nothing returned NULL and setting a property on NULL is fatal
+		// in PHP 8; a trashed row with an empty slug called this with no argument
+		// at all; and the write included `deleted_date`, a column nothing else in
+		// the application creates or writes. Now it is an id and two columns.
+		if ($listing_id === NULL || !ctype_digit((string) $listing_id)) {
+			$this->session->set_flashdata('error', 'That listing could not be identified, so nothing was restored.');
 			redirect('admin/trash-listing', 'refresh');
-		} else {
-			$this->session->set_flashdata('message', 'Listing Restore Failed!!');
-			redirect('admin/trash-listing', 'refresh');
+			return;
 		}
+
+		if ($this->adminmodel->restoreListing($listing_id)) {
+			$this->session->set_flashdata('message', 'Listing restored.');
+		} else {
+			$this->session->set_flashdata('error', 'Could not restore that listing. ' . $this->adminmodel->lastDbError());
+		}
+		redirect('admin/trash-listing', 'refresh');
 	}
 
 	/*===============================
 		Listing Delete Permanently
 	=================================*/
 
-	public function listing_delete($slug)
+	public function listing_delete($listing_id = NULL)
 	{
-		if ($this->adminmodel->permanentDeleteListing($slug)) {
-			$this->session->set_flashdata('message', 'Successfully Removed Listing!!');
+		if ($listing_id === NULL || !ctype_digit((string) $listing_id)) {
+			$this->session->set_flashdata('error', 'That listing could not be identified, so nothing was removed.');
+			redirect('admin/trash-listing', 'refresh');
+			return;
+		}
+
+		if ($this->adminmodel->permanentDeleteListing($listing_id)) {
+			$this->session->set_flashdata('message', 'Listing permanently removed.');
 			redirect('admin/trash-listing');
 		} else {
-			$this->session->set_flashdata('message', 'Listing Remove Failed!!');
+			$this->session->set_flashdata('error', 'Could not remove that listing. ' . $this->adminmodel->lastDbError());
 			redirect('admin/trash-listing', 'refresh');
 		}
 	}
@@ -2088,13 +2097,19 @@ class Admin extends CI_Controller
 	/*====================
 		Delete Listing (Soft Delete - Move to Trash)
 	=====================*/
-	public function delete_listing($slug)
+	public function delete_listing($listing_id = NULL)
 	{
-		if ($this->adminmodel->softDeleteListing($slug)) {
+		if ($listing_id === NULL || !ctype_digit((string) $listing_id)) {
+			$this->session->set_flashdata('error', 'That listing could not be identified, so nothing was deleted.');
+			redirect('admin/all-listings', 'refresh');
+			return;
+		}
+
+		if ($this->adminmodel->softDeleteListing($listing_id)) {
 			$this->session->set_flashdata('message', 'Listing successfully moved to trash!');
 			redirect('admin/all-listings');
 		} else {
-			$this->session->set_flashdata('message', 'Failed to delete listing!');
+			$this->session->set_flashdata('error', 'Failed to delete listing. ' . $this->adminmodel->lastDbError());
 			redirect('admin/all-listings', 'refresh');
 		}
 	}

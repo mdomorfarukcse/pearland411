@@ -407,20 +407,29 @@
                           <div class="form-group">
                             <label>Upload Gallery Images (Multiple Images)</label>
                             <input type="file" name="listing_image_gallery[]" class="form-control" multiple accept="image/*">
-                            <small class="form-text text-muted">You can select multiple images for your gallery. Supported formats: JPG, PNG, GIF</small>
-                            <?php if (isset($listing) && !empty($listing->listing_image_gallery)) {
-                              $gallery_images = json_decode($listing->listing_image_gallery, true);
-                              if ($gallery_images && is_array($gallery_images)) { ?>
-                                <div class="current-gallery" style="margin-top:10px;">
-                                  <label>Current Gallery Images:</label>
-                                  <div class="gallery-images" style="display:flex; flex-wrap:wrap; gap:10px;">
-                                    <?php foreach ($gallery_images as $gallery_img) { ?>
-                                      <img src="<?= base_url($gallery_img) ?>" alt="Gallery Image" style="max-width:80px; height:60px; object-fit:cover; border:1px solid #ddd;" />
-                                    <?php } ?>
-                                  </div>
+                            <small class="form-text text-muted">You can select multiple images for your gallery. New images are <strong>added</strong> to the ones below &mdash; nothing is replaced. Supported formats: JPG, PNG, GIF</small>
+                            <?php
+                            // Tick an image to remove it on save. Before this the gallery was
+                            // rendered as bare <img> tags with no control of any kind, and there
+                            // was no endpoint to remove one either — the only way to change the
+                            // gallery was to re-upload the whole thing.
+                            $gallery_images = listing_gallery_paths($listing->listing_image_gallery ?? null);
+                            if (!empty($gallery_images)) { ?>
+                              <div class="current-gallery" style="margin-top:10px;">
+                                <label>Current gallery images</label>
+                                <p class="form-text text-muted" style="margin:0 0 8px;">Tick <em>Remove</em> under any image to delete it when you save.</p>
+                                <div class="gallery-images" style="display:flex; flex-wrap:wrap; gap:12px;">
+                                  <?php foreach ($gallery_images as $gi => $gallery_img) { ?>
+                                    <div style="text-align:center;">
+                                      <img src="<?= e_url(base_url($gallery_img)) ?>" alt="Gallery image <?= (int) $gi + 1 ?>" style="display:block; max-width:80px; height:60px; object-fit:cover; border:1px solid #ddd;" />
+                                      <label style="display:block; font-size:12px; margin-top:4px; font-weight:normal; cursor:pointer;">
+                                        <input type="checkbox" name="remove_gallery[]" value="<?= e_attr($gallery_img) ?>"> Remove
+                                      </label>
+                                    </div>
+                                  <?php } ?>
                                 </div>
-                            <?php }
-                            } ?>
+                              </div>
+                            <?php } ?>
                           </div>
                         </div>
                       </div>

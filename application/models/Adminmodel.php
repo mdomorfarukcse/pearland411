@@ -1770,7 +1770,7 @@
 		}
 		public function getAllDeletedListings($limit = NULL, $offset = NULL)
 		{
-			return $data = $this->db->select('listings.listing_id,listings.listing_name, listings.postal_code,listings.listing_status,listings.listing_id,listings.listing_slug,listings.created_at,listings.listing_image, user.user_id,user.name,categories.category_name,sub_categories.sub_category_name')->from('listings')
+			return $data = $this->db->select('listings.listing_id,listings.listing_name, listings.postal_code,listings.listing_status,listings.listing_id,listings.listing_slug,listings.created_at,listings.deleted_date,listings.listing_image, user.user_id,user.name,categories.category_name,sub_categories.sub_category_name')->from('listings')
 				->join('user', 'listings.user_id = user.user_id', 'left')
 				->where('is_deleted', 1)
 				->join('listing_categories as categories', 'categories.category_id = listings.category_id', 'LEFT')
@@ -1808,19 +1808,56 @@
 			}
 		}
 
-		public function softDeleteListing($slug)
+		/**
+		 * The last database error message, for surfacing a rejected write to the
+		 * operator instead of redirecting them to a blank form.
+		 */
+		public function lastDbError()
 		{
-			$data = array('is_deleted' => 1);
-			if ($this->db->where('listing_slug', $slug)->update('listings', $data)) {
-				return true;
-			} else {
-				return false;
-			}
+			$err = $this->db->error();
+			return empty($err['message']) ? 'No further detail was reported by the database.' : $err['message'];
 		}
 
-		public function permanentDeleteListing($slug)
+		/*
+		 * The three listing delete/restore methods below key on `listing_id`.
+		 *
+		 * They used to key on `listing_slug`, which is not unique: both
+		 * add_listing_scratch() and edit_listing() derived the slug from the
+		 * business name with no uniqueness pass, so two businesses called the
+		 * same thing carried the identical slug — and one click on Delete
+		 * flipped is_deleted on both of them. That is the reported "deleting one
+		 * duplicate listing also deletes the original". Permanent delete was
+		 * worse: it removed every row sharing the slug and unlinked the image
+		 * they had in common.
+		 */
+
+		public function softDeleteListing($listing_id)
 		{
-			$data = $this->db->select('*')->from('listings')->where('listing_slug', $slug)->get()->row();
+			$data = array(
+				'is_deleted'   => 1,
+				'deleted_date' => date('Y-m-d H:i:s'),
+			);
+			return (bool) $this->db->where('listing_id', (int) $listing_id)->update('listings', $data);
+		}
+
+		/**
+		 * Bring a listing back out of the trash. Clears the deletion stamp —
+		 * the old code *set* deleted_date to now while restoring, and wrote the
+		 * whole row object back, which meant every column went into the UPDATE.
+		 */
+		public function restoreListing($listing_id)
+		{
+			$data = array(
+				'is_deleted'   => 0,
+				'deleted_date' => NULL,
+			);
+			return (bool) $this->db->where('listing_id', (int) $listing_id)->update('listings', $data);
+		}
+
+		public function permanentDeleteListing($listing_id)
+		{
+			$listing_id = (int) $listing_id;
+			$data = $this->db->select('*')->from('listings')->where('listing_id', $listing_id)->get()->row();
 
 			if (!$data) {
 				return false; // Return false if no record is found
@@ -1836,7 +1873,7 @@
 				}
 			}
 
-			if ($this->db->where('listing_slug', $slug)->delete('listings')) {
+			if ($this->db->where('listing_id', $listing_id)->delete('listings')) {
 				if (!empty($img)) {
 					unlink($img);
 				}

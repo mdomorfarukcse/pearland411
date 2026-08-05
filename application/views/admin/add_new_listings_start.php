@@ -249,7 +249,13 @@
                         <div class="col-md-6">
                           <div>
                             <div class="chbox">
-                              <input type="checkbox" id="featured_listing" name="featured_listing" required="required" checked value="1">
+                              <?php // No `required` here. A required checkbox must be CHECKED to
+                                    // pass constraint validation, and this one sits on step 1 —
+                                    // hidden by the time you reach the Submit button on step 3.
+                                    // Unticking it (the normal case) made the browser refuse to
+                                    // submit and refuse to say why, because it cannot focus an
+                                    // invalid control inside a display:none container. ?>
+                              <input type="checkbox" id="featured_listing" name="featured_listing" value="1">
                               <label for="featured_listing">Featured Listing</label>
                             </div>
                           </div>
@@ -257,7 +263,7 @@
                         <div class="col-md-6">
                           <div>
                             <div class="chbox">
-                              <input type="checkbox" id="spotlight_listing" name="spotlight_listing" required="required" checked value="1">
+                              <input type="checkbox" id="spotlight_listing" name="spotlight_listing" value="1">
                               <label for="spotlight_listing">Spotlight Listing</label>
                             </div>
                           </div>
