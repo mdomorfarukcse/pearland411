@@ -1079,7 +1079,10 @@ class Usermodel extends CI_Model
 	===========================*/
 	public function getAllBlog()
 	{
-		return $data = $this->db->get('blogs')->result();
+		// Published only. /all-blog listed unpublished drafts when browsing,
+		// and searchBlogs() now filters them, so without this the same page
+		// would show a draft to a browser and hide it from a searcher.
+		return $data = $this->db->where('blog_status', 1)->get('blogs')->result();
 	}
 	public function countAllBlog()
 	{
@@ -3651,6 +3654,126 @@ class Usermodel extends CI_Model
 	 **********************/
 
 	/**
+	 * Split what someone typed into the words it is actually made of.
+	 *
+	 * Every search here used to send the whole box straight to `LIKE`, so
+	 * "central bbq" became `listing_name LIKE '%central bbq%'` and never found
+	 * "Central Texas BBQ" — the two words are real, they just are not adjacent.
+	 * A search box is expected to work word by word.
+	 *
+	 * Punctuation is dropped, words are lower-cased and de-duplicated, and the
+	 * list is capped: each word costs another LIKE across every column, so a
+	 * pasted paragraph would otherwise build a hundred-clause query. Words of
+	 * one character are skipped for the same reason — they match nearly every
+	 * row — unless that is all there is.
+	 *
+	 * @return string[] possibly empty, in which case the caller must not search
+	 */
+	private function searchTerms($search_term, $max_terms = 6)
+	{
+		$clean = preg_replace('/[^\p{L}\p{N}]+/u', ' ', (string) $search_term);
+		$parts = preg_split('/\s+/', trim((string) $clean), -1, PREG_SPLIT_NO_EMPTY);
+		if (empty($parts)) {
+			return array();
+		}
+
+		$lower = function ($s) {
+			return function_exists('mb_strtolower') ? mb_strtolower($s, 'UTF-8') : strtolower($s);
+		};
+		$len = function ($s) {
+			return function_exists('mb_strlen') ? mb_strlen($s, 'UTF-8') : strlen($s);
+		};
+
+		$terms = array();
+		foreach ($parts as $part) {
+			if ($len($part) < 2) continue;
+			$terms[$lower($part)] = true;
+			if (count($terms) >= $max_terms) break;
+		}
+
+		// "BJ" or a single initial is still worth looking for on its own.
+		if (empty($terms)) {
+			$terms[$lower($parts[0])] = true;
+		}
+
+		return array_keys($terms);
+	}
+
+	/**
+	 * AND across the words, OR across the columns:
+	 *
+	 *   ( (name LIKE %central% OR descr LIKE %central%)
+	 *     AND (name LIKE %bbq% OR descr LIKE %bbq%) )
+	 *
+	 * Every word has to appear somewhere in the row, but not in the same
+	 * column and not next to each other — which is what makes "central bbq"
+	 * find "Central Texas BBQ".
+	 *
+	 * @param string[] $columns fully-qualified column names
+	 * @param string[] $terms   from searchTerms(); must not be empty
+	 */
+	private function applySearchTerms(array $columns, array $terms)
+	{
+		if (empty($columns) || empty($terms)) {
+			return;
+		}
+
+		$this->db->group_start();
+		foreach ($terms as $term) {
+			$this->db->group_start();
+			$first = true;
+			foreach ($columns as $column) {
+				$first ? $this->db->like($column, $term) : $this->db->or_like($column, $term);
+				$first = false;
+			}
+			$this->db->group_end();
+		}
+		$this->db->group_end();
+	}
+
+	/**
+	 * Relevance for a name/title column, as a raw ORDER BY fragment.
+	 *
+	 * Results were ordered by id DESC, so "Central Texas BBQ" could sit below
+	 * any newer row that merely mentioned barbecue in its description. This
+	 * puts an exact name first, then a name that starts with what was typed,
+	 * then one that contains it, then rows by how many of the words are in the
+	 * name at all.
+	 *
+	 * @param string   $column fully-qualified, e.g. 'listings.listing_name'
+	 * @param string   $phrase what the visitor typed, whole
+	 * @param string[] $terms  from searchTerms()
+	 */
+	private function searchRelevanceOrder($column, $phrase, array $terms)
+	{
+		$name   = 'LOWER(' . $column . ')';
+		$phrase = trim(strtolower((string) $phrase));
+
+		// escape_like_str() neutralises % and _ with a `!` prefix, which only
+		// means anything to MySQL alongside an ESCAPE clause — the query
+		// builder appends one for us on like(), but these fragments are hand
+		// built, so they have to carry their own. Without it a business called
+		// "50% Off Tyres" would rank by a pattern containing a literal `!`.
+		$like = function ($pattern) use ($name) {
+			return $name . " LIKE '" . $pattern . "' ESCAPE '!'";
+		};
+		$esc = $this->db->escape_like_str($phrase);
+
+		$rank = 'CASE'
+			. ' WHEN ' . $name . ' = ' . $this->db->escape($phrase) . ' THEN 0'
+			. ' WHEN ' . $like($esc . '%') . ' THEN 1'
+			. ' WHEN ' . $like('%' . $esc . '%') . ' THEN 2'
+			. ' ELSE 3 END ASC';
+
+		$hits = array();
+		foreach ($terms as $term) {
+			$hits[] = '(' . $like('%' . $this->db->escape_like_str($term) . '%') . ')';
+		}
+
+		return $rank . ', (' . implode(' + ', $hits) . ') DESC';
+	}
+
+	/**
 	 * Global search function that searches across all content types
 	 */
 	public function globalSearch($search_term, $limit = 50, $offset = 0)
@@ -3671,47 +3794,37 @@ class Usermodel extends CI_Model
 			'total_count' => 0,
 		);
 
-		if (empty($search_term)) {
+		// Nothing usable typed — don't run twelve full-table scans to find out.
+		if (empty($search_term) || !$this->searchTerms($search_term)) {
 			return $results;
 		}
 
+		// Only search sections that are switched on. This page used to offer
+		// News, Events, Blogs, Products, Videos, Real Estate and Classifieds
+		// results whatever /admin/setting said, so a switched-off section was
+		// still reachable from search and every link in it 404'd — and it cost
+		// a scan per section to produce them.
+		$on = function ($key) {
+			return site_setting($key, '1') !== '0';
+		};
 
-
-		// Search in Listings
-		$results['listings'] = $this->searchListings($search_term, 20);
-
-		// Search in News
-		$results['news'] = $this->searchNews($search_term, 20);
-
-		// Search in Events
-		$results['events'] = $this->searchEvents($search_term, 15);
-
-		// Search in Blogs
-		$results['blogs'] = $this->searchBlogs($search_term, 15);
-
-		// Search in Products
-		$results['products'] = $this->searchProducts($search_term, 15);
-
-		// Search in House
-		$results['house'] = $this->searchHouse($search_term, 15);
-
-		// Search in Rental
-		$results['rental'] = $this->searchRental($search_term, 15);
-
-		// Search in Classifieds
-		$results['classifieds'] = $this->searchClassifieds($search_term, 15);
-
-		// Search in Videos
-		$results['videos'] = $this->searchVideo($search_term, 15);
-
-		// Search in Categories
+		// The core directory, categories, the services catalog and coupons are
+		// always on — see the note on /admin/setting.
+		$results['listings']   = $this->searchListings($search_term, 20);
 		$results['categories'] = $this->searchCategories($search_term, 10);
+		$results['services']   = $this->searchServices($search_term, 10);
+		$results['coupons']    = $this->searchCoupons($search_term, 10);
 
-		// Search in Services catalog
-		$results['services'] = $this->searchServices($search_term, 10);
-
-		// Search in active Coupons
-		$results['coupons'] = $this->searchCoupons($search_term, 10);
+		if ($on('service_news_enabled'))        $results['news']        = $this->searchNews($search_term, 20);
+		if ($on('service_events_enabled'))      $results['events']      = $this->searchEvents($search_term, 15);
+		if ($on('service_blog_enabled'))        $results['blogs']       = $this->searchBlogs($search_term, 15);
+		if ($on('service_products_enabled'))    $results['products']    = $this->searchProducts($search_term, 15);
+		if ($on('service_videos_enabled'))      $results['videos']      = $this->searchVideo($search_term, 15);
+		if ($on('service_classifieds_enabled')) $results['classifieds'] = $this->searchClassifieds($search_term, 15);
+		if ($on('service_realestate_enabled')) {
+			$results['house']  = $this->searchHouse($search_term, 15);
+			$results['rental'] = $this->searchRental($search_term, 15);
+		}
 
 		// Calculate total count
 		$results['total_count'] = count($results['listings']) + count($results['news']) +
@@ -3727,15 +3840,14 @@ class Usermodel extends CI_Model
 	public function searchServices($search_term, $limit = 10)
 	{
 		if (!$this->db->table_exists('services')) return array();
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) return array();
+
+		$this->db->from('services')->where('is_active', 1);
+		$this->applySearchTerms(array('name', 'short_description', 'category', 'body'), $terms);
+
 		return $this->db
-			->from('services')
-			->where('is_active', 1)
-			->group_start()
-				->like('name', $search_term)
-				->or_like('short_description', $search_term)
-				->or_like('category', $search_term)
-				->or_like('body', $search_term)
-			->group_end()
+			->order_by($this->searchRelevanceOrder('name', $search_term, $terms), '', false)
 			->order_by('sort_order', 'ASC')
 			->limit((int) $limit)
 			->get()
@@ -3744,16 +3856,18 @@ class Usermodel extends CI_Model
 
 	public function searchCoupons($search_term, $limit = 10)
 	{
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) return array();
+
 		$today = date('Y-m-d');
-		return $this->db
-			->from('coupons')
+		$this->db->from('coupons')
 			->where('coupon_status', 1)
 			->where('coupon_start_date <=', $today)
-			->where('coupon_end_date >=',  $today)
-			->group_start()
-				->like('coupon_name', $search_term)
-				->or_like('coupon_code', $search_term)
-			->group_end()
+			->where('coupon_end_date >=',  $today);
+		$this->applySearchTerms(array('coupon_name', 'coupon_code'), $terms);
+
+		return $this->db
+			->order_by($this->searchRelevanceOrder('coupon_name', $search_term, $terms), '', false)
 			->order_by('coupon_cdt', 'DESC')
 			->limit((int) $limit)
 			->get()
@@ -3765,21 +3879,30 @@ class Usermodel extends CI_Model
 	 */
 	public function searchListings($search_term, $limit = 20)
 	{
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) return array();
+
 		$this->db->select('listings.*, listing_categories.category_name, user.name as owner_name');
 		$this->db->from('listings');
 		$this->db->join('listing_categories', 'listings.category_id = listing_categories.category_id', 'left');
 		$this->db->join('user', 'listings.user_id = user.user_id', 'left');
 		$this->db->where('listings.is_deleted', 0);
 		$this->db->where('listings.listing_status', 1);
-		$this->db->group_start();
-		$this->db->like('listings.listing_name', $search_term);
-		$this->db->or_like('listings.listing_description', $search_term);
-		$this->db->or_like('listings.listing_address', $search_term);
-		$this->db->or_like('listings.service_locations', $search_term);
-		$this->db->or_like('listing_categories.category_name', $search_term);
-		$this->db->group_end();
+
+		// service_offered is searched too: a barbecue place that does not say
+		// "catering" in its description usually says it here.
+		$this->applySearchTerms(array(
+			'listings.listing_name',
+			'listings.listing_description',
+			'listings.listing_address',
+			'listings.service_locations',
+			'listings.service_offered',
+			'listing_categories.category_name',
+		), $terms);
+
+		$this->db->order_by($this->searchRelevanceOrder('listings.listing_name', $search_term, $terms), '', false);
+		$this->db->order_by('COALESCE(listings.featured_listing, 0) DESC, listings.listing_id DESC', '', false);
 		$this->db->limit($limit);
-		$this->db->order_by('listings.listing_id', 'DESC');
 
 		return $this->db->get()->result();
 	}
@@ -3789,16 +3912,17 @@ class Usermodel extends CI_Model
 	 */
 	public function searchNews($search_term, $limit = 20)
 	{
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) return array();
+
 		$this->db->select('news.*, user.name as author_name');
 		$this->db->from('news');
 		$this->db->join('user', 'news.user_id = user.user_id', 'left');
 		$this->db->where('news.news_status', 1);
-		$this->db->group_start();
-		$this->db->like('news.news_title', $search_term);
-		$this->db->or_like('news.news_description', $search_term);
-		$this->db->group_end();
-		$this->db->limit($limit);
+		$this->applySearchTerms(array('news.news_title', 'news.news_description'), $terms);
+		$this->db->order_by($this->searchRelevanceOrder('news.news_title', $search_term, $terms), '', false);
 		$this->db->order_by('news.news_id', 'DESC');
+		$this->db->limit($limit);
 
 		return $this->db->get()->result();
 	}
@@ -3808,33 +3932,48 @@ class Usermodel extends CI_Model
 	 */
 	public function searchEvents($search_term, $limit = 15)
 	{
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) return array();
+
 		$this->db->select('events.*, COALESCE(admin.admin_name, user.name) as organizer_name', false);
 		$this->db->from('events');
 		$this->db->join('user', 'events.user_id = user.user_id', 'left');
 		$this->db->join('admin', 'admin.admin_id = events.admin_id', 'left');
 		$this->db->where('events.event_status', 1);
-		$this->db->group_start();
-		$this->db->like('events.event_name', $search_term);
-		$this->db->or_like('events.event_description', $search_term);
-		$this->db->or_like('events.event_address', $search_term);
-		$this->db->group_end();
-		$this->db->limit($limit);
+		$this->applySearchTerms(array('events.event_name', 'events.event_description', 'events.event_address'), $terms);
+		$this->db->order_by($this->searchRelevanceOrder('events.event_name', $search_term, $terms), '', false);
 		$this->db->order_by('events.event_id', 'DESC');
+		$this->db->limit($limit);
 
 		return $this->db->get()->result();
 	}
 
 	/**
-	 * Search in blogs table
+	 * Search in blogs table.
+	 *
+	 * Was the odd one out: it matched the title only, and unpublished drafts
+	 * turned up in the results. Both are fixed here.
+	 *
+	 * $limit stays optional and defaults to no limit. /all-blog?q= slices this
+	 * result set in PHP to paginate (User::all_blog), so capping it by default
+	 * would silently truncate that page to one or two pages; the site-wide
+	 * search passes an explicit 15 like every other section.
 	 */
-	public function searchBlogs($search_term)
+	public function searchBlogs($search_term, $limit = null)
 	{
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) return array();
+
 		$this->db->select('*');
 		$this->db->from('blogs');
-		$this->db->like('blog_name', $search_term, 'both');
-		// Optionally search in description as well:
-		// $this->db->or_like('blog_description', $query, 'both');
+		$this->db->where('blog_status', 1);
+		$this->applySearchTerms(array('blog_name', 'blog_description'), $terms);
+		$this->db->order_by($this->searchRelevanceOrder('blog_name', $search_term, $terms), '', false);
 		$this->db->order_by('blog_id', 'DESC');
+		if ($limit !== null) {
+			$this->db->limit((int) $limit);
+		}
+
 		return $this->db->get()->result();
 	}
 
@@ -3843,16 +3982,17 @@ class Usermodel extends CI_Model
 	 */
 	public function searchProducts($search_term, $limit = 15)
 	{
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) return array();
+
 		$this->db->select('products.*, user.name as seller_name');
 		$this->db->from('products');
 		$this->db->join('user', 'products.user_id = user.user_id', 'left');
 		$this->db->where('products.product_status', 1);
-		$this->db->group_start();
-		$this->db->like('products.product_name', $search_term);
-		$this->db->or_like('products.product_description', $search_term);
-		$this->db->group_end();
-		$this->db->limit($limit);
+		$this->applySearchTerms(array('products.product_name', 'products.product_description'), $terms);
+		$this->db->order_by($this->searchRelevanceOrder('products.product_name', $search_term, $terms), '', false);
 		$this->db->order_by('products.product_id', 'DESC');
+		$this->db->limit($limit);
 
 		return $this->db->get()->result();
 	}
@@ -3869,6 +4009,9 @@ class Usermodel extends CI_Model
 	 */
 	public function searchCategories($search_term, $limit = 10)
 	{
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) return array();
+
 		$this->db->select('listing_categories.*', false);
 		$this->db->select(
 			'(SELECT COUNT(*) FROM `listings` l'
@@ -3878,12 +4021,10 @@ class Usermodel extends CI_Model
 			false
 		);
 		$this->db->from('listing_categories');
-		$this->db->group_start();
-		$this->db->like('listing_categories.category_name', $search_term);
-		$this->db->or_like('listing_categories.category_description', $search_term);
-		$this->db->group_end();
-		$this->db->limit($limit);
+		$this->applySearchTerms(array('listing_categories.category_name', 'listing_categories.category_description'), $terms);
+		$this->db->order_by($this->searchRelevanceOrder('listing_categories.category_name', $search_term, $terms), '', false);
 		$this->db->order_by('listing_categories.category_id', 'DESC');
+		$this->db->limit($limit);
 
 		return $this->db->get()->result();
 	}
@@ -3893,17 +4034,17 @@ class Usermodel extends CI_Model
 	 */
 	public function searchHouse($search_term, $limit = 15)
 	{
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) return array();
+
 		$this->db->select('house.*, user.name as owner_name');
 		$this->db->from('house');
 		$this->db->join('user', 'house.user_id = user.user_id', 'left');
 		$this->db->where('house.house_status', 0); // 0 = active based on database
-		$this->db->group_start();
-		$this->db->like('house.house_title', $search_term);
-		$this->db->or_like('house.house_description', $search_term);
-		$this->db->or_like('house.house_address', $search_term);
-		$this->db->group_end();
-		$this->db->limit($limit);
+		$this->applySearchTerms(array('house.house_title', 'house.house_description', 'house.house_address'), $terms);
+		$this->db->order_by($this->searchRelevanceOrder('house.house_title', $search_term, $terms), '', false);
 		$this->db->order_by('house.house_id', 'DESC');
+		$this->db->limit($limit);
 
 		return $this->db->get()->result();
 	}
@@ -3913,17 +4054,17 @@ class Usermodel extends CI_Model
 	 */
 	public function searchRental($search_term, $limit = 15)
 	{
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) return array();
+
 		$this->db->select('rental.*, user.name as owner_name');
 		$this->db->from('rental');
 		$this->db->join('user', 'rental.user_id = user.user_id', 'left');
 		$this->db->where('rental.rental_status', 0); // 0 = active based on database
-		$this->db->group_start();
-		$this->db->like('rental.rental_title', $search_term);
-		$this->db->or_like('rental.rental_description', $search_term);
-		$this->db->or_like('rental.rental_address', $search_term);
-		$this->db->group_end();
-		$this->db->limit($limit);
+		$this->applySearchTerms(array('rental.rental_title', 'rental.rental_description', 'rental.rental_address'), $terms);
+		$this->db->order_by($this->searchRelevanceOrder('rental.rental_title', $search_term, $terms), '', false);
 		$this->db->order_by('rental.rental_id', 'DESC');
+		$this->db->limit($limit);
 
 		return $this->db->get()->result();
 	}
@@ -3933,16 +4074,17 @@ class Usermodel extends CI_Model
 	 */
 	public function searchClassifieds($search_term, $limit = 15)
 	{
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) return array();
+
 		$this->db->select('classifieds.*, user.name as poster_name');
 		$this->db->from('classifieds');
 		$this->db->join('user', 'classifieds.user_id = user.user_id', 'left');
 		$this->db->where('classifieds.classifieds_status', 1); // 1 = active based on database
-		$this->db->group_start();
-		$this->db->like('classifieds.classifieds_title', $search_term);
-		$this->db->or_like('classifieds.classifieds_description', $search_term);
-		$this->db->group_end();
-		$this->db->limit($limit);
+		$this->applySearchTerms(array('classifieds.classifieds_title', 'classifieds.classifieds_description'), $terms);
+		$this->db->order_by($this->searchRelevanceOrder('classifieds.classifieds_title', $search_term, $terms), '', false);
 		$this->db->order_by('classifieds.classifieds_id', 'DESC');
+		$this->db->limit($limit);
 
 		return $this->db->get()->result();
 	}
@@ -3952,16 +4094,17 @@ class Usermodel extends CI_Model
 	 */
 	public function searchVideo($search_term, $limit = 15)
 	{
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) return array();
+
 		$this->db->select('video.*, user.name as uploader_name');
 		$this->db->from('video');
 		$this->db->join('user', 'video.user_id = user.user_id', 'left');
 		$this->db->where('video.video_status', 1); // 1 = active based on database
-		$this->db->group_start();
-		$this->db->like('video.video_title', $search_term);
-		$this->db->or_like('video.video_description', $search_term);
-		$this->db->group_end();
-		$this->db->limit($limit);
+		$this->applySearchTerms(array('video.video_title', 'video.video_description'), $terms);
+		$this->db->order_by($this->searchRelevanceOrder('video.video_title', $search_term, $terms), '', false);
 		$this->db->order_by('video.video_id', 'DESC');
+		$this->db->limit($limit);
 
 		return $this->db->get()->result();
 	}
@@ -3971,37 +4114,45 @@ class Usermodel extends CI_Model
 	 */
 	public function getSearchSuggestions($search_term, $limit = 10)
 	{
-		$suggestions = array();
-
-		if (strlen($search_term) >= 2) {
-			// Get suggestions from listings
-			$this->db->select('listing_name as suggestion, "listing" as type, listing_id as id');
-			$this->db->from('listings');
-			$this->db->like('listing_name', $search_term);
-			$this->db->where('listing_status', 1);
-			$this->db->where('is_deleted', 0);
-			$this->db->limit(5);
-			$listings = $this->db->get()->result();
-
-			// Get suggestions from categories
-			$this->db->select('category_name as suggestion, "category" as type, category_id as id');
-			$this->db->from('listing_categories');
-			$this->db->like('category_name', $search_term);
-			$this->db->limit(3);
-			$categories = $this->db->get()->result();
-
-			// Get suggestions from news
-			$this->db->select('news_title as suggestion, "news" as type, news_id as id');
-			$this->db->from('news');
-			$this->db->like('news_title', $search_term);
-			$this->db->where('news_status', 1);
-			$this->db->limit(2);
-			$news = $this->db->get()->result();
-
-			$suggestions = array_merge($listings, $categories, $news);
+		// Same word-by-word matching as the results page, so the dropdown
+		// cannot suggest nothing for a query the search page would answer.
+		$terms = $this->searchTerms($search_term);
+		if (empty($terms)) {
+			return array();
 		}
 
-		return array_slice($suggestions, 0, $limit);
+		// Get suggestions from listings
+		$this->db->select('listing_name as suggestion, "listing" as type, listing_id as id');
+		$this->db->from('listings');
+		$this->db->where('listing_status', 1);
+		$this->db->where('is_deleted', 0);
+		$this->applySearchTerms(array('listing_name'), $terms);
+		$this->db->order_by($this->searchRelevanceOrder('listing_name', $search_term, $terms), '', false);
+		$this->db->limit(5);
+		$listings = $this->db->get()->result();
+
+		// Get suggestions from categories
+		$this->db->select('category_name as suggestion, "category" as type, category_id as id');
+		$this->db->from('listing_categories');
+		$this->applySearchTerms(array('category_name'), $terms);
+		$this->db->order_by($this->searchRelevanceOrder('category_name', $search_term, $terms), '', false);
+		$this->db->limit(3);
+		$categories = $this->db->get()->result();
+
+		// Get suggestions from news — only when the section is switched on,
+		// otherwise the dropdown offers a page that 404s.
+		$news = array();
+		if (site_setting('service_news_enabled', '1') !== '0') {
+			$this->db->select('news_title as suggestion, "news" as type, news_id as id');
+			$this->db->from('news');
+			$this->db->where('news_status', 1);
+			$this->applySearchTerms(array('news_title'), $terms);
+			$this->db->order_by($this->searchRelevanceOrder('news_title', $search_term, $terms), '', false);
+			$this->db->limit(2);
+			$news = $this->db->get()->result();
+		}
+
+		return array_slice(array_merge($listings, $categories, $news), 0, $limit);
 	}
 
 	/**

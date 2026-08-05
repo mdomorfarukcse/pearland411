@@ -6,6 +6,73 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-05 — Search finds "Central Texas BBQ" when you type "central bbq"
+
+`/search?q=central+bbq` returned nothing while `/listing-details/Central-Texas-BBQ`
+sat right there in the directory.
+
+**Why.** Every search sent the whole search box to the database as one string:
+`listing_name LIKE '%central bbq%'`. Both words are in that business's name —
+they are just not next to each other, so the phrase never matched. Any query of
+more than one word only worked if the visitor happened to type a contiguous
+substring of the record.
+
+### Fixed
+- **Word-by-word matching.** `searchTerms()` splits the query; `applySearchTerms()`
+  builds `(word1 in any column) AND (word2 in any column) AND …`. Each word has
+  to appear somewhere in the row, but not in the same column and not adjacent.
+  Applied to all twelve searches (listings, news, events, blogs, products,
+  houses, rentals, classifieds, videos, categories, services, coupons) and to
+  the autocomplete dropdown, which had the same defect and so could suggest
+  nothing for a query the results page would answer.
+- **Results are ordered by relevance, not by id.** Every search ended
+  `ORDER BY <id> DESC`, so a business whose *name* matched could sit below any
+  newer row that merely mentioned the word in a description. Now: exact name,
+  then name starting with the query, then name containing it, then how many of
+  the words are in the name — with featured listings and recency as
+  tie-breakers.
+- **Listings also match on `service_offered`.** A barbecue place that does not
+  say "catering" in its description usually says it there.
+- **Unpublished blog drafts were searchable.** `searchBlogs()` had no status
+  filter, and searched the title only. It now filters `blog_status = 1` and
+  searches the body. `getAllBlog()` gained the same filter — it is the browse
+  half of the same page (`/all-blog`), and without it a draft would be listed
+  when browsing and hidden when searching.
+
+### Changed (speed)
+- **A search no longer runs twelve full-table scans regardless.** Sections
+  switched off at `/admin/setting` are skipped — those results were being
+  computed and shown even though every link in them 404s via `requireService()`.
+  With the default set-up that is a handful of scans saved per search; with the
+  optional sections off it is most of them.
+- **A query with nothing searchable in it returns immediately** instead of
+  running the full set of scans to discover it matched everything.
+- Words are de-duplicated and capped at six, so a pasted paragraph cannot build
+  a hundred-clause query.
+
+### Note on `searchBlogs()`'s signature
+`$limit` stays optional and defaults to *no* limit. `/all-blog?q=` slices the
+whole result set in PHP to paginate (`User::all_blog`), so capping it by default
+would have silently truncated that page to one or two pages. The site-wide
+search passes an explicit 15, like every other section.
+
+### Verified
+`searchTerms()` and the compiled SQL were checked against CodeIgniter's own
+query builder offline (`get_compiled_select()`): `"central bbq"` produces
+`((name LIKE '%central%' OR …) AND (name LIKE '%bbq%' OR …))`, and the hand-built
+ORDER BY fragments carry their own `ESCAPE '!'` — `escape_like_str()` neutralises
+`%` and `_` with a `!` prefix that means nothing to MySQL without one, so
+"50% Off Tyres" would otherwise have ranked by a pattern containing a literal `!`.
+
+### Key files
+`application/models/Usermodel.php` — `searchTerms()`, `applySearchTerms()`,
+`searchRelevanceOrder()` (new), `globalSearch()`, all twelve `search*()` methods,
+`getSearchSuggestions()`, `getAllBlog()`.
+
+No migrations.
+
+---
+
 ## 2026-08-05 — Duplicate listings hidden behind a switch; "Add new listing" goes straight to the form
 
 QA flagged that **"Create duplicate listing"** sat one click from "Create
