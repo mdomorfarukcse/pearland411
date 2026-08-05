@@ -293,7 +293,10 @@
                         </div>
                         <div class="col-md-6">
                           <div class="form-group">
-                            <select data-placeholder="Select Sub Category" name="sub_category_id" id="sub_category_id" class="chosen-select form-control">
+                            <?php // Multiple — see the note in edit_listings.php. Populated by the
+                                  // category dropdown's onChange handler. ?>
+                            <label for="sub_category_id">Sub categories <small class="text-muted">(hold Ctrl / Cmd to pick more than one)</small></label>
+                            <select data-placeholder="Select Sub Category" name="sub_category_id[]" id="sub_category_id" class="chosen-select form-control" multiple size="6">
                             </select>
                           </div>
                         </div>
@@ -589,14 +592,19 @@
 
 <script>
   function getSubCategory(val) {
+    // Send what is currently ticked so the server can mark it selected again —
+    // this replaces the select's innerHTML wholesale.
+    var keep = $('#sub_category_id').val() || [];
 
     $.ajax({
 
       type: "POST",
 
-      url: '<?= base_url() ?>/admin/get_listing_sub_category',
+      // No leading slash before "admin": base_url() already ends in one, so
+      // this was requesting //admin/... — a protocol-relative URL.
+      url: '<?= base_url() ?>admin/get_listing_sub_category',
 
-      data: 'category_id=' + val,
+      data: { category_id: val, selected: keep },
 
       success: function(data) {
 

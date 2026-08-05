@@ -76,6 +76,10 @@ $dir_swatch = function ($name) {
 	return $palette[crc32((string) $name) % count($palette)];
 };
 
+// The category being browsed, for category-targeted ad bookings (0024).
+// Resolved in the controller so this page and the ad query agree on the id.
+$ad_category_id = isset($current_category_id) ? $current_category_id : null;
+
 $showing_from = $total_listings > 0 ? $current_offset + 1 : 0;
 $showing_to   = $current_offset + count($allListings);
 ?>
@@ -179,9 +183,15 @@ $showing_to   = $current_offset + count($allListings);
 			<div class="p411-shell__main">
 
 				<div class="p411-adrow">
-					<?php $slot = $ad_slots['top'];
-					$slot_alias = 'listing-top';
-					include APPPATH . 'views/partials/ad_slot.php'; ?>
+					<?php
+					// On a category page, ask for that category's header banner first
+					// (top-banner-category, seeded by migration 0024) and fall back to
+					// the site-wide top banner when it is unsold. "No option to add a
+					// header banner in Business Listings" was this slot not existing.
+					$slot = $cat_slug !== '' ? 'top-banner-category' : $ad_slots['top'];
+					$slot_alias = $cat_slug !== '' ? array($ad_slots['top'], 'listing-top') : 'listing-top';
+					$slot_category = $ad_category_id;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
 				</div>
 
 				<?php if (!empty($allListings)): ?>
@@ -288,7 +298,8 @@ $showing_to   = $current_offset + count($allListings);
 								<div class="p411-adrow p411-adrow--grid">
 									<?php $slot = $ad_slots['inline'];
 									$slot_alias = 'listing-inline';
-									include APPPATH . 'views/partials/ad_slot.php'; ?>
+									$slot_category = $ad_category_id;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
 								</div>
 							<?php endif; ?>
 						<?php endforeach; ?>
@@ -345,7 +356,8 @@ $showing_to   = $current_offset + count($allListings);
 					<div class="p411-adrow" style="margin-top:22px;">
 						<?php $slot = $ad_slots['inline'];
 						$slot_alias = 'listing-inline';
-						include APPPATH . 'views/partials/ad_slot.php'; ?>
+						$slot_category = $ad_category_id;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
 					</div>
 
 					<?php // A results page with nothing on it leaves a tall empty column
@@ -365,6 +377,7 @@ $showing_to   = $current_offset + count($allListings);
 				// web-services pitch; an unsold zone sells the space itself
 				// rather than repeating it.
 				$slot_creative = 'house-ad';
+				$slot_category = $ad_category_id;
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
 				<?php // Static house promo — never sold, never rotated. ?>
@@ -458,6 +471,7 @@ $showing_to   = $current_offset + count($allListings);
 				// Kept as the creative for the case where the partial is
 				// missing, so the position never renders the generic house ad.
 				$slot_creative = 'banner-design';
+				$slot_category = $ad_category_id;
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
 				<!-- One enquiry, sent to the Pearland411 team -->
@@ -509,6 +523,7 @@ $showing_to   = $current_offset + count($allListings);
 				      // does more harm than the zone is worth. ?>
 				<?php $slot = $ad_slots['side_sky'];
 				$slot_fallback = false;
+				$slot_category = $ad_category_id;
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
 			</aside>
@@ -517,7 +532,8 @@ $showing_to   = $current_offset + count($allListings);
 		<!-- ==================================================== BOTTOM AD -->
 		<div class="p411-adrow" style="margin-top:6px;">
 			<?php $slot = $ad_slots['bottom'];
-			include APPPATH . 'views/partials/ad_slot.php'; ?>
+			$slot_category = $ad_category_id;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
 		</div>
 	</div>
 

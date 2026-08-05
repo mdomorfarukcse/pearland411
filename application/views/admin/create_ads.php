@@ -130,6 +130,32 @@
 
                           </div>
 
+                          <?php
+                          // Category targeting (migration 0024). Ads used to have one
+                          // dimension — the slot — so a "category banner" was a single
+                          // global inventory item that ran on every category page. An
+                          // advertiser could not buy the Restaurants banner.
+                          ?>
+                          <div class="col-md-12">
+                            <div class="form-group ca-sh-user">
+                              <label for="ad_category_id">Show only in category</label>
+                              <select name="category_id" class="form-control" id="ad_category_id">
+                                <option value="">All categories &mdash; run this ad site-wide in its position</option>
+                                <?php if (!empty($adCategories)) {
+                                  foreach ($adCategories as $__cat) { ?>
+                                    <option value="<?= (int) $__cat->category_id ?>"<?= set_select('category_id', (string) $__cat->category_id) ?>><?= html_escape($__cat->category_name) ?></option>
+                                <?php }
+                                } ?>
+                              </select>
+                              <small class="form-text text-muted">
+                                Pick a category to sell that category&rsquo;s banner. A category booking
+                                takes the position ahead of a site-wide one; leave it on
+                                &ldquo;All categories&rdquo; to behave exactly as before.
+                              </small>
+                            </div>
+                            <span class="text-danger"><?= form_error("category_id") ? form_error("category_id") : ''; ?></span>
+                          </div>
+
                         </div>
 
                         <!--FILED END-->

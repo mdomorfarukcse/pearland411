@@ -795,4 +795,85 @@ UPDATE `listings`
  WHERE `deleted_date` IS NOT NULL
    AND (`is_deleted` = 0 OR `is_deleted` IS NULL);
 
+
+-- ===========================================================================
+-- 0023_listing_subcategory_map.sql
+-- ---------------------------------------------------------------------------
+-- "Why can't I add subcategories, even though I have included all the
+-- available subcategories?" It was never possible: listings.sub_category_id is
+-- a single INT and the admin form posted a single-value <select>, so a listing
+-- could hold exactly one and the last one picked won. listing_sub_categories is
+-- the CATALOGUE of subcategories, not a listing-to-subcategory join, and no
+-- join table existed anywhere. This adds one and back-fills existing values.
+--
+-- listings.sub_category_id stays, holding the FIRST selection, so the many
+-- readers that still use it keep working; it can be retired separately.
+-- ===========================================================================
+
+CREATE TABLE IF NOT EXISTS `listing_sub_category_map` (
+    `listing_id`      INT(11) NOT NULL,
+    `sub_category_id` INT(11) NOT NULL,
+    PRIMARY KEY (`listing_id`, `sub_category_id`),
+    KEY `lscm_sub_category_idx` (`sub_category_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  COMMENT='Many-to-many: a listing may sit under several subcategories';
+
+INSERT INTO `listing_sub_category_map` (`listing_id`, `sub_category_id`)
+SELECT l.`listing_id`, l.`sub_category_id`
+  FROM `listings` l
+ WHERE l.`sub_category_id` IS NOT NULL
+   AND l.`sub_category_id` > 0
+   AND NOT EXISTS (
+       SELECT 1 FROM `listing_sub_category_map` m
+        WHERE m.`listing_id` = l.`listing_id`
+          AND m.`sub_category_id` = l.`sub_category_id`
+   );
+
+
+-- ===========================================================================
+-- 0024_ads_category_target.sql
+-- ---------------------------------------------------------------------------
+-- "No option to add category-specific banners and header banner in Business
+-- Listings." Ads had exactly one targeting dimension - ads_prices.slot_key,
+-- the position on the page - so the slots named "category" were single global
+-- inventory items rendered on category pages, not banners sold per category.
+--
+-- ads.category_id: NULL runs the ad in its slot everywhere (which is every ad
+-- booked before this migration), an id restricts it to that listing category.
+-- A category booking outranks an untargeted one in the same slot.
+-- ===========================================================================
+
+SET @p411_ads_category_missing = (
+    SELECT COUNT(*) = 0 FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ads' AND COLUMN_NAME = 'category_id');
+
+SET @sql = IF(@p411_ads_category_missing,
+    'ALTER TABLE `ads` ADD COLUMN `category_id` INT(11) NULL DEFAULT NULL',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @p411_ads_category_idx_missing = (
+    SELECT COUNT(*) = 0 FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ads' AND INDEX_NAME = 'ads_category_idx');
+
+SET @sql = IF(@p411_ads_category_idx_missing,
+    'ALTER TABLE `ads` ADD KEY `ads_category_idx` (`category_id`)',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- The header banner slot the report asks for, so there is something to sell.
+INSERT INTO `ads_prices` (`name`, `slot_key`, `size`, `cost`, `status`, `created_at`, `updated_at`)
+SELECT * FROM (
+    SELECT 'Category Header Banner' AS name,
+           'top-banner-category'    AS slot_key,
+           '900x100'                AS size,
+           25.00                    AS cost,
+           1                        AS status,
+           NOW()                    AS created_at,
+           NOW()                    AS updated_at
+) AS seed
+WHERE NOT EXISTS (
+    SELECT 1 FROM `ads_prices` WHERE `ads_prices`.`slot_key` = seed.slot_key
+);
+
 SET FOREIGN_KEY_CHECKS = 1;

@@ -1154,6 +1154,8 @@ class Admin extends CI_Controller
 		if (!empty($this->input->post('category_id'))) {
 			$category_id = $this->input->post('category_id');
 			$data['sub_categories'] = $this->adminmodel->ListingSubCategoryByCateId($category_id);
+			// What is already ticked, so switching category does not wipe it.
+			$data['selected'] = array_map('intval', (array) $this->input->post('selected'));
 			$this->load->view('admin/get_sub_categories', $data);
 		}
 	}
@@ -1280,7 +1282,10 @@ class Admin extends CI_Controller
 					'featured_listing' => $this->input->post('featured_listing'),
 					'spotlight_listing' => $this->input->post('spotlight_listing'),
 					'category_id' => $this->input->post('category_id'),
-					'sub_category_id' => $this->input->post('sub_category_id'),
+					// First of the selected sub-categories. The full set goes into
+					// listing_sub_category_map after the write; this column is kept
+					// in step so the readers that still use it keep working.
+					'sub_category_id' => ($__subs = $this->postedSubCategoryIds()) ? $__subs[0] : NULL,
 					'listing_mobile' => $this->input->post('listing_mobile'),
 					'listing_whatsapp' => $this->input->post('listing_whatsapp'),
 					'display_phone' => $this->input->post('display_phone'),
@@ -1359,6 +1364,7 @@ class Admin extends CI_Controller
 				}
 
 				if ($this->adminmodel->addListing($info)) {
+					$this->adminmodel->saveListingSubCategories($this->db->insert_id(), $this->postedSubCategoryIds());
 					$this->session->set_flashdata('message', 'Listing added successfully.');
 					redirect('admin/all_listings', 'refresh');
 				} else {
@@ -1753,6 +1759,23 @@ class Admin extends CI_Controller
 		return $this->db->count_all_results() > 0;
 	}
 
+	/**
+	 * The sub-category ids posted by the admin listing forms.
+	 *
+	 * The field is `sub_category_id[]` now — a listing may sit under several.
+	 * Returns ints, de-duplicated, empties dropped.
+	 *
+	 * @return int[]
+	 */
+	private function postedSubCategoryIds()
+	{
+		$ids = $this->input->post('sub_category_id');
+		if (!is_array($ids)) {
+			$ids = ($ids === NULL || $ids === '') ? array() : array($ids);
+		}
+		return array_values(array_unique(array_filter(array_map('intval', $ids))));
+	}
+
 	private function makeUniqueListingSlug($name)
 	{
 		$base = preg_replace('/[^A-Za-z0-9-]+/', '-', $name);
@@ -1819,9 +1842,15 @@ class Admin extends CI_Controller
 			return;
 		}
 
-		if (!empty($data['listing']->category_id)) {
-			$data['sub_category_listing'] = $this->adminmodel->ListingSubCategoryByCateId($data['listing']->category_id);
-		}
+		// Load the sub-category list unconditionally. Guarded on category_id, a
+		// listing with no category rendered the select with zero options — not
+		// even the placeholder — and the AJAX that fills it only fires onChange.
+		$data['sub_category_listing'] = !empty($data['listing']->category_id)
+			? $this->adminmodel->ListingSubCategoryByCateId($data['listing']->category_id)
+			: array();
+
+		// Every sub-category attached to this listing (migration 0023).
+		$data['listing_sub_categories'] = $this->adminmodel->listingSubCategoryIds($data['listing']->listing_id);
 
 		if ($this->form_validation->run('admin_listing_scratch') == FALSE) {
 			$this->load->view('admin/header', $data);
@@ -1835,7 +1864,10 @@ class Admin extends CI_Controller
 				'featured_listing' => $this->input->post('featured_listing'),
 				'spotlight_listing' => $this->input->post('spotlight_listing'),
 				'category_id' => $this->input->post('category_id'),
-				'sub_category_id' => $this->input->post('sub_category_id'),
+				// First of the selected sub-categories. The full set goes into
+					// listing_sub_category_map after the write; this column is kept
+					// in step so the readers that still use it keep working.
+					'sub_category_id' => ($__subs = $this->postedSubCategoryIds()) ? $__subs[0] : NULL,
 				'listing_mobile' => $this->input->post('listing_mobile'),
 				'listing_whatsapp' => $this->input->post('listing_whatsapp'),
 				'display_phone' => $this->input->post('display_phone'),
@@ -1925,6 +1957,7 @@ class Admin extends CI_Controller
 			}
 
 			if ($this->adminmodel->update($slug, $info, 'listing_slug', 'listings')) {
+				$this->adminmodel->saveListingSubCategories($data['listing']->listing_id, $this->postedSubCategoryIds());
 				$this->session->set_flashdata('message', 'Listing updated successfully.');
 				redirect('admin/all-listings');
 			} else {
@@ -5455,6 +5488,9 @@ class Admin extends CI_Controller
 
 		$data['users'] 		= $this->adminmodel->getAllValues('user');
 		$data['adsPrices'] 	= $this->adminmodel->allAdsPrices();
+		// Category targeting (migration 0024): an ad may be booked for one
+		// listing category, or left open to run in its slot everywhere.
+		$data['adCategories'] = $this->usermodel->getAllValues('listing_categories');
 
 		$this->form_validation->set_rules('user_id', 'User', 'trim|required');
 		$this->form_validation->set_rules('ads_price_id', 'Ads Position', 'trim|required');
@@ -5470,9 +5506,15 @@ class Admin extends CI_Controller
 			$this->load->view('admin/create_ads');
 			$this->load->view('admin/footer');
 		} else {
+			// Blank means "run everywhere in this slot", which is how every ad
+			// booked before 0024 behaves.
+			$ad_category = $this->input->post('category_id');
+			$ad_category = ($ad_category === NULL || $ad_category === '') ? NULL : (int) $ad_category;
+
 			$info = array(
-				'u_id'            => htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'ads_price_id'    => htmlentities($this->input->post('ads_price_id'), ENT_QUOTES),
+				'u_id'            => $this->input->post('user_id'),
+				'ads_price_id'    => $this->input->post('ads_price_id'),
+				'category_id'     => $ad_category,
 				'ad_start_date'   => date('Y-m-d h:i:s', strtotime($this->input->post('ad_start_date'))),
 				'ad_end_date'     => date('Y-m-d h:i:s', strtotime($this->input->post('ad_end_date'))),
 				'ad_link'         => htmlentities($this->input->post('ad_link'), ENT_QUOTES),

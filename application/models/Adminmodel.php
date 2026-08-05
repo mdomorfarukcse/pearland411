@@ -1730,6 +1730,60 @@
 		 * True when a listing slug already exists (used to keep slugs unique
 		 * on import).
 		 */
+		/*=================================================
+		LISTING <-> SUB-CATEGORY (many-to-many, 0023)
+		=================================================*/
+
+		/**
+		 * The sub_category_ids attached to a listing.
+		 *
+		 * @return int[]
+		 */
+		public function listingSubCategoryIds($listing_id)
+		{
+			if (!$this->db->table_exists('listing_sub_category_map')) {
+				return array();
+			}
+
+			$rows = $this->db->select('sub_category_id')
+				->from('listing_sub_category_map')
+				->where('listing_id', (int) $listing_id)
+				->get()->result();
+
+			return array_map(function ($r) { return (int) $r->sub_category_id; }, $rows);
+		}
+
+		/**
+		 * Replace a listing's sub-categories with exactly $ids.
+		 *
+		 * Deletes then inserts rather than diffing: the set is small, and the
+		 * write is a single logical "these are the subcategories now".
+		 *
+		 * @param int   $listing_id
+		 * @param int[] $ids
+		 */
+		public function saveListingSubCategories($listing_id, array $ids)
+		{
+			if (!$this->db->table_exists('listing_sub_category_map')) {
+				return;
+			}
+
+			$listing_id = (int) $listing_id;
+			$ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+
+			$this->db->where('listing_id', $listing_id)->delete('listing_sub_category_map');
+
+			if (empty($ids)) {
+				return;
+			}
+
+			$batch = array();
+			foreach ($ids as $id) {
+				$batch[] = array('listing_id' => $listing_id, 'sub_category_id' => $id);
+			}
+			$this->db->insert_batch('listing_sub_category_map', $batch);
+		}
+
 		public function listingSlugExists($slug)
 		{
 			return $this->db->from('listings')

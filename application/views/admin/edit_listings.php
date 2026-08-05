@@ -232,12 +232,22 @@
                         </div>
                         <div class="col-md-6">
                           <div class="form-group">
-                            <select data-placeholder="Select Sub Category" name="sub_category_id" id="sub_category_id" class="chosen-select form-control">
-                              <?php if (isset($sub_category_listing) && $sub_category_listing) { ?>
-                                <option value="">Choose a Sub Category</option>
-                                <?php
-                                foreach ($sub_category_listing as $subcat) { ?>
-                                  <option value="<?= $subcat->sub_category_id  ?>" <?= (isset($listing) && $subcat->sub_category_id == $listing->sub_category_id) ? 'SELECTED' : '' ?>><?= $subcat->sub_category_name ?></option>
+                            <?php
+                            // Multiple. A listing could only ever hold one sub-category —
+                            // the column is a single INT and this was a single-value
+                            // select — so "I have included all the available
+                            // subcategories" could not be stored. The set now lives in
+                            // listing_sub_category_map (migration 0023).
+                            $selected_subs = isset($listing_sub_categories) && is_array($listing_sub_categories)
+                                ? array_map('intval', $listing_sub_categories)
+                                : array();
+                            ?>
+                            <label for="sub_category_id">Sub categories <small class="text-muted">(hold Ctrl / Cmd to pick more than one)</small></label>
+                            <select data-placeholder="Select Sub Category" name="sub_category_id[]" id="sub_category_id" class="chosen-select form-control" multiple size="6">
+                              <?php if (isset($sub_category_listing) && $sub_category_listing) {
+                                foreach ($sub_category_listing as $subcat) {
+                                  $sid = (int) $subcat->sub_category_id; ?>
+                                  <option value="<?= $sid ?>"<?= in_array($sid, $selected_subs, TRUE) ? ' selected' : '' ?>><?= html_escape($subcat->sub_category_name) ?></option>
                               <?php
                                 }
                               } ?>
@@ -603,10 +613,15 @@
   // the #sub_category_id <select>. Hits the same admin endpoint that
   // add_new_listings_start.php uses, so the two forms stay in sync.
   function getSubCategory(val) {
+    // Send what is currently ticked so the server can mark it selected again.
+    // Swapping category replaces this select's innerHTML wholesale, and the
+    // partial had no notion of a current value — so touching the category
+    // dropdown silently cleared the sub-categories already saved.
+    var keep = $('#sub_category_id').val() || [];
     $.ajax({
       type: 'POST',
       url:  '<?= base_url() ?>admin/get_listing_sub_category',
-      data: { category_id: val },
+      data: { category_id: val, selected: keep },
       success: function (data) {
         $('#sub_category_id').html(data);
         $('#sub_category_id').trigger('chosen:updated');

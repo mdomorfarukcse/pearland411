@@ -17,6 +17,9 @@
  *   $slot_class    (string) — extra CSS class on the wrapper.
  *   $slot_label    (string) — override the "Sponsored" microlabel.
  *   $slot_fallback (bool)   — false = render nothing when no ad is sold.
+ *   $slot_category (int) — listing category being browsed. An ad booked for
+ *                  that category wins this slot; without it only untargeted
+ *                  bookings run. See migration 0024.
  *   $slot_alias    (string|array) — older slot_key(s) this position replaced.
  *                  Only consulted when nothing is sold on $slot, so inventory
  *                  booked against a retired zone keeps running.
@@ -51,7 +54,7 @@ if (!isset($slot) || $slot === '') return;
 // Global off-switch. Deliberately unseeded — the helper's default keeps
 // advertising on unless an operator turns it off in /admin/setting.
 if (site_setting('service_ads_enabled', '1') === '0') {
-	unset($slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative, $slot_fallback_partial);
+	unset($slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative, $slot_fallback_partial, $slot_category);
 	return;
 }
 
@@ -60,7 +63,12 @@ if (site_setting('service_ads_enabled', '1') === '0') {
 // value by reference raises "Only variables should be assigned by reference".
 $__ci = get_instance();
 
-$__ad   = method_exists($__ci->usermodel, 'getAdForSlot')  ? $__ci->usermodel->getAdForSlot($slot)  : null;
+// The listing category being browsed, when the page has one. An ad booked
+// against that category wins the slot over an untargeted booking; pages with
+// no category only ever run untargeted ads. See migration 0024.
+$__ad_cat = isset($slot_category) && $slot_category !== '' ? (int) $slot_category : NULL;
+
+$__ad   = method_exists($__ci->usermodel, 'getAdForSlot')  ? $__ci->usermodel->getAdForSlot($slot, $__ad_cat)  : null;
 $__meta = method_exists($__ci->usermodel, 'getAdSlotMeta') ? $__ci->usermodel->getAdSlotMeta($slot) : null;
 
 // Nothing sold on this zone? Fall through to any zone it superseded, so an
@@ -69,14 +77,14 @@ $__meta = method_exists($__ci->usermodel, 'getAdSlotMeta') ? $__ci->usermodel->g
 if (!$__ad && !empty($slot_alias) && method_exists($__ci->usermodel, 'getAdForSlot')) {
 	foreach ((array) $slot_alias as $__alias_key) {
 		if (empty($__alias_key)) continue;
-		$__ad = $__ci->usermodel->getAdForSlot($__alias_key);
+		$__ad = $__ci->usermodel->getAdForSlot($__alias_key, $__ad_cat);
 		if ($__ad) break;
 	}
 }
 
 $__fallback = isset($slot_fallback) ? (bool) $slot_fallback : true;
 if (!$__ad && !$__fallback) {
-	unset($slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative, $slot_fallback_partial);
+	unset($slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative, $slot_fallback_partial, $slot_category);
 	return;
 }
 

@@ -3298,6 +3298,17 @@ class Usermodel extends CI_Model
 	 * "it redirects to the General section". The caller decides what to do
 	 * with a miss; User::all_listing() now says the category was not found.
 	 */
+	/**
+	 * The category id for a slug, or NULL. Public wrapper over
+	 * resolveCategoryIdBySlug() so controllers can hand the id to the views
+	 * that need it (category-targeted ad bookings, migration 0024) without
+	 * each of them re-deriving it with a different slug rule.
+	 */
+	public function categoryIdBySlug($category_slug, $table = 'listing_categories')
+	{
+		return $this->resolveCategoryIdBySlug($category_slug, $table);
+	}
+
 	public function getCategoryNameBySlug($category_slug, $table = 'listing_categories')
 	{
 		$cat_id = $this->resolveCategoryIdBySlug($category_slug, $table);
@@ -6107,13 +6118,27 @@ class Usermodel extends CI_Model
 	 * Returns an object with photo / link / size / slot_key, or null
 	 * when there's nothing live for that slot.
 	 */
-	public function getAdForSlot($slot_key)
+	/**
+	 * The ad to run in a slot, optionally for the category being browsed.
+	 *
+	 * $category_id is the listing category the visitor is looking at, or NULL
+	 * on a page that has no category. An ad booked against that category wins
+	 * over an untargeted one in the same slot; an untargeted booking still
+	 * runs everywhere, which is every ad sold before migration 0024. Ads had
+	 * one targeting dimension — the slot — so "category-specific banners"
+	 * could not be sold at all.
+	 */
+	public function getAdForSlot($slot_key, $category_id = NULL)
 	{
 		if (empty($slot_key)) return null;
 
+		$category_id = ($category_id === NULL || $category_id === '') ? NULL : (int) $category_id;
+
 		// Served from primeAdSlots() when the page primed its zones up
-		// front, so seven homepage slots cost one query, not seven.
-		if (self::$ad_slot_cache !== null && array_key_exists($slot_key, self::$ad_slot_cache)) {
+		// front, so seven homepage slots cost one query, not seven. The cache
+		// is only consulted for untargeted lookups — a category-specific one
+		// has to ask, because the primed set is not filtered by category.
+		if ($category_id === NULL && self::$ad_slot_cache !== null && array_key_exists($slot_key, self::$ad_slot_cache)) {
 			$live = self::$ad_slot_cache[$slot_key]['ads'];
 			if (!$live) return null;
 			return $live[array_rand($live)];
@@ -6122,15 +6147,33 @@ class Usermodel extends CI_Model
 		if (!$this->db->table_exists('ads')) return null;
 		if (!$this->db->field_exists('slot_key', 'ads_prices')) return null;
 
+		$targeted = $category_id !== NULL && $this->db->field_exists('category_id', 'ads');
+
 		$today = date('Y-m-d H:i:s');
-		return $this->db
+		$this->db
 			->select('a.id, a.ad_photo, a.ad_link, ap.size, ap.slot_key')
 			->from('ads a')
 			->join('ads_prices ap', 'ap.id = a.ads_price_id', 'inner')
 			->where('ap.slot_key', $slot_key)
 			->where('a.ad_status', 1)
 			->where('a.ad_start_date <=', $today)
-			->where('a.ad_end_date >=',   $today)
+			->where('a.ad_end_date >=',   $today);
+
+		if ($targeted) {
+			// This category, or no category at all.
+			$this->db->group_start()
+				->where('a.category_id', $category_id)
+				->or_where('a.category_id IS NULL', NULL, FALSE)
+				->group_end();
+			// A booking for this category outranks the general one.
+			$this->db->order_by('a.category_id IS NULL', '', FALSE);
+		} elseif ($this->db->field_exists('category_id', 'ads')) {
+			// No category in play, so only untargeted bookings may run —
+			// otherwise the Restaurants banner would show on the homepage.
+			$this->db->where('a.category_id IS NULL', NULL, FALSE);
+		}
+
+		return $this->db
 			->order_by('RAND()', '', false)
 			->limit(1)
 			->get()
