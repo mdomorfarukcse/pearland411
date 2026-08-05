@@ -2854,8 +2854,14 @@ class Admin extends CI_Controller
 			$info = array(
 				// 'blog_id'			=> htmlentities($this->input->post('blog_id'), ENT_QUOTES),
 				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'blog_name'    		=> htmlentities($this->input->post('blog_name'), ENT_QUOTES),
-				'blog_description'  => htmlentities($this->input->post('blog_description'), ENT_QUOTES),
+				// Stored as typed. These used to go through htmlentities(), which
+				// encoded the editor's markup — so the column held
+				// "&lt;p&gt;…" and, since every read escapes again on output,
+				// readers saw a literal "<p>" and "&rsquo;" on the cards. The
+				// public form (User::add_blog) never did this. Output is
+				// escaped at the point of display, as it is everywhere else.
+				'blog_name'    		=> $this->input->post('blog_name'),
+				'blog_description'  => $this->input->post('blog_description'),
 				'blog_status'		=> 1,
 				'isenquiry'         => $isenquiry,
 				'blog_slug'			=> $blog_slug,
@@ -2909,8 +2915,9 @@ class Admin extends CI_Controller
 			$info = array(
 				'blog_id'			=> htmlentities($this->input->post('blog_id'), ENT_QUOTES),
 				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'blog_name'    		=> htmlentities($this->input->post('blog_name'), ENT_QUOTES),
-				'blog_description'  => htmlentities($this->input->post('blog_description'), ENT_QUOTES),
+				// Stored as typed — see the note in add_blog().
+				'blog_name'    		=> $this->input->post('blog_name'),
+				'blog_description'  => $this->input->post('blog_description'),
 				'isenquiry'         => $isenquiry,
 				'blog_slug'			=> $blog_slug
 			);

@@ -177,7 +177,25 @@ if (!function_exists('content_text')) {
      */
     function content_text($value)
     {
-        $value = preg_replace('#<\s*(br|/p|/div|/li|/h[1-6]|/tr)\s*/?\s*>#i', "\n", (string) $value);
+        $value = (string) $value;
+
+        // Some bodies are stored *entity-encoded*: the admin blog form ran the
+        // pasted markup through htmlentities() before saving, so the column
+        // holds "&lt;p&gt;…&lt;/p&gt;" rather than "<p>…</p>". Left alone, the
+        // tag work below finds no tags to strip and the decode at the end turns
+        // them into visible text — which is how "<p>Why Pearland is one of
+        // America&rsquo;s…" ended up printed on the blog cards. Decoding first
+        // gives the rest of this function real markup to work with.
+        //
+        // The signal is an encoded *closing* tag ("&lt;/p&gt;"), not just
+        // "&lt;": a post that explains "use the &lt;p&gt; tag to start a
+        // paragraph" is talking about markup rather than made of it, and
+        // should keep showing what it typed.
+        if (strpos($value, '<') === false && preg_match('#&lt;\s*/\s*[a-z]#i', $value)) {
+            $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        }
+
+        $value = preg_replace('#<\s*(br|/p|/div|/li|/h[1-6]|/tr)\s*/?\s*>#i', "\n", $value);
         $value = strip_tags($value);
         $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $value = str_replace("\xC2\xA0", ' ', $value);           // stray &nbsp;

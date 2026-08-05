@@ -62,7 +62,7 @@
 
 												<textarea name="blog_description" id="blog_description" required="required" class="form-control" placeholder="Post Details">
 
-														<?= $blog->blog_description; ?>
+														<?= e($blog->blog_description); ?>
 
 															
 

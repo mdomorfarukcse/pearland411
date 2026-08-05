@@ -429,7 +429,7 @@ if (!function_exists('createSafeSlug')) {
 
 								<img src="<?= base_url($value->blog_image); ?>" alt="">
 
-								<h5><?= $value->blog_name; ?></h5>
+								<h5><?= e($value->blog_name); ?></h5>
 
 								<span>Created: <?= date('d, M Y', strtotime($value->created_at)); ?></span>
 
