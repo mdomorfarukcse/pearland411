@@ -100,9 +100,30 @@ $reps      = function_exists('sales_representatives') ? sales_representatives() 
 
 						<div class="form-group">
 							<label for="password">Password <span class="p411-req">*</span></label>
+							<?php // minlength matches the server's min_length[8] and this field's
+							      // own promise. The server accepted six, so "At least 8
+							      // characters" was not true and nothing enforced it either end. ?>
 							<input type="password" name="password" id="password" autocomplete="new-password"
-								   class="form-control" placeholder="At least 8 characters" required>
+								   class="form-control" placeholder="At least 8 characters" minlength="8" maxlength="128" required>
 							<div class="formError"><?= form_error('password') ?></div>
+						</div>
+
+						<div class="form-group">
+							<label for="password_confirm">Confirm password <span class="p411-req">*</span></label>
+							<input type="password" name="password_confirm" id="password_confirm" autocomplete="new-password"
+								   class="form-control" placeholder="Type it again" minlength="8" maxlength="128" required>
+							<div class="formError"><?= form_error('password_confirm') ?></div>
+						</div>
+
+						<?php
+						// Honeypot. Not type="hidden" — a bot skips those; it fills in
+						// anything that looks like a real field. Moved off-screen rather
+						// than display:none for the same reason. Never shown to a person,
+						// so a value in it means the submission is automated.
+						?>
+						<div aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;">
+							<label for="website_url">Leave this field empty</label>
+							<input type="text" name="website_url" id="website_url" tabindex="-1" autocomplete="off" value="">
 						</div>
 
 						<div class="form-group">

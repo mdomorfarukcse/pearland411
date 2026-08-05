@@ -111,6 +111,27 @@ class User extends CI_Controller
 	}
 
 	/**
+	 * Where to send someone back to after an enquiry that could not be saved.
+	 *
+	 * The referer, but only when it is one of ours. The enquiry handler used to
+	 * `redirect($_SERVER['HTTP_REFERER'])` with no isset() guard at all — an
+	 * undefined-index notice and a redirect to an empty URL when there is no
+	 * referer, and a redirect to wherever an attacker's page said otherwise.
+	 */
+	private function enquiryReturnUrl()
+	{
+		$referer = trim((string) $this->getServerVar('HTTP_REFERER', ''));
+		if ($referer === '') {
+			return base_url();
+		}
+
+		$here = rtrim((string) parse_url(base_url(), PHP_URL_HOST), '/');
+		$there = (string) parse_url($referer, PHP_URL_HOST);
+
+		return ($there !== '' && strcasecmp($there, $here) === 0) ? $referer : base_url();
+	}
+
+	/**
 	 * Helper method to safely get POST variables
 	 * Prevents undefined index errors for $_POST variables
 	 */
@@ -860,10 +881,19 @@ class User extends CI_Controller
 			$data['search_results'] = array();
 			$data['total_results'] = 0;
 
+			// How many results per section. globalSearch() used to ignore its own
+			// $limit and hard-code 20/15/10 per section, with no pager anywhere
+			// on this page — so a query matching 200 businesses showed 20 and
+			// there was no way to reach the 21st. ?show= raises the cap; the
+			// model clamps it, so a hand-typed number cannot ask for the table.
+			$data['search_limit'] = (int) ($this->input->get('show') ?: 20);
+
 			if (!empty($search_query)) {
 				// Get search results
-				$data['search_results'] = $this->usermodel->globalSearch($search_query);
+				$data['search_results'] = $this->usermodel->globalSearch($search_query, $data['search_limit']);
 				$data['total_results'] = isset($data['search_results']['total_count']) ? $data['search_results']['total_count'] : 0;
+				$data['search_limit']  = isset($data['search_results']['limit']) ? (int) $data['search_results']['limit'] : 20;
+				$data['search_has_more'] = !empty($data['search_results']['has_more']);
 			}
 
 			// Load additional data for the page
@@ -1953,6 +1983,13 @@ class User extends CI_Controller
 
 		// Set page title based on category
 		$category_name = $cat_slug ? $this->usermodel->getCategoryNameBySlug($cat_slug) : '';
+
+		// A slug that matches no category used to be titled "General" over an
+		// empty list, which reads as a real but empty section rather than a
+		// dead link — the reported "clicking Sports and Health redirects to the
+		// General section". Say so instead, and offer the full category list.
+		$data['category_not_found'] = ($cat_slug !== '' && $category_name === '');
+
 		if ($cat_slug) {
 			$data['title']            = ucfirst($category_name ?: str_replace('-', ' ', $cat_slug)) . ' in Pearland, TX — Pearland411 Directory';
 			$data['meta_description'] = 'Browse ' . ($total_listings ? $total_listings . ' ' : '')
@@ -6664,14 +6701,64 @@ class User extends CI_Controller
 		$rental_id = $this->input->post('rental_id') ?: null;
 		$video_id = $this->input->post('video_id') ?: null;
 
-		// Validation
-		if (empty($enquiry_name) || empty($enquiry_email)) {
+		// Validation.
+		//
+		// This used to be `if (empty($name) || empty($email))` and nothing else
+		// — no email format check, no length limits, no phone rule. The only
+		// real constraints were the `required` / type="email" / pattern
+		// attributes in the markup, which are gone the moment someone posts
+		// directly or turns JavaScript off. That is "little constraint in
+		// entering texts". The errors are keyed by field name so the page can
+		// mark the offending box instead of showing one flat banner.
+		$errors = array();
+
+		if ($enquiry_name === NULL || trim($enquiry_name) === '') {
+			$errors['enquiry_name'] = 'Please tell us your name.';
+		} elseif (mb_strlen(trim($enquiry_name)) > 100) {
+			$errors['enquiry_name'] = 'That name is too long (100 characters maximum).';
+		}
+
+		if ($enquiry_email === NULL || trim($enquiry_email) === '') {
+			$errors['enquiry_email'] = 'Please give us an email address so they can reply.';
+		} elseif (!filter_var(trim($enquiry_email), FILTER_VALIDATE_EMAIL)) {
+			$errors['enquiry_email'] = 'That does not look like an email address.';
+		} elseif (mb_strlen(trim($enquiry_email)) > 190) {
+			$errors['enquiry_email'] = 'That email address is too long.';
+		}
+
+		if ($enquiry_mobile !== NULL && trim($enquiry_mobile) !== '') {
+			if (!preg_match('/^[0-9+\-\s()]{7,20}$/', trim($enquiry_mobile))) {
+				$errors['enquiry_mobile'] = 'Please use digits, spaces, brackets, + or - only.';
+			}
+		}
+
+		if ($enquiry_message !== NULL && mb_strlen($enquiry_message) > 5000) {
+			// A 10 MB message used to be inserted verbatim.
+			$errors['enquiry_message'] = 'That message is too long (5000 characters maximum).';
+		}
+
+		if (!empty($errors)) {
 			if ($this->input->is_ajax_request()) {
-				echo json_encode(['success' => false, 'message' => 'Please fill in all required fields.']);
+				echo json_encode(array(
+					'success' => false,
+					'message' => reset($errors),
+					'errors'  => $errors,
+				));
 				return;
 			}
-			$this->session->set_flashdata('error_msg', 'Please fill in all required fields.');
-			redirect($_SERVER['HTTP_REFERER']);
+			// Keep what they typed. The old branch flashed a message and
+			// redirected, discarding the form, so "try again" meant retyping
+			// everything — and it redirected to a raw $_SERVER['HTTP_REFERER']
+			// with no isset() guard, which with no referer is an empty URL.
+			$this->session->set_flashdata('error_msg', reset($errors));
+			$this->session->set_flashdata('enquiry_errors', $errors);
+			$this->session->set_flashdata('enquiry_old', array(
+				'enquiry_name'    => $enquiry_name,
+				'enquiry_email'   => $enquiry_email,
+				'enquiry_mobile'  => $enquiry_mobile,
+				'enquiry_message' => $enquiry_message,
+			));
+			redirect($this->enquiryReturnUrl());
 			return;
 		}
 
@@ -6784,9 +6871,12 @@ class User extends CI_Controller
 	===================*/
 	private function getDynamicRedirectUrl($source, $identifier)
 	{
-		// If HTTP_REFERER is available, use it (most reliable)
-		if (!empty($_SERVER['HTTP_REFERER'])) {
-			return $_SERVER['HTTP_REFERER'];
+		// If a same-origin HTTP_REFERER is available, use it (most reliable).
+		// enquiryReturnUrl() does the isset() guard and the host check that the
+		// raw superglobal read here did not.
+		$referer = $this->enquiryReturnUrl();
+		if ($referer !== base_url()) {
+			return $referer;
 		}
 
 		// Fallback: construct URL based on source and identifier

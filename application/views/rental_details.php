@@ -334,7 +334,7 @@
                                 <span class="text-danger"><?= form_error("enquiry_email") ? form_error("enquiry_email") : ''; ?></span>
                             </div>
                             <div class="form-group ic-pho">
-                                <input type="text" class="form-control" <?= $disabled; ?> name="enquiry_mobile" value="<?= set_value('enquiry_mobile'); ?>" placeholder="Enter mobile number *" pattern="[0-9]{10,15}" title="Please enter a valid phone number" required>
+                                <input type="text" class="form-control" <?= $disabled; ?> name="enquiry_mobile" value="<?= set_value('enquiry_mobile'); ?>" placeholder="Enter mobile number *" pattern="[0-9+\-\s()]{7,20}" title="7 to 20 characters: digits, spaces, + ( ) and - are allowed" required>
                                 <span class="text-danger"><?= form_error("enquiry_mobile") ? form_error("enquiry_mobile") : ''; ?></span>
                             </div>
                             <div class="form-group">

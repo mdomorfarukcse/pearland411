@@ -387,7 +387,9 @@
                 <p class="mb-0">Find businesses, news, events, and more in Pearland</p>
 
                 <!-- Search Form -->
-                <form method="GET" action="search" class="search-form">
+                <?php // Absolute: a relative "search" posts to /search/foo/search when
+                      // submitted from /search/foo, which 404s. ?>
+                <form method="GET" action="<?php echo html_escape(base_url('search')); ?>" class="search-form">
                     <input type="text" name="q" class="search-input"
                         placeholder="Search businesses, news, events..."
                         value="<?php echo isset($search_query) ? htmlspecialchars($search_query) : ''; ?>"
@@ -416,8 +418,26 @@
                             <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16" style="margin-right: 8px;">
                                 <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z" />
                             </svg>
-                            Found <?php echo isset($search_results['total_count']) ? $search_results['total_count'] : 0; ?> results
+                            <?php
+                            $sr_total = isset($search_results['total_count']) ? (int) $search_results['total_count'] : 0;
+                            $sr_more  = !empty($search_results['has_more']);
+                            $sr_limit = isset($search_results['limit']) ? (int) $search_results['limit'] : 20;
+                            ?>
+                            <?php // "results" was the size of the truncated arrays, so the page
+                                  // under-reported its own match count. Say when it is a floor. ?>
+                            Found <?php echo $sr_total; ?><?php echo $sr_more ? '+' : ''; ?> result<?php echo $sr_total === 1 ? '' : 's'; ?>
                         </h5>
+                        <?php if ($sr_more): ?>
+                            <?php // There used to be no pager, no "load more" and no offset
+                                  // anywhere on this page, so results past the per-section cap
+                                  // were simply unreachable. ?>
+                            <p style="margin:6px 0 0;">
+                                Showing the first <?php echo $sr_limit; ?> in each section.
+                                <a href="<?php echo html_escape(base_url('search') . '?q=' . rawurlencode((string) $search_query) . '&show=' . min(500, $sr_limit * 5)); ?>">
+                                    Show more results
+                                </a>
+                            </p>
+                        <?php endif; ?>
                     </div>
 
                     <?php if (isset($search_results['total_count']) && $search_results['total_count'] > 0): ?>
