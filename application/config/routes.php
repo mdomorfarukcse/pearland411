@@ -57,6 +57,8 @@ $route['contact-us'] = 'User/contact_us';
 $route['contact-submit'] = 'User/contact_submit';
 $route['pricing-plan'] = 'User/pricing_plan';
 $route['pricing-details'] = 'User/pricing_plan';
+// Free-tier signup for an already-logged-in member (POST from /pricing-plan).
+$route['start-free'] = 'User/start_free_plan';
 $route['all-news'] = 'User/news';
 $route['post-your-ads'] = 'User/post_your_ads';
 

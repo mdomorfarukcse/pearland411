@@ -39,6 +39,10 @@ if (!empty($cart['items'])) {
     foreach ($cart['items'] as $ci) { $cartIds[] = (int) $ci['plan_id']; }
 }
 
+// Signed in? Distinct from having a subscription — the free-tier button used to
+// conflate the two and sent logged-in visitors without a plan to /register.
+$isLoggedIn = !empty($is_logged_in);
+
 /** Bullet list for a card: limits for listing/special tiers, placement details otherwise. */
 function pp_features($plan, $cat)
 {
@@ -123,7 +127,7 @@ function pp_features($plan, $cat)
     .pp-feats li:before{content:"";position:absolute;left:0;top:4px;width:15px;height:15px;border-radius:50%;background:#F1F7E5;}
     .pp-feats li:after{content:"";position:absolute;left:4.5px;top:8px;width:5px;height:8px;border-right:2px solid var(--go);border-bottom:2px solid var(--go);transform:rotate(42deg);}
     .pp-cta{margin-top:auto;}
-    .pp-buy{display:block;width:100%;text-align:center;background:var(--brand);color:#fff;border:none;padding:12px;border-radius:10px;font-weight:700;font-size:14.5px;cursor:pointer;text-decoration:none;transition:.15s;}
+    .pp-buy{display:block;width:100%;text-align:center;background:var(--brand);color:#fff;border:none;padding:12px;border-radius:10px;font-family:inherit;font-weight:700;font-size:14.5px;cursor:pointer;text-decoration:none;transition:.15s;}
     .pp-buy:hover{background:#171A45;color:#fff;}
     .pp-buy.free{background:#fff;color:var(--brand);border:1.5px solid var(--brand);}
     .pp-buy.ownedbtn{background:#F1F7E5;color:var(--go);cursor:default;}
@@ -173,6 +177,17 @@ function pp_features($plan, $cat)
     <div class="pp-wrap">
 
         <div class="pp-err" id="ppErr"></div>
+
+        <?php
+        /* Server-side notices land here too: /start-free and /buy-now both bounce
+           back to this page with a flash message, which previously had nowhere
+           to render. `display:block` overrides .pp-err's hidden default (the JS
+           above only unhides it for cart errors). */
+        $pp_notice = $this->session->flashdata('error') ?: $this->session->flashdata('message');
+        ?>
+        <?php if (!empty($pp_notice)): ?>
+            <div class="pp-err" style="display:block;"><?= htmlspecialchars($pp_notice, ENT_QUOTES, 'UTF-8') ?></div>
+        <?php endif; ?>
 
         <?php if (!empty($my_packages)): ?>
             <div class="pp-mine">
@@ -253,10 +268,23 @@ function pp_features($plan, $cat)
                             <?php endif; ?>
 
                             <div class="pp-cta">
-                                <?php if ($isFree): ?>
-                                    <a class="pp-buy free" href="<?= !empty($user_subscription) ? base_url('user/dashboard') : base_url('register') ?>">Get started free</a>
-                                <?php elseif ($isOwned): ?>
+                                <?php if ($isOwned): ?>
                                     <a class="pp-buy ownedbtn" href="<?= base_url('user/my-account') ?>">Active — manage</a>
+                                <?php elseif ($isFree): ?>
+                                    <?php if (!$isLoggedIn): ?>
+                                        <a class="pp-buy free" href="<?= base_url('register') ?>">Get started free</a>
+                                    <?php elseif (!empty($user_subscription)): ?>
+                                        <?php /* Already on another active plan — the free tier would be a downgrade. */ ?>
+                                        <a class="pp-buy free" href="<?= base_url('user/user-listing') ?>">Go to my listings</a>
+                                    <?php else: ?>
+                                        <?php /* Signed in with no plan: start the free tier here. This used to link
+                                                  to /register, which bounced an already-logged-in user to a signup
+                                                  form they had no use for. */ ?>
+                                        <form method="post" action="<?= base_url('start-free') ?>" style="margin:0;">
+                                            <input type="hidden" name="plan_id" value="<?= (int) $plan->id ?>">
+                                            <button type="submit" class="pp-buy free">Get started free</button>
+                                        </form>
+                                    <?php endif; ?>
                                 <?php else: ?>
                                     <a class="pp-buy" href="<?= base_url('buy-now?plan_id=' . (int) $plan->id) ?>">Buy Now</a>
                                     <button type="button" class="pp-add <?= $inCart ? 'on' : '' ?>"

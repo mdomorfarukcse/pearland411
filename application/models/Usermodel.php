@@ -5249,6 +5249,70 @@ class Usermodel extends CI_Model
 	}
 
 	/**
+	 * Put a user on a zero-cost plan (the free "Basic Listing" tier).
+	 *
+	 * Deliberately simpler than activateHelcimSubscription(): nothing is
+	 * charged, so there is no transaction row and no card to vault. The caller
+	 * is responsible for checking that the plan really is free and that the
+	 * user has no active subscription to downgrade — see
+	 * User::start_free_plan().
+	 *
+	 * The term is open-ended rather than the plan's duration_days. Renewal is
+	 * card-driven (getRenewableSubscriptions() only picks up auto_renew rows
+	 * with a next_billing_date), so a 30-day end_date would quietly strand a
+	 * free member with no way to renew. auto_renew stays 0 and
+	 * next_billing_date stays NULL, so the renewal cron never looks at it.
+	 *
+	 * Returns the new subscription id, or FALSE on failure.
+	 */
+	public function activateFreePlan($user_id, $plan_id)
+	{
+		$user_id = (int) $user_id;
+		$plan_id = (int) $plan_id;
+		if (!$user_id || !$plan_id) {
+			return false;
+		}
+
+		$now = date('Y-m-d H:i:s');
+		$end = date('Y-m-d H:i:s', strtotime('+10 years'));
+
+		$this->db->trans_start();
+
+		$this->db->insert('subscriptions', array(
+			'user_id'           => $user_id,
+			'plan_id'           => $plan_id,
+			'status'            => 'active',
+			'start_date'        => $now,
+			'end_date'          => $end,
+			'next_billing_date' => null,
+			'created_at'        => $now,
+			'updated_at'        => $now,
+			'duration_days'     => 3650,
+			'duration_months'   => 120,
+			'payment_status'    => 'paid', // nothing to collect
+			'total_amount'      => 0,
+			'currency'          => 'USD',
+			'billing_cycle'     => 'monthly',
+			'auto_renew'        => 0,
+		));
+		$subscription_id = (int) $this->db->insert_id();
+
+		// Usage window, same as the paid path — the dashboards read counts from
+		// this table to work out what is left of an allowance.
+		$this->db->insert('user_usage_tracking', array(
+			'user_id'         => $user_id,
+			'subscription_id' => $subscription_id,
+			'reset_date'      => date('Y-m-d', strtotime('+10 years')),
+			'created_at'      => $now,
+			'updated_at'      => $now,
+		));
+
+		$this->db->trans_complete();
+
+		return $this->db->trans_status() ? $subscription_id : false;
+	}
+
+	/**
 	 * Everything a user currently owns, for the "My packages" strip on the
 	 * pricing page: the active listing subscription plus any paid ad
 	 * placements (banners/videos/add-ons), each with a computed expiry.
