@@ -725,4 +725,40 @@ DROP TEMPORARY TABLE IF EXISTS `p411_slug_dupes`;
 DROP TEMPORARY TABLE IF EXISTS `p411_slug_calc`;
 
 
+
+-- ===========================================================================
+-- 0021_blog_dates.sql
+-- ---------------------------------------------------------------------------
+-- "All blogs have the same date": Admin::add_blog() never wrote
+-- blogs.created_at, so those rows carried the zero date / NULL and the index
+-- printed the epoch for every one of them. Make the column nullable with a
+-- sensible default and turn the zero dates into NULL — honest "no date
+-- recorded", which the views now omit rather than printing 1970. Real dates
+-- are set per post at /admin/blog-list -> Edit.
+--
+-- phpMyAdmin cannot run DELIMITER blocks, so the guards here are prepared
+-- statements built from INFORMATION_SCHEMA rather than a stored procedure.
+-- ===========================================================================
+
+SET @p411_blog_created_missing = (
+    SELECT COUNT(*) = 0 FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'blogs' AND COLUMN_NAME = 'created_at');
+
+SET @sql = IF(@p411_blog_created_missing,
+    'ALTER TABLE `blogs` ADD COLUMN `created_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @p411_blog_created_needs_fix = (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'blogs' AND COLUMN_NAME = 'created_at'
+       AND (IS_NULLABLE <> 'YES' OR COLUMN_DEFAULT IS NULL));
+
+SET @sql = IF(@p411_blog_created_needs_fix > 0,
+    'ALTER TABLE `blogs` MODIFY COLUMN `created_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP',
+    'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+UPDATE `blogs` SET `created_at` = NULL WHERE `created_at` = '0000-00-00 00:00:00';
+
 SET FOREIGN_KEY_CHECKS = 1;

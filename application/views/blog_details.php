@@ -391,7 +391,9 @@
 								<line x1="8" y1="2" x2="8" y2="6"></line>
 								<line x1="3" y1="10" x2="21" y2="10"></line>
 							</svg>
-							<span class="date-text"><?= date('M d', strtotime($blog->created_at)); ?></span>
+							<?php // Was date('M d', …), which printed the epoch when no date was
+							      // recorded. us_date() gives '' instead, and US order. ?>
+							<span class="date-text"><?= e(us_date($blog->created_at ?? null)) ?></span>
 						</div>
 					</div>
 					<h1 class="pg_title"><?= e($blog->blog_name); ?></h1>
@@ -455,8 +457,10 @@
 											<img src="<?= base_url($rel_blog->blog_image); ?>" alt="<?= htmlspecialchars($rel_blog->blog_name); ?>">
 										</div>
 										<div>
-											<?php $date = date('d <b>M</b>', strtotime($rel_blog->created_at)); ?>
-											<span><?= $date ?></span>
+											<?php $rel_ts = us_date_ts($rel_blog->created_at ?? null); ?>
+											<?php if ($rel_ts): ?>
+												<span><?= e(date('j', $rel_ts)) ?> <b><?= e(date('M', $rel_ts)) ?></b></span>
+											<?php endif; ?>
 											<h2><?= htmlspecialchars($rel_blog->blog_name); ?></h2>
 											<p><?= isset($rel_blog->blog_location) ? htmlspecialchars($rel_blog->blog_location) : '' ?></p>
 										</div>

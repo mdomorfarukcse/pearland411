@@ -171,8 +171,14 @@ $route['event_details/(:any)'] = 'user/event_details/$1';
 $route['classifieds-details/(:any)'] = '/user/classifieds-details/$1';
 // Products - Not working
 $route['products-details/(:any)'] = 'user/product_details/$1';
-// blogs
+// blogs. Same pair as news/videos/events: `blog-details` (singular) is what the
+// index and the detail page's own canonical link use, `blogs-details` is the
+// older form already in the wild, and `blog_details` matches the method name.
+// None of them reach a controller on their own — CI3's catch-all `(:any)` is
+// [^/]+ and matches a single segment.
+$route['blog-details/(:any)']  = 'user/blog_details/$1';
 $route['blogs-details/(:any)'] = 'user/blog_details/$1';
+$route['blog_details/(:any)']  = 'user/blog_details/$1';
 // rental 
 $route['rental-details/(:any)'] = 'user/rental-details/$1';
 // House 

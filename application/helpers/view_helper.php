@@ -540,3 +540,74 @@ if (!function_exists('duplicate_listing_enabled')) {
         return site_setting('feature_duplicate_listing_enabled', '0') === '1';
     }
 }
+
+if (!function_exists('us_date')) {
+    /**
+     * A stored date, formatted the way the audience reads dates.
+     *
+     * Pearland411 is a Texas directory, but the content pages printed
+     * `j M Y` ("5 Aug 2026") and the blog index printed `d, M Y`
+     * ("05, Aug 2026") — neither of which is how anybody writes a date in the
+     * US, and the second is not how anybody writes one anywhere.
+     *
+     * Just as important, it returns '' rather than a wrong date for input the
+     * old calls turned into "01 Jan 1970": NULL, an empty string and MySQL's
+     * zero date all reach `strtotime()` as FALSE, and `date($fmt, FALSE)`
+     * cheerfully prints the epoch. Callers test the result and omit the line.
+     *
+     *   us_date($blog->created_at)              → "Aug 5, 2026"
+     *   us_date($blog->created_at, 'long')      → "August 5, 2026"
+     *   us_date($blog->created_at, 'numeric')   → "08/05/2026"
+     *   us_date($blog->created_at, 'M')         → "Aug"      (any date() string)
+     *   us_date('0000-00-00 00:00:00')          → ""
+     *
+     * @param  mixed  $value  date string or unix timestamp
+     * @param  string $format named style, or a raw date() format
+     * @return string
+     */
+    function us_date($value, $format = 'M j, Y')
+    {
+        $ts = us_date_ts($value);
+        if ($ts === false) {
+            return '';
+        }
+
+        $named = array(
+            'short'    => 'M j, Y',        // Aug 5, 2026
+            'long'     => 'F j, Y',        // August 5, 2026
+            'numeric'  => 'm/d/Y',         // 08/05/2026
+            'datetime' => 'M j, Y g:i A',  // Aug 5, 2026 2:30 PM
+        );
+
+        return date(isset($named[$format]) ? $named[$format] : $format, $ts);
+    }
+}
+
+if (!function_exists('us_date_ts')) {
+    /**
+     * Timestamp for a stored date, or FALSE when there isn't a real one.
+     *
+     * MySQL's zero date is spelled several ways depending on the column type
+     * and how it was written, and `strtotime('0000-00-00')` is FALSE on some
+     * builds and a negative timestamp on others — so the zero dates are
+     * matched before they get near strtotime().
+     */
+    function us_date_ts($value)
+    {
+        if ($value === null || $value === '' || $value === false) {
+            return false;
+        }
+        if (is_int($value) || ctype_digit((string) $value)) {
+            $ts = (int) $value;
+            return $ts > 0 ? $ts : false;
+        }
+
+        $str = trim((string) $value);
+        if ($str === '' || strpos($str, '0000-00-00') === 0) {
+            return false;
+        }
+
+        $ts = strtotime($str);
+        return ($ts === false || $ts <= 0) ? false : $ts;
+    }
+}

@@ -43,7 +43,9 @@
                     <td><?= $i; ?></td>
                     <td>
                       <?= e($blog->blog_name); ?>
-                      <span><?= date('d, M Y', strtotime($blog->created_at)); ?></span>
+                      <?php // Was date('d, M Y', strtotime(...)), which printed the epoch
+                            // for the posts that have no date rather than saying so. ?>
+                      <span><?= ($__d = us_date($blog->created_at ?? null)) !== '' ? e($__d) : '<em>no date set</em>' ?></span>
                     </td>
                     <td>
                       <?php if (!empty($blog->name)) : ?>
