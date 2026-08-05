@@ -1738,6 +1738,25 @@
 		}
 
 		/**
+		 * Whether $table already has a row whose $column is $slug.
+		 *
+		 * The general form of listingSlugExists(), for the content tables that
+		 * had no uniqueness pass at all. Table and column are checked against
+		 * the schema rather than interpolated blind, since both reach the query
+		 * builder as identifiers.
+		 */
+		public function slugExists($table, $column, $slug)
+		{
+			if (!$this->db->table_exists($table) || !$this->db->field_exists($column, $table)) {
+				return false;
+			}
+
+			return $this->db->from($table)
+				->where($column, $slug)
+				->count_all_results() > 0;
+		}
+
+		/**
 		 * Fetch every active (non-deleted) listing with the human-readable
 		 * category / sub-category names and owner email, in the exact shape
 		 * the CSV export / import template expects.
@@ -1769,16 +1788,99 @@
 		/*==============
 		LISTINGS
     ==============*/
-		public function getAllListings($limit = NULL, $offset = NULL)
+		/**
+		 * The columns an admin listings search looks in.
+		 *
+		 * Name and address are the obvious ones; postal code and category are
+		 * there because that is how staff actually look a business up.
+		 */
+		private function adminListingSearchColumns()
 		{
-			return $data = $this->db->select('listings.listing_id,listings.listing_name, listings.postal_code,listings.listing_status,listings.listing_id,listings.listing_slug, listings.created_at,listings.listing_image, user.user_id,user.name,categories.category_name,sub_categories.sub_category_name')->from('listings')
+			return array(
+				'listings.listing_name',
+				'listings.listing_address',
+				'listings.postal_code',
+				'listings.listing_email',
+				'listings.listing_mobile',
+				'categories.category_name',
+				'user.name',
+			);
+		}
+
+		/**
+		 * Add a word-by-word search to the query currently being built.
+		 *
+		 * Every word has to appear somewhere in the row, but not in the same
+		 * column and not next to each other — so "central bbq" finds "Central
+		 * Texas BBQ". Same rule as the public search
+		 * (Usermodel::applySearchTerms), which is private to that model.
+		 * Capped at six words so a pasted paragraph cannot build a
+		 * hundred-clause query.
+		 */
+		private function applyAdminListingSearch($q)
+		{
+			$terms = preg_split('/\s+/', trim((string) $q), -1, PREG_SPLIT_NO_EMPTY);
+			if (empty($terms)) {
+				return;
+			}
+			$terms   = array_slice(array_unique($terms), 0, 6);
+			$columns = $this->adminListingSearchColumns();
+
+			$this->db->group_start();
+			foreach ($terms as $term) {
+				$this->db->group_start();
+				$first = true;
+				foreach ($columns as $column) {
+					$first ? $this->db->like($column, $term) : $this->db->or_like($column, $term);
+					$first = false;
+				}
+				$this->db->group_end();
+			}
+			$this->db->group_end();
+		}
+
+		/**
+		 * @param int|null    $limit
+		 * @param int|null    $offset
+		 * @param string|null $q Search text. Applied in SQL, across every
+		 *                       listing — the admin table's box used to be a
+		 *                       browser-side filter over the ten rows the
+		 *                       server had already sent, so a business on page
+		 *                       four could not be found by typing its name.
+		 */
+		public function getAllListings($limit = NULL, $offset = NULL, $q = NULL)
+		{
+			$this->db->select('listings.listing_id,listings.listing_name, listings.postal_code,listings.listing_status,listings.listing_id,listings.listing_slug, listings.created_at,listings.listing_image, user.user_id,user.name,categories.category_name,sub_categories.sub_category_name')->from('listings')
 				->join('user', 'listings.user_id = user.user_id', 'left')
 				->where('is_deleted', 0)
 				->join('listing_categories as categories', 'categories.category_id = listings.category_id', 'LEFT')
-				->join('listing_sub_categories as sub_categories', 'sub_categories.sub_category_id = listings.sub_category_id', 'LEFT')
-				->order_by('listing_id', 'DESC')
+				->join('listing_sub_categories as sub_categories', 'sub_categories.sub_category_id = listings.sub_category_id', 'LEFT');
+
+			$this->applyAdminListingSearch($q);
+
+			return $this->db->order_by('listing_id', 'DESC')
 				->limit($limit, $offset)
 				->get()->result();
+		}
+
+		/**
+		 * How many listings the admin table has, honouring the same search.
+		 *
+		 * The pager used to be sized with count(getAllListings(NULL, NULL)),
+		 * which pulled every row with all three joins on every page load just
+		 * to measure it. Distinct from countAllListings(), which is the
+		 * dashboard's count_all('listings') and includes trashed rows.
+		 */
+		public function countAdminListings($q = NULL)
+		{
+			$this->db->from('listings')
+				->join('user', 'listings.user_id = user.user_id', 'left')
+				->where('listings.is_deleted', 0)
+				->join('listing_categories as categories', 'categories.category_id = listings.category_id', 'LEFT');
+
+			$this->applyAdminListingSearch($q);
+
+			return (int) $this->db->count_all_results();
 		}
 		public function getAllDeletedListings($limit = NULL, $offset = NULL)
 		{

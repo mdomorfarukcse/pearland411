@@ -989,10 +989,14 @@ class Admin extends CI_Controller
 			$total_rows = $this->adminmodel->countAllListingSubCategory();
 
 			// Pagination Configuration
+			// 100 per page, matching all_listing_category(): sub-categories are
+			// few, the inline search in admin-table.js only sees the rows the
+			// server sent, and the view asks for data-page-size="0" so the whole
+			// page is visible at once. Bulk delete ticks what you can see.
 			$config = [
 				'base_url'         => base_url('admin/all_listing_sub_category'),
 				'total_rows'       => $total_rows,
-				'per_page'         => 10,
+				'per_page'         => 100,
 				'uri_segment'      => 3,
 				'use_page_numbers' => TRUE,
 				'num_links'        => 3,
@@ -1158,11 +1162,17 @@ class Admin extends CI_Controller
 	=====================*/
 	public function all_listings()
 	{
+		// ?q= searches every listing in SQL. The box above this table used to be
+		// a browser-side filter over the ten rows the server had already sent,
+		// so a business on page four could not be found by typing its name.
+		$q = trim((string) $this->input->get('q', TRUE));
+
 		$config = [
 			'base_url' => base_url('admin/all_listings'),
 			'per_page' => 10,
-			'total_rows' => count($this->adminmodel->getAllListings(NULL, NULL)),
+			'total_rows' => $this->adminmodel->countAdminListings($q),
 			'uri_segment' => 3,
+			'reuse_query_string' => TRUE,
 		];
 
 		$config['full_tag_open'] = '<ul class="pagination">';
@@ -1185,8 +1195,10 @@ class Admin extends CI_Controller
 		$this->pagination->initialize($config);
 
 		$page = ($this->uri->segment(3)) ? $this->uri->segment(3) : 0;
-		$data['AllListings']   = $this->adminmodel->getAllListings($config['per_page'], $page);
+		$data['AllListings']   = $this->adminmodel->getAllListings($config['per_page'], $page, $q);
 		$data['start_number'] = $page + 1;
+		$data['search_query'] = $q;
+		$data['total_rows']   = $config['total_rows'];
 
 		// Collect listing IDs and get their view counts via the new reusable model method
 		$listing_ids = array();
@@ -1752,6 +1764,38 @@ class Admin extends CI_Controller
 		$slug = $base;
 		$suffix = 1;
 		while ($this->adminmodel->listingSlugExists($slug)) {
+			$suffix++;
+			$slug = $base . '-' . $suffix;
+		}
+		return $slug;
+	}
+
+	/**
+	 * A slug for $title that no row in $table.$column already holds.
+	 *
+	 * Two articles with the same headline produced the same slug. Where the
+	 * column is unique that made the second INSERT fail — and the controller
+	 * reported a flat "Adding News Failed!!" with no reason, which is what
+	 * "cannot add more news" looks like from the admin's side. Where it is not
+	 * unique it is worse but quieter: every lookup is
+	 * getSingleValue($slug, …), so the second article is unreachable and edits
+	 * meant for it land on the first.
+	 *
+	 * @param string      $title
+	 * @param string      $table
+	 * @param string      $column
+	 * @param string|null $fallback Used when the title slugs to nothing.
+	 */
+	private function makeUniqueContentSlug($title, $table, $column, $fallback = 'post')
+	{
+		$base = pearland_slug($title);
+		if ($base === '') {
+			$base = $fallback;
+		}
+
+		$slug = $base;
+		$suffix = 1;
+		while ($this->adminmodel->slugExists($table, $column, $slug)) {
 			$suffix++;
 			$slug = $base . '-' . $suffix;
 		}
@@ -2865,7 +2909,7 @@ class Admin extends CI_Controller
 			$this->load->view('admin/footer');
 		} else {
 			$isenquiry = $this->input->post('isenquiry') == 'on' ? 1 : 0;
-			$blog_slug = pearland_slug($this->input->post('blog_name'));
+			$blog_slug = $this->makeUniqueContentSlug($this->input->post('blog_name'), 'blogs', 'blog_slug', 'post');
 			$info = array(
 				'user_id'			=> $this->input->post('user_id'),
 				// Stored as typed. These used to go through htmlentities(), which
@@ -2901,7 +2945,11 @@ class Admin extends CI_Controller
 				$this->session->set_flashdata('message', 'Successfully Added Blog!!');
 				redirect('admin/blog-list');
 			} else {
-				$this->session->set_flashdata('message', 'Adding Blog Failed!!');
+				$this->session->set_flashdata('error', 'Could not save the blog post. ' . $this->adminmodel->lastDbError());
+				// Redirect, don't fall through. These branches used to set the
+				// message and then end the request with no view loaded at all —
+				// a blank white page, nothing saved, no explanation.
+				redirect('admin/blog-list');
 			}
 		}
 	}
@@ -3096,7 +3144,7 @@ class Admin extends CI_Controller
 			$this->load->view('admin/add_new_news');
 			$this->load->view('admin/footer');
 		} else {
-			$news_slug = pearland_slug($this->input->post('news_title'));
+			$news_slug = $this->makeUniqueContentSlug($this->input->post('news_title'), 'news', 'news_slug', 'news');
 			$info = array(
 				'user_id'			=> $this->input->post('user_id'),
 				// Stored as typed, like the blog paths and like events. These used
@@ -3130,7 +3178,11 @@ class Admin extends CI_Controller
 				$this->session->set_flashdata('message', 'Successfully Added News!!');
 				redirect('admin/news-list');
 			} else {
-				$this->session->set_flashdata('message', 'Adding News Failed!!');
+				$this->session->set_flashdata('error', 'Could not save the news article. ' . $this->adminmodel->lastDbError());
+				// Redirect, don't fall through. These branches used to set the
+				// message and then end the request with no view loaded at all —
+				// a blank white page, nothing saved, no explanation.
+				redirect('admin/news-list');
 			}
 		}
 	}
@@ -3587,7 +3639,7 @@ class Admin extends CI_Controller
 			$this->load->view('admin/add_new_video');
 			$this->load->view('admin/footer');
 		} else {
-			$video_slug = pearland_slug($this->input->post('video_title'));
+			$video_slug = $this->makeUniqueContentSlug($this->input->post('video_title'), 'video', 'video_slug', 'video');
 			// Stored as typed — see the note in add_news(). video_code in
 			// particular must not be encoded: youtube_id() parses it, and an
 			// encoded "&" in a watch URL stops the id being found.
@@ -3617,7 +3669,11 @@ class Admin extends CI_Controller
 				$this->session->set_flashdata('message', 'Successfully Added Video!!');
 				redirect('admin/video-list');
 			} else {
-				$this->session->set_flashdata('message', 'Adding Video Failed!!');
+				$this->session->set_flashdata('error', 'Could not save the video. ' . $this->adminmodel->lastDbError());
+				// Redirect, don't fall through. These branches used to set the
+				// message and then end the request with no view loaded at all —
+				// a blank white page, nothing saved, no explanation.
+				redirect('admin/video-list');
 			}
 		}
 	}
@@ -4909,7 +4965,7 @@ class Admin extends CI_Controller
 				$this->session->set_flashdata('message', 'Successfully Added Event!!');
 				redirect('admin/all-events');
 			} else {
-				$this->session->set_flashdata('message', 'Adding Event Failed!!');
+				$this->session->set_flashdata('error', 'Could not save the event. ' . $this->adminmodel->lastDbError());
 				redirect('admin/add-new-event');
 			}
 		}

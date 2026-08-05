@@ -46,7 +46,9 @@
               <span id="bulk-selected-sub-count" style="margin-left:10px;color:#666;"></span>
             </div>
 
-          <table data-admin-table class="responsive-table bordered tb_cus" id="pg-resu">
+          <?php // See the note in all_listing_category.php — show every row the
+                // server sent instead of re-paginating it to 10 in the browser. ?>
+          <table data-admin-table data-page-size="0" class="responsive-table bordered tb_cus" id="pg-resu">
 
             <thead>
 

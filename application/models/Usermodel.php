@@ -3405,8 +3405,17 @@ class Usermodel extends CI_Model
 		$limit_field = $content_type . '_limit';
 		$limit = isset($subscription->$limit_field) ? $subscription->$limit_field : 0;
 
-		// -1 means unlimited
-		if ($limit == -1) {
+		// -1 and 0 both mean unlimited.
+		//
+		// They have to agree with the dashboards, which have always read
+		// `($limit === -1 || $limit === 0)` as unlimited. This method used to
+		// treat 0 as "none allowed", so a plan row with 0 in its *_limit column
+		// — the column default — made canUserAddContent() refuse every add
+		// while the page it came from said the allowance was unlimited. That is
+		// "cannot add more news" and "cannot add more events" with nothing on
+		// screen to explain it. A plan that genuinely allows nothing is
+		// expressed by not granting the capability, not by a 0 quota.
+		if ($limit == -1 || $limit == 0) {
 			return true;
 		}
 

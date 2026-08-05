@@ -14,7 +14,12 @@
 
           <?php if ($this->session->flashdata('message')) { ?>
             <div class="log-suc">
-              <p><?= $this->session->flashdata('message') ?></p>
+              <p><?= e($this->session->flashdata('message')) ?></p>
+            </div>
+          <?php } ?>
+          <?php if ($this->session->flashdata('error')) { ?>
+            <div class="alert alert-danger" style="background:#fde2e7;color:#591A2D;border:1px solid #f1b3bf;padding:12px 16px;border-radius:10px;margin-bottom:14px;">
+              <?= e($this->session->flashdata('error')) ?>
             </div>
           <?php } ?>
           <table data-admin-table class="responsive-table bordered" id="pg-resu">
