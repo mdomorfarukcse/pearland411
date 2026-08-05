@@ -1924,7 +1924,7 @@ class Admin extends CI_Controller
 		$data['title']    = 'Preview: ' . (!empty($data['listing']->listing_name) ? $data['listing']->listing_name : 'listing');
 		// promo-cards.css too — the view includes the two house promo cards
 		// and their styles no longer live in directory.css.
-		$data['page_css'] = array('assets/css/directory.css?v=3', 'assets/css/promo-cards.css?v=1');
+		$data['page_css'] = array('assets/css/directory.css', 'assets/css/promo-cards.css');
 
 		$this->load->view('header', $data);
 		$this->load->view('listing_details', $data);

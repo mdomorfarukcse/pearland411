@@ -28,6 +28,10 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `edit_listings.php`, `checkout.php`, `pricing_plan.php`, `user_account.php`, …); admin views in
   `admin/`; shared partials `header.php` / `footer.php` / `user_left_sidebar.php`.
   Note: the **homepage `index.php` is self-contained** (its own header), separate from `header.php`.
+- **Cache busting:** stylesheet `<link>`s go through `asset_css('assets/css/x.css')`
+  (`application/helpers/view_helper.php`), which stamps the file's mtime as `?v=`. Never hand-write a
+  `?v=N` — the numbers this replaced went stale four times, shipping fixes that returning visitors
+  never saw. `page_css` entries are plain paths; `header.php` runs them through the helper.
 - **Per-page CSS:** a controller sets `$data['page_css']` (path or array of paths) and `header.php`
   links them after the shared sheets. `assets/css/directory.css` is the **shared page kit** — hero,
   two-column shell, cards, buttons, forms, notes, empty states, pager, rail, owner band — and its

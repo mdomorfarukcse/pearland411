@@ -31,7 +31,7 @@
 
   <link rel="stylesheet" href="<?= base_url() ?>assets/css/fonts.css">
   <!-- Brand palette + typography overrides — loaded last so it wins. -->
-  <link rel="stylesheet" href="<?= base_url() ?>assets/css/pearland-brand.css?v=1">
+  <link rel="stylesheet" href="<?= asset_css('assets/css/pearland-brand.css') ?>">
 
   <link rel="stylesheet" href="https://cdn.datatables.net/1.10.20/css/dataTables.bootstrap4.min.css">
   <!-- Select2 CSS CDN -->

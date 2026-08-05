@@ -40,13 +40,13 @@
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/style.css">
 	<link rel="stylesheet" href="<?= base_url() ?>assets/css/fonts.css">
 	<!-- Brand palette + typography overrides — loaded last so it wins. -->
-	<link rel="stylesheet" href="<?= base_url() ?>assets/css/pearland-brand.css?v=1">
+	<link rel="stylesheet" href="<?= asset_css('assets/css/pearland-brand.css') ?>">
 	<!-- The header strip below (.hom-top / .news-top-menu), painted in the
 	     homepage's navy + green. Paint only — the theme keeps the geometry. -->
-	<link rel="stylesheet" href="<?= base_url() ?>assets/css/site-header.css?v=1">
+	<link rel="stylesheet" href="<?= asset_css('assets/css/site-header.css') ?>">
 	<!-- The footer (partials/site_footer.php, rendered by views/footer.php).
 	     Every selector is a .p411-foot descendant, so this is safe on any page. -->
-	<link rel="stylesheet" href="<?= base_url() ?>assets/css/site-footer.css?v=2">
+	<link rel="stylesheet" href="<?= asset_css('assets/css/site-footer.css') ?>">
 
 	<?php
 	// Per-page stylesheets. A controller sets $data['page_css'] to one path or
@@ -56,7 +56,7 @@
 	if (!empty($page_css)):
 		foreach ((array) $page_css as $__page_css):
 			?>
-			<link rel="stylesheet" href="<?= base_url($__page_css) ?>">
+			<link rel="stylesheet" href="<?= asset_css($__page_css) ?>">
 		<?php endforeach;
 	endif; ?>
 

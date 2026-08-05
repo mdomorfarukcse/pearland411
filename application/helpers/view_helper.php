@@ -478,3 +478,44 @@ if (!function_exists('sales_representatives')) {
         return $out;
     }
 }
+
+if (!function_exists('asset_css')) {
+    /**
+     * Cache-busted URL for a stylesheet this repo ships.
+     *
+     * Replaces the hand-written `?v=N` numbers. Those were maintained by
+     * hand, and three fixes have now shipped that never reached a returning
+     * visitor because the file changed and the number didn't:
+     *
+     *   directory.css     fixed once already (see the 2026-08-04 entry)
+     *   site-header.css   a doubled dropdown caret and an unstyled search box
+     *   site-footer.css   the white strip above the footer the client reported
+     *   promo-cards.css   still on ?v=1 at four of its five call sites
+     *
+     * The file's own mtime is the version, so the key changes exactly when
+     * the bytes do and there is nothing left to remember. Any `?query` on the
+     * way in is dropped, so a caller that still passes `...css?v=3` gets the
+     * mtime rather than a doubled query string. Falls back to the bare URL
+     * when the file is not on disk.
+     *
+     * @param  string $path web-root-relative, e.g. 'assets/css/directory.css'
+     * @return string
+     */
+    function asset_css($path)
+    {
+        $path = ltrim((string) $path, '/');
+        $q    = strpos($path, '?');
+        if ($q !== false) {
+            $path = substr($path, 0, $q);
+        }
+        if ($path === '') {
+            return base_url();
+        }
+
+        $abs = rtrim(FCPATH, '/\\') . '/' . $path;
+
+        return is_file($abs)
+            ? base_url($path) . '?v=' . filemtime($abs)
+            : base_url($path);
+    }
+}
