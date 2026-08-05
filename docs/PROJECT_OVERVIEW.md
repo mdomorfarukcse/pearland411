@@ -14,7 +14,9 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
 - **Controllers** (`application/controllers/`):
   - `User.php` — the public site + logged-in user dashboard (**mega-controller, ~7k lines**).
   - `Admin.php` — the admin panel (**~5.8k lines**).
-  - `Cli.php` — CLI jobs: `php index.php cli <method>` (`images_backfill`, `renew_subscriptions`).
+  - `Cli.php` — CLI jobs: `php index.php cli <method>` (`images_backfill`, `renew_subscriptions`,
+    `decode_content_entities` — one-off, decodes news/video/blog rows the old admin write paths
+    stored entity-encoded; records itself in `site_settings` so it cannot run twice).
   - `Weather.php`, `Sitemap.php`, `Errors.php`.
 - **Models** (`application/models/`): `Usermodel.php`, `Adminmodel.php` (most DB logic lives here).
   Two rules in `Usermodel` are load-bearing and should never be re-implemented inline:
@@ -83,7 +85,10 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   safe to re-run. The hero illustration `assets/images/home/hero-pearland.svg` is hand-authored.
 - **Helpers** (autoloaded): `site_setting` (settings + feature flags), `image` (uploads/resize:
   `safe_upload_image`, `uploadAndResize`, `responsive_img`), `view` — escaping (`e`, `e_attr`,
-  `e_url`, `e_nl2br`), `json_ld`, `pearland_slug`, `category_placeholder()` (a listing with no
+  `e_url`, `e_nl2br`), `json_ld`, `pearland_slug`, `external_url()` (an operator-supplied link, given a scheme and
+  refused unless it is http/https/mailto/tel), `listing_gallery_paths()` (decode
+  `listings.listing_image_gallery`; the read and the write must agree, or adding one photograph
+  wipes the rest), `category_placeholder()` (a listing with no
   photograph → the placeholder for its kind of business), plus the content helpers the
   events/news/videos pages share: `content_text()` / `content_excerpt()` (stored rich text → clean
   **unescaped** text; escape at output), `youtube_id()` / `youtube_thumb_url()` /
@@ -143,6 +148,11 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 `claim_listings`, `plans`, `plan_durations`, `subscriptions`, `transactions`, `payment_cards`,
 `user_usage_tracking`, `site_settings`, content tables (`events`, `news`, `blogs`, `products`,
 `classifieds`, `house`, `rental`, `video`, `coupons`), `ads` / `ads_prices`.
+`listing_sub_category_map` (0023) is the listing↔sub-category join — a listing may sit under
+several. `listings.sub_category_id` survives alongside it holding the **first** selection,
+because the admin table, the CSV export and several model joins still read it.
+`ads.category_id` (0024) is nullable: NULL runs an ad in its slot everywhere, an id restricts
+it to that listing category and outranks an untargeted booking in the same slot.
 Core tables are **not** in repo migrations (they predate git); migrations `0010+` add columns to
 them. Get the run order from `database/README.md`.
 

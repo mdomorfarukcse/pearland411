@@ -4217,6 +4217,13 @@ class Admin extends CI_Controller
 	public function edit_marketplace_category($slug)
 	{
 		$data['category'] = $this->adminmodel->getSingleValue($slug, 'category_slug', 'marketplace_categories');
+		if (empty($data['category'])) {
+			// getSingleValue() returns NULL on a miss, and reading a property
+			// off NULL is fatal in PHP 8.
+			$this->session->set_flashdata('error', 'Marketplace category not found.');
+			redirect('admin/all_marketplace_category');
+			return;
+		}
 		$old_image        = $data['category']->category_image;
 
 		$this->form_validation->set_rules('category_name', 'Category Name', 'trim|required');

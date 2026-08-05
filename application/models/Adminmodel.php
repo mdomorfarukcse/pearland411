@@ -1283,13 +1283,29 @@
      		Update marketplace Category Information
      		====================================*/
 
-		public function updatemarketplaceCategory($id, $info)
+		/**
+		 * Update a marketplace category, keyed on its slug.
+		 *
+		 * The same defect the video category edit had: this keyed on
+		 * `category_id`, an INT, while its only caller
+		 * (Admin::edit_marketplace_category) loads the row by `category_slug`
+		 * and passes that slug straight through. MySQL casts the string to 0,
+		 * nothing matches — and CI3's update() returns TRUE whenever the query
+		 * runs, so the admin was told "Successfully Updated" every time while
+		 * the category never changed. Found while fixing tracker row 25.
+		 */
+		public function updatemarketplaceCategory($slug, $info)
 		{
-			if ($this->db->where('category_id', $id)->update('marketplace_categories', $info)) {
-				return true;
-			} else {
+			$exists = $this->db->select('category_id')
+				->from('marketplace_categories')
+				->where('category_slug', $slug)
+				->get()->row();
+
+			if (!$exists) {
 				return false;
 			}
+
+			return (bool) $this->db->where('category_slug', $slug)->update('marketplace_categories', $info);
 		}
 		/*===================================
 			Delete marketplace Category Information
