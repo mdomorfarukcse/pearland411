@@ -121,7 +121,7 @@ foreach ($__foot_socials as $__row) { if ($__row[1] !== '') { $__foot_social_any
 					<li><a href="<?= base_url('pricing-plan') ?>">Featured placements</a></li>
 					<li><a href="<?= base_url('post-your-ads') ?>">Advertising packages</a></li>
 					<li><a href="<?= base_url('services') ?>">Website services</a></li>
-					<li><a href="<?= base_url('request-service') ?>">Banner &amp; ad design</a></li>
+					<li><a href="<?= base_url('request-quote') ?>">Banner &amp; ad design</a></li>
 				</ul>
 			</div>
 

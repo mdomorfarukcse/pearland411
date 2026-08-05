@@ -616,6 +616,8 @@ class Admin extends CI_Controller
 			// General
 			'site_title', 'site_description', 'site_keywords',
 			'site_og_image', 'site_logo_url', 'contact_phone', 'contact_email',
+			// Where /request-quote submissions are emailed.
+			'service_quote_email',
 			// SEO / analytics
 			'google_analytics_id', 'google_site_verification',
 			'bing_site_verification', 'facebook_app_id',

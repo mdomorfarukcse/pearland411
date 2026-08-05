@@ -119,7 +119,8 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Sign in / register | `/login`, `/register` | `User::login`, `register` | Shared kit (`.p411-ct--auth`); the rep list comes from `sales_representatives()` |
 | Contact | `/contact-us` → `/contact-submit` | `User::contact_us`, `contact_submit` | Shared kit; an email address **or** a phone number is enough; `return_to` sends callback requests back to the page they came from |
 | Deals & coupons | `/coupons`, `/coupons/<id>` | `User::coupons`, `coupon_details` | Shared kit + 5 ad zones on the index |
-| Services (web/IT) | `/services[?category=]`, `/services/<slug>` | `User::services`, `service_details` → `/request-service` | Shared kit; quote form posts to `User::request_service` |
+| Services (web/IT) | `/services[?category=]`, `/services/<slug>` | `User::services`, `service_details` | Shared kit; each service page carries its own quote form |
+| Custom quote | `/request-quote[?service=<slug>]` (GET form), `/request-service[/<slug>]` (POST) | `User::request_quote`, `request_service` | One POST handler for both forms — rate-limited 5/IP/hour, saved to `service_requests`, emailed to `site_setting('service_quote_email')` with the sender as Reply-To |
 | Checkout | `/checkout?plan_id=X` | `User::checkout` / `helcim_init` / `process_checkout` | HelcimPay.js |
 | Manage plan | `/user/my_account` | upgrade/downgrade/cancel | prorated upgrade |
 | Renewal cron | — | `Cli::renew_subscriptions` | daily |

@@ -35,7 +35,7 @@ $cta_subline  = isset($cta_subline)  ? $cta_subline  : 'We build fast, mobile-fi
 				   style="background:#fff;color:#180f5e;padding:12px 22px;border-radius:99px;font-weight:600;text-decoration:none;white-space:nowrap;">
 					See our services
 				</a>
-				<a href="<?= base_url('request-service') ?>"
+				<a href="<?= base_url('request-quote') ?>"
 				   style="background:rgba(255,255,255,0.14);color:#fff;border:1px solid rgba(255,255,255,0.4);padding:12px 22px;border-radius:99px;font-weight:600;text-decoration:none;white-space:nowrap;">
 					Get a quote
 				</a>
@@ -68,7 +68,7 @@ $cta_subline  = isset($cta_subline)  ? $cta_subline  : 'We build fast, mobile-fi
 		   style="display:block;background:#fff;color:#2563eb;padding:12px 18px;border-radius:99px;text-align:center;font-weight:600;text-decoration:none;">
 			Explore our services
 		</a>
-		<a href="<?= base_url('request-service') ?>"
+		<a href="<?= base_url('request-quote') ?>"
 		   style="display:block;margin-top:8px;color:#fff;text-align:center;font-size:0.85rem;opacity:0.85;text-decoration:underline;">
 			Or request a custom quote
 		</a>

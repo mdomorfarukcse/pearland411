@@ -205,6 +205,10 @@ $s = isset($settings) ? $settings : array();
 				<label for="contact_email">Contact email<small>Footer + mailto: links</small></label>
 				<input type="email" id="contact_email" name="contact_email" value="<?= e_attr($s['contact_email'] ?? '') ?>" placeholder="sales@pearland411.com">
 			</div>
+			<div class="setting-row">
+				<label for="service_quote_email">Quote requests to<small>Where /request-quote and service quote forms are emailed. Blank falls back to the site's From address.</small></label>
+				<input type="email" id="service_quote_email" name="service_quote_email" value="<?= e_attr($s['service_quote_email'] ?? '') ?>" placeholder="joshua@spacecentersystems.com">
+			</div>
 		</section>
 
 		<!-- SEO / analytics --------------------------------------------- -->
