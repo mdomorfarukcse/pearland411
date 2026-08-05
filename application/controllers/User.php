@@ -60,7 +60,7 @@ class User extends CI_Controller
 			// Enquiry submission (rate-limited; anonymous OK)
 			'add_enquiry',
 			// Services catalog + quote requests
-			'services', 'service_details', 'request_service',
+			'services', 'service_details', 'request_service', 'request_quote',
 			// Listing claim (form gates on session itself)
 			'claim_listing',
 			// Public coupons / deals
@@ -8007,6 +8007,59 @@ class User extends CI_Controller
 	}
 
 	/**
+	 * GET /request-quote — the custom-quote form.
+	 *
+	 * /services offered "Request a custom quote" in three places, all pointing
+	 * at /request-service. That is the POST handler below, and it bounces any
+	 * GET straight back to /services — so the button looked broken: click it,
+	 * land back where you started, no form. This is the page it should have
+	 * been going to. It posts to the same handler, with no service preselected.
+	 *
+	 * ?service=<slug> preselects one, so a link from a service page can carry
+	 * its context in.
+	 */
+	public function request_quote()
+	{
+		$data = array();
+
+		// ?service=<slug> just preselects the dropdown; the value is checked
+		// against the catalog on submit, so it does not need looking up here.
+		$slug = trim((string) $this->input->get('service'));
+		$data['services'] = $this->usermodel->getActiveServices();
+
+		// Put back what they typed when validation sent them here — retyping a
+		// project description because the email address had a typo is the
+		// fastest way to lose the enquiry.
+		$old = $this->session->flashdata('service_request_old');
+		$data['prefill'] = array(
+			'name'         => isset($old['name'])         ? $old['name']         : '',
+			'email'        => isset($old['email'])        ? $old['email']        : '',
+			'phone'        => isset($old['phone'])        ? $old['phone']        : '',
+			'company'      => isset($old['company'])      ? $old['company']      : '',
+			'budget_range' => isset($old['budget_range']) ? $old['budget_range'] : '',
+			'message'      => isset($old['message'])      ? $old['message']      : '',
+			'service_slug' => isset($old['service_slug']) ? $old['service_slug'] : $slug,
+		);
+
+		// A signed-in member should not have to type what we already know.
+		if ($data['prefill']['name'] === '' && $this->session->userdata('logged_user')) {
+			$session = $this->session->userdata('logged_user');
+			$data['prefill']['name']  = isset($session['name']) ? $session['name'] : '';
+			$data['prefill']['email'] = isset($session['email_id']) ? $session['email_id'] : '';
+		}
+
+		$data['title']            = 'Request a custom quote — Pearland411 Services';
+		$data['meta_description'] = 'Tell us what you need built, hosted or supported and we will come back with a fixed price.';
+		$data['canonical_url']    = base_url('request-quote');
+		$data['page_css']         = $this->contentPageCss();
+		$this->loadHeaderCategories($data);
+
+		$this->load->view('header', $data);
+		$this->load->view('request_quote', $data);
+		$this->load->view('footer');
+	}
+
+	/**
 	 * Handle quote-request submission. Slug is optional — a generic
 	 * "request quote" form (no service preselected) can post here
 	 * with service_slug empty.
@@ -8014,9 +8067,25 @@ class User extends CI_Controller
 	public function request_service($slug = '')
 	{
 		if ($this->input->method() !== 'post') {
-			redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+			// The standalone form lives at /request-quote; a GET here is
+			// someone following an old link or refreshing.
+			redirect($slug ? 'services/' . rawurlencode($slug) : 'request-quote');
 			return;
 		}
+
+		// The service can also arrive in the body, from the standalone form's
+		// dropdown rather than the URL.
+		if ($slug === '') {
+			$slug = trim((string) $this->input->post('service_slug'));
+		}
+
+		// Where to send them afterwards. Whitelisted — never redirect to a
+		// posted URL. The standalone form asks to come back to itself so the
+		// error, and what they typed, are next to the fields.
+		$posted_back = (string) $this->input->post('return_to');
+		$back = ($posted_back === 'request-quote')
+			? 'request-quote'
+			: ($slug ? 'services/' . rawurlencode($slug) : 'services');
 
 		// 5 service requests per IP per hour. Each one sends two emails.
 		if (!$this->rate_limit->check_ip('request_service', 5, 3600)) {
@@ -8032,7 +8101,16 @@ class User extends CI_Controller
 
 		if (!$this->form_validation->run()) {
 			$this->session->set_flashdata('service_request_error', strip_tags(validation_errors()) ?: 'Please complete the required fields.');
-			redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+			$this->session->set_flashdata('service_request_old', array(
+				'name'         => (string) $this->input->post('name'),
+				'email'        => (string) $this->input->post('email'),
+				'phone'        => (string) $this->input->post('phone'),
+				'company'      => (string) $this->input->post('company'),
+				'budget_range' => (string) $this->input->post('budget_range'),
+				'message'      => (string) $this->input->post('message'),
+				'service_slug' => $slug,
+			));
+			redirect($back);
 			return;
 		}
 
@@ -8060,7 +8138,7 @@ class User extends CI_Controller
 
 		if (!$request_id) {
 			$this->session->set_flashdata('service_request_error', 'Could not save your request. Please try again or call us.');
-			redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+			redirect($back);
 			return;
 		}
 
@@ -8072,7 +8150,14 @@ class User extends CI_Controller
 		$ack_body = '<p>Thanks for your message — we received your request about <strong>' . html_escape($svc_name) . '</strong> and will be in touch shortly.</p>';
 		$this->mailer->send($this->input->post('email'), 'We received your Pearland411 services request', $ack_body);
 
-		$admin_to = env('MAIL_FROM_ADDRESS', '');
+		// Quote requests go to whoever sells the services — set at
+		// /admin/setting, defaulting to the address we were given. Falls back
+		// to the site's own From address only if that were ever blanked out,
+		// so a request can't end up going nowhere.
+		$admin_to = trim((string) site_setting('service_quote_email', 'joshua@spacecentersystems.com'));
+		if ($admin_to === '') {
+			$admin_to = env('MAIL_FROM_ADDRESS', '');
+		}
 		if ($admin_to) {
 			$alert_body = '<p>New service request #' . (int) $request_id . '</p>'
 				. '<ul>'
@@ -8084,11 +8169,18 @@ class User extends CI_Controller
 				. '<li>Budget: '  . html_escape($this->input->post('budget_range')) . '</li>'
 				. '</ul>'
 				. '<p>Message:</p><blockquote>' . nl2br(html_escape($this->input->post('message'))) . '</blockquote>';
-			$this->mailer->send($admin_to, '[Pearland411] New service request — ' . $svc_name, $alert_body);
+			// Reply hits the person who asked, not the site's no-reply box.
+			$this->mailer->send(
+				$admin_to,
+				'[Pearland411] New service request — ' . $svc_name,
+				$alert_body,
+				null,
+				array('reply_to' => $this->input->post('email'), 'reply_to_name' => $this->input->post('name'))
+			);
 		}
 
 		$this->session->set_flashdata('service_request_success', 'Thanks! We received your request and will be in touch shortly.');
-		redirect($slug ? 'services/' . rawurlencode($slug) : 'services');
+		redirect($back);
 	}
 
 	/*=========================

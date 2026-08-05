@@ -51,7 +51,7 @@ $bpromo_items = array(
 	),
 );
 
-$bpromo_link = base_url('request-service');
+$bpromo_link = base_url('request-quote');
 ?>
 
 <?php if ($bpromo_variant === 'banner'): ?>

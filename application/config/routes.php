@@ -102,6 +102,9 @@ $route['verify-email/(:any)']       = 'user/verify_email/$1';
 // IT / web services catalog (public side)
 $route['services']                    = 'user/services';
 $route['services/(:any)']             = 'user/service_details/$1';
+// The standalone quote form (GET). request-service below is the POST handler
+// for both this and the per-service form on /services/{slug}.
+$route['request-quote']               = 'user/request_quote';
 $route['request-service']             = 'user/request_service';
 $route['request-service/(:any)']      = 'user/request_service/$1';
 

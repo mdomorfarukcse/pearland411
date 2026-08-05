@@ -61,7 +61,7 @@ $svc_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 
 			<div class="p411-owner__cta" style="margin-top:20px;">
 				<a class="p411-btn" href="#services">Browse services</a>
-				<a class="p411-btn p411-btn--ghost" href="<?= e_url(base_url('request-service')) ?>">Request a custom quote</a>
+				<a class="p411-btn p411-btn--ghost" href="<?= e_url(base_url('request-quote')) ?>">Request a custom quote</a>
 			</div>
 		</div>
 	</div>
@@ -130,7 +130,7 @@ $svc_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 					<p>Have a look at everything we do, or tell us what you need and we'll quote for it.</p>
 					<div class="p411-empty__actions">
 						<a class="p411-btn" href="<?= e_url(base_url('services')) ?>">View all services</a>
-						<a class="p411-btn p411-btn--ghost" href="<?= e_url(base_url('request-service')) ?>">Request a quote</a>
+						<a class="p411-btn p411-btn--ghost" href="<?= e_url(base_url('request-quote')) ?>">Request a quote</a>
 					</div>
 				</div>
 			<?php else: ?>
@@ -185,7 +185,7 @@ $svc_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 				</p>
 			</div>
 			<div class="p411-owner__cta">
-				<a class="p411-btn" href="<?= e_url(base_url('request-service')) ?>">Request a custom quote</a>
+				<a class="p411-btn" href="<?= e_url(base_url('request-quote')) ?>">Request a custom quote</a>
 				<?php if ($svc_phone !== ''): ?>
 					<a class="p411-btn p411-btn--ghost" href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', $svc_phone)) ?>">Call <?= e($svc_phone) ?></a>
 				<?php endif; ?>

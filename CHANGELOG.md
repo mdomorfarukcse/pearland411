@@ -6,6 +6,65 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-05 — "Request a custom quote" now has somewhere to go
+
+The button on `/services` did nothing. It pointed at `/request-service`, which
+is the **POST handler** for the quote form — its first act on a GET is
+`redirect('services')`. So clicking it reloaded the page you were already on
+and showed no form.
+
+Seven links across the site had the same target, all equally dead: the two on
+the `/services` hero and footer CTA, the empty-category state, the "Or request
+a custom quote" line in the web-dev promo (twice), the "Banner &amp; ad design"
+link in the site footer, and the `banner-design` ad creative.
+
+### Added
+- **`/request-quote`** (`User::request_quote` → `views/request_quote.php`) — a
+  real page on the shared content kit, same shell as `/contact-us`: name,
+  email, phone, company, which service (a dropdown off the live catalog, so it
+  cannot list something that has been retired), budget range and the job
+  description. Signed-in members get their name and email filled in.
+- It posts to the existing `request-service` handler, so it inherits everything
+  already built: rate limiting (5/IP/hour), validation, storage in
+  `service_requests`, and the acknowledgement email to the sender.
+
+### Changed
+- **Quote requests are emailed to `joshua@spacecentersystems.com`**, via
+  `site_setting('service_quote_email', …)` so the address can be changed at
+  `/admin/setting` (new "Quote requests to" field) without a deploy. It falls
+  back to `MAIL_FROM_ADDRESS` only if that setting is blanked, so a request
+  cannot end up going nowhere. This covers the per-service forms on
+  `/services/{slug}` too — same handler, same kind of enquiry; they previously
+  went to `MAIL_FROM_ADDRESS`.
+- **The alert carries a Reply-To of the person asking**, so hitting Reply
+  answers the customer instead of the site's no-reply box. `Mailer::send()`
+  gained an optional `$opts` array for this (`reply_to`, `reply_to_name`);
+  the address is validated before it is used, and every existing call is
+  unaffected.
+- **A failed submission no longer loses what was typed.** Validation errors
+  flashed a message and redirected, discarding the form; the standalone page
+  now gets the values back. `return_to` is whitelisted to the one value —
+  never a posted URL.
+- A GET to `/request-service` now lands on `/request-quote` rather than
+  bouncing to `/services`, so old links reach the form instead of a dead end.
+
+### Verified
+The page was rendered against the real stylesheets and screenshotted at 1280px
+and 390px: the form posts to `/request-service` by POST, carries all eight
+fields, marks exactly the three the server requires (name, email, message), and
+the layout stacks with no horizontal scroll.
+
+### Key files
+`application/views/request_quote.php` (new), `application/controllers/User.php`
+(`request_quote()`, `request_service()`), `application/libraries/Mailer.php`,
+`application/config/routes.php`, `application/controllers/Admin.php` +
+`application/views/admin/admin_setting.php` (the new setting), and the six
+views that carried a dead link.
+
+No migrations — `service_requests` (0002_services.sql) already stores these.
+
+---
+
 ## 2026-08-05 — Search finds "Central Texas BBQ" when you type "central bbq"
 
 `/search?q=central+bbq` returned nothing while `/listing-details/Central-Texas-BBQ`
