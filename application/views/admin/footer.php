@@ -40,7 +40,14 @@
 // Publish the operator's rows-per-page choice so admin-table.js can render the
 // dropdown and match its own client-side paging to what the server did. One
 // setting drives both pagers; see application/helpers/admin_helper.php.
-$__ap_choice  = admin_per_page_choice();
+// The EFFECTIVE size, not the raw choice. With nothing chosen the choice is
+// '' and no <option> matched, so the browser fell back to showing the first
+// one — the category list read "10 per page" while displaying all 23 rows.
+$__ap_choice = admin_per_page_choice();
+if ($__ap_choice === '') {
+	$__ap_effective = (string) admin_per_page();
+	$__ap_choice = array_key_exists($__ap_effective, admin_per_page_options()) ? $__ap_effective : '';
+}
 $__ap_options = array();
 foreach (admin_per_page_options() as $__ap_v => $__ap_l) {
 	$__ap_options[] = array('value' => $__ap_v, 'label' => $__ap_l);

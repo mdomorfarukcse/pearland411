@@ -1,0 +1,137 @@
+/*
+ * Admin UI refinements, loaded after admin-style.css so these win.
+ *
+ * Nothing here changes the theme's layout — it normalises the controls that
+ * the theme only ever styled in one of their two forms.
+ *
+ * The action buttons are the case in point: admin-style.css styles
+ * `.ud-cen-s2 a.db-tit-btn` — an ANCHOR — at 12px with 3px/10px padding. A
+ * `<button class="db-tit-btn">` matched none of that and fell through to the
+ * theme's generic button rule, which is why the Search button rendered as a
+ * large pill beside anchors half its height. Both forms are covered here, at
+ * one size.
+ */
+
+/* ---- action buttons --------------------------------------------------- */
+
+.ud-cen-s2 a.db-tit-btn,
+.ud-cen-s3 a.db-tit-btn,
+.ud-cen-s2 button.db-tit-btn,
+.ud-cen-s3 button.db-tit-btn,
+.ud-cen-s2 input[type="submit"].db-tit-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	/* Explicit: the theme gives <button> border-box but leaves <a> on
+	   content-box, so the same min-height plus padding produced a 42px anchor
+	   next to a 32px button. */
+	box-sizing: border-box;
+	min-height: 32px;
+	padding: 5px 14px;
+	border: 0;
+	border-radius: 6px;
+	background: var(--p411-admin-btn, #6D263D);
+	color: #fff;
+	font-size: 12.5px;
+	font-weight: 600;
+	line-height: 1.2;
+	letter-spacing: .01em;
+	white-space: nowrap;
+	cursor: pointer;
+	box-shadow: none;
+	text-decoration: none;
+	transition: background .15s ease, opacity .15s ease;
+}
+
+.ud-cen-s2 a.db-tit-btn:hover,
+.ud-cen-s3 a.db-tit-btn:hover,
+.ud-cen-s2 button.db-tit-btn:hover,
+.ud-cen-s3 button.db-tit-btn:hover {
+	background: #581E31;
+	color: #fff;
+	text-decoration: none;
+}
+
+.ud-cen-s2 button.db-tit-btn:disabled,
+.ud-cen-s3 button.db-tit-btn:disabled {
+	opacity: .5;
+	cursor: not-allowed;
+}
+
+/* The primary action on a screen — "Add new …" — reads as the green one. */
+.ud-cen-s2 a.db-tit-btn[href*="add"],
+.ud-cen-s2 a.db-tit-btn[href*="Add"] {
+	background: #5E9220;
+}
+
+.ud-cen-s2 a.db-tit-btn[href*="add"]:hover,
+.ud-cen-s2 a.db-tit-btn[href*="Add"]:hover {
+	background: #4C7A19;
+}
+
+/* ---- list toolbar ----------------------------------------------------- */
+
+.admin-table-toolbar .admin-table-search,
+.ad-int-sear input[type="search"],
+.ad-int-sear input[type="text"] {
+	min-height: 32px;
+	padding: 5px 12px;
+	border: 1px solid #d9dced;
+	border-radius: 6px;
+	font-size: 13px;
+	background: #fff;
+	box-shadow: none;
+}
+
+.admin-table-toolbar .admin-table-search:focus,
+.ad-int-sear input:focus {
+	outline: none;
+	border-color: #79B82A;
+	box-shadow: 0 0 0 3px rgba(121, 184, 42, .16);
+}
+
+.admin-table-toolbar .admin-table-per-page {
+	min-height: 32px;
+	padding: 4px 26px 4px 10px;
+	border: 1px solid #d9dced;
+	border-radius: 6px;
+	font-size: 13px;
+	background-color: #fff;
+	color: #20245B;
+	font-weight: 600;
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.admin-table-toolbar .admin-table-per-page:focus {
+	outline: none;
+	border-color: #79B82A;
+	box-shadow: 0 0 0 3px rgba(121, 184, 42, .16);
+}
+
+.admin-table-toolbar .admin-table-size { white-space: nowrap; }
+
+.admin-table-toolbar .admin-table-counter {
+	margin-left: auto;          /* the count sits at the far end of the row */
+	color: #6b7280;
+	font-size: 12.5px;
+}
+
+/* ---- bulk-action row -------------------------------------------------- */
+
+.bulk-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+@media (max-width: 767px) {
+	.ud-cen-s2 .listing-action-btns {
+		position: static !important;
+		margin: 10px 0 14px;
+	}
+
+	.admin-table-toolbar .admin-table-counter { margin-left: 0; }
+}
