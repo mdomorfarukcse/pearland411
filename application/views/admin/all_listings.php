@@ -47,11 +47,11 @@
             <a href="<?= base_url() ?>admin/add-new-listing" class="db-tit-btn" style="position:static; top:auto; right:auto;">Add new listing</a>
           </div>
 
-          <?php // No data-admin-table here: search and paging are both done by the
-                // server now, and letting admin-table.js add a second "Search this
-                // page" box over the same rows would be two searches with
-                // different reach sitting on top of each other. ?>
-          <table class="responsive-table bordered" id="pg-resu">
+          <?php // data-server-search: the toolbar renders the rows-per-page dropdown
+                // but NOT a second search box, because the search above is the
+                // server's and covers every listing rather than this page.
+                // data-page-size="0" leaves paging to the server pager below. ?>
+          <table data-admin-table data-server-search data-page-size="0" class="responsive-table bordered" id="pg-resu">
             <thead>
               <tr>
                 <th>No</th>

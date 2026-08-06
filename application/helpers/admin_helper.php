@@ -78,15 +78,18 @@ if (!function_exists('admin_per_page')) {
     /**
      * Rows per page for an admin list.
      *
-     * The operator's dropdown choice wins; otherwise the page's own default,
-     * because a few screens want a different one — the category lists show 100
-     * so their inline search covers the whole list rather than one page of it.
+     * The operator's dropdown choice wins; otherwise $default. Every list uses
+     * 20 now — the category pages used to ask for 100 so their inline search
+     * covered the whole list rather than one page of it, which the dropdown
+     * does properly.
      *
-     * @param  int $default Rows per page when nothing has been chosen.
+     * @param  int $default Rows per page when nothing has been chosen. 20 by
+     *                      default: ten was small enough that every list needed
+     *                      paging through.
      * @return int Always a positive int, so the pagination arithmetic in every
      *             caller keeps working. "All" is ADMIN_PER_PAGE_ALL.
      */
-    function admin_per_page($default = 10)
+    function admin_per_page($default = 20)
     {
         $choice = admin_per_page_choice();
 

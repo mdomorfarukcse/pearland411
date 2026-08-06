@@ -79,6 +79,9 @@ in the toolbar above each list, with the pagination following it. The choice is
 remembered in the session, so moving between admin screens keeps the size you
 picked instead of snapping back to ten.
 
+**Default 20**, not ten — ten was small enough that every list needed paging
+through.
+
 There were two pagers to reconcile: 20 controllers paginate server-side through
 CodeIgniter, and 41 views page in the browser through `admin-table.js`. Both now
 read one value. `admin_per_page($default)` resolves it — the operator's choice
@@ -91,6 +94,25 @@ Two things that would have made this subtly wrong: the pager links needed
 and CodeIgniter puts the page number in the URL **path**, not the query string,
 so changing size while on `/admin/all_listings/20` had to strip that segment or
 it would apply the old offset to the new page size.
+
+Two follow-ups after the first cut. `/admin/all_listings` showed no dropdown at
+all: that table had `data-admin-table` removed when its server-side search
+landed, so nothing rendered the toolbar. It opts back in with
+`data-server-search`, which draws the dropdown but not a second search box. And
+the category list *displayed* "10 per page" while showing all 23 rows — with no
+explicit choice the published value was `''`, no `<option>` matched, and the
+browser fell back to showing the first one. The footer publishes the effective
+size now, so the control always states what you are actually looking at.
+
+**Admin buttons are one size.** `admin-style.css` styles
+`.ud-cen-s2 a.db-tit-btn` — an *anchor* — so a `<button>` with the same class
+matched none of it and fell through to the theme's generic rule, which is why
+Search rendered as a large pill beside anchors half its height. New
+`assets/admin/css/admin-ui.css` covers both forms at 32px, and sets
+`box-sizing` explicitly: the theme gives `<button>` border-box but leaves `<a>`
+on content-box, so an identical `min-height` plus padding still produced a 42px
+anchor next to a 32px button. It also tidies the toolbar's search box and
+select, and puts the primary "Add new …" action in green.
 
 "All" is capped at 5,000 rows rather than being unbounded — CI's pagination
 divides by `per_page` to count pages, so NULL would be a division by zero, and a

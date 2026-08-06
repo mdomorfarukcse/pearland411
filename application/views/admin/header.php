@@ -36,6 +36,9 @@
   <link rel="stylesheet" href="<?= base_url() ?>assets/admin/css/admin-style.css">
   <?php // Image/video widgets on the edit screens. See assets/admin/js/media-preview.js ?>
   <link rel="stylesheet" href="<?= base_url('assets/admin/css/media-preview.css') ?>?v=<?= @filemtime(FCPATH . 'assets/admin/css/media-preview.css') ?: 1 ?>">
+  <?php // Loaded last so it wins over admin-style.css. Normalises the controls
+        // the theme only styled in one of their two forms. ?>
+  <link rel="stylesheet" href="<?= base_url('assets/admin/css/admin-ui.css') ?>?v=<?= @filemtime(FCPATH . 'assets/admin/css/admin-ui.css') ?: 1 ?>">
 
   <link rel="stylesheet" href="<?= base_url() ?>assets/css/fonts.css">
   <!-- Brand palette + typography overrides — loaded last so it wins. -->

@@ -49,8 +49,14 @@
                 return '<option value="' + o.value + '"' + sel + '>' + o.label + '</option>';
             }).join('');
 
+        // data-server-search: this list is searched by the server, so a second
+        // "Search this page" box over the rows already sent would be two
+        // searches with different reach sitting on top of each other.
+        var serverSearch = table.hasAttribute('data-server-search');
+
         toolbar.innerHTML =
-            '<input type="search" class="form-control admin-table-search" placeholder="Search this page…" style="max-width:280px;">' +
+            (serverSearch ? '' :
+              '<input type="search" class="form-control admin-table-search" placeholder="Search this page…" style="max-width:280px;">') +
             (opts_html
                 ? '<label class="admin-table-size" style="display:flex;align-items:center;gap:6px;margin:0;font-weight:400;color:#6b7280;font-size:0.9rem;">' +
                   'Show <select class="form-control admin-table-per-page" style="width:auto;display:inline-block;padding:2px 8px;height:auto;">' +
@@ -145,7 +151,7 @@
         }
 
         function render() {
-            var q = (searchInput.value || '').trim().toLowerCase();
+            var q = (searchInput && searchInput.value || '').trim().toLowerCase();
             var filtered = q ? allRows.filter(function (r) { return rowText(r).indexOf(q) !== -1; }) : allRows;
 
             var size = pageSize > 0 ? pageSize : filtered.length;
@@ -168,7 +174,9 @@
             renderPager(pages);
         }
 
-        searchInput.addEventListener('input', function () { currentPage = 1; render(); });
+        if (searchInput) {
+            searchInput.addEventListener('input', function () { currentPage = 1; render(); });
+        }
 
         var sizeSelect = toolbar.querySelector('.admin-table-per-page');
         if (sizeSelect) {

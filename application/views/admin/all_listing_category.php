@@ -35,15 +35,9 @@
               <span id="bulk-selected-count" style="margin-left:10px;color:#666;"></span>
             </div>
 
-          <?php // data-page-size="0" = show every row the server sent, no client
-                // pager. The controller already serves 100 per page so the inline
-                // search can match the whole list, but admin-table.js then
-                // re-paginated those 100 down to 10 in the browser — which is what
-                // "display all available results, not just the first 10" was. It
-                // also meant "Select all" ticked 100 hidden checkboxes while the
-                // admin could see 10, and the confirm dialog said "Delete the 100
-                // selected categories?". ?>
-          <table data-admin-table data-page-size="0" class="responsive-table bordered" id="pg-resu">
+          <?php // Rows per page comes from the toolbar dropdown (admin-table.js),
+                // so "Select all" only ever ticks rows the admin can see. ?>
+          <table data-admin-table class="responsive-table bordered" id="pg-resu">
 
             <thead>
 
