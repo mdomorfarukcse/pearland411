@@ -203,7 +203,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url' => base_url('admin/house-list'),
 			'total_rows' => $total_rows,
-			'per_page' => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment' => 3,
 			'use_page_numbers' => TRUE,
 			'num_links' => 3,
@@ -260,7 +261,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url' => base_url('admin/newsletter-subscribers'),
 			'total_rows' => $total_rows,
-			'per_page' => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment' => 3,
 			'use_page_numbers' => TRUE,
 			'num_links' => 3,
@@ -400,7 +402,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url' => base_url('admin/all-house-category'),
 			'total_rows' => $total_rows,
-			'per_page' => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment' => 3,
 			'use_page_numbers' => TRUE,
 			'num_links' => 3,
@@ -799,7 +802,8 @@ class Admin extends CI_Controller
 		// without needing a server-side search round-trip.
 		$config = [
 			'base_url' => base_url('admin/all_listing_category'),
-			'per_page' => 100,
+			'per_page' => admin_per_page(100),
+			'reuse_query_string' => TRUE,
 			'total_rows' => count($this->adminmodel->allListingCategory(NULL, NULL)),
 			'uri_segment' => 3,
 		];
@@ -1004,7 +1008,8 @@ class Admin extends CI_Controller
 			$config = [
 				'base_url'         => base_url('admin/all_listing_sub_category'),
 				'total_rows'       => $total_rows,
-				'per_page'         => 100,
+				'per_page' => admin_per_page(100),
+				'reuse_query_string' => TRUE,
 				'uri_segment'      => 3,
 				'use_page_numbers' => TRUE,
 				'num_links'        => 3,
@@ -1179,7 +1184,7 @@ class Admin extends CI_Controller
 
 		$config = [
 			'base_url' => base_url('admin/all_listings'),
-			'per_page' => 10,
+			'per_page' => admin_per_page(10),
 			'total_rows' => $this->adminmodel->countAdminListings($q),
 			'uri_segment' => 3,
 			'reuse_query_string' => TRUE,
@@ -2099,7 +2104,8 @@ class Admin extends CI_Controller
 
 		$config = [
 			'base_url' => base_url('admin/trash_listings'),
-			'per_page' => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'total_rows' => count($this->adminmodel->getAllDeletedListings(NULL, NULL))
 		];
 
@@ -2237,7 +2243,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/all_product_category'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -2428,7 +2435,8 @@ class Admin extends CI_Controller
 			$config = [
 				'base_url'         => base_url('admin/all_product_sub_category'),
 				'total_rows'       => $total_rows,
-				'per_page'         => 10,
+				'per_page' => admin_per_page(10),
+				'reuse_query_string' => TRUE,
 				'uri_segment'      => 3,
 				'use_page_numbers' => TRUE,
 				'num_links'        => 3,
@@ -2571,7 +2579,8 @@ class Admin extends CI_Controller
 		// Pagination configuration
 		$config = [
 			'base_url' => base_url('admin/products'),
-			'per_page' => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'total_rows' => $this->adminmodel->countAllProducts(),
 			'uri_segment' => 3,
 		];
@@ -2846,7 +2855,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/blog_list'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -3101,7 +3111,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/news_list'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -3435,7 +3446,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/all_video_category'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -3603,7 +3615,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/video_list'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -3806,7 +3819,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/all_classifieds_category'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -3975,7 +3989,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/classifieds_list'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -4446,7 +4461,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/all_rental_category'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -4613,7 +4629,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/rental-list'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -4892,7 +4909,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/all_events'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -6074,7 +6092,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url' => base_url('admin/all_subscriptions'),
 			'total_rows' => $total_rows,
-			'per_page' => 20,
+			'per_page' => admin_per_page(20),
+			'reuse_query_string' => TRUE,
 			'uri_segment' => 3,
 			'use_page_numbers' => TRUE,
 			'first_link' => 'First',

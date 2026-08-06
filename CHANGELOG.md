@@ -72,6 +72,30 @@ on click and closes on Escape, and ticking Remove greys the right cell and
 leaves its neighbour alone. `content_text()` was exercised across CRLF, LF,
 headings, `<br>`, lists and legacy entity-encoded bodies.
 
+### Also added
+
+**A rows-per-page dropdown on every admin table** — 10, 20, 30, 50 or Show all,
+in the toolbar above each list, with the pagination following it. The choice is
+remembered in the session, so moving between admin screens keeps the size you
+picked instead of snapping back to ten.
+
+There were two pagers to reconcile: 20 controllers paginate server-side through
+CodeIgniter, and 41 views page in the browser through `admin-table.js`. Both now
+read one value. `admin_per_page($default)` resolves it — the operator's choice
+wins, otherwise the page's own default, because the category lists deliberately
+serve 100 so their inline search covers the whole list. The value is validated
+against the option list before it goes anywhere near a `LIMIT`.
+
+Two things that would have made this subtly wrong: the pager links needed
+`reuse_query_string` or clicking page 2 dropped the size back to the default;
+and CodeIgniter puts the page number in the URL **path**, not the query string,
+so changing size while on `/admin/all_listings/20` had to strip that segment or
+it would apply the old offset to the new page size.
+
+"All" is capped at 5,000 rows rather than being unbounded — CI's pagination
+divides by `per_page` to count pages, so NULL would be a division by zero, and a
+browser handed 50,000 `<tr>`s stops responding.
+
 ### Also fixed
 
 **Special characters, everywhere else.** The first pass covered News, Blogs and

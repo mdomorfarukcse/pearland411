@@ -27,17 +27,35 @@
         if (table.dataset.adminTableEnhanced === '1') return;
         table.dataset.adminTableEnhanced = '1';
 
-        var pageSize = parseInt(table.dataset.pageSize || opts.pageSize || '10', 10);
+        // Rows per page comes from the operator's dropdown, published by the
+        // admin footer as window.P411_ADMIN_PER_PAGE so the client-side pager
+        // and the server-side one agree. A table can still pin its own with
+        // data-page-size; 0 means "no client paging, show what the server sent".
+        var pageSize = parseInt(
+            table.dataset.pageSize || window.P411_ADMIN_PER_PAGE || opts.pageSize || '10', 10
+        );
         var currentPage = 1;
         var allRows = Array.prototype.slice.call(table.tBodies[0] ? table.tBodies[0].rows : []);
         if (!allRows.length) return;
 
-        // Toolbar above the table: search box + counter only.
+        // Toolbar above the table: search box, per-page dropdown, counter.
         var toolbar = document.createElement('div');
         toolbar.className = 'admin-table-toolbar';
         toolbar.style.cssText = 'display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;';
+
+        var opts_html = (window.P411_ADMIN_PER_PAGE_OPTIONS || [])
+            .map(function (o) {
+                var sel = (String(o.value) === String(window.P411_ADMIN_PER_PAGE_CHOICE)) ? ' selected' : '';
+                return '<option value="' + o.value + '"' + sel + '>' + o.label + '</option>';
+            }).join('');
+
         toolbar.innerHTML =
             '<input type="search" class="form-control admin-table-search" placeholder="Search this page…" style="max-width:280px;">' +
+            (opts_html
+                ? '<label class="admin-table-size" style="display:flex;align-items:center;gap:6px;margin:0;font-weight:400;color:#6b7280;font-size:0.9rem;">' +
+                  'Show <select class="form-control admin-table-per-page" style="width:auto;display:inline-block;padding:2px 8px;height:auto;">' +
+                  opts_html + '</select></label>'
+                : '') +
             '<span class="admin-table-counter" style="color:#6b7280;font-size:0.9rem;"></span>';
 
         // Pager below the table: numbered Bootstrap pagination, matches CI styling.
@@ -151,6 +169,27 @@
         }
 
         searchInput.addEventListener('input', function () { currentPage = 1; render(); });
+
+        var sizeSelect = toolbar.querySelector('.admin-table-per-page');
+        if (sizeSelect) {
+            sizeSelect.addEventListener('change', function () {
+                // Round-trip rather than re-slice locally: most admin lists are
+                // paginated by the server, so the rows for page 1 of 50 are not
+                // in the DOM to begin with. ?per_page is remembered in the
+                // session, so the choice sticks across the admin.
+                var url = new URL(window.location.href);
+                url.searchParams.set('per_page', sizeSelect.value);
+
+                // Back to page one. CodeIgniter's pager puts the page number in
+                // the PATH — /admin/all_listings/20 — not the query string, so
+                // a trailing numeric segment has to come off too; leaving it
+                // would apply the old offset to the new page size.
+                url.searchParams.delete('page');
+                url.pathname = url.pathname.replace(/\/\d+\/?$/, '');
+
+                window.location.href = url.toString();
+            });
+        }
 
         render();
     }
