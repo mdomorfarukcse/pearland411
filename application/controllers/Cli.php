@@ -218,6 +218,16 @@ class Cli extends CI_Controller
             array('table' => 'news',  'key' => 'news_id',  'cols' => array('news_title', 'news_description')),
             array('table' => 'video', 'key' => 'video_id', 'cols' => array('video_title', 'video_description')),
             array('table' => 'blogs', 'key' => 'blog_id',  'cols' => array('blog_name', 'blog_description')),
+            // These sections encoded on input for longer — every text column
+            // they wrote is affected, not just the body.
+            array('table' => 'products', 'key' => 'product_id', 'cols' => array(
+                'product_name', 'product_description', 'product_tags')),
+            array('table' => 'classifieds', 'key' => 'classifieds_id', 'cols' => array(
+                'classifieds_title', 'classifieds_description',
+                'classifieds_seo_title', 'classifieds_seo_description', 'classifieds_seo_keywords')),
+            array('table' => 'marketplace', 'key' => 'marketplace_id', 'cols' => array(
+                'marketplace_title', 'marketplace_description',
+                'marketplace_seo_title', 'marketplace_seo_description', 'marketplace_seo_keywords')),
         );
 
         echo $apply ? "Mode: APPLY (writing changes)\n" : "Mode: REPORT ONLY (pass 'apply' to write)\n";

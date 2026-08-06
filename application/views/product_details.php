@@ -152,7 +152,9 @@
 
 					<div class="pro-pbox-4 pro-pbox-com">
 
-						<?= strip_tags(html_entity_decode($product->product_description)); ?>
+						<?php // content_text() handles both storage forms — raw markup now, and the
+					      // entity-encoded rows written before the admin paths were fixed. ?>
+						<?= nl2br(e(content_text($product->product_description ?? ''))) ?>
 
 					</div>
 

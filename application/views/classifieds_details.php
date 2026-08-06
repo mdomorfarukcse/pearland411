@@ -263,7 +263,8 @@
 
                     <h1 class="pg_title"><?= e($classifieds->classifieds_title); ?></h1>
                 </div>
-                <p><?= strip_tags(html_entity_decode($classifieds->classifieds_description)); ?></p>
+                <?php // See the note in product_details.php. ?>
+                <p><?= nl2br(e(content_text($classifieds->classifieds_description ?? ''))) ?></p>
 
             </div>
             <div class="rhs">
