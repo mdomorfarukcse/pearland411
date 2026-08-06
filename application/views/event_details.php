@@ -391,7 +391,7 @@ if ($related_events)                      $ev_nav['related']  = 'More events';
 						<?php endif; ?>
 					<?php else: ?>
 						<p class="p411-form__hint">Ask about tickets, timings, parking &mdash; whatever you need to know.</p>
-						<form method="post" name="ev_enquiry_form" id="ev_enquiry_form"
+						<form method="post" name="ev_enquiry_form" id="ev_enquiry_form" data-validate
 							  action="<?= base_url('user/add-enquiry/event_details/' . rawurlencode($ev_slug)) ?>">
 							<input type="hidden" name="listing_id" value="">
 							<input type="hidden" name="event_id" value="<?= e_attr($ev_slug) ?>">

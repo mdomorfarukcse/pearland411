@@ -1056,6 +1056,9 @@ unset($__ext, $__rel);
         // so jQuery UI has to be here or the rest of that file never runs. ?>
   <script src="<?= base_url() ?>assets/js/jquery-ui.js"></script>
   <script src="<?= base_url() ?>assets/js/custom.js"></script>
+  <?php // The homepage carries its own <head>/scripts rather than footer.php's,
+        // so the shared form validator has to be asked for here too. ?>
+  <script src="<?= base_url('assets/js/form-validate.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/form-validate.js') ?: 1 ?>"></script>
 
   <script>
   /* ------------------------------------------------------------------

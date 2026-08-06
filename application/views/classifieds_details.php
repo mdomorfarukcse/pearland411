@@ -206,7 +206,7 @@
                         </div>
 
                         <?php $disabled = empty($logged_id) ? 'disabled' : ''; ?>
-                        <form method="post" action="<?= base_url('user/add-enquiry/' . 'classifieds_details/' . $classifieds->classifieds_id); ?>" name="detail_enquiry_form" id="detail_enquiry_form">
+                        <form method="post" action="<?= base_url('user/add-enquiry/' . 'classifieds_details/' . $classifieds->classifieds_id); ?>" name="detail_enquiry_form" id="detail_enquiry_form" data-validate>
 
                             <input type="hidden" class="form-control" name="listing_id" value="" placeholder="">
                             <input type="hidden" class="form-control" name="event_id" value="" placeholder="">
@@ -230,7 +230,7 @@
                                 <span class="text-danger"><?= form_error("enquiry_email") ? form_error("enquiry_email") : ''; ?></span>
                             </div>
                             <div class="form-group ic-pho">
-                                <input <?= $disabled; ?> type="text" class="form-control" name="enquiry_mobile" value="<?= set_value('enquiry_mobile'); ?>" placeholder="Enter mobile number *" pattern="[0-9]{10,15}" title="Please enter a valid phone number" required>
+                                <input <?= $disabled; ?> type="tel" inputmode="tel" class="form-control" name="enquiry_mobile" value="<?= set_value('enquiry_mobile'); ?>" placeholder="Enter mobile number *" pattern="[0-9]{10,15}" title="Please enter a valid phone number" required>
                                 <span class="text-danger"><?= form_error("enquiry_mobile") ? form_error("enquiry_mobile") : ''; ?></span>
                             </div>
                             <div class="form-group">

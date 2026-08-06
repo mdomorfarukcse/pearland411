@@ -72,7 +72,7 @@ $reps      = function_exists('sales_representatives') ? sales_representatives() 
 						<div class="p411-note p411-note--err" role="alert"><?= nl2br(e($reg_errors)) ?></div>
 					<?php endif; ?>
 
-					<form name="register_form" id="register_form" method="post">
+					<form name="register_form" id="register_form" method="post" data-validate>
 						<div class="p411-form__row">
 							<div class="form-group">
 								<label for="name">Your name <span class="p411-req">*</span></label>
@@ -111,7 +111,7 @@ $reps      = function_exists('sales_representatives') ? sales_representatives() 
 						<div class="form-group">
 							<label for="password_confirm">Confirm password <span class="p411-req">*</span></label>
 							<input type="password" name="password_confirm" id="password_confirm" autocomplete="new-password"
-								   class="form-control" placeholder="Type it again" minlength="8" maxlength="128" required>
+								   class="form-control" placeholder="Type it again" minlength="8" maxlength="128" required data-match="#password">
 							<div class="formError"><?= form_error('password_confirm') ?></div>
 						</div>
 

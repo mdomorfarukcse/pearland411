@@ -612,6 +612,8 @@ class Admin extends CI_Controller
 	{
 		// Keys we expose in the form. Anything else in the table is
 		// left alone (and not echoed back to the page).
+		$data['nav_categories'] = $this->usermodel->getAllValues('listing_categories');
+
 		$known_keys = array(
 			// General
 			'site_title', 'site_description', 'site_keywords',
@@ -637,6 +639,12 @@ class Admin extends CI_Controller
 			// Listings tools. Unlike the service keys above this one defaults
 			// to OFF — see duplicate_listing_enabled() in view_helper.php.
 			'feature_duplicate_listing_enabled',
+			// The two category slots in the top menu. A category slug pins the
+			// slot; blank falls back to keyword detection; '-' removes the item.
+			'nav_category_1', 'nav_category_2',
+			// One address for every public form. Blank falls back to
+			// contact_email, then MAIL_FROM_ADDRESS.
+			'forms_recipient_email',
 		);
 
 		if ($this->input->method() === 'post') {

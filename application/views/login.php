@@ -45,7 +45,7 @@ $login_error   = !empty($loginSucess['message']) ? (string) $loginSucess['messag
 					<div class="p411-note p411-note--err" role="alert"><?= e($login_error) ?></div>
 				<?php endif; ?>
 
-				<form id="login_form" name="login_form" method="post">
+				<form id="login_form" name="login_form" method="post" data-validate>
 					<input type="hidden" name="lastpage" value="<?= e_attr($http_referer) ?>">
 
 					<div class="form-group">

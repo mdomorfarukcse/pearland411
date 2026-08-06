@@ -206,9 +206,47 @@ $s = isset($settings) ? $settings : array();
 				<input type="email" id="contact_email" name="contact_email" value="<?= e_attr($s['contact_email'] ?? '') ?>" placeholder="sales@pearland411.com">
 			</div>
 			<div class="setting-row">
-				<label for="service_quote_email">Quote requests to<small>Where /request-quote and service quote forms are emailed. Blank falls back to the site's From address.</small></label>
+				<label for="service_quote_email">Quote requests to<small>Where /request-quote and service quote forms are emailed. Blank falls back to the address below.</small></label>
 				<input type="email" id="service_quote_email" name="service_quote_email" value="<?= e_attr($s['service_quote_email'] ?? '') ?>" placeholder="joshua@spacecentersystems.com">
 			</div>
+			<div class="setting-row">
+				<label for="forms_recipient_email">All form submissions to<small>One address for every public form &mdash; enquiries, contact, callback requests and quotes. Each form falls back to this before the site's From address, so setting it here changes them all at once.</small></label>
+				<input type="email" id="forms_recipient_email" name="forms_recipient_email" value="<?= e_attr($s['forms_recipient_email'] ?? '') ?>" placeholder="info@pearland411.com">
+			</div>
+		</section>
+
+		<!-- Top menu ------------------------------------------------------ -->
+		<section class="setting-card">
+			<h2>Top menu categories</h2>
+			<p class="hint">
+				The two category links in the main menu, after Classifieds. Leave a slot on
+				<em>Auto</em> and it picks a matching category by name; choose <em>Hide</em> to drop
+				the link entirely. Auto is what put &ldquo;Sports&rdquo; on the Travel and Recreation
+				page &mdash; there was no sports category with published listings, so it fell through
+				to a keyword that matched travel.
+			</p>
+
+			<?php
+			$nav_categories = (isset($nav_categories) && is_array($nav_categories)) ? $nav_categories : array();
+			$nav_slots = array(
+				'nav_category_1' => 'First menu category',
+				'nav_category_2' => 'Second menu category',
+			);
+			foreach ($nav_slots as $nav_key => $nav_label):
+				$nav_current = (string) ($s[$nav_key] ?? '');
+			?>
+				<div class="setting-row">
+					<label for="<?= e_attr($nav_key) ?>"><?= e($nav_label) ?><small>Shown in the top menu and linked to that category's directory page.</small></label>
+					<select id="<?= e_attr($nav_key) ?>" name="<?= e_attr($nav_key) ?>">
+						<option value=""<?= $nav_current === '' ? ' selected' : '' ?>>Auto &mdash; pick a matching category by name</option>
+						<option value="-"<?= $nav_current === '-' ? ' selected' : '' ?>>Hide &mdash; no link in this slot</option>
+						<?php foreach ($nav_categories as $nav_cat):
+							$nav_slug = !empty($nav_cat->category_slug) ? (string) $nav_cat->category_slug : pearland_slug($nav_cat->category_name); ?>
+							<option value="<?= e_attr($nav_slug) ?>"<?= $nav_current === $nav_slug ? ' selected' : '' ?>><?= e($nav_cat->category_name) ?></option>
+						<?php endforeach; ?>
+					</select>
+				</div>
+			<?php endforeach; ?>
 		</section>
 
 		<!-- SEO / analytics --------------------------------------------- -->

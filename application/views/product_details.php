@@ -375,7 +375,7 @@
 							</div>
 						<?php endif; ?>
 
-						<form method="post" action="<?= base_url('user/add-enquiry/product_details/' . $product->product_id); ?>">
+						<form method="post" action="<?= base_url('user/add-enquiry/product_details/' . $product->product_id); ?>" data-validate>
 
 							<!-- Hidden fields for enquiry data -->
 							<input type="hidden" name="listing_id" value="">
@@ -401,7 +401,7 @@
 
 							<div class="form-group">
 
-								<input type="text" class="form-control" name="enquiry_mobile" placeholder="Enter mobile number *" pattern="[0-9]{10,15}" title="Please enter a valid phone number (10-15 digits)" required>
+								<input type="tel" inputmode="tel" class="form-control" name="enquiry_mobile" placeholder="Enter mobile number *" pattern="[0-9]{10,15}" title="Please enter a valid phone number (10-15 digits)" required>
 
 							</div>
 

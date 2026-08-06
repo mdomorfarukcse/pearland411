@@ -272,7 +272,7 @@ $nw_url = function ($row) {
 						<a class="p411-btn p411-btn--block p411-btn--ghost" style="margin-top:8px;" href="<?= e_url(base_url('contact-us')) ?>">Or use the contact form</a>
 					<?php else: ?>
 						<p class="p411-form__hint">A correction, a tip-off or a question about this story &mdash; it comes straight to us.</p>
-						<form method="post" name="nw_enquiry_form" id="nw_enquiry_form"
+						<form method="post" name="nw_enquiry_form" id="nw_enquiry_form" data-validate
 							  action="<?= base_url('user/add-enquiry/news_details/' . rawurlencode($nw_key)) ?>">
 							<input type="hidden" name="listing_id" value="">
 							<input type="hidden" name="event_id" value="">

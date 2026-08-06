@@ -86,7 +86,7 @@ $budgets = array(
 						Fields marked <span class="p411-req">*</span> are required.
 					</p>
 
-					<form method="post" action="<?= e_url(base_url('request-service')) ?>">
+					<form method="post" data-validate action="<?= e_url(base_url('request-service')) ?>">
 						<?php // Come back here on error so the message isn't retyped — whitelisted
 						      // in User::request_service(), which never redirects to a posted URL. ?>
 						<input type="hidden" name="return_to" value="request-quote">
