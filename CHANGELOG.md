@@ -6,6 +6,135 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-06 — Second tracker round: media, forms, line breaks, menu
+
+Four reports after the first pass went live.
+
+### Fixed
+
+- **The listing edit form never showed its logo.** It read
+  `$listing->listing_profile_image` — the name of the file *input*, not a
+  column; the column is `listing_image` — and prepended
+  `assets/images/listings/` to a path that already contained it. News, blog,
+  video and event edits showed nothing either: a bare file input and no sight
+  of what was already stored.
+- **Doubled line breaks in article bodies.** `content_text()` turns block tags
+  into newlines, but CKEditor already separates its tags with real ones, so a
+  paragraph break arrived as `"\n\r\n\r\n"`. There was a collapse rule for
+  this — `\n{3,}` — and the stray `\r` broke the run, so it never matched.
+  Line endings are normalised first now. The Picos article goes from 12 `<br>`
+  to 6.
+- **"Sports" in the top menu pointed at Travel and Recreation.** The slot
+  resolved by keyword from `('sport', 'recreation')`; no sports category held
+  published listings, so it fell through to "recreation", which matches the
+  travel category. Keyword matching is whole-word now and "recreation" is gone
+  from that list — but the real fix is that both slots are settings.
+- **Six phone boxes were `type="text"`**, which accepts anything.
+
+### Added
+
+- **`application/views/admin/partials/media_field.php`** — one image field,
+  rendered the same way on every edit screen: the stored image beneath the
+  input, opening full size in a lightbox, with a Remove tickbox per image for
+  galleries. Ticking one greys it out, so the effect of saving is visible
+  before you save.
+- **`assets/admin/js/media-preview.js`** + `media-preview.css` — markup-driven,
+  so a page opts in with attributes: `data-preview` (thumbnails of the files
+  just chosen, marked not-yet-saved), `data-lightbox`, and
+  `data-video-preview` (parses YouTube URLs as you type, renders a player for
+  each, and names anything that is not a YouTube link rather than dropping it).
+- **`assets/js/form-validate.js`** — live validation for any
+  `<form data-validate>`: checks each field as it is edited, writes the reason
+  under the control, blocks submit while anything is invalid and focuses the
+  first offender. Rules come from the markup (`required`, `type`, `minlength`,
+  `maxlength`, `pattern`, `data-match`), so there is no per-form script to keep
+  in step. It listens in the **capture** phase, because the directory enquiry
+  form posts over AJAX in its own handler that would otherwise fire first.
+  Applied to the directory enquiry form, login, register, contact,
+  request-a-quote and nine detail-page enquiry forms.
+- **Two "Top menu categories" settings.** Auto keeps the keyword search, Hide
+  drops the item, or pick any category by name. The link text follows the
+  category, so pinning a different one does not leave the old word in the menu.
+- **An "All form submissions to" setting**, read through
+  `form_recipient_email()`. Every form reached for `env('MAIL_FROM_ADDRESS')`
+  independently, so changing who receives enquiries meant a deploy and a search
+  through four controllers. Order: the form's own override, then this setting,
+  then `contact_email`, then `MAIL_FROM_ADDRESS` — first valid address wins.
+
+### Verified
+
+Browser-tested against the real stylesheets. Validation: letters in a phone
+field, a malformed email, a short password and mismatched passwords each block
+submission with the right message on the right field; an empty optional phone
+passes; what was typed survives a blocked submit. Media: two valid YouTube
+links render two players and a junk third entry is reported, the lightbox opens
+on click and closes on Escape, and ticking Remove greys the right cell and
+leaves its neighbour alone. `content_text()` was exercised across CRLF, LF,
+headings, `<br>`, lists and legacy entity-encoded bodies.
+
+### Also added
+
+**A rows-per-page dropdown on every admin table** — 10, 20, 30, 50 or Show all,
+in the toolbar above each list, with the pagination following it. The choice is
+remembered in the session, so moving between admin screens keeps the size you
+picked instead of snapping back to ten.
+
+There were two pagers to reconcile: 20 controllers paginate server-side through
+CodeIgniter, and 41 views page in the browser through `admin-table.js`. Both now
+read one value. `admin_per_page($default)` resolves it — the operator's choice
+wins, otherwise the page's own default, because the category lists deliberately
+serve 100 so their inline search covers the whole list. The value is validated
+against the option list before it goes anywhere near a `LIMIT`.
+
+Two things that would have made this subtly wrong: the pager links needed
+`reuse_query_string` or clicking page 2 dropped the size back to the default;
+and CodeIgniter puts the page number in the URL **path**, not the query string,
+so changing size while on `/admin/all_listings/20` had to strip that segment or
+it would apply the old offset to the new page size.
+
+"All" is capped at 5,000 rows rather than being unbounded — CI's pagination
+divides by `per_page` to count pages, so NULL would be a division by zero, and a
+browser handed 50,000 `<tr>`s stops responding.
+
+### Also fixed
+
+**Special characters, everywhere else.** The first pass covered News, Blogs and
+Videos. Products, Classifieds, Marketplace, Ads and Sliders were still running
+every text field through `htmlentities()` on the way in — 79 call sites — so an
+apostrophe stored as `&#039;` and came back that way in the edit box, because
+`set_value()` escapes on output and a value that is already encoded gets
+encoded twice. Four **slugs** were encoded too, which is worse than cosmetic.
+Output already escaped (`e()` / `htmlspecialchars()` on titles), so storing raw
+is what those views expect; the two description views moved onto the same
+`nl2br(e(content_text(...)))` convention as news and blogs.
+`cli decode_content_entities` now covers those tables as well, taking titles,
+tags and SEO fields rather than just the body.
+
+### Not changed
+
+`edit_product.php`'s `gallery_image[]` — no admin controller reads that field,
+so there is no column to show current images from. Wiring it up is a separate
+change from making the existing ones visible.
+
+The **featured icon** (About Us). Rendered against the real stylesheets it
+measures 5.39px above the icon against 5.41px below, and the `stars` ligature
+is present in `assets/css/icon.woff2`, so it draws as a glyph rather than the
+letters of the word. Waiting on a screenshot of what was actually seen.
+
+### Key files
+
+`application/views/admin/partials/media_field.php` (new),
+`assets/admin/js/media-preview.js` + `assets/admin/css/media-preview.css` (new),
+`assets/js/form-validate.js` (new), `application/helpers/view_helper.php`
+(`content_text()`), `application/helpers/site_setting_helper.php`
+(`form_recipient_email()`), `application/models/Usermodel.php`
+(`findCategoryByKeywords()`, `getCategoryBySlug()`), `application/views/header.php`,
+`application/views/admin/admin_setting.php`, and the admin edit + public form views.
+
+No migrations.
+
+---
+
 ## 2026-08-05 — The manager's error tracker, worked through end to end
 
 47 findings from `PEARLAND411_PROJECT_TRACKER.pdf`, recorded by Angel and

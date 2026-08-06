@@ -164,9 +164,14 @@
 
                         <div class="form-group">
 
-                          <label>Choose banner image</label>
-
-                          <input type="file" name="event_image" class="form-control">
+                          <?php
+                          $mf_name    = 'event_image';
+                          $mf_label   = 'Choose banner image';
+                          $mf_hint    = 'Leave empty to keep the current image.';
+                          $mf_current = $event->event_image ?? '';
+                          $mf_empty   = 'No banner uploaded yet.';
+                          include APPPATH . 'views/admin/partials/media_field.php';
+                          ?>
 
                         </div>
 

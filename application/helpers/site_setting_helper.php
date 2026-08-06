@@ -93,3 +93,39 @@ if (!function_exists('site_setting_save'))
         }
     }
 }
+
+if (!function_exists('form_recipient_email')) {
+    /**
+     * Where a public form's alert should be delivered.
+     *
+     * One address for every form on the site, set at /admin/setting. Each form
+     * used to reach for `env('MAIL_FROM_ADDRESS')` on its own, so changing who
+     * receives enquiries meant a deploy and a look through four controllers.
+     *
+     * Resolution order, first non-empty wins:
+     *   1. $override        — a form-specific setting, e.g. service_quote_email
+     *   2. forms_recipient_email  — the site-wide "all forms to" setting
+     *   3. contact_email          — the address already published on the site
+     *   4. MAIL_FROM_ADDRESS      — the .env From address
+     *
+     * @param  string $override Optional per-form setting value.
+     * @return string '' when nothing is configured anywhere.
+     */
+    function form_recipient_email($override = '')
+    {
+        $candidates = array(
+            trim((string) $override),
+            trim((string) site_setting('forms_recipient_email', '')),
+            trim((string) site_setting('contact_email', '')),
+            trim((string) env('MAIL_FROM_ADDRESS', '')),
+        );
+
+        foreach ($candidates as $address) {
+            if ($address !== '' && filter_var($address, FILTER_VALIDATE_EMAIL)) {
+                return $address;
+            }
+        }
+
+        return '';
+    }
+}

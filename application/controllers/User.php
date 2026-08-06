@@ -679,7 +679,7 @@ class User extends CI_Controller
 		}
 
 		// Notify the admin address.
-		$admin_to = env('MAIL_FROM_ADDRESS', '');
+		$admin_to = form_recipient_email();
 		if ($admin_to) {
 			$alert = '<p>New contact-form submission:</p>'
 				. '<ul>'
@@ -8283,10 +8283,11 @@ class User extends CI_Controller
 		// /admin/setting, defaulting to the address we were given. Falls back
 		// to the site's own From address only if that were ever blanked out,
 		// so a request can't end up going nowhere.
-		$admin_to = trim((string) site_setting('service_quote_email', 'joshua@spacecentersystems.com'));
-		if ($admin_to === '') {
-			$admin_to = env('MAIL_FROM_ADDRESS', '');
-		}
+		// form_recipient_email() already walks the whole chain — the per-form
+		// override, then the site-wide "all forms to" address, then
+		// contact_email, then MAIL_FROM_ADDRESS — so the second lookup this
+		// replaced could only ever return the same thing.
+		$admin_to = form_recipient_email(site_setting('service_quote_email', 'joshua@spacecentersystems.com'));
 		if ($admin_to) {
 			$alert_body = '<p>New service request #' . (int) $request_id . '</p>'
 				. '<ul>'
@@ -8460,7 +8461,7 @@ class User extends CI_Controller
 				$ack
 			);
 
-			$admin_to = env('MAIL_FROM_ADDRESS', '');
+			$admin_to = form_recipient_email();
 			if ($admin_to) {
 				$alert = '<p>New listing claim #' . $claim_id . '</p>'
 					. '<ul>'

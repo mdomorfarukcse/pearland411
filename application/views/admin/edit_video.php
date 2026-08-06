@@ -116,8 +116,14 @@
 										<div class="row">
 											<div class="col-md-12">
 												<div class="form-group">
-													<label>Choose video preview image</label>
-													<input type="file" name="video_image" class="form-control">
+													<?php
+													$mf_name    = 'video_image';
+													$mf_label   = 'Choose video preview image';
+													$mf_hint    = 'Shown before the video plays. Leave empty to keep the current one — without it the YouTube thumbnail is used.';
+													$mf_current = $video->video_image ?? '';
+													$mf_empty   = 'No preview image uploaded yet.';
+													include APPPATH . 'views/admin/partials/media_field.php';
+													?>
 												</div>
 											</div>
 										</div>

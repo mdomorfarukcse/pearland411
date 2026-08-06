@@ -3304,6 +3304,24 @@ class Usermodel extends CI_Model
 	 * that need it (category-targeted ad bookings, migration 0024) without
 	 * each of them re-deriving it with a different slug rule.
 	 */
+	/**
+	 * A whole category row for a slug, or NULL.
+	 *
+	 * Used by the top menu, which needs the name for the link text as well as
+	 * the slug for the href.
+	 */
+	public function getCategoryBySlug($category_slug, $table = 'listing_categories')
+	{
+		$id = $this->resolveCategoryIdBySlug($category_slug, $table);
+		if ($id === NULL) return NULL;
+
+		return $this->db->select('category_id, category_name, category_slug')
+			->from($table)
+			->where('category_id', $id)
+			->limit(1)
+			->get()->row();
+	}
+
 	public function categoryIdBySlug($category_slug, $table = 'listing_categories')
 	{
 		return $this->resolveCategoryIdBySlug($category_slug, $table);
@@ -6524,9 +6542,16 @@ class Usermodel extends CI_Model
 			$needle = strtolower(trim((string) $needle));
 			if ($needle === '') continue;
 
+			// Whole word, not a substring. "recreation" matched "Travel and
+			// Recreation", so the Sports menu item pointed at the travel
+			// category — a plain strpos() will match any category that merely
+			// contains the letters. The trailing \w* keeps simple plurals
+			// ("sport" -> "Sports") working.
+			$pattern = '/\b' . preg_quote($needle, '/') . '\w*/i';
+
 			$best = null;
 			foreach ($cache as $row) {
-				if (strpos(strtolower((string) $row->category_name), $needle) === false) continue;
+				if (!preg_match($pattern, (string) $row->category_name)) continue;
 				if ($must_have_listings && (int) $row->listing_count < 1) continue;
 				// Prefer the fullest category when several names match.
 				if ($best === null || (int) $row->listing_count > (int) $best->listing_count) {

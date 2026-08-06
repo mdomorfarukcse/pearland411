@@ -199,7 +199,19 @@ if (!function_exists('content_text')) {
         $value = strip_tags($value);
         $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $value = str_replace("\xC2\xA0", ' ', $value);           // stray &nbsp;
+
+        // Normalise line endings BEFORE collapsing blank runs. CKEditor writes
+        // its block tags separated by real newlines — "<p>a</p>\r\n\r\n<p>b</p>"
+        // — and the rule above adds one more for the closing tag, so a single
+        // paragraph break arrives here as "\n\r\n\r\n". The collapse below is
+        // written for "\n", and the stray \r broke the run, so every paragraph
+        // break rendered as three <br> once the caller ran nl2br() over it.
+        $value = str_replace(array("\r\n", "\r"), "\n", $value);
+
+        // Trim each line at both ends: the markup is indented, so a stripped
+        // <li> arrived as "\n\tTwo" and the tab showed up in the output.
         $value = preg_replace("/[ \t]+\n/", "\n", $value);
+        $value = preg_replace("/\n[ \t]+/", "\n", $value);
         $value = preg_replace("/\n{3,}/", "\n\n", trim($value));
 
         return $value;

@@ -72,7 +72,7 @@ $c_err = $this->session->flashdata('contact_error');
 						Fields marked <span class="p411-req">*</span> are required.
 					</p>
 
-					<form id="p411ContactForm" method="post" action="<?= base_url('contact-submit') ?>">
+					<form id="p411ContactForm" method="post" data-validate action="<?= base_url('contact-submit') ?>">
 						<input type="hidden" name="return_to" value="contact-us">
 
 						<div class="p411-form__row">

@@ -616,7 +616,7 @@ $ld_stars = function ($value) {
 						<?php endif; ?>
 					<?php else: ?>
 						<p class="p411-form__hint">Tell <?= e($ld_name) ?> what you need and they'll come back to you.</p>
-						<form method="post" name="detail_enquiry_form" id="detail_enquiry_form"
+						<form method="post" name="detail_enquiry_form" id="detail_enquiry_form" data-validate
 							  action="<?= base_url('user/add-enquiry/listing_details/' . rawurlencode($ld_slug)) ?>">
 							<input type="hidden" name="listing_id" value="<?= (int) ($listing->listing_id ?? 0) ?>">
 							<input type="hidden" name="receiving_user_id" value="<?= (int) ($listing->user_id ?? 0) ?>">

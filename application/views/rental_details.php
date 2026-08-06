@@ -310,7 +310,7 @@
                         </div>
 
                         <?php $disabled = empty($logged_id) ? 'disabled' : ''; ?>
-                        <form method="post" action="<?= base_url('user/add-enquiry/' . 'rental_details/' . $rentals->rental_slug); ?>" name="detail_enquiry_form" id="detail_enquiry_form">
+                        <form method="post" action="<?= base_url('user/add-enquiry/' . 'rental_details/' . $rentals->rental_slug); ?>" name="detail_enquiry_form" id="detail_enquiry_form" data-validate>
 
                             <input type="hidden" class="form-control" name="listing_id" value="" placeholder="">
                             <input type="hidden" class="form-control" name="event_id" value="" placeholder="">
@@ -334,7 +334,7 @@
                                 <span class="text-danger"><?= form_error("enquiry_email") ? form_error("enquiry_email") : ''; ?></span>
                             </div>
                             <div class="form-group ic-pho">
-                                <input type="text" class="form-control" <?= $disabled; ?> name="enquiry_mobile" value="<?= set_value('enquiry_mobile'); ?>" placeholder="Enter mobile number *" pattern="[0-9+\-\s()]{7,20}" title="7 to 20 characters: digits, spaces, + ( ) and - are allowed" required>
+                                <input type="tel" inputmode="tel" class="form-control" <?= $disabled; ?> name="enquiry_mobile" value="<?= set_value('enquiry_mobile'); ?>" placeholder="Enter mobile number *" pattern="[0-9+\-\s()]{7,20}" title="7 to 20 characters: digits, spaces, + ( ) and - are allowed" required>
                                 <span class="text-danger"><?= form_error("enquiry_mobile") ? form_error("enquiry_mobile") : ''; ?></span>
                             </div>
                             <div class="form-group">

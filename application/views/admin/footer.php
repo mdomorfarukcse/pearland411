@@ -36,7 +36,23 @@
 <!-- Universal admin-table enhancer — search, page-size, prev/next.
      Wires automatically to every <table data-admin-table>, plus any
      <table> following the legacy #pg-sear input. -->
-<script src="<?= base_url('assets/admin/js/admin-table.js') ?>"></script>
+<?php
+// Publish the operator's rows-per-page choice so admin-table.js can render the
+// dropdown and match its own client-side paging to what the server did. One
+// setting drives both pagers; see application/helpers/admin_helper.php.
+$__ap_choice  = admin_per_page_choice();
+$__ap_options = array();
+foreach (admin_per_page_options() as $__ap_v => $__ap_l) {
+	$__ap_options[] = array('value' => $__ap_v, 'label' => $__ap_l);
+}
+?>
+<script>
+	window.P411_ADMIN_PER_PAGE         = <?= (int) admin_per_page() ?>;
+	window.P411_ADMIN_PER_PAGE_CHOICE  = <?= json_encode($__ap_choice) ?>;
+	window.P411_ADMIN_PER_PAGE_OPTIONS = <?= json_encode($__ap_options) ?>;
+</script>
+<script src="<?= base_url('assets/admin/js/admin-table.js') ?>?v=<?= @filemtime(FCPATH . 'assets/admin/js/admin-table.js') ?: 1 ?>"></script>
+<script src="<?= base_url('assets/admin/js/media-preview.js') ?>?v=<?= @filemtime(FCPATH . 'assets/admin/js/media-preview.js') ?: 1 ?>"></script>
 
 <!-- CKEditor 4 (4.22.1 — last free release; suppresses the "not secure" nag). -->
 <script src="https://cdn.ckeditor.com/4.22.1/standard/ckeditor.js"></script>

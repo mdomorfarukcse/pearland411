@@ -203,7 +203,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url' => base_url('admin/house-list'),
 			'total_rows' => $total_rows,
-			'per_page' => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment' => 3,
 			'use_page_numbers' => TRUE,
 			'num_links' => 3,
@@ -260,7 +261,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url' => base_url('admin/newsletter-subscribers'),
 			'total_rows' => $total_rows,
-			'per_page' => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment' => 3,
 			'use_page_numbers' => TRUE,
 			'num_links' => 3,
@@ -400,7 +402,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url' => base_url('admin/all-house-category'),
 			'total_rows' => $total_rows,
-			'per_page' => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment' => 3,
 			'use_page_numbers' => TRUE,
 			'num_links' => 3,
@@ -612,6 +615,8 @@ class Admin extends CI_Controller
 	{
 		// Keys we expose in the form. Anything else in the table is
 		// left alone (and not echoed back to the page).
+		$data['nav_categories'] = $this->usermodel->getAllValues('listing_categories');
+
 		$known_keys = array(
 			// General
 			'site_title', 'site_description', 'site_keywords',
@@ -637,6 +642,12 @@ class Admin extends CI_Controller
 			// Listings tools. Unlike the service keys above this one defaults
 			// to OFF — see duplicate_listing_enabled() in view_helper.php.
 			'feature_duplicate_listing_enabled',
+			// The two category slots in the top menu. A category slug pins the
+			// slot; blank falls back to keyword detection; '-' removes the item.
+			'nav_category_1', 'nav_category_2',
+			// One address for every public form. Blank falls back to
+			// contact_email, then MAIL_FROM_ADDRESS.
+			'forms_recipient_email',
 		);
 
 		if ($this->input->method() === 'post') {
@@ -791,7 +802,8 @@ class Admin extends CI_Controller
 		// without needing a server-side search round-trip.
 		$config = [
 			'base_url' => base_url('admin/all_listing_category'),
-			'per_page' => 100,
+			'per_page' => admin_per_page(100),
+			'reuse_query_string' => TRUE,
 			'total_rows' => count($this->adminmodel->allListingCategory(NULL, NULL)),
 			'uri_segment' => 3,
 		];
@@ -996,7 +1008,8 @@ class Admin extends CI_Controller
 			$config = [
 				'base_url'         => base_url('admin/all_listing_sub_category'),
 				'total_rows'       => $total_rows,
-				'per_page'         => 100,
+				'per_page' => admin_per_page(100),
+				'reuse_query_string' => TRUE,
 				'uri_segment'      => 3,
 				'use_page_numbers' => TRUE,
 				'num_links'        => 3,
@@ -1171,7 +1184,7 @@ class Admin extends CI_Controller
 
 		$config = [
 			'base_url' => base_url('admin/all_listings'),
-			'per_page' => 10,
+			'per_page' => admin_per_page(10),
 			'total_rows' => $this->adminmodel->countAdminListings($q),
 			'uri_segment' => 3,
 			'reuse_query_string' => TRUE,
@@ -2091,7 +2104,8 @@ class Admin extends CI_Controller
 
 		$config = [
 			'base_url' => base_url('admin/trash_listings'),
-			'per_page' => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'total_rows' => count($this->adminmodel->getAllDeletedListings(NULL, NULL))
 		];
 
@@ -2229,7 +2243,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/all_product_category'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -2420,7 +2435,8 @@ class Admin extends CI_Controller
 			$config = [
 				'base_url'         => base_url('admin/all_product_sub_category'),
 				'total_rows'       => $total_rows,
-				'per_page'         => 10,
+				'per_page' => admin_per_page(10),
+				'reuse_query_string' => TRUE,
 				'uri_segment'      => 3,
 				'use_page_numbers' => TRUE,
 				'num_links'        => 3,
@@ -2563,7 +2579,8 @@ class Admin extends CI_Controller
 		// Pagination configuration
 		$config = [
 			'base_url' => base_url('admin/products'),
-			'per_page' => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'total_rows' => $this->adminmodel->countAllProducts(),
 			'uri_segment' => 3,
 		];
@@ -2651,15 +2668,15 @@ class Admin extends CI_Controller
 		} else {
 			$product_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('product_name'));
 			$info = array(
-				'user_id'			    => htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'product_name'			=> htmlentities($this->input->post('product_name'), ENT_QUOTES),
-				'category_id'			=> htmlentities($this->input->post('category_id'), ENT_QUOTES),
-				'sub_category_id'		=> htmlentities($this->input->post('sub_category_id'), ENT_QUOTES),
-				'product_price'			=> htmlentities($this->input->post('product_price'), ENT_QUOTES),
-				'product_price_offer'	=> htmlentities($this->input->post('product_price_offer'), ENT_QUOTES),
-				'product_payment_link'	=> htmlentities($this->input->post('product_payment_link'), ENT_QUOTES),
-				'product_description'	=> htmlentities($this->input->post('product_description'), ENT_QUOTES),
-				'product_tags'			=> htmlentities($this->input->post('product_tags'), ENT_QUOTES),
+				'user_id'			    => $this->input->post('user_id'),
+				'product_name'			=> $this->input->post('product_name'),
+				'category_id'			=> $this->input->post('category_id'),
+				'sub_category_id'		=> $this->input->post('sub_category_id'),
+				'product_price'			=> $this->input->post('product_price'),
+				'product_price_offer'	=> $this->input->post('product_price_offer'),
+				'product_payment_link'	=> $this->input->post('product_payment_link'),
+				'product_description'	=> $this->input->post('product_description'),
+				'product_tags'			=> $this->input->post('product_tags'),
 				'product_status'        => 1,
 				'product_slug'			=> $product_slug
 			);
@@ -2730,15 +2747,15 @@ class Admin extends CI_Controller
 		} else {
 
 			$info = array(
-				'user_id' => htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'product_name' => htmlentities($this->input->post('product_name'), ENT_QUOTES),
-				'category_id' => htmlentities($this->input->post('category_id'), ENT_QUOTES),
-				'sub_category_id' => htmlentities($this->input->post('sub_category_id'), ENT_QUOTES),
-				'product_price' => htmlentities($this->input->post('product_price'), ENT_QUOTES),
-				'product_price_offer' => htmlentities($this->input->post('product_price_offer'), ENT_QUOTES),
-				'product_payment_link' => htmlentities($this->input->post('product_payment_link'), ENT_QUOTES),
-				'product_description' => htmlentities($this->input->post('product_description'), ENT_QUOTES),
-				'product_tags' => htmlentities($this->input->post('product_tags'), ENT_QUOTES),
+				'user_id' => $this->input->post('user_id'),
+				'product_name' => $this->input->post('product_name'),
+				'category_id' => $this->input->post('category_id'),
+				'sub_category_id' => $this->input->post('sub_category_id'),
+				'product_price' => $this->input->post('product_price'),
+				'product_price_offer' => $this->input->post('product_price_offer'),
+				'product_payment_link' => $this->input->post('product_payment_link'),
+				'product_description' => $this->input->post('product_description'),
+				'product_tags' => $this->input->post('product_tags'),
 			);
 
 			// Handle highlights
@@ -2838,7 +2855,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/blog_list'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -3093,7 +3111,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/news_list'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -3427,7 +3446,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/all_video_category'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -3595,7 +3615,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/video_list'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -3798,7 +3819,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/all_classifieds_category'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -3967,7 +3989,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/classifieds_list'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -4050,18 +4073,18 @@ class Admin extends CI_Controller
 		} else {
 			$classifieds_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('classifieds_title'));
 			$info = array(
-				'user_id'					  => htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'classifieds_title'    		  => htmlentities($this->input->post('classifieds_title'), ENT_QUOTES),
-				'classifieds_price'    		  => htmlentities($this->input->post('classifieds_price'), ENT_QUOTES),
-				'classifieds_category_id'	  => htmlentities($this->input->post('classifieds_category_id'), ENT_QUOTES),
-				'featured_classifieds'  	  => htmlentities($this->input->post('featured_classifieds'), ENT_QUOTES),
-				'spotlight_classifieds'  	  => htmlentities($this->input->post('spotlight_classifieds'), ENT_QUOTES),
-				'display_contact'  	  		  => htmlentities($this->input->post('display_contact'), ENT_QUOTES),
-				'classifieds_description'	  => htmlentities($this->input->post('classifieds_description'), ENT_QUOTES),
-				'classifieds_seo_title' 	  => htmlentities($this->input->post('classifieds_seo_title'), ENT_QUOTES),
-				'classifieds_seo_description' => htmlentities($this->input->post('classifieds_seo_description'), ENT_QUOTES),
-				'classifieds_seo_keywords'    => htmlentities($this->input->post('classifieds_seo_keywords'), ENT_QUOTES),
-				'classifieds_slug'  		  => htmlentities($classifieds_slug, ENT_QUOTES)
+				'user_id'					  => $this->input->post('user_id'),
+				'classifieds_title'    		  => $this->input->post('classifieds_title'),
+				'classifieds_price'    		  => $this->input->post('classifieds_price'),
+				'classifieds_category_id'	  => $this->input->post('classifieds_category_id'),
+				'featured_classifieds'  	  => $this->input->post('featured_classifieds'),
+				'spotlight_classifieds'  	  => $this->input->post('spotlight_classifieds'),
+				'display_contact'  	  		  => $this->input->post('display_contact'),
+				'classifieds_description'	  => $this->input->post('classifieds_description'),
+				'classifieds_seo_title' 	  => $this->input->post('classifieds_seo_title'),
+				'classifieds_seo_description' => $this->input->post('classifieds_seo_description'),
+				'classifieds_seo_keywords'    => $this->input->post('classifieds_seo_keywords'),
+				'classifieds_slug'  		  => $classifieds_slug
 			);
 
 			if ($_FILES && $_FILES['classifieds_image']['name']) {
@@ -4102,18 +4125,18 @@ class Admin extends CI_Controller
 		} else {
 			$classifieds_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('classifieds_title'));
 			$info = array(
-				'user_id'					  => htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'classifieds_title'    		  => htmlentities($this->input->post('classifieds_title'), ENT_QUOTES),
-				'classifieds_price'    		  => htmlentities($this->input->post('classifieds_price'), ENT_QUOTES),
-				'classifieds_category_id'	  => htmlentities($this->input->post('classifieds_category_id'), ENT_QUOTES),
-				'featured_classifieds'  	  => htmlentities($this->input->post('featured_classifieds'), ENT_QUOTES),
-				'spotlight_classifieds'  	  => htmlentities($this->input->post('spotlight_classifieds'), ENT_QUOTES),
-				'display_contact'  	  		  => htmlentities($this->input->post('display_contact'), ENT_QUOTES),
-				'classifieds_description'	  => htmlentities($this->input->post('classifieds_description'), ENT_QUOTES),
-				'classifieds_seo_title' 	  => htmlentities($this->input->post('classifieds_seo_title'), ENT_QUOTES),
-				'classifieds_seo_description' => htmlentities($this->input->post('classifieds_seo_description'), ENT_QUOTES),
-				'classifieds_seo_keywords'    => htmlentities($this->input->post('classifieds_seo_keywords'), ENT_QUOTES),
-				'classifieds_slug'  		  => htmlentities($classifieds_slug, ENT_QUOTES)
+				'user_id'					  => $this->input->post('user_id'),
+				'classifieds_title'    		  => $this->input->post('classifieds_title'),
+				'classifieds_price'    		  => $this->input->post('classifieds_price'),
+				'classifieds_category_id'	  => $this->input->post('classifieds_category_id'),
+				'featured_classifieds'  	  => $this->input->post('featured_classifieds'),
+				'spotlight_classifieds'  	  => $this->input->post('spotlight_classifieds'),
+				'display_contact'  	  		  => $this->input->post('display_contact'),
+				'classifieds_description'	  => $this->input->post('classifieds_description'),
+				'classifieds_seo_title' 	  => $this->input->post('classifieds_seo_title'),
+				'classifieds_seo_description' => $this->input->post('classifieds_seo_description'),
+				'classifieds_seo_keywords'    => $this->input->post('classifieds_seo_keywords'),
+				'classifieds_slug'  		  => $classifieds_slug
 			);
 
 			if ($_FILES && $_FILES['classifieds_image']['name']) {
@@ -4317,18 +4340,18 @@ class Admin extends CI_Controller
 		} else {
 			$marketplace_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('marketplace_title'));
 			$info = array(
-				'user_id'					  => htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'marketplace_title'    		  => htmlentities($this->input->post('marketplace_title'), ENT_QUOTES),
-				'marketplace_price'    		  => htmlentities($this->input->post('marketplace_price'), ENT_QUOTES),
-				'marketplace_category_id'	  => htmlentities($this->input->post('marketplace_category_id'), ENT_QUOTES),
-				'featured_marketplace'  	  => htmlentities($this->input->post('featured_marketplace'), ENT_QUOTES),
-				'spotlight_marketplace'  	  => htmlentities($this->input->post('spotlight_marketplace'), ENT_QUOTES),
-				'display_contact'  	  		  => htmlentities($this->input->post('display_contact'), ENT_QUOTES),
-				'marketplace_description'	  => htmlentities($this->input->post('marketplace_description'), ENT_QUOTES),
-				'marketplace_seo_title' 	  => htmlentities($this->input->post('marketplace_seo_title'), ENT_QUOTES),
-				'marketplace_seo_description' => htmlentities($this->input->post('marketplace_seo_description'), ENT_QUOTES),
-				'marketplace_seo_keywords'    => htmlentities($this->input->post('marketplace_seo_keywords'), ENT_QUOTES),
-				'marketplace_slug'  		  => htmlentities($marketplace_slug, ENT_QUOTES)
+				'user_id'					  => $this->input->post('user_id'),
+				'marketplace_title'    		  => $this->input->post('marketplace_title'),
+				'marketplace_price'    		  => $this->input->post('marketplace_price'),
+				'marketplace_category_id'	  => $this->input->post('marketplace_category_id'),
+				'featured_marketplace'  	  => $this->input->post('featured_marketplace'),
+				'spotlight_marketplace'  	  => $this->input->post('spotlight_marketplace'),
+				'display_contact'  	  		  => $this->input->post('display_contact'),
+				'marketplace_description'	  => $this->input->post('marketplace_description'),
+				'marketplace_seo_title' 	  => $this->input->post('marketplace_seo_title'),
+				'marketplace_seo_description' => $this->input->post('marketplace_seo_description'),
+				'marketplace_seo_keywords'    => $this->input->post('marketplace_seo_keywords'),
+				'marketplace_slug'  		  => $marketplace_slug
 			);
 
 			if ($_FILES && $_FILES['marketplace_image']['name']) {
@@ -4364,18 +4387,18 @@ class Admin extends CI_Controller
 		} else {
 			$marketplace_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('marketplace_title'));
 			$info = array(
-				'user_id'					  => htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'marketplace_title'    		  => htmlentities($this->input->post('marketplace_title'), ENT_QUOTES),
-				'marketplace_price'    		  => htmlentities($this->input->post('marketplace_price'), ENT_QUOTES),
-				'marketplace_category_id'	  => htmlentities($this->input->post('marketplace_category_id'), ENT_QUOTES),
-				'featured_marketplace'  	  => htmlentities($this->input->post('featured_marketplace'), ENT_QUOTES),
-				'spotlight_marketplace'  	  => htmlentities($this->input->post('spotlight_marketplace'), ENT_QUOTES),
-				'display_contact'  	  		  => htmlentities($this->input->post('display_contact'), ENT_QUOTES),
-				'marketplace_description'	  => htmlentities($this->input->post('marketplace_description'), ENT_QUOTES),
-				'marketplace_seo_title' 	  => htmlentities($this->input->post('marketplace_seo_title'), ENT_QUOTES),
-				'marketplace_seo_description' => htmlentities($this->input->post('marketplace_seo_description'), ENT_QUOTES),
-				'marketplace_seo_keywords'    => htmlentities($this->input->post('marketplace_seo_keywords'), ENT_QUOTES),
-				'marketplace_slug'  		  => htmlentities($marketplace_slug, ENT_QUOTES)
+				'user_id'					  => $this->input->post('user_id'),
+				'marketplace_title'    		  => $this->input->post('marketplace_title'),
+				'marketplace_price'    		  => $this->input->post('marketplace_price'),
+				'marketplace_category_id'	  => $this->input->post('marketplace_category_id'),
+				'featured_marketplace'  	  => $this->input->post('featured_marketplace'),
+				'spotlight_marketplace'  	  => $this->input->post('spotlight_marketplace'),
+				'display_contact'  	  		  => $this->input->post('display_contact'),
+				'marketplace_description'	  => $this->input->post('marketplace_description'),
+				'marketplace_seo_title' 	  => $this->input->post('marketplace_seo_title'),
+				'marketplace_seo_description' => $this->input->post('marketplace_seo_description'),
+				'marketplace_seo_keywords'    => $this->input->post('marketplace_seo_keywords'),
+				'marketplace_slug'  		  => $marketplace_slug
 			);
 
 			if ($_FILES && $_FILES['marketplace_image']['name']) {
@@ -4438,7 +4461,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/all_rental_category'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -4605,7 +4629,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/rental-list'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -4884,7 +4909,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url'         => base_url('admin/all_events'),
 			'total_rows'       => $total_rows,
-			'per_page'         => 10,
+			'per_page' => admin_per_page(10),
+			'reuse_query_string' => TRUE,
 			'uri_segment'      => 3,
 			'use_page_numbers' => TRUE,
 			'num_links'        => 3,
@@ -5128,7 +5154,7 @@ class Admin extends CI_Controller
 			$this->load->view('admin/footer');
 		} else {
 			$data = array();
-			$data['slider_link'] = htmlentities($this->input->post('slider_link'), ENT_QUOTES);
+			$data['slider_link'] = $this->input->post('slider_link');
 
 			if ($_FILES && $_FILES['slider_photo']['name']) {
 				$img_info = [
@@ -5524,10 +5550,10 @@ class Admin extends CI_Controller
 				'category_id'     => $ad_category,
 				'ad_start_date'   => date('Y-m-d h:i:s', strtotime($this->input->post('ad_start_date'))),
 				'ad_end_date'     => date('Y-m-d h:i:s', strtotime($this->input->post('ad_end_date'))),
-				'ad_link'         => htmlentities($this->input->post('ad_link'), ENT_QUOTES),
-				'ad_total_days'   => htmlentities($this->input->post('ad_total_days'), ENT_QUOTES),
-				'ad_cost_per_day' => htmlentities($this->input->post('ad_cost_per_day'), ENT_QUOTES),
-				'ad_total_cost'   => htmlentities($this->input->post('ad_total_cost'), ENT_QUOTES)
+				'ad_link'         => $this->input->post('ad_link'),
+				'ad_total_days'   => $this->input->post('ad_total_days'),
+				'ad_cost_per_day' => $this->input->post('ad_cost_per_day'),
+				'ad_total_cost'   => $this->input->post('ad_total_cost')
 			);
 
 			if ($_FILES && $_FILES['ad_photo']['name']) {
@@ -5575,14 +5601,14 @@ class Admin extends CI_Controller
 			$this->load->view('admin/footer');
 		} else {
 			$info = array(
-				'u_id'            => htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'ads_price_id'    => htmlentities($this->input->post('ads_price_id'), ENT_QUOTES),
+				'u_id'            => $this->input->post('user_id'),
+				'ads_price_id'    => $this->input->post('ads_price_id'),
 				'ad_start_date'   => date('Y-m-d h:i:s', strtotime($this->input->post('ad_start_date'))),
 				'ad_end_date'     => date('Y-m-d h:i:s', strtotime($this->input->post('ad_end_date'))),
-				'ad_link'         => htmlentities($this->input->post('ad_link'), ENT_QUOTES),
-				'ad_total_days'   => htmlentities($this->input->post('ad_total_days'), ENT_QUOTES),
-				'ad_cost_per_day' => htmlentities($this->input->post('ad_cost_per_day'), ENT_QUOTES),
-				'ad_total_cost'   => htmlentities($this->input->post('ad_total_cost'), ENT_QUOTES)
+				'ad_link'         => $this->input->post('ad_link'),
+				'ad_total_days'   => $this->input->post('ad_total_days'),
+				'ad_cost_per_day' => $this->input->post('ad_cost_per_day'),
+				'ad_total_cost'   => $this->input->post('ad_total_cost')
 			);
 
 			if ($_FILES && $_FILES['ad_photo']['name']) {
@@ -5657,9 +5683,9 @@ class Admin extends CI_Controller
 			$this->load->view('admin/footer');
 		} else {
 			$info = array(
-				'name'   => htmlentities($this->input->post('name'), ENT_QUOTES),
-				'cost'   => htmlentities($this->input->post('cost'), ENT_QUOTES),
-				'status' => htmlentities($this->input->post('status'), ENT_QUOTES),
+				'name'   => $this->input->post('name'),
+				'cost'   => $this->input->post('cost'),
+				'status' => $this->input->post('status'),
 				'img'    => $uploaded_image_path // set this after upload
 				// Removed 'size', 'height', and 'width' from insert
 			);
@@ -5708,9 +5734,9 @@ class Admin extends CI_Controller
 			$this->load->view('admin/footer');
 		} else {
 			$info = array(
-				'name'		=> htmlentities($this->input->post('name'), ENT_QUOTES),
-				'cost'    	=> htmlentities($this->input->post('cost'), ENT_QUOTES),
-				'status'    => htmlentities($this->input->post('status'), ENT_QUOTES)
+				'name'		=> $this->input->post('name'),
+				'cost'    	=> $this->input->post('cost'),
+				'status'    => $this->input->post('status')
 			);
 
 			if ($_FILES && $_FILES['img']['name']) {
@@ -6066,7 +6092,8 @@ class Admin extends CI_Controller
 		$config = [
 			'base_url' => base_url('admin/all_subscriptions'),
 			'total_rows' => $total_rows,
-			'per_page' => 20,
+			'per_page' => admin_per_page(20),
+			'reuse_query_string' => TRUE,
 			'uri_segment' => 3,
 			'use_page_numbers' => TRUE,
 			'first_link' => 'First',

@@ -405,42 +405,32 @@
                       <!--FILED START-->
                       <div class="row">
                         <div class="col-md-12">
-                          <div class="form-group">
-                            <label>Upload Listing Logo</label>
-                            <input type="file" name="listing_profile_image" class="form-control">
-                            <?php if (isset($listing) && !empty($listing->listing_profile_image)) { ?>
-                              <img src="<?= base_url('assets/images/listings/' . $listing->listing_profile_image) ?>" alt="Current Logo" style="max-width:120px; margin-top:10px;" />
-                            <?php } ?>
-                          </div>
+                          <?php
+                          // The logo. This block used to read
+                          // $listing->listing_profile_image — the name of the file
+                          // INPUT, not a column; the column is `listing_image` — and
+                          // then prepended assets/images/listings/ to a path that
+                          // already contained it. So the current logo never appeared.
+                          $mf_name    = 'listing_profile_image';
+                          $mf_label   = 'Upload Listing Logo';
+                          $mf_hint    = 'Shown at the top of the listing page. Leave empty to keep the current one. JPG, PNG or GIF.';
+                          $mf_current = $listing->listing_image ?? '';
+                          $mf_empty   = 'No logo uploaded yet.';
+                          include APPPATH . 'views/admin/partials/media_field.php';
+                          ?>
                         </div>
                         <div class="col-md-12">
-                          <div class="form-group">
-                            <label>Upload Gallery Images (Multiple Images)</label>
-                            <input type="file" name="listing_image_gallery[]" class="form-control" multiple accept="image/*">
-                            <small class="form-text text-muted">You can select multiple images for your gallery. New images are <strong>added</strong> to the ones below &mdash; nothing is replaced. Supported formats: JPG, PNG, GIF</small>
-                            <?php
-                            // Tick an image to remove it on save. Before this the gallery was
-                            // rendered as bare <img> tags with no control of any kind, and there
-                            // was no endpoint to remove one either — the only way to change the
-                            // gallery was to re-upload the whole thing.
-                            $gallery_images = listing_gallery_paths($listing->listing_image_gallery ?? null);
-                            if (!empty($gallery_images)) { ?>
-                              <div class="current-gallery" style="margin-top:10px;">
-                                <label>Current gallery images</label>
-                                <p class="form-text text-muted" style="margin:0 0 8px;">Tick <em>Remove</em> under any image to delete it when you save.</p>
-                                <div class="gallery-images" style="display:flex; flex-wrap:wrap; gap:12px;">
-                                  <?php foreach ($gallery_images as $gi => $gallery_img) { ?>
-                                    <div style="text-align:center;">
-                                      <img src="<?= e_url(base_url($gallery_img)) ?>" alt="Gallery image <?= (int) $gi + 1 ?>" style="display:block; max-width:80px; height:60px; object-fit:cover; border:1px solid #ddd;" />
-                                      <label style="display:block; font-size:12px; margin-top:4px; font-weight:normal; cursor:pointer;">
-                                        <input type="checkbox" name="remove_gallery[]" value="<?= e_attr($gallery_img) ?>"> Remove
-                                      </label>
-                                    </div>
-                                  <?php } ?>
-                                </div>
-                              </div>
-                            <?php } ?>
-                          </div>
+                          <?php
+                          $mf_name     = 'listing_image_gallery[]';
+                          $mf_id       = 'listing_image_gallery';
+                          $mf_label    = 'Upload Gallery Images (Multiple Images)';
+                          $mf_hint     = 'You can select several at once. New images are <strong>added</strong> to the ones below &mdash; nothing is replaced.';
+                          $mf_current  = listing_gallery_paths($listing->listing_image_gallery ?? null);
+                          $mf_multiple = true;
+                          $mf_remove   = 'remove_gallery[]';
+                          $mf_empty    = 'No gallery images uploaded yet.';
+                          include APPPATH . 'views/admin/partials/media_field.php';
+                          ?>
                         </div>
                       </div>
                       <!--FILED END-->
@@ -451,7 +441,12 @@
                           <div class="row">
                             <div class="col-md-12">
                               <div class="form-group">
-                                <textarea id="listing_video" name="listing_video" class="form-control" placeholder="Paste Your Youtube Url here"><?= isset($listing) ? $listing->listing_video : '' ?></textarea>
+                                <textarea id="listing_video" name="listing_video" class="form-control" rows="3"
+                                          data-video-preview="#listing_video_preview"
+                                          placeholder="Paste YouTube links here — one per line, or separated by commas"><?= e($listing->listing_video ?? '') ?></textarea>
+                                <small class="form-text text-muted">Each link is checked as you type; anything that is not a YouTube URL is called out rather than silently ignored.</small>
+                                <?php // Rendered by media-preview.js from whatever is in the box. ?>
+                                <div class="p411-media p411-media__videos" id="listing_video_preview"></div>
                               </div>
                             </div>
                           </div>

@@ -572,12 +572,37 @@
 		$slug = !empty($cat->category_slug) ? (string) $cat->category_slug : pearland_slug($cat->category_name);
 		return base_url('all_listing/' . rawurlencode($slug));
 	};
-	$__nav_health = $__nav_sports = null;
-	if (isset($__nav_ci->usermodel) && method_exists($__nav_ci->usermodel, 'findCategoryByKeywords')) {
-		// "healthcare" first so it wins over "health services" / "mental health".
-		$__nav_health = $__nav_ci->usermodel->findCategoryByKeywords(array('healthcare', 'health'), true);
-		$__nav_sports = $__nav_ci->usermodel->findCategoryByKeywords(array('sport', 'recreation'), true);
-	}
+	/*
+	 * Each slot is an operator setting at /admin/setting:
+	 *   ''   auto — resolve by name (below)
+	 *   '-'  hide the item entirely
+	 *   slug pin the slot to that category
+	 *
+	 * Auto is what put "Sports" on the Travel and Recreation page: there was no
+	 * sports category holding published listings, so it fell through to the
+	 * second keyword, "recreation", which is a travel word here. That keyword is
+	 * gone, and a slot that resolves to nothing is simply left out — but the
+	 * setting is the real answer, because which categories belong in the menu is
+	 * an editorial choice, not something to guess from names.
+	 */
+	$__nav_pick = function ($setting_key, array $keywords) use ($__nav_ci) {
+		$choice = trim((string) site_setting($setting_key, ''));
+		if ($choice === '-') {
+			return null;                       // explicitly hidden
+		}
+		if ($choice !== '' && isset($__nav_ci->usermodel) && method_exists($__nav_ci->usermodel, 'getCategoryBySlug')) {
+			$pinned = $__nav_ci->usermodel->getCategoryBySlug($choice);
+			if ($pinned) return $pinned;
+		}
+		if (isset($__nav_ci->usermodel) && method_exists($__nav_ci->usermodel, 'findCategoryByKeywords')) {
+			return $__nav_ci->usermodel->findCategoryByKeywords($keywords, true);
+		}
+		return null;
+	};
+
+	// "healthcare" first so it wins over "health services" / "mental health".
+	$__nav_sports = $__nav_pick('nav_category_1', array('sport', 'athletic', 'fitness'));
+	$__nav_health = $__nav_pick('nav_category_2', array('healthcare', 'health', 'medical'));
 	?>
 	<section class="news-top-menu">
 
@@ -601,9 +626,11 @@
 
 <?php if (site_setting('service_classifieds_enabled','1') !== '0'): ?><li><a href="<?= base_url() ?>classifieds" class="">Classifieds</a></li><?php endif; ?>
 
-						<?php if ($__nav_sports): ?><li><a href="<?= e_url($__nav_cat_url($__nav_sports)) ?>" class="">Sports</a></li><?php endif; ?>
+						<?php // Label follows the category, so pinning a different one in
+						      // /admin/setting does not leave the old word in the menu. ?>
+						<?php if ($__nav_sports): ?><li><a href="<?= e_url($__nav_cat_url($__nav_sports)) ?>" class=""><?= e($__nav_sports->category_name) ?></a></li><?php endif; ?>
 
-						<?php if ($__nav_health): ?><li><a href="<?= e_url($__nav_cat_url($__nav_health)) ?>" class="">Health</a></li><?php endif; ?>
+						<?php if ($__nav_health): ?><li><a href="<?= e_url($__nav_cat_url($__nav_health)) ?>" class=""><?= e($__nav_health->category_name) ?></a></li><?php endif; ?>
 
 						<li><a href="<?= base_url() ?>all-category" class="">All categories</a></li>
 

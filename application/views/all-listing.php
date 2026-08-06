@@ -484,7 +484,7 @@ $showing_to   = $current_offset + count($allListings);
 					<div id="dir_enq_success" class="p411-note p411-note--ok" style="display:none;">Thanks &mdash; your enquiry has been sent.</div>
 					<div id="dir_enq_fail" class="p411-note p411-note--err" style="display:none;">Sorry, that didn't send. Please try again.</div>
 
-					<form name="dir_enquiry_form" id="dir_enquiry_form" method="post"
+					<form name="dir_enquiry_form" id="dir_enquiry_form" method="post" data-validate
 						  action="<?= base_url('user/add_enquiry/all_listing') ?>">
 						<input type="hidden" name="listing_id" value="0">
 						<input type="hidden" name="receiving_user_id" value="0">

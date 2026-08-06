@@ -88,8 +88,14 @@
 										<div class="row">
 											<div class="col-md-12">
 												<div class="form-group">
-													<label>Choose News image</label>
-													<input type="file" name="news_image" class="form-control">
+													<?php
+													$mf_name    = 'news_image';
+													$mf_label   = 'Choose News image';
+													$mf_hint    = 'Leave empty to keep the current image.';
+													$mf_current = $news->news_image ?? '';
+													$mf_empty   = 'No image uploaded yet.';
+													include APPPATH . 'views/admin/partials/media_field.php';
+													?>
 												</div>
 											</div>
 										</div>

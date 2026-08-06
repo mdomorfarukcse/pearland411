@@ -269,7 +269,7 @@ $bd_url = function ($row) {
 
 						<?php $disabled = empty($logged_id) ? 'disabled' : ''; ?>
 						<form method="post" action="<?= e_url(base_url('user/add-enquiry/blog_details/' . (int) $blog->blog_id)) ?>"
-							  name="detail_enquiry_form" id="detail_enquiry_form">
+							  name="detail_enquiry_form" id="detail_enquiry_form" data-validate>
 							<input type="hidden" name="listing_id" value="">
 							<input type="hidden" name="event_id" value="">
 							<input type="hidden" name="blog_id" value="<?= (int) $blog->blog_id ?>">
