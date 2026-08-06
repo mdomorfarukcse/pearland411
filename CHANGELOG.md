@@ -6,6 +6,72 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-06 — Banner artwork drawn at each zone's exact size
+
+Reported as "banner not showing properly": the navy top banner rendered as
+"D PLACEMENT … red business placement available" with its call-to-action
+button sliced in half.
+
+### Fixed
+
+- **The creative was cropped, badly.** `ad_slot.php` picked artwork by aspect
+  ratio from four fixed shapes, and `top-banner-site-wide` is 700x100 — a 7:1
+  box — while the "strip" shape is 970x90, 10.8:1. `object-fit: cover` scaled
+  the artwork to the box height and threw away the 35% of width that didn't
+  fit, 17% off each side. The same crop hit `middle-banner-category` and
+  `bottom-banner-site-wide` more mildly, and the two hand-authored service
+  creatives had a comment explaining which parts of them survived it.
+
+  Creatives are now generated **per creative per catalogue size** — 42 files —
+  so the artwork's viewBox equals the zone's box and cropping is arithmetically
+  impossible. The four shape names remain, at their own dimensions, for a zone
+  whose size isn't in the catalogue.
+- **`object-fit: cover` → `contain`.** With exact-size artwork the two are
+  identical, but an advertiser who uploads a banner a few pixels off its zone
+  now sees a hairline of background rather than losing the end of their phone
+  number.
+- **The pear mark was clipped on short banners.** It was scaled about the
+  origin, but its stem and leaf reach to y −80 while the body stops at +47, so
+  a third of the glyph hung above the point it was placed at. Marks are fitted
+  and centred on their true bounding box now.
+- **Two identical green banners stacked at the foot of every page.**
+  `footer-banner` had no entry in the house-creative map, so it fell through to
+  the same green default as `bottom-banner-site-wide` directly above it — the
+  exact repetition that map exists to prevent. The footer takes the
+  web-services creative.
+
+### Changed
+
+- **The creatives are laid out from (width, height), and the text is
+  measured.** Every headline is fitted to the room actually left after the mark
+  and the button, against DejaVu Sans metrics — an `<img>` renders its SVG in
+  isolation and can't reach the page's Poppins, so what draws is a system
+  fallback, and DejaVu is the widest of them. The stacked box and skyscraper
+  layouts now treat height as a budget, shedding the supporting line and then
+  the price before shrinking type: the 300x250 sidebar creative was drawing its
+  button at y 245 in a 250-tall box, so it showed an offer with no way to act
+  on it.
+- Call-to-action pills carry a chevron and size themselves to their own label,
+  with the chevron given its own room instead of being carved out of the
+  right-hand padding.
+
+### Key files
+
+`scripts/generate_brand_art.py` (section 2 rewritten: parametric, measured,
+exact-size), `application/views/partials/ad_slot.php` (exact-size lookup,
+`contain`, footer palette), `assets/images/ads/*.svg` (regenerated; 42 new
+exact-size files).
+
+### Verified
+
+Every zone rendered in Chromium through the partial's real CSS at its real box:
+no image's rendered ratio differs from its artwork's, so nothing is cropped or
+letterboxed. The partial's test suite additionally asserts that each of the 42
+exact-size creatives exists and carries the matching viewBox, and that an
+unknown size (640x160) still falls back to a shape bucket rather than a 404.
+
+---
+
 ## 2026-08-06 — Advertising on every public page, and the reasons it wasn't
 
 Reported as "no ads banner showing on any page". Seventeen public pages carried

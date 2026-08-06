@@ -116,12 +116,19 @@ if ($__size !== '' && preg_match('/^\s*(\d{2,4})\s*[xX\*]\s*(\d{2,4})\s*$/', $__
 }
 
 // ---- Pick a default creative shaped for that box ------------------------
-// Four buckets, because the zones in use span 970x90 (10.8:1) to 300x600
-// (0.5:1) and a single "wide" artwork cropped unreadably at the extremes.
+// The generator writes one creative per size the catalogue sells, so the
+// artwork below is normally drawn at this zone's exact pixel box and cannot
+// be cropped. The four generic buckets remain, for a zone whose size it does
+// not know about:
 //   strip  970x90   ratio >= 6      — leaderboards
 //   wide   900x300  2.0 <= r < 6    — 728x200, 728x250, 970x250
 //   box    600x500  0.9 < r < 2.0   — 300x250
 //   tall   300x600  ratio <= 0.9    — 300x600
+//
+// Matching only by bucket is what broke the top banner: `top-banner-site-wide`
+// is 700x100 (7:1), the strip is 970x90 (10.8:1), and covering the one with
+// the other threw away 35% of the width — the headline lost its first word and
+// the call-to-action button was sliced in half.
 $__ratio = ($__w && $__h) ? ($__w / $__h) : 3.0;
 if     ($__ratio >= 6.0) $__shape = 'strip';
 elseif ($__ratio >= 2.0) $__shape = 'wide';
@@ -141,6 +148,12 @@ $__house_map = array(
 	'right-side-banner-3'     => 'house-ad-navy',
 	'listing-sidebar'         => 'scs-ad',
 	'news-sidebar'            => 'banner-design',
+	// The footer strip sits directly under `bottom-banner-site-wide`, and both
+	// fell through to the unsuffixed green default — two identical green
+	// banners stacked at the foot of every page, which is the exact thing this
+	// map exists to stop. The web-services pitch is the one creative no
+	// rendered zone uses (`listing-sidebar` is only ever reached as an alias).
+	'footer-banner'           => 'scs-ad',
 );
 $__creatives = array(
 	'house-ad', 'house-ad-burgundy', 'house-ad-navy', 'house-ad-cream',
@@ -150,7 +163,17 @@ $__creative = isset($__house_map[$slot]) ? $__house_map[$slot] : 'house-ad';
 if (!empty($slot_creative) && in_array($slot_creative, $__creatives, true)) {
 	$__creative = $slot_creative;
 }
-$__default  = 'assets/images/ads/' . $__creative . '-' . $__shape . '.svg';
+// Exact-size artwork when it exists, the generic bucket otherwise.
+$__default = '';
+if ($__w && $__h) {
+	$__exact = 'assets/images/ads/' . $__creative . '-' . $__w . 'x' . $__h . '.svg';
+	if (is_file(FCPATH . $__exact)) {
+		$__default = $__exact;
+	}
+}
+if ($__default === '') {
+	$__default = 'assets/images/ads/' . $__creative . '-' . $__shape . '.svg';
+}
 
 switch ($__creative) {
 	case 'scs-ad':
@@ -201,7 +224,16 @@ if ($__need_css) define('PEARLAND411_AD_SLOT_CSS', 1);
 			overflow: hidden; border: 1px solid #e4e7de; background: #fafbf7; line-height: 0;
 		}
 		.ad-slot__link:hover { border-color: #cfe3a8; }
-		.ad-slot__link img { display: block; width: 100%; height: 100%; object-fit: cover; }
+		/*
+		 * `contain`, not `cover`. Cover fills the box by cropping whatever
+		 * does not fit, which on a banner means cutting words off the ends of
+		 * a headline and slicing the call-to-action button in half. An
+		 * advertiser who supplies artwork a few pixels off its zone would
+		 * rather see a hairline of background than lose their phone number.
+		 * The house creatives are drawn at each zone's exact size, so for
+		 * them the two are identical.
+		 */
+		.ad-slot__link img { display: block; width: 100%; height: 100%; object-fit: contain; }
 	</style>
 <?php endif; ?>
 
@@ -233,7 +265,7 @@ if ($__need_css) define('PEARLAND411_AD_SLOT_CSS', 1);
 <?php
 unset(
 	$__ci, $__ad, $__meta, $__fallback, $__w, $__h, $__size, $__m, $__ratio,
-	$__shape, $__creative, $__creatives, $__house_map, $__default, $__external, $__href, $__alt,
+	$__shape, $__creative, $__creatives, $__house_map, $__default, $__exact, $__external, $__href, $__alt,
 	$__label, $__cls, $__style, $__need_css, $__alias_key,
 	// Per-include options must not leak into the next include on the page.
 	$slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative,

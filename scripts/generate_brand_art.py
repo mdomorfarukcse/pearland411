@@ -10,11 +10,21 @@ site) serves as flat files:
       These are soft cream / light grey, carry a category-specific line glyph
       and only a small green accent, per the 2026-08 homepage brief.
 
-  assets/images/ads/house-ad-<palette>-<shape>.svg
-      House creatives for an unsold ad zone, in four palettes so two unsold
-      zones on one page never show the same green rectangle twice.
-      <shape> matches the buckets in application/views/partials/ad_slot.php:
-        strip 970x90 · wide 900x300 · box 600x500 · tall 300x600
+  assets/images/ads/<creative>-<WxH>.svg
+  assets/images/ads/<creative>-<shape>.svg
+      The creative an unsold ad zone falls back to. Six of them — four house
+      palettes, so two unsold zones on one page never show the same green
+      rectangle twice, plus the web-development and banner-design pitches.
+
+      One file is written per creative PER SIZE the catalogue sells, because
+      the artwork is `object-fit`-ed into the zone: a 10.8:1 strip covering a
+      7:1 box loses 35% of its width, which is how the top banner came to
+      render as "D PLACEMENT" with its button sliced in half. The four shape
+      names (strip 970x90 · wide 900x300 · box 600x500 · tall 300x600) are
+      still written, as the fallback for a zone whose size isn't in the list.
+
+      Layout is computed from (width, height) and every string is measured
+      against the widest likely fallback face, so nothing overflows its box.
 
   assets/images/ads/templates/advertiser-<shape>.svg
       Editable templates for an advertiser who arrives with no artwork. Every
@@ -226,75 +236,195 @@ for key, (label, glyph) in GLYPHS.items():
 
 
 # ===========================================================================
-# 2. House ad creatives, four palettes x four shapes
+# 2. Ad creatives — six families, drawn at each zone's exact pixel box
 # ===========================================================================
+#
+# WHY EXACT SIZES. ad_slot.php sizes a zone from `ads_prices.size` and the
+# image is `object-fit`-ed into it. The creatives used to come in four fixed
+# shapes — strip 970x90, wide 900x300, box 600x500, tall 300x600 — and the
+# nearest shape was picked by aspect ratio. But `top-banner-site-wide` is
+# 700x100, a 7:1 box, and the strip is 10.8:1. Covering a 7:1 box with 10.8:1
+# artwork throws away 35% of the width, 17% off each side: the reported bug was
+# the navy banner rendering as "D PLACEMENT ... red business placement
+# available" with its call-to-action button sliced in half.
+#
+# So the layout is computed from (width, height) instead, and one file is
+# written per creative per size the catalogue actually sells. The four shape
+# names are still emitted, at their own dimensions, as the fallback for a zone
+# whose size we don't know about.
+#
+# WHY THE TEXT IS MEASURED. An <img> renders its SVG in isolation — it cannot
+# reach the font the page loaded, so `Poppins` in these files is decorative and
+# the real face is whatever the system supplies. Widths are measured against
+# Liberation Sans, which is metrically identical to Arial, so the numbers match
+# the widest thing likely to render. Every headline is then fitted to the space
+# that is actually left after the mark and the button, rather than set at a
+# hard-coded size and hoped for.
+
+from PIL import ImageFont
 
 SHAPES = {
-    #  name  : (width, height)
+    #  name  : (width, height)   — the generic fallback boxes
     "strip": (970, 90),
     "wide":  (900, 300),
     "box":   (600, 500),
     "tall":  (300, 600),
 }
 
-# Each palette: gradient stops, eyebrow colour, body colour, button fill/ink,
-# plus the pear mark's leaf tint.
-PALETTES = {
+# Every size in the ads_prices catalogue (migrations 0006 / 0017 / 0019 / 0024).
+# A creative is written for each, so no zone ever crops its artwork.
+ZONE_SIZES = ["970x90", "900x100", "728x90", "700x100", "728x200", "300x250", "295x600"]
+
+# Measured against DejaVu Sans, deliberately. The face named in these files is
+# Poppins, but an <img> renders its SVG in isolation and cannot reach a font
+# the page loaded, so what actually draws is a system fallback — Segoe UI,
+# SF Pro, Roboto, DejaVu. DejaVu is the widest of those, so fitting to it means
+# the headline that fits here fits everywhere. Measuring against Arial metrics
+# instead is what let "Featured business placement" run under its own button.
+_FACES = [
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans%s.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationSans-%s.ttf",
+]
+_SAFETY = 1.04                            # hinting and rounding, not metrics
+_FONTS = {}
+
+
+def _advance(text, bold):
+    """Width of `text` at font-size 1, in the widest common fallback face."""
+    key = bool(bold)
+    if key not in _FONTS:
+        _FONTS[key] = None
+        for tmpl in _FACES:
+            path = tmpl % ("-Bold" if key and "DejaVu" in tmpl else
+                           ("Bold" if key else ("" if "DejaVu" in tmpl else "Regular")))
+            if os.path.isfile(path):
+                _FONTS[key] = ImageFont.truetype(path, 100)
+                break
+    font = _FONTS[key]
+    if font is None:                      # no font files at all — estimate wide
+        return len(text) * (0.64 if key else 0.56)
+    return font.getlength(text) / 100.0
+
+
+def measure(text, size, bold=True, tracking=0.0):
+    """Rendered width of `text` in px, including SVG letter-spacing."""
+    return _advance(text, bold) * size * _SAFETY + tracking * max(0, len(text) - 1)
+
+
+def fit(text, want, floor, avail, bold=True, tracking=0.0):
+    """The largest font-size <= `want` at which `text` fits `avail` px."""
+    size = want
+    while size > floor and measure(text, size, bold, tracking) > avail:
+        size -= 0.5
+    return size
+
+
+def clamp(v, lo, hi):
+    return max(lo, min(hi, v))
+
+
+# Each family: gradient stops, eyebrow colour, body colour, button fill/ink,
+# the mark it carries, and the file it is written to.
+FAMILIES = {
     "": {  # the original green set keeps its unsuffixed filenames
+        "file": "house-ad", "mark": "pear",
         "stops": (GREEN_DEEP, "#6BA935", GREEN_LIFT),
         "eyebrow": "#DCEFC0", "body": "#EEF7DF",
         "btn": "#FFFFFF", "btn_ink": GREEN_DEEP,
         "leaf": "#DCEFC0", "pear": "#FFFFFF", "ink": "#FFFFFF",
+        "copy": {
+            "eyebrow": "ADVERTISE ON PEARLAND411",
+            "one":   "Your ad here — reach Pearland",
+            "big":   ["Advertise where", "Pearland searches"],
+            "small": "Banner positions across the site.",
+            "price": "from $20/mo",
+            "cta":   "See packages",
+        },
+        "alt": "Advertise your business on Pearland411",
     },
     "burgundy": {
+        "file": "house-ad-burgundy", "mark": "pear",
         "stops": (BURGUNDY_DP, BURGUNDY, BURGUNDY_LT),
         "eyebrow": "#F0C8DC", "body": "#F6E3EC",
         "btn": "#FFFFFF", "btn_ink": BURGUNDY,
         "leaf": "#F0C8DC", "pear": "#FFFFFF", "ink": "#FFFFFF",
+        "copy": {
+            "eyebrow": "SPONSORED PLACEMENT",
+            "one":   "Reach thousands of local customers",
+            "big":   ["Reach thousands of", "Pearland customers"],
+            "small": "Be where local customers already look.",
+            "price": "from $20/mo",
+            "cta":   "Advertise",
+        },
+        "alt": "Reach thousands of Pearland customers — advertise on Pearland411",
     },
     "navy": {
+        "file": "house-ad-navy", "mark": "pear",
         "stops": (NAVY_DEEP, NAVY, NAVY_LIFT),
         "eyebrow": GREEN_LIFT, "body": "#D9DCF0",
         "btn": GREEN, "btn_ink": "#FFFFFF",
         "leaf": GREEN_LIFT, "pear": "#FFFFFF", "ink": "#FFFFFF",
+        "copy": {
+            "eyebrow": "FEATURED PLACEMENT",
+            "one":   "Featured business placement",
+            "big":   ["Featured business", "placement available"],
+            "small": "Top of the homepage and your category.",
+            "price": "from $20/mo",
+            "cta":   "Get featured",
+        },
+        "alt": "Featured business placement available on Pearland411",
     },
     "cream": {
+        "file": "house-ad-cream", "mark": "pear",
         "stops": ("#FFFFFF", CREAM, "#EDE8DE"),
         "eyebrow": BURGUNDY, "body": INK_MUTED,
         "btn": BURGUNDY, "btn_ink": "#FFFFFF",
         "leaf": GREEN_LIFT, "pear": GREEN, "ink": NAVY,
+        "copy": {
+            "eyebrow": "PROMOTE YOUR BUSINESS",
+            "one":   "Get in front of local customers",
+            "big":   ["Get your business in", "front of local customers"],
+            "small": "Homepage, directory and category banners.",
+            "price": "from $20/mo",
+            "cta":   "View packages",
+        },
+        "alt": "Get your business in front of local customers on Pearland411",
     },
-}
-
-# One message per palette, so the same page never repeats a pitch.
-COPY = {
-    "": {
-        "eyebrow": "ADVERTISE ON PEARLAND411",
-        "big": ["Advertise where", "Pearland searches"],
-        "small": "Banner positions across the site.",
-        "price": "from $20/mo",
-        "cta": "See ad packages",
+    # The two service creatives. They used to be hand-authored at 800x100 with
+    # a comment explaining which parts survived the crop in each zone — the
+    # same problem, worked around rather than fixed. They are generated now,
+    # so they get exact-size artwork like everything else.
+    "scs": {
+        "file": "scs-ad", "mark": "screen",
+        "stops": ("#1E2430", "#2B3545", "#3A4759"),
+        "eyebrow": "#8CC63F", "body": "#C6CEDA",
+        "btn": "#8CC63F", "btn_ink": "#16202C",
+        "leaf": "#8CC63F", "pear": "#8CC63F", "ink": "#FFFFFF",
+        "copy": {
+            "eyebrow": "SPACE CENTER SYSTEMS",
+            "one":   "Websites that bring customers",
+            "big":   ["Websites that", "bring customers"],
+            "small": "Design, hosting and local SEO.",
+            "price": "",
+            "cta":   "Get a quote",
+        },
+        "alt": "Space Center Systems — website design, hosting and local SEO",
     },
-    "burgundy": {
-        "eyebrow": "SPONSORED PLACEMENT",
-        "big": ["Reach thousands of", "Pearland customers"],
-        "small": "Be where local customers are already looking.",
-        "price": "from $20/mo",
-        "cta": "Advertise your business",
-    },
-    "navy": {
-        "eyebrow": "FEATURED PLACEMENT",
-        "big": ["Featured business", "placement available"],
-        "small": "Top of the homepage and your category page.",
-        "price": "from $20/mo",
-        "cta": "Get featured",
-    },
-    "cream": {
-        "eyebrow": "PROMOTE YOUR BUSINESS",
-        "big": ["Get your business in", "front of local customers"],
-        "small": "Homepage, directory and category banners.",
-        "price": "from $20/mo",
-        "cta": "View packages",
+    "design": {
+        "file": "banner-design", "mark": "pen",
+        "stops": ("#5A2540", "#7C3357", "#A2456F"),
+        "eyebrow": "#F0C8DC", "body": "#EFD6E1",
+        "btn": "#8CC63F", "btn_ink": "#231018",
+        "leaf": "#F0C8DC", "pear": "#FFFFFF", "ink": "#FFFFFF",
+        "copy": {
+            "eyebrow": "PEARLAND411 DESIGN",
+            "one":   "No banner? We'll design it",
+            "big":   ["No banner?", "We'll design it"],
+            "small": "Ad artwork made for these positions.",
+            "price": "",
+            "cta":   "Design my ad",
+        },
+        "alt": "Need a banner designed? Pearland411 designs your ad artwork",
     },
 }
 
@@ -311,24 +441,111 @@ def pear(fill, leaf, scale=1.0, opacity="0.95"):
     )
 
 
-def house_ad(palette_key, shape):
-    w, h = SHAPES[shape]
-    p = PALETTES[palette_key]
-    c = COPY[palette_key]
-    uid = (palette_key or "green") + shape
-    s0, s1, s2 = p["stops"]
+# Each mark's true drawn extent (x0, y0, x1, y1) in its own units. The pear is
+# NOT symmetric about the origin — its stem and leaf reach to y -80 while the
+# body stops at +47 — so scaling it about 0,0 hangs a third of the glyph above
+# the point it is placed at, and the leaf was being cut off by the top edge of
+# every short banner. Fit and centre on the box instead of assuming it.
+MARK_BOX = {
+    "pear":   (-34, -80, 45, 47),
+    "screen": (-46, -38, 46, 40),
+    "pen":    (-38, -36, 38, 28),
+}
+
+
+def mark_glyph(fam, size):
+    """The family's mark, scaled to fit a `size` x `size` box centred on 0,0."""
+    kind = fam["mark"]
+    x0, y0, x1, y1 = MARK_BOX[kind]
+    scale = size / float(max(x1 - x0, y1 - y0))
+    dx, dy = -(x0 + x1) / 2.0, -(y0 + y1) / 2.0
+    box = f'scale({scale:.4f}) translate({dx:.1f} {dy:.1f})'
+
+    if kind == "pear":
+        return f'<g transform="{box}">{pear(fam["pear"], fam["leaf"])}</g>'
+
+    stroke = fam["leaf"]
+    sw = 4.6
+    if kind == "screen":            # a browser window with a code caret
+        d = ('<rect x="-38" y="-30" width="76" height="52" rx="6"/>'
+             '<path d="M-14 34h28M0 22v12"/>'
+             f'<path d="M-18-12l-8 8 8 8M18-12l8 8-8 8M6-16l-12 24" stroke-width="{sw * 0.8:.1f}"/>')
+    else:                            # "pen" — an artboard with a nib
+        d = ('<rect x="-36" y="-34" width="72" height="60" rx="6"/>'
+             '<path d="M-36-14h72"/>'
+             '<path d="M-14 18l6-20 20 20z" stroke-linejoin="round"/>')
+    return (f'<g transform="{box}" fill="none" stroke="{stroke}" '
+            f'stroke-width="{sw:.1f}" stroke-linecap="round" stroke-linejoin="round">{d}</g>')
+
+
+def cta_pill(fam, x, y, label, height, font_size, anchor_right=False):
+    """
+    A call-to-action pill wide enough for its own label AND its chevron.
+    The chevron used to be carved out of the right-hand padding, so a label
+    measured even slightly narrow ran underneath it.
+    """
+    pad = height * 0.44
+    gap = height * 0.24
+    text_w = measure(label, font_size, bold=True)
+    chev = font_size * 0.52
+    w = text_w + pad * 2 + gap + chev
+    if anchor_right:
+        x -= w
+    tx = x + pad
+    cx = x + pad + text_w + gap + chev / 2
+    cy = y + height / 2
+    r = chev * 0.46
+    return w, (
+        f'<g><rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{height:.1f}" '
+        f'rx="{height / 2:.1f}" fill="{fam["btn"]}"/>'
+        f'<text x="{tx:.1f}" y="{cy:.1f}" dominant-baseline="central" font-family="{HEAD}" '
+        f'font-size="{font_size:.1f}" font-weight="700" fill="{fam["btn_ink"]}">{xml(label)}</text>'
+        f'<path d="M{cx - r:.1f} {cy - r * 1.3:.1f}L{cx + r * 0.6:.1f} {cy:.1f}'
+        f'L{cx - r:.1f} {cy + r * 1.3:.1f}" fill="none" stroke="{fam["btn_ink"]}" '
+        f'stroke-width="{max(1.5, r * 0.62):.1f}" stroke-linecap="round" stroke-linejoin="round"/></g>'
+    )
+
+
+def _ground(fam, w, h, uid):
+    """Gradient, two soft blobs and a hairline top edge."""
+    cream = fam["file"].endswith("cream")
+    blob = NAVY if cream else "#FFFFFF"
+    op = "0.05" if cream else "0.10"
     # A cream creative sits on a cream page, so it needs an edge or it
     # dissolves: a hairline all round and a burgundy bar down the left.
-    frame = (f'<rect x="0" y="0" width="14" height="{h}" fill="{BURGUNDY}"/>'
+    frame = (f'<rect x="0" y="0" width="{max(6, w * 0.016):.0f}" height="{h}" fill="{BURGUNDY}"/>'
              f'<rect x="0.5" y="0.5" width="{w - 1}" height="{h - 1}" fill="none" '
-             f'stroke="#DED9CE" stroke-width="1"/>') if palette_key == "cream" else ""
-    blob_fill = NAVY if palette_key == "cream" else "#FFFFFF"
-    blob_op = "0.05" if palette_key == "cream" else "0.10"
+             f'stroke="#DED9CE" stroke-width="1"/>') if cream else (
+             f'<rect x="0" y="0" width="{w}" height="1" fill="#FFFFFF" opacity="0.16"/>')
+    r1, r2 = h * 0.85, h * 0.62
+    return (
+        f'<rect width="{w}" height="{h}" fill="url(#g{uid})"/>'
+        f'<g opacity="{op}" fill="{blob}">'
+        f'<circle cx="{w * 0.90:.0f}" cy="{-h * 0.12:.0f}" r="{r1:.0f}"/>'
+        f'<circle cx="{w * 0.06:.0f}" cy="{h * 1.05:.0f}" r="{r2:.0f}"/></g>'
+        + frame
+    )
 
-    head = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}"
-     role="img" aria-label="Advertise your business on Pearland411">
-  <title>{c['big'][0]} {c['big'][1]} — Pearland411 advertising</title>
-  <!-- Generated by scripts/generate_brand_art.py — edit there, not here. -->
+
+def creative(family_key, w, h):
+    """One ad creative, laid out for exactly this pixel box."""
+    fam = FAMILIES[family_key]
+    c = fam["copy"]
+    uid = (family_key or "green") + f"{w}x{h}"
+    s0, s1, s2 = fam["stops"]
+    ratio = w / float(h)
+
+    if ratio >= 3.2:
+        body = _bar(fam, c, w, h)
+    elif ratio <= 0.9:
+        body = _stack(fam, c, w, h, tall=True)
+    else:
+        body = _stack(fam, c, w, h, tall=False)
+
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}"
+     role="img" aria-label="{xml(fam['alt'])}">
+  <title>{xml(fam['alt'])}</title>
+  <!-- Generated by scripts/generate_brand_art.py at exactly {w}x{h} — edit there, not here. -->
   <defs>
     <linearGradient id="g{uid}" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="{s0}"/>
@@ -336,97 +553,206 @@ def house_ad(palette_key, shape):
       <stop offset="1" stop-color="{s2}"/>
     </linearGradient>
   </defs>
-  <rect width="{w}" height="{h}" fill="url(#g{uid})"/>
-  {frame}"""
-
-    if shape == "strip":
-        body = f"""
-  <g opacity="{blob_op}" fill="{blob_fill}"><circle cx="880" cy="10" r="70"/><circle cx="60" cy="86" r="52"/></g>
-  <g transform="translate(56 45) scale(0.5)">{pear(p['pear'], p['leaf'])}</g>
-  <text x="98" y="41" font-family="{SANS}" font-size="11" font-weight="600"
-        letter-spacing="2.4" fill="{p['eyebrow']}">{c['eyebrow']}</text>
-  <text x="98" y="66" font-family="{HEAD}" font-size="23" font-weight="700"
-        letter-spacing="-0.3" fill="{p['ink']}">{c['big'][0]} {c['big'][1]}</text>
-  <text x="616" y="55" font-family="{HEAD}" font-size="19" font-weight="700"
-        fill="{p['ink']}">{c['price']}</text>
-  <g transform="translate(766 21)">
-    <rect width="168" height="48" rx="24" fill="{p['btn']}"/>
-    <text x="84" y="31" text-anchor="middle" font-family="{HEAD}" font-size="16"
-          font-weight="700" fill="{p['btn_ink']}">{c['cta']}</text>
-  </g>"""
-
-    elif shape == "wide":
-        # SAFE AREA. This 3:1 artwork is cropped (object-fit: cover) into the
-        # 728x200, 728x250 and 970x250 zones, whose ratios run 2.9–3.9. At 3.9
-        # only y 35–266 survives, so every glyph below lives inside y 80–250
-        # and away from the extreme left and right. Move anything outside that
-        # band and it gets guillotined in the widest zone.
-        body = f"""
-  <g opacity="{blob_op}" fill="{blob_fill}"><circle cx="812" cy="34" r="150"/><circle cx="70" cy="286" r="110"/></g>
-  <g transform="translate(120 152) scale(0.98)">{pear(p['pear'], p['leaf'])}</g>
-  <text x="186" y="104" font-family="{SANS}" font-size="14" font-weight="600"
-        letter-spacing="2.8" fill="{p['eyebrow']}">{c['eyebrow']}</text>
-  <text x="186" y="140" font-family="{HEAD}" font-size="30" font-weight="700"
-        letter-spacing="-0.6" fill="{p['ink']}">{c['big'][0]}</text>
-  <text x="186" y="174" font-family="{HEAD}" font-size="30" font-weight="700"
-        letter-spacing="-0.6" fill="{p['ink']}">{c['big'][1]}</text>
-  <text x="186" y="200" font-family="{SANS}" font-size="15" fill="{p['body']}">{c['small']}</text>
-  <g transform="translate(186 214)">
-    <rect width="204" height="42" rx="21" fill="{p['btn']}"/>
-    <text x="102" y="27" text-anchor="middle" font-family="{HEAD}" font-size="16"
-          font-weight="700" fill="{p['btn_ink']}">{c['cta']}</text>
-  </g>
-  <text x="406" y="242" font-family="{HEAD}" font-size="17" font-weight="700"
-        fill="{p['ink']}" opacity="0.9">{c['price']}</text>"""
-
-    elif shape == "box":
-        body = f"""
-  <g opacity="{blob_op}" fill="{blob_fill}"><circle cx="548" cy="42" r="150"/><circle cx="46" cy="472" r="120"/></g>
-  <g transform="translate(300 128) scale(1.15)">{pear(p['pear'], p['leaf'])}</g>
-  <text x="300" y="228" text-anchor="middle" font-family="{SANS}" font-size="14"
-        font-weight="600" letter-spacing="2.6" fill="{p['eyebrow']}">{c['eyebrow']}</text>
-  <text x="300" y="278" text-anchor="middle" font-family="{HEAD}" font-size="34"
-        font-weight="700" letter-spacing="-0.6" fill="{p['ink']}">{c['big'][0]}</text>
-  <text x="300" y="318" text-anchor="middle" font-family="{HEAD}" font-size="34"
-        font-weight="700" letter-spacing="-0.6" fill="{p['ink']}">{c['big'][1]}</text>
-  <text x="300" y="356" text-anchor="middle" font-family="{SANS}" font-size="17"
-        fill="{p['body']}">{c['small']}</text>
-  <text x="300" y="396" text-anchor="middle" font-family="{HEAD}" font-size="26"
-        font-weight="700" fill="{p['ink']}">{c['price']}</text>
-  <g transform="translate(174 418)">
-    <rect width="252" height="52" rx="26" fill="{p['btn']}"/>
-    <text x="126" y="34" text-anchor="middle" font-family="{HEAD}" font-size="18"
-          font-weight="700" fill="{p['btn_ink']}">{c['cta']}</text>
-  </g>"""
-
-    else:  # tall
-        body = f"""
-  <g opacity="{blob_op}" fill="{blob_fill}"><circle cx="272" cy="70" r="130"/><circle cx="30" cy="560" r="110"/></g>
-  <g transform="translate(150 150) scale(1.35)">{pear(p['pear'], p['leaf'])}</g>
-  <text x="150" y="268" text-anchor="middle" font-family="{SANS}" font-size="13"
-        font-weight="600" letter-spacing="2.6" fill="{p['eyebrow']}">{c['eyebrow']}</text>
-  <text x="150" y="312" text-anchor="middle" font-family="{HEAD}" font-size="25"
-        font-weight="700" letter-spacing="-0.5" fill="{p['ink']}">{c['big'][0]}</text>
-  <text x="150" y="344" text-anchor="middle" font-family="{HEAD}" font-size="25"
-        font-weight="700" letter-spacing="-0.5" fill="{p['ink']}">{c['big'][1]}</text>
-  <path d="M96 374h108" stroke="{p['ink']}" stroke-width="2" opacity="0.4"/>
-  <text x="150" y="414" text-anchor="middle" font-family="{SANS}" font-size="16"
-        fill="{p['body']}">{c['small']}</text>
-  <text x="150" y="470" text-anchor="middle" font-family="{HEAD}" font-size="26"
-        font-weight="700" fill="{p['ink']}">{c['price']}</text>
-  <g transform="translate(34 512)">
-    <rect width="232" height="52" rx="26" fill="{p['btn']}"/>
-    <text x="116" y="34" text-anchor="middle" font-family="{HEAD}" font-size="18"
-          font-weight="700" fill="{p['btn_ink']}">{c['cta']}</text>
-  </g>"""
-
-    return head + body + "\n</svg>"
+  {_ground(fam, w, h, uid)}
+{body}
+</svg>"""
 
 
-for palette_key in PALETTES:
-    suffix = f"-{palette_key}" if palette_key else ""
-    for shape in SHAPES:
-        write(f"assets/images/ads/house-ad{suffix}-{shape}.svg", house_ad(palette_key, shape))
+def _bar(fam, c, w, h):
+    """
+    Horizontal banner: mark, then eyebrow over headline, then a pill hard
+    right. Everything is measured, so the headline takes whatever size the
+    remaining width allows rather than a size chosen for a different box.
+    """
+    pad = clamp(round(h * 0.20), 12, 34)
+    roomy = h >= 130                      # tall enough for two lines and a price
+    mark = clamp(h * (0.50 if roomy else 0.56), 30, 130)
+    gap = clamp(h * 0.17, 12, 28)
+
+    cta_h = clamp(h * (0.24 if roomy else 0.42), 30, 54)
+    cta_fs = clamp(cta_h * 0.40, 12, 19)
+    cta_w, _ = cta_pill(fam, 0, 0, c["cta"], cta_h, cta_fs)
+
+    right_edge = w - pad
+    text_x = pad + mark + gap
+    avail = right_edge - cta_w - clamp(w * 0.055, 28, 64) - text_x
+
+    out = [f'  <g transform="translate({pad + mark / 2:.1f} {h / 2:.1f})">'
+           f'{mark_glyph(fam, mark)}</g>']
+
+    if roomy:
+        eb_fs = clamp(h * 0.075, 11, 15)
+        hd_fs = clamp(h * 0.165, 16, 34)
+        for line in c["big"]:
+            hd_fs = min(hd_fs, fit(line, hd_fs, 14, avail, True, -0.4))
+        sub_fs = clamp(h * 0.085, 12, 17)
+
+        block = eb_fs * 1.7 + hd_fs * 2.5 + sub_fs * 1.7
+        y = (h - block) / 2 + eb_fs
+        out.append(_txt(text_x, y, c["eyebrow"], eb_fs, fam["eyebrow"], SANS, 600, h * 0.014))
+        y += eb_fs * 0.75 + hd_fs
+        for line in c["big"]:
+            out.append(_txt(text_x, y, line, hd_fs, fam["ink"], HEAD, 700, -0.4))
+            y += hd_fs * 1.25
+        y += sub_fs * 0.1
+        out.append(_txt(text_x, y, c["small"], sub_fs, fam["body"], SANS, 400))
+
+        cy = h / 2
+        if c["price"]:
+            pr_fs = clamp(h * 0.10, 13, 20)
+            out.append(_txt(right_edge, cy - cta_h * 0.55, c["price"], pr_fs,
+                            fam["ink"], HEAD, 700, 0, anchor="end"))
+            cy += pr_fs * 0.42
+        _, pill = cta_pill(fam, right_edge, cy - cta_h / 2, c["cta"], cta_h, cta_fs, True)
+        out.append('  ' + pill)
+    else:
+        # Short bar. The price rides on the eyebrow line rather than fighting
+        # the headline for horizontal room.
+        eyebrow = c["eyebrow"]
+        if c["price"]:
+            eyebrow += "  ·  " + c["price"].upper()
+        eb_fs = clamp(h * 0.115, 9, 13)
+        eb_tr = clamp(h * 0.022, 1.4, 2.6)
+        while measure(eyebrow, eb_fs, False, eb_tr) > avail and eyebrow != c["eyebrow"]:
+            eyebrow = c["eyebrow"]        # drop the price before shrinking type
+        eb_fs = fit(eyebrow, eb_fs, 8.5, avail, False, eb_tr)
+
+        hd_fs = fit(c["one"], clamp(h * 0.27, 14, 30), 13, avail, True, -0.3)
+
+        block = eb_fs + hd_fs * 1.6
+        y = (h - block) / 2 + eb_fs
+        out.append(_txt(text_x, y, eyebrow, eb_fs, fam["eyebrow"], SANS, 600, eb_tr))
+        out.append(_txt(text_x, y + hd_fs * 1.18, c["one"], hd_fs, fam["ink"], HEAD, 700, -0.3))
+
+        _, pill = cta_pill(fam, right_edge, (h - cta_h) / 2, c["cta"], cta_h, cta_fs, True)
+        out.append('  ' + pill)
+
+    return "\n".join(out)
+
+
+def _stack(fam, c, w, h, tall):
+    """
+    Box and skyscraper: everything centred on one axis.
+
+    Height is a budget, not an afterthought. Laying this out top-down and
+    hoping is what pushed the call-to-action off the bottom of the 300x250 —
+    the pill was drawn at y 245 in a 250-tall box, so the sidebar creative
+    showed a headline and a price and no way to act on either. Elements are
+    shed in order of importance (the supporting line first, then the price)
+    and only then is type shrunk, so the mark, the offer and the button
+    always survive.
+    """
+    pad = clamp(w * 0.09, 16, 34)
+    avail = w - pad * 2
+    budget = h - pad * 2
+    cx = w / 2
+
+    mark = clamp(min(w, h) * (0.26 if tall else 0.30), 40, 150)
+    eb_fs = clamp(w * 0.045, 10, 15)
+    eb_tr = clamp(w * 0.008, 1.4, 2.6)
+    hd_fs = clamp(w * 0.115, 15, 34)
+    sub_fs = clamp(w * 0.055, 11, 18)
+    pr_fs = clamp(w * 0.08, 14, 26)
+    cta_h = clamp(h * (0.09 if tall else 0.13), 34, 56)
+
+    show_sub = bool(c["small"])
+    show_price = bool(c["price"])
+    rule = tall and h > 420
+
+    def fitted_head(size):
+        for line in c["big"]:
+            size = min(size, fit(line, size, 13, avail, True, -0.5))
+        return size
+
+    def block_of(mark, eb_fs, hd_fs, sub_fs, pr_fs, cta_h, show_sub, show_price, rule):
+        return (mark + clamp(h * 0.05, 12, 34)
+                + eb_fs * 1.9
+                + hd_fs * 1.34 * len(c["big"])
+                + (sub_fs * 2.1 if show_sub else 0)
+                + (clamp(h * 0.035, 10, 26) if rule else 0)
+                + (pr_fs * 1.9 if show_price else 0)
+                + cta_h * 1.5)
+
+    hd_fs = fitted_head(hd_fs)
+    if show_sub and measure(c["small"], sub_fs, False) > avail:
+        sub_fs = fit(c["small"], sub_fs, 10.5, avail, False)
+        show_sub = measure(c["small"], sub_fs, False) <= avail
+
+    for _ in range(120):
+        block = block_of(mark, eb_fs, hd_fs, sub_fs, pr_fs, cta_h, show_sub, show_price, rule)
+        if block <= budget:
+            break
+        if show_sub:
+            show_sub = False
+            continue
+        if rule:
+            rule = False
+            continue
+        if show_price and mark <= min(w, h) * 0.20:
+            show_price = False
+            continue
+        mark = max(30.0, mark * 0.95)
+        hd_fs = max(13.0, hd_fs - 0.5)
+        eb_fs = max(9.5, eb_fs - 0.2)
+        pr_fs = max(12.0, pr_fs - 0.5)
+        sub_fs = max(10.5, sub_fs - 0.3)
+        cta_h = max(28.0, cta_h - 0.4)
+
+    cta_fs = clamp(cta_h * 0.36, 12, 19)
+    cta_w, _ = cta_pill(fam, 0, 0, c["cta"], cta_h, cta_fs)
+    while cta_w > avail and cta_fs > 10.5:
+        cta_fs -= 0.5
+        cta_w, _ = cta_pill(fam, 0, 0, c["cta"], cta_h, cta_fs)
+
+    block = block_of(mark, eb_fs, hd_fs, sub_fs, pr_fs, cta_h, show_sub, show_price, rule)
+    y = max(pad, (h - block) / 2)
+
+    out = [f'  <g transform="translate({cx:.1f} {y + mark / 2:.1f})">{mark_glyph(fam, mark)}</g>']
+    y += mark + clamp(h * 0.05, 12, 34)
+
+    out.append(_txt(cx, y, c["eyebrow"], eb_fs, fam["eyebrow"], SANS, 600, eb_tr, "middle"))
+    y += eb_fs * 0.9 + hd_fs
+
+    for line in c["big"]:
+        out.append(_txt(cx, y, line, hd_fs, fam["ink"], HEAD, 700, -0.5, "middle"))
+        y += hd_fs * 1.24
+    y -= hd_fs * 0.24
+
+    if rule:
+        rw = min(avail * 0.42, 130)
+        y += clamp(h * 0.035, 10, 26)
+        out.append(f'  <path d="M{cx - rw / 2:.0f} {y:.0f}h{rw:.0f}" stroke="{fam["ink"]}" '
+                   f'stroke-width="2" opacity="0.35"/>')
+
+    if show_sub:
+        y += sub_fs * 1.9
+        out.append(_txt(cx, y, c["small"], sub_fs, fam["body"], SANS, 400, 0, "middle"))
+    if show_price:
+        y += pr_fs * 1.7
+        out.append(_txt(cx, y, c["price"], pr_fs, fam["ink"], HEAD, 700, 0, "middle"))
+
+    y += cta_h * 0.7
+    _, pill = cta_pill(fam, cx - cta_w / 2, y, c["cta"], cta_h, cta_fs)
+    out.append('  ' + pill)
+    return "\n".join(out)
+
+
+def _txt(x, y, text, size, fill, family, weight, tracking=0.0, anchor="start"):
+    ls = f' letter-spacing="{tracking:.2f}"' if tracking else ""
+    an = f' text-anchor="{anchor}"' if anchor != "start" else ""
+    return (f'  <text x="{x:.1f}" y="{y:.1f}"{an} font-family="{family}" '
+            f'font-size="{size:.1f}" font-weight="{weight}" fill="{fill}"{ls}>{xml(text)}</text>')
+
+
+for family_key, fam in FAMILIES.items():
+    base = fam["file"]
+    # The generic shape fallbacks, for a zone whose size isn't in the catalogue.
+    for shape, (sw, sh) in SHAPES.items():
+        write(f"assets/images/ads/{base}-{shape}.svg", creative(family_key, sw, sh))
+    # And one per size actually sold, so nothing is ever cropped.
+    for size in ZONE_SIZES:
+        sw, sh = (int(n) for n in size.split("x"))
+        write(f"assets/images/ads/{base}-{size}.svg", creative(family_key, sw, sh))
 
 
 # ===========================================================================
