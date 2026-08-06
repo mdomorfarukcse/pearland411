@@ -59,7 +59,12 @@
               '<input type="search" class="form-control admin-table-search" placeholder="Search this page…" style="max-width:280px;">') +
             (opts_html
                 ? '<label class="admin-table-size" style="display:flex;align-items:center;gap:6px;margin:0;font-weight:400;color:#6b7280;font-size:0.9rem;">' +
-                  'Show <select class="form-control admin-table-per-page" style="width:auto;display:inline-block;padding:2px 8px;height:auto;">' +
+                  // no-select2: the admin footer runs select2 over every <select>
+                  // that does not opt out. It replaces the control with its own
+                  // widget and fires jQuery events, which do NOT reach a native
+                  // addEventListener('change') — so this dropdown rendered with
+                  // select2's arrow and did nothing when you picked a size.
+                  'Show <select class="form-control admin-table-per-page admin-table-size no-select2" style="width:auto;display:inline-block;padding:2px 8px;height:auto;">' +
                   opts_html + '</select></label>'
                 : '') +
             '<span class="admin-table-counter" style="color:#6b7280;font-size:0.9rem;"></span>';
@@ -180,13 +185,14 @@
 
         var sizeSelect = toolbar.querySelector('.admin-table-per-page');
         if (sizeSelect) {
-            sizeSelect.addEventListener('change', function () {
+            function applySize() {
                 // Round-trip rather than re-slice locally: most admin lists are
                 // paginated by the server, so the rows for page 1 of 50 are not
                 // in the DOM to begin with. ?per_page is remembered in the
                 // session, so the choice sticks across the admin.
                 var url = new URL(window.location.href);
-                url.searchParams.set('per_page', sizeSelect.value);
+                // ?show=, not ?per_page= — see admin_helper.php.
+                url.searchParams.set('show', sizeSelect.value);
 
                 // Back to page one. CodeIgniter's pager puts the page number in
                 // the PATH — /admin/all_listings/20 — not the query string, so
@@ -196,7 +202,13 @@
                 url.pathname = url.pathname.replace(/\/\d+\/?$/, '');
 
                 window.location.href = url.toString();
-            });
+            }
+
+            sizeSelect.addEventListener('change', applySize);
+            // Belt and braces: if anything ever does wrap this in select2 or
+            // chosen, those fire jQuery events only, which the native listener
+            // above would never see.
+            if (window.jQuery) { window.jQuery(sizeSelect).on('change', applySize); }
         }
 
         render();

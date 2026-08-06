@@ -95,6 +95,24 @@ and CodeIgniter puts the page number in the URL **path**, not the query string,
 so changing size while on `/admin/all_listings/20` had to strip that segment or
 it would apply the old offset to the new page size.
 
+Two defects stopped the dropdown doing anything at all, and neither was
+visible without opening the page.
+
+**select2 was eating the control.** `views/admin/footer.php` runs
+`$('select:not(.admin-table-size):not(.no-select2)').select2(…)` — and the
+opt-out class sat on the `<label>`, not the `<select>`. So select2 replaced the
+dropdown with its own widget (which is why the arrow looked wrong) and fired
+jQuery events, and a jQuery `.trigger('change')` never reaches a native
+`addEventListener('change')` handler. Picking a size did nothing. The select
+carries both opt-out classes now, and the handler is bound natively *and*
+through jQuery so a future wrapper cannot break it again.
+
+**`per_page` is CodeIgniter's own reserved name.** `CI_Pagination` uses it as
+its query-string segment (`Pagination.php:268`) and, with `reuse_query_string`
+on, explicitly `unset()`s it from every link it builds (line 435) — so even
+once the dropdown worked, turning a page would have dropped the size. The
+parameter is `?show=` instead.
+
 Two follow-ups after the first cut. `/admin/all_listings` showed no dropdown at
 all: that table had `data-admin-table` removed when its server-side search
 landed, so nothing rendered the toolbar. It opts back in with

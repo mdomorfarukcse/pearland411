@@ -26,7 +26,11 @@ if (!function_exists('admin_per_page_options')) {
     /**
      * The choices offered in the "Show N per page" dropdown.
      *
-     * Keys are what appears in the URL; values are what the operator reads.
+     * Keys are what appears in the URL (`?show=`); values are what the
+     * operator reads. Deliberately NOT `per_page`: that is CodeIgniter's own
+     * reserved pagination query-string segment, and `reuse_query_string`
+     * strips it from every generated link, so the choice would be lost the
+     * moment you turned a page.
      *
      * @return array<string,string>
      */
@@ -47,7 +51,7 @@ if (!function_exists('admin_per_page_choice')) {
      * The operator's current choice, as it appears in the URL ('10'…'all'),
      * or '' when they have not chosen and the page's own default applies.
      *
-     * Read from `?per_page=` and then remembered in the session, so moving
+     * Read from `?show=` and then remembered in the session, so moving
      * between admin lists keeps the size you picked instead of snapping back
      * to ten on every screen. Anything not in the option list is ignored
      * rather than trusted — this value reaches a LIMIT clause.
@@ -59,7 +63,7 @@ if (!function_exists('admin_per_page_choice')) {
         $CI =& get_instance();
         $options = admin_per_page_options();
 
-        $posted = $CI->input->get('per_page', true);
+        $posted = $CI->input->get('show', true);
         if ($posted !== NULL && $posted !== '') {
             $posted = (string) $posted;
             if (isset($options[$posted])) {

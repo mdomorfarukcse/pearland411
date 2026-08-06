@@ -69,7 +69,8 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
 - **Admin list paging:** every admin table carries a rows-per-page dropdown
   (10/20/30/50/all) rendered by `assets/admin/js/admin-table.js`. One value drives both
   pagers — the server-side CI pagination in ~20 `Admin` methods and the client-side one in the
-  41 views that opt in — resolved by `admin_per_page($default)`
+  41 views that opt in — carried in `?show=` (**not** `per_page` — that is `CI_Pagination`'s reserved segment, which
+  `reuse_query_string` strips from every link it builds) and resolved by `admin_per_page($default)`
   (`application/helpers/admin_helper.php`, autoloaded) and remembered in the session. A page can
   still pin its own with `data-page-size`; `0` means "show whatever the server sent", which is
   what the category lists use. `ADMIN_PER_PAGE_ALL` caps "all" at 5,000 rows.
