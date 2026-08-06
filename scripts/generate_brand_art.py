@@ -588,4 +588,237 @@ python3 scripts/generate_brand_art.py
 It is deterministic, writes only under `assets/images/`, and is safe to re-run.
 """)
 
+
+# ===========================================================================
+# 4. Ad-zone preview mockups (the admin "Ads Preview" column)
+# ===========================================================================
+#
+# /admin/ads-price lists every sellable zone and shows a thumbnail of it. The
+# thumbnail came from `ads_prices.img`, which only the handful of rows created
+# by hand before the slot_key migrations ever had — every zone seeded by 0006 /
+# 0017 / 0019 / 0024 had NULL, and the view rendered `base_url(NULL)`, i.e. the
+# site root as an <img> src, which is the broken-image icon in the screenshot.
+#
+# These are what fills it: a page wireframe with the zone highlighted WHERE IT
+# ACTUALLY SITS and labelled with its pixel size, so an operator selling
+# "#2 Right Side Banner" can see it is the second box down the sidebar without
+# opening the site. One file per slot_key, plus one per distinct size for rows
+# whose slot_key we don't know, plus a generic.
+
+PREVIEW_W, PREVIEW_H = 1024, 768
+
+# Wireframe geometry. The page is drawn once and one region is highlighted, so
+# every preview is the same drawing and the zones are comparable at a glance.
+PV = {
+    "pad":        20,
+    "head_y":     20,  "head_h":  40,
+    "top_y":      70,  "top_h":   58,
+    "hero_y":    138,  "hero_h": 116,
+    "body_y":    266,
+    "main_x":     20,  "main_w": 640,
+    "side_x":    676,  "side_w": 308,
+    "row1_h":    156,               # main block A / side box 1
+    "mid_y":     434,  "mid_h":   58,   # in-content banner
+    "row2_h":    128,               # main block B
+    "bot_y":     636,  "bot_h":   58,
+    "foot_y":    706,  "foot_h":   42,
+}
+PV["side1_y"] = PV["body_y"]
+PV["side2_y"] = PV["body_y"] + 168
+PV["side3_y"] = PV["body_y"] + 336
+PV["sky_y"]   = PV["body_y"]
+PV["sky_h"]   = 428
+PV["row2_y"]  = PV["mid_y"] + PV["mid_h"] + 12
+
+# Where each zone lives on the page. Keys are ads_prices.slot_key.
+PREVIEW_POSITIONS = {
+    # full-width banners
+    "top":    ("x", PV["pad"], PV["top_y"], PREVIEW_W - 2 * PV["pad"], PV["top_h"]),
+    "mid":    ("x", PV["main_x"], PV["mid_y"], PV["main_w"], PV["mid_h"]),
+    "bottom": ("x", PV["pad"], PV["bot_y"], PREVIEW_W - 2 * PV["pad"], PV["bot_h"]),
+    "footer": ("x", PV["pad"], PV["foot_y"], PREVIEW_W - 2 * PV["pad"], PV["foot_h"]),
+    # sidebar
+    "side-1": ("y", PV["side_x"], PV["side1_y"], PV["side_w"], PV["row1_h"]),
+    "side-2": ("y", PV["side_x"], PV["side2_y"], PV["side_w"], PV["row1_h"]),
+    "side-3": ("y", PV["side_x"], PV["side3_y"], PV["side_w"], PV["row1_h"]),
+    "sky":    ("y", PV["side_x"], PV["sky_y"],   PV["side_w"], PV["sky_h"]),
+}
+
+# slot_key -> position. Every zone the code or the migrations reference.
+PREVIEW_SLOTS = {
+    # 0017 — the site-wide packages sold on /pricing-plan
+    "top-banner-site-wide":     ("top",    "700x100"),
+    "middle-banner-category":   ("mid",    "900x100"),
+    "bottom-banner-site-wide":  ("bottom", "900x100"),
+    "right-side-banner-1":      ("side-1", "300x250"),
+    "right-side-banner-2":      ("side-2", "300x250"),
+    "right-side-banner-3":      ("side-3", "300x250"),
+    "right-panel-skyscraper":   ("sky",    "295x600"),
+    # 0019 + 0024 — the category-priced zones
+    "top-banner-category":      ("top",    "900x100"),
+    "bottom-banner-category":   ("bottom", "900x100"),
+    "right-banner-1":           ("side-1", "300x250"),
+    "right-banner-2":           ("side-2", "300x250"),
+    # 0006 — the original zones, still bookable and still aliased
+    "home-hero":                ("top",    "728x200"),
+    "home-sidebar":             ("side-1", "300x250"),
+    "listing-top":              ("top",    "728x90"),
+    "listing-inline":           ("mid",    "728x90"),
+    "listing-sidebar":          ("side-1", "300x250"),
+    "events-sidebar":           ("side-1", "300x250"),
+    "news-sidebar":             ("side-2", "300x250"),
+    "footer-banner":            ("footer", "970x90"),
+}
+
+# Sizes that get a position-agnostic preview, for a row whose slot_key is not
+# one of ours (an operator can add pricing rows by hand).
+PREVIEW_SIZES = sorted({size for _, size in PREVIEW_SLOTS.values()})
+
+PV_LINE   = "#BFD4EA"   # wireframe text rules
+PV_BLOCK  = "#9FC1E4"   # wireframe image blocks
+PV_SOFT   = "#D8E6F4"   # wireframe headings
+PV_FRAME  = "#EDF3F9"   # page ground
+PV_EDGE   = "#C7DBEF"
+
+
+def _pv_lines(x, y, w, count, gap=11, indent_last=0.55):
+    """A stack of text rules, the last one short, like real copy."""
+    out = []
+    for i in range(count):
+        lw = w * indent_last if i == count - 1 else w
+        out.append(f'<rect x="{x}" y="{y + i * gap}" width="{lw:.0f}" height="6" rx="3" fill="{PV_LINE}"/>')
+    return "".join(out)
+
+
+def _pv_wireframe(skip):
+    """
+    The page behind the highlight. `skip` names the region the highlight
+    occupies so the wireframe doesn't draw its own block underneath it — the
+    highlight is that block, in its true position.
+    """
+    p, w = PV["pad"], PREVIEW_W
+    out = []
+
+    # header: logo + nav
+    out.append(f'<rect x="{p}" y="{PV["head_y"]}" width="{w - 2 * p}" height="{PV["head_h"]}" rx="4" fill="{PV_FRAME}"/>')
+    out.append(f'<rect x="{p + 14}" y="{PV["head_y"] + 12}" width="104" height="16" rx="4" fill="{PV_BLOCK}"/>')
+    for i in range(4):
+        out.append(f'<rect x="{w - p - 60 - i * 78}" y="{PV["head_y"] + 16}" width="58" height="8" rx="4" fill="{PV_SOFT}"/>')
+
+    if skip != "top":
+        out.append(f'<rect x="{p}" y="{PV["top_y"]}" width="{w - 2 * p}" height="{PV["top_h"]}" rx="4" fill="{PV_FRAME}"/>')
+
+    # hero
+    out.append(f'<rect x="{p}" y="{PV["hero_y"]}" width="{w - 2 * p}" height="{PV["hero_h"]}" rx="6" fill="{PV_BLOCK}" opacity="0.75"/>')
+
+    # main column
+    mx, mw = PV["main_x"], PV["main_w"]
+    out.append(f'<rect x="{mx}" y="{PV["body_y"]}" width="{mw * 0.46:.0f}" height="{PV["row1_h"]}" rx="5" fill="{PV_BLOCK}"/>')
+    out.append(f'<rect x="{mx + mw * 0.5:.0f}" y="{PV["body_y"]}" width="{mw * 0.5:.0f}" height="18" rx="4" fill="{PV_SOFT}"/>')
+    out.append(_pv_lines(mx + mw * 0.5, PV["body_y"] + 32, mw * 0.5, 9))
+
+    if skip != "mid":
+        out.append(f'<rect x="{mx}" y="{PV["mid_y"]}" width="{mw}" height="{PV["mid_h"]}" rx="4" fill="{PV_FRAME}"/>')
+
+    r2 = PV["row2_y"]
+    out.append(f'<rect x="{mx}" y="{r2}" width="{mw * 0.3:.0f}" height="18" rx="4" fill="{PV_SOFT}"/>')
+    out.append(_pv_lines(mx, r2 + 30, mw * 0.44, 7))
+    out.append(f'<rect x="{mx + mw * 0.52:.0f}" y="{r2}" width="{mw * 0.48:.0f}" height="{PV["row2_h"]}" rx="5" fill="{PV_BLOCK}" opacity="0.8"/>')
+
+    # sidebar — three boxes, or one tall panel when the skyscraper is highlighted
+    sx, sw = PV["side_x"], PV["side_w"]
+    if skip != "sky":
+        for key, y in (("side-1", PV["side1_y"]), ("side-2", PV["side2_y"]), ("side-3", PV["side3_y"])):
+            if key == skip:
+                continue
+            out.append(f'<rect x="{sx}" y="{y}" width="{sw}" height="{PV["row1_h"]}" rx="5" fill="{PV_FRAME}"/>')
+            out.append(f'<rect x="{sx + 16}" y="{y + 18}" width="{sw - 32}" height="{PV["row1_h"] - 62}" rx="4" fill="{PV_SOFT}"/>')
+            out.append(_pv_lines(sx + 16, y + PV["row1_h"] - 34, sw - 32, 2))
+
+    if skip != "bottom":
+        out.append(f'<rect x="{p}" y="{PV["bot_y"]}" width="{w - 2 * p}" height="{PV["bot_h"]}" rx="4" fill="{PV_FRAME}"/>')
+
+    # footer band
+    if skip != "footer":
+        out.append(f'<rect x="{p}" y="{PV["foot_y"]}" width="{w - 2 * p}" height="{PV["foot_h"]}" rx="4" fill="{PV_FRAME}"/>')
+        for i in range(4):
+            out.append(f'<rect x="{p + 22 + i * 246}" y="{PV["foot_y"] + 16}" width="180" height="8" rx="4" fill="{PV_SOFT}"/>')
+
+    return "\n  ".join(out)
+
+
+def ad_zone_preview(position, size, caption):
+    """
+    One wireframe with `position` highlighted in burgundy and labelled `size`.
+    Burgundy rather than green: it is the palette's promotional band, and a
+    green highlight on a green-accented site does not read as "this bit".
+    """
+    axis, x, y, w, h = PREVIEW_POSITIONS[position]
+    # Label size: the footer strip and the sidebar boxes are much smaller than
+    # a leaderboard, so a fixed size either overflows one or gets lost in the
+    # other. Fit to the shorter edge, then clamp.
+    fs = max(15, min(38, int(min(w * 0.13, h * 0.52))))
+    vertical = axis == "y" and h > w * 1.4
+
+    if vertical:
+        # Rotate the caption for the skyscraper — a 295x600 box is too narrow
+        # to set "295x600" horizontally without shrinking it to nothing.
+        fs = max(16, min(30, int(w * 0.16)))
+        label = (
+            f'<text x="0" y="0" transform="translate({x + w / 2} {y + h / 2}) rotate(-90)" '
+            f'text-anchor="middle" dominant-baseline="central" class="pv-cap" '
+            f'font-size="{fs}">{xml(caption)}</text>'
+        )
+    else:
+        label = (
+            f'<text x="{x + w / 2}" y="{y + h / 2}" text-anchor="middle" '
+            f'dominant-baseline="central" class="pv-cap" font-size="{fs}">{xml(caption)}</text>'
+        )
+
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {PREVIEW_W} {PREVIEW_H}"
+     width="{PREVIEW_W}" height="{PREVIEW_H}" role="img"
+     aria-label="{xml(caption)} advertising zone, shown in place on the page">
+  <title>{xml(caption)} ad zone</title>
+  <style>
+    .pv-cap {{ font-family: {HEAD}; font-weight: 700; fill: #FFFFFF; letter-spacing: .01em; }}
+  </style>
+  <defs>
+    <linearGradient id="pvZone" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="{BURGUNDY_LT}"/>
+      <stop offset="1" stop-color="{BURGUNDY_DP}"/>
+    </linearGradient>
+    <linearGradient id="pvSheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="{PREVIEW_W}" height="{PREVIEW_H}" fill="#FFFFFF"/>
+  <rect x="4" y="4" width="{PREVIEW_W - 8}" height="{PREVIEW_H - 8}" rx="8"
+        fill="none" stroke="{PV_EDGE}" stroke-width="4"/>
+
+  {_pv_wireframe(position)}
+
+  <rect x="{x}" y="{y}" width="{w}" height="{h}" rx="5" fill="url(#pvZone)"/>
+  <rect x="{x}" y="{y}" width="{w}" height="{h}" rx="5" fill="url(#pvSheen)"/>
+  {label}
+</svg>"""
+
+
+for _slot, (_pos, _size) in sorted(PREVIEW_SLOTS.items()):
+    write(f"assets/images/ads/previews/{_slot}.svg", ad_zone_preview(_pos, _size, _size))
+
+# Position-agnostic, keyed by size, for pricing rows we didn't seed. The shape
+# buckets are ad_slot.php's: a wide banner is drawn as the top leaderboard, a
+# box as the first sidebar slot, a tall one as the skyscraper.
+for _size in PREVIEW_SIZES:
+    _w, _h = (int(n) for n in _size.split("x"))
+    _ratio = _w / _h
+    _pos = "top" if _ratio >= 2.0 else ("sky" if _ratio <= 0.9 else "side-1")
+    write(f"assets/images/ads/previews/zone-{_size}.svg", ad_zone_preview(_pos, _size, _size))
+
+# The last resort: a row with no slot_key and an unparseable size.
+write("assets/images/ads/previews/zone-generic.svg",
+      ad_zone_preview("top", "", "Ad zone"))
+
 print("\ndone")

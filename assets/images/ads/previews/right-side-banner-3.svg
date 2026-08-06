@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 768"
+     width="1024" height="768" role="img"
+     aria-label="300x250 advertising zone, shown in place on the page">
+  <title>300x250 ad zone</title>
+  <style>
+    .pv-cap { font-family: 'Poppins','Open Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif; font-weight: 700; fill: #FFFFFF; letter-spacing: .01em; }
+  </style>
+  <defs>
+    <linearGradient id="pvZone" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8A3D59"/>
+      <stop offset="1" stop-color="#4E1A2B"/>
+    </linearGradient>
+    <linearGradient id="pvSheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="768" fill="#FFFFFF"/>
+  <rect x="4" y="4" width="1016" height="760" rx="8"
+        fill="none" stroke="#C7DBEF" stroke-width="4"/>
+
+  <rect x="20" y="20" width="984" height="40" rx="4" fill="#EDF3F9"/>
+  <rect x="34" y="32" width="104" height="16" rx="4" fill="#9FC1E4"/>
+  <rect x="944" y="36" width="58" height="8" rx="4" fill="#D8E6F4"/>
+  <rect x="866" y="36" width="58" height="8" rx="4" fill="#D8E6F4"/>
+  <rect x="788" y="36" width="58" height="8" rx="4" fill="#D8E6F4"/>
+  <rect x="710" y="36" width="58" height="8" rx="4" fill="#D8E6F4"/>
+  <rect x="20" y="70" width="984" height="58" rx="4" fill="#EDF3F9"/>
+  <rect x="20" y="138" width="984" height="116" rx="6" fill="#9FC1E4" opacity="0.75"/>
+  <rect x="20" y="266" width="294" height="156" rx="5" fill="#9FC1E4"/>
+  <rect x="340" y="266" width="320" height="18" rx="4" fill="#D8E6F4"/>
+  <rect x="340.0" y="298" width="320" height="6" rx="3" fill="#BFD4EA"/><rect x="340.0" y="309" width="320" height="6" rx="3" fill="#BFD4EA"/><rect x="340.0" y="320" width="320" height="6" rx="3" fill="#BFD4EA"/><rect x="340.0" y="331" width="320" height="6" rx="3" fill="#BFD4EA"/><rect x="340.0" y="342" width="320" height="6" rx="3" fill="#BFD4EA"/><rect x="340.0" y="353" width="320" height="6" rx="3" fill="#BFD4EA"/><rect x="340.0" y="364" width="320" height="6" rx="3" fill="#BFD4EA"/><rect x="340.0" y="375" width="320" height="6" rx="3" fill="#BFD4EA"/><rect x="340.0" y="386" width="176" height="6" rx="3" fill="#BFD4EA"/>
+  <rect x="20" y="434" width="640" height="58" rx="4" fill="#EDF3F9"/>
+  <rect x="20" y="504" width="192" height="18" rx="4" fill="#D8E6F4"/>
+  <rect x="20" y="534" width="282" height="6" rx="3" fill="#BFD4EA"/><rect x="20" y="545" width="282" height="6" rx="3" fill="#BFD4EA"/><rect x="20" y="556" width="282" height="6" rx="3" fill="#BFD4EA"/><rect x="20" y="567" width="282" height="6" rx="3" fill="#BFD4EA"/><rect x="20" y="578" width="282" height="6" rx="3" fill="#BFD4EA"/><rect x="20" y="589" width="282" height="6" rx="3" fill="#BFD4EA"/><rect x="20" y="600" width="155" height="6" rx="3" fill="#BFD4EA"/>
+  <rect x="353" y="504" width="307" height="128" rx="5" fill="#9FC1E4" opacity="0.8"/>
+  <rect x="676" y="266" width="308" height="156" rx="5" fill="#EDF3F9"/>
+  <rect x="692" y="284" width="276" height="94" rx="4" fill="#D8E6F4"/>
+  <rect x="692" y="388" width="276" height="6" rx="3" fill="#BFD4EA"/><rect x="692" y="399" width="152" height="6" rx="3" fill="#BFD4EA"/>
+  <rect x="676" y="434" width="308" height="156" rx="5" fill="#EDF3F9"/>
+  <rect x="692" y="452" width="276" height="94" rx="4" fill="#D8E6F4"/>
+  <rect x="692" y="556" width="276" height="6" rx="3" fill="#BFD4EA"/><rect x="692" y="567" width="152" height="6" rx="3" fill="#BFD4EA"/>
+  <rect x="20" y="636" width="984" height="58" rx="4" fill="#EDF3F9"/>
+  <rect x="20" y="706" width="984" height="42" rx="4" fill="#EDF3F9"/>
+  <rect x="42" y="722" width="180" height="8" rx="4" fill="#D8E6F4"/>
+  <rect x="288" y="722" width="180" height="8" rx="4" fill="#D8E6F4"/>
+  <rect x="534" y="722" width="180" height="8" rx="4" fill="#D8E6F4"/>
+  <rect x="780" y="722" width="180" height="8" rx="4" fill="#D8E6F4"/>
+
+  <rect x="676" y="602" width="308" height="156" rx="5" fill="url(#pvZone)"/>
+  <rect x="676" y="602" width="308" height="156" rx="5" fill="url(#pvSheen)"/>
+  <text x="830.0" y="680.0" text-anchor="middle" dominant-baseline="central" class="pv-cap" font-size="38">300x250</text>
+</svg>

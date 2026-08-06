@@ -14,6 +14,11 @@
 
 <section style="padding:40px 0;">
 	<div class="container">
+		<div class="p411-adrow" style="margin-bottom:18px;">
+			<?php $slot = $ad_slots['top'] ?? '';
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
+		</div>
+
 		<?php if (!empty($error)): ?>
 			<div class="alert alert-danger"><?= e($error) ?></div>
 		<?php endif; ?>
@@ -62,6 +67,11 @@
 					<?php endif; ?>
 				</div>
 			</div>
+		</div>
+
+		<div class="p411-adrow" style="margin-top:24px;">
+			<?php $slot = $ad_slots['bottom'] ?? '';
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
 		</div>
 	</div>
 </section>

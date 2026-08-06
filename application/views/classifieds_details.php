@@ -179,6 +179,12 @@
 <!-- START -->
 <section class="  eve-deta-pg" style="margin-top: 0px !important; padding-top:50px;">
     <div class="container">
+        <div class="p411-adrow" style="margin-bottom:18px;">
+            <?php $slot = $ad_slots['top'] ?? '';
+            include APPPATH . 'views/partials/ad_slot.php'; ?>
+        </div>
+    </div>
+    <div class="container">
         <div class="eve-deta-pg-main">
             <div class="lhs">
                 <div class="img">
@@ -247,6 +253,25 @@
 
                     </div>
                 </div>
+                <?php
+                /*
+                 * Sidebar zones, below the enquiry form. The form is why the
+                 * visitor is on this page, so nothing goes above it.
+                 */
+                ?>
+                <?php $slot = $ad_slots['side_1'] ?? '';
+                $slot_creative = 'house-ad-burgundy';
+                include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+                <?php $slot = $ad_slots['side_2'] ?? '';
+                $slot_fallback_partial = 'banner_design_promo.php';
+                $slot_creative = 'banner-design';
+                include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+                <?php // 295x600, held back until sold. ?>
+                <?php $slot = $ad_slots['side_sky'] ?? '';
+                $slot_fallback = false;
+                include APPPATH . 'views/partials/ad_slot.php'; ?>
 
             </div>
         </div>
@@ -255,6 +280,13 @@
 <!--END-->
 <!-- START -->
 <section class=" eve-deta-body blog-deta-body">
+    <div class="container">
+        <div class="p411-adrow" style="margin:0 0 22px;">
+            <?php $slot = $ad_slots['inline'] ?? '';
+            $slot_creative = 'house-ad-cream';
+            include APPPATH . 'views/partials/ad_slot.php'; ?>
+        </div>
+    </div>
     <div class="container">
         <div class="eve-deta-body-main">
             <div class="lhs">
@@ -393,6 +425,17 @@
                     <?php endfor; ?>
                 </ul>
             </div>
+        </div>
+    </div>
+</section>
+<!--END-->
+
+<!-- START -->
+<section>
+    <div class="container">
+        <div class="p411-adrow" style="margin:10px 0 30px;">
+            <?php $slot = $ad_slots['bottom'] ?? '';
+            include APPPATH . 'views/partials/ad_slot.php'; ?>
         </div>
     </div>
 </section>

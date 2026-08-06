@@ -225,6 +225,14 @@ $ab_categories = $ab_stat('categories');
 		</div>
 	</div>
 
+	<div class="container">
+		<div class="p411-adrow" style="margin:22px 0;">
+			<?php $slot = $ad_slots['inline'] ?? '';
+			$slot_creative = 'house-ad-cream';
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
+		</div>
+	</div>
+
 	<!-- ============================================== WHY CHOOSE US -->
 	<div class="p411-ab-band p411-ab-band--tint">
 		<div class="container">

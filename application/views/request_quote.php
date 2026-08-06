@@ -69,6 +69,12 @@ $budgets = array(
 			<!-- ============================================================ FORM -->
 			<div class="p411-shell__main">
 
+				<div class="p411-adrow">
+					<?php $slot = $ad_slots['top'] ?? '';
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
+				</div>
+
+
 				<div class="p411-card p411-form">
 					<div class="p411-card__head">
 						<h2>Request a custom quote</h2>
@@ -158,10 +164,20 @@ $budgets = array(
 						<button type="submit" class="p411-btn p411-btn--lg">Send request</button>
 					</form>
 				</div>
+
+				<div class="p411-adrow" style="margin-top:22px;">
+					<?php $slot = $ad_slots['inline'] ?? '';
+					$slot_creative = 'house-ad-cream';
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
+				</div>
 			</div>
 
 			<!-- ============================================================ SIDE -->
 			<aside class="p411-shell__side">
+
+				<?php $slot = $ad_slots['side_1'] ?? '';
+				$slot_creative = 'house-ad-burgundy';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
 				<div class="p411-card">
 					<div class="p411-card__head">
@@ -206,7 +222,22 @@ $budgets = array(
 					<a class="p411-btn p411-btn--block p411-btn--ghost" href="<?= e_url(base_url('services')) ?>">See all services</a>
 				</div>
 
+				<?php $slot = $ad_slots['side_2'] ?? '';
+				$slot_creative = 'house-ad-navy';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+				<?php // 295x600. Held back until sold — an unsold half-page house
+				      // ad does more harm than the zone is worth. ?>
+				<?php $slot = $ad_slots['side_sky'] ?? '';
+				$slot_fallback = false;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
 			</aside>
+		</div>
+
+		<div class="p411-adrow" style="margin-top:6px;">
+			<?php $slot = $ad_slots['bottom'] ?? '';
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
 		</div>
 	</div>
 </section>

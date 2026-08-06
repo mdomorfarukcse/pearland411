@@ -68,6 +68,11 @@ $svc_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 
 	<div class="container" id="services">
 
+		<div class="p411-adrow" style="margin-top:22px;">
+			<?php $slot = $ad_slots['top'] ?? '';
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
+		</div>
+
 		<?php if (!empty($svc_ok)): ?>
 			<div class="p411-note p411-note--ok" style="margin-top:22px;" role="status"><?= e($svc_ok) ?></div>
 		<?php endif; ?>
@@ -172,6 +177,12 @@ $svc_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 				</div>
 			<?php endif; ?>
 		</div>
+
+		<div class="p411-adrow" style="margin-top:22px;">
+			<?php $slot = $ad_slots['inline'] ?? '';
+			$slot_creative = 'house-ad-cream';
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
+		</div>
 	</div>
 
 	<!-- ========================================================== OWNER BAND -->
@@ -191,6 +202,13 @@ $svc_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 				<?php endif; ?>
 				<a class="p411-btn p411-btn--ghost" href="<?= e_url(base_url('contact-us')) ?>">Send a message</a>
 			</div>
+		</div>
+	</div>
+
+	<div class="container">
+		<div class="p411-adrow" style="margin-top:6px;">
+			<?php $slot = $ad_slots['bottom'] ?? '';
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
 		</div>
 	</div>
 </section>

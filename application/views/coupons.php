@@ -241,6 +241,14 @@ foreach ($coupons as $c) {
 					<a class="p411-btn p411-btn--block p411-btn--ghost" style="margin-top:8px;" href="<?= e_url(base_url('pricing-plan')) ?>">See advertising packages</a>
 				</div>
 
+				<?php // 295x600. The controller primed this zone and the view never
+				      // rendered it, so the one page that sells deals was the one
+				      // page a bought skyscraper did not appear on. Held back until
+				      // sold, like every other page's. ?>
+				<?php $slot = $ad_slots['side_sky'];
+				$slot_fallback = false;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
 			</aside>
 		</div>
 

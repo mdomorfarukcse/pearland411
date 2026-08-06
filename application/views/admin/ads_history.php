@@ -42,7 +42,13 @@
             <td><?= $value->ads_price_name; ?>(<?= $value->ad_cost_per_day; ?>$/per day)</td>
             <td><?= date('d, M Y',strtotime($value->ad_start_date)); ?></td>
             <td><?= date('d, M Y',strtotime($value->ad_end_date)); ?></td>
-            <td><img src="<?= base_url($value->ad_photo); ?>" alt=""></td>
+            <td><?php // An ad whose upload was rejected has an empty ad_photo, and
+                  // base_url('') is the site root — a broken image, not a blank cell. ?>
+                  <?php if (!empty($value->ad_photo)): ?>
+                    <img src="<?= base_url($value->ad_photo); ?>" alt="<?= e_attr($value->name ?? 'Advertisement') ?>" width="120" loading="lazy">
+                  <?php else: ?>
+                    <span class="db-list-rat">No artwork</span>
+                  <?php endif; ?></td>
             <td><?= $value->ad_total_days; ?></td>
             <td><span class="db-list-rat">$<?= $value->ad_total_cost; ?></span></td>
             <td>

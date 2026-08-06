@@ -100,25 +100,41 @@
                                 <option value="">Choose Ads Position *</option>
 
                                 <?php
-
-                                if ($adsPrices && $adsPrices != null) {
-
-                                  foreach ($adsPrices as $key => $value) {
-
-                                ?>
-
-                                    <option myTag="<?= $value->cost; ?>" value="<?= $value->id; ?>">
-
-                                      <?= $value->name; ?> (<?= $value->cost; ?> /per day) (<?= $value->size; ?>)
-
-                                    </option>
-
-                                <?php
-
+                                /*
+                                 * Split live inventory from dead. A zone with no
+                                 * `slot_key` is one no page can ask for: an ad
+                                 * booked against it is paid for, dated, approved
+                                 * — and renders on zero pages, with nothing
+                                 * anywhere to say why. That is bookable from this
+                                 * dropdown, and was indistinguishable from a real
+                                 * position. Same for a zone switched off.
+                                 */
+                                $ap_live = $ap_dead = array();
+                                foreach (($adsPrices ?: array()) as $value) {
+                                  if (trim((string) ($value->slot_key ?? '')) !== '' && (int) $value->status === 1) {
+                                    $ap_live[] = $value;
+                                  } else {
+                                    $ap_dead[] = $value;
                                   }
                                 }
-
                                 ?>
+
+                                <?php foreach ($ap_live as $value): ?>
+                                  <option myTag="<?= e_attr($value->cost); ?>" value="<?= (int) $value->id; ?>">
+                                    <?= e($value->name); ?> (<?= e($value->cost); ?> /per day) (<?= e($value->size); ?>)
+                                  </option>
+                                <?php endforeach; ?>
+
+                                <?php if ($ap_dead): ?>
+                                  <optgroup label="Not on any page — fix the zone first">
+                                    <?php foreach ($ap_dead as $value): ?>
+                                      <option value="<?= (int) $value->id; ?>" disabled>
+                                        <?= e($value->name); ?>
+                                        <?= trim((string) ($value->slot_key ?? '')) === '' ? '— no position code' : '— switched off' ?>
+                                      </option>
+                                    <?php endforeach; ?>
+                                  </optgroup>
+                                <?php endif; ?>
 
                               </select>
 

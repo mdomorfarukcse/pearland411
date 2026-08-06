@@ -5664,6 +5664,52 @@ class Admin extends CI_Controller
 		$this->load->view('admin/ads_price');
 		$this->load->view('admin/footer');
 	}
+	/**
+	 * "728" + "90" -> "728x90", the string `ads_prices.size` holds.
+	 *
+	 * Every view reads the zone's pixel box out of that one column and emits
+	 * it as width/height so the browser reserves the space before the creative
+	 * loads. The admin form collects two numbers; this is where they become
+	 * the column. Returns '' when either side is missing or out of range, so
+	 * a junk value can't reach ad_slot.php's parser.
+	 */
+	private function adsSizeString($width, $height)
+	{
+		$w = (int) preg_replace('/\D+/', '', (string) $width);
+		$h = (int) preg_replace('/\D+/', '', (string) $height);
+
+		if ($w < 10 || $h < 10 || $w > 9999 || $h > 9999) {
+			return '';
+		}
+
+		return $w . 'x' . $h;
+	}
+
+	/**
+	 * The slot_key for a pricing row: what a view asks for by name, and what a
+	 * package's `plans.slug` must equal for buying it to fill the position.
+	 *
+	 * Falls back to a slug of the zone's name so a row created in admin is
+	 * never left unreachable, which is what every hand-made row before the
+	 * 0006 migration was. Restricted to the same [a-z0-9-] the partial's class
+	 * filter and the preview filenames assume.
+	 */
+	private function adsSlotKey($posted, $name)
+	{
+		$key = strtolower(trim((string) $posted));
+
+		if ($key === '') {
+			$key = function_exists('pearland_slug')
+				? pearland_slug((string) $name)
+				: strtolower((string) $name);
+		}
+
+		$key = preg_replace('/[^a-z0-9]+/', '-', $key);
+		$key = trim((string) $key, '-');
+
+		return substr($key, 0, 60);
+	}
+
 	/* Ads Price Create*/
 	public function create_ads_price()
 	{
@@ -5682,24 +5728,32 @@ class Admin extends CI_Controller
 			$this->load->view('admin/create_ads_price');
 			$this->load->view('admin/footer');
 		} else {
+			// `ads_prices` has no width/height columns — it has `size`, the
+			// "728x90" string every view parses to reserve the box before the
+			// creative paints. The form collects the two numbers, so compose
+			// it here; without this a zone created in admin had no pixel box
+			// and ad_slot.php fell back to a guessed 3:1 shape.
 			$info = array(
-				'name'   => $this->input->post('name'),
-				'cost'   => $this->input->post('cost'),
-				'status' => $this->input->post('status'),
-				'img'    => $uploaded_image_path // set this after upload
-				// Removed 'size', 'height', and 'width' from insert
+				'name'     => $this->input->post('name'),
+				'slot_key' => $this->adsSlotKey($this->input->post('slot_key'), $this->input->post('name')),
+				'size'     => $this->adsSizeString($this->input->post('width'), $this->input->post('height')),
+				'cost'     => $this->input->post('cost'),
+				'status'   => $this->input->post('status'),
 			);
 
-			if ($_FILES && $_FILES['img']['name']) {
-				$img_info = [
+			// Was `'img' => $uploaded_image_path` — a variable that is never
+			// assigned, so PHP 8 warned and stored NULL on every insert.
+			if (!empty($_FILES['img']['name'])) {
+				$uploaded = uploadAndResize(array(
 					'upload_path' => 'images/ads',
 					'image_name'  => 'img',
 					'quality'     => '60%',
-					'width'       => $info['width'],
-					'height'      => $info['height']
-				];
-
-				$info['img'] = uploadAndResize($img_info);
+				));
+				// uploadAndResize() returns nothing when the upload is
+				// rejected; don't write NULL over a column the list reads.
+				if (!empty($uploaded)) {
+					$info['img'] = $uploaded;
+				}
 			}
 
 			if ($this->adminmodel->add('ads_prices', $info)) {
@@ -5720,7 +5774,15 @@ class Admin extends CI_Controller
 		$data['logged_id'] 	= $session['logged_id'];
 
 		$data['price']		= $this->adminmodel->getAdsPrice($id);
-		$old_image        	= $data['price']->img;
+
+		// getAdsPrice() returns NULL for an id that isn't there, and reading
+		// ->img off it was a fatal error rather than a redirect.
+		if (empty($data['price'])) {
+			$this->session->set_flashdata('message', 'That ad zone no longer exists.');
+			redirect('admin/ads-price', 'refresh');
+			return;
+		}
+		$old_image        	= (string) ($data['price']->img ?? '');
 
 		$this->form_validation->set_rules('name', 'Name', 'trim|required');
 		$this->form_validation->set_rules('width', 'Ad Width', 'trim|required');
@@ -5735,27 +5797,45 @@ class Admin extends CI_Controller
 		} else {
 			$info = array(
 				'name'		=> $this->input->post('name'),
+				// See create_ads_price() — the column is `size`, not width/height.
+				'size'      => $this->adsSizeString($this->input->post('width'), $this->input->post('height')),
 				'cost'    	=> $this->input->post('cost'),
 				'status'    => $this->input->post('status')
 			);
 
-			if ($_FILES && $_FILES['img']['name']) {
-				$img_info = [
+			// A zone with no slot_key is one no view can ask for, so naming it
+			// is what makes it renderable. Re-keying a zone that already has
+			// one would silently unhook whatever page renders it, so that is
+			// deliberately not offered.
+			if (trim((string) ($data['price']->slot_key ?? '')) === '') {
+				$new_key = $this->adsSlotKey($this->input->post('slot_key'), $this->input->post('name'));
+				if ($new_key !== '') {
+					$info['slot_key'] = $new_key;
+				}
+			}
+
+			$info['img'] = $old_image;
+
+			if (!empty($_FILES['img']['name'])) {
+				// Upload first, delete second. The old order unlinked the
+				// existing artwork before the replacement was accepted, so a
+				// rejected upload (wrong type, over 5 MB) left the zone with
+				// no image at all.
+				$uploaded = uploadAndResize(array(
 					'upload_path' => 'images/ads',
 					'image_name'  => 'img',
 					'quality'     => '60%',
-					'height'      => $info['height'],
-					'width'       => $info['width']
-				];
+				));
 
-				$image_link = './' . $old_image;
-				if (file_exists($image_link)) {
-					unlink($image_link);
+				if (!empty($uploaded)) {
+					$info['img'] = $uploaded;
+
+					$image_link = FCPATH . ltrim((string) $old_image, '/');
+					if ($old_image !== '' && $uploaded !== $old_image
+						&& strpos((string) $old_image, '..') === false && is_file($image_link)) {
+						@unlink($image_link);
+					}
 				}
-
-				$info['img'] = uploadAndResize($img_info);
-			} else {
-				$info['img'] = $old_image;
 			}
 
 			if ($this->adminmodel->updateAdsPrice($id, $info)) {
@@ -5810,12 +5890,15 @@ class Admin extends CI_Controller
 
 	public function approveAdStatus()
 	{
-		$id = $this->input->post('id');
-		$statusValue = $this->input->post('status');
+		$id = (int) $this->input->post('id');
+		$statusValue = (int) $this->input->post('status');
 
 		$data = $this->adminmodel->getSingleAdsAjaxValue($id);
 
-		$data['ad_status'] = 1;
+		// Was hard-coded to 1, so the "Active" button — which posts 0 and reads
+		// as "switch this off" — approved the ad again instead. There was no
+		// way to take a live ad down from this screen short of deleting it.
+		$data['ad_status'] = $statusValue === 1 ? 1 : 0;
 
 		if ($this->db->where('id', $id)->update('ads', $data)) {
 			$update['message'] = 'success';

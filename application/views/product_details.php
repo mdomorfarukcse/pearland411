@@ -64,6 +64,15 @@
 	<div class="container">
 
 		<div class="row">
+			<div class="col-12">
+				<div class="p411-adrow" style="margin-bottom:18px;">
+					<?php $slot = $ad_slots['top'] ?? '';
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
+				</div>
+			</div>
+		</div>
+
+		<div class="row">
 
 			<div class="col-md-5 lhs">
 
@@ -220,6 +229,27 @@
 
 				</div>
 
+				<?php
+				/*
+				 * Sidebar zones, under the price and enquiry block — the
+				 * column a buyer reads down, so the zones sit where attention
+				 * already is rather than above the price.
+				 */
+				?>
+				<?php $slot = $ad_slots['side_1'] ?? '';
+				$slot_creative = 'house-ad-burgundy';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+				<?php $slot = $ad_slots['side_2'] ?? '';
+				$slot_fallback_partial = 'banner_design_promo.php';
+				$slot_creative = 'banner-design';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+				<?php // 295x600, held back until sold. ?>
+				<?php $slot = $ad_slots['side_sky'] ?? '';
+				$slot_fallback = false;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
 			</div>
 
 		</div>
@@ -276,6 +306,12 @@
 					</div>
 				</li>
 			</ul>
+		</div>
+
+		<div class="p411-adrow" style="margin:0 0 22px;">
+			<?php $slot = $ad_slots['inline'] ?? '';
+			$slot_creative = 'house-ad-cream';
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
 		</div>
 
 		<div class="pro-rel-pro-box">
@@ -428,3 +464,14 @@
 	</div>
 
 </section>
+
+<!-- START -->
+<section>
+	<div class="container">
+		<div class="p411-adrow" style="margin:10px 0 30px;">
+			<?php $slot = $ad_slots['bottom'] ?? '';
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
+		</div>
+	</div>
+</section>
+<!--END-->

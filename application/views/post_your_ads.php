@@ -13,6 +13,15 @@
 <section class="login-reg">
 	<div class="container">
 		<div class="row">
+			<div class="col-12">
+				<?php // The page that sells the space shows the space. ?>
+				<div class="p411-adrow" style="margin-bottom:18px;">
+					<?php $slot = $ad_slots['top'] ?? '';
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
+				</div>
+			</div>
+		</div>
+		<div class="row">
 			<div class="login-main add-list">
 				<div class="log-bor">&nbsp;</div>
 				<span class="steps">Advertise on Pearland411</span>
@@ -71,6 +80,15 @@
 							within one business day.
 						</p>
 					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="row">
+			<div class="col-12">
+				<div class="p411-adrow" style="margin-top:10px;">
+					<?php $slot = $ad_slots['bottom'] ?? '';
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
 				</div>
 			</div>
 		</div>

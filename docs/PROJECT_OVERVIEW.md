@@ -84,6 +84,20 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `pattern`, plus `data-match` for confirm fields). It binds in the **capture** phase, so a form
   that also posts over AJAX cannot send an invalid payload. The server validates independently —
   this is the courtesy layer, not the guard.
+- **Advertising:** every public page carries zones — **34 pages, 204 placements**; the full
+  table, with sizes and prices, is **[`docs/AD_INVENTORY.md`](./AD_INVENTORY.md)**, generated
+  from the source by `python3 scripts/ad_inventory.py` (re-run it after moving a zone). A page
+  declares its zones with `User::pageAdSlots($shape)` — `full` (main + sidebar, 6 zones),
+  `wide` (full-width, 3), `banner` (a form, 2) — which also **primes** them, so a six-zone page
+  costs one query rather than six. Every `slot_key` is a `plans.slug` sold on `/pricing-plan`,
+  so nothing here is page-specific inventory: buying a site-wide package fills the position on
+  all of them. `/checkout`, `/checkout-success`, `/user/*` and `/admin/*` are deliberately
+  ad-free. Unsold zones show a house creative (the skyscraper is held back until sold);
+  `service_ads_enabled` at `/admin/setting` switches the lot off. In admin, a zone with no
+  `slot_key` renders on no page and is shown as such in the booking dropdown rather than
+  looking bookable, and `ad_zone_preview()` (view helper) gives every pricing row a thumbnail —
+  a real upload if there is one, otherwise the generated wireframe in
+  `assets/images/ads/previews/`.
 - **Reusable blocks:** `partials/ad_slot.php` (one sellable ad zone; options `$slot_class`,
   `$slot_label`, `$slot_fallback`, `$slot_alias`, `$slot_creative`, `$slot_fallback_partial`),
   `partials/site_footer.php` (the site footer — rendered by `views/footer.php` **and** by the
@@ -98,8 +112,10 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
 - **Brand artwork** is generated, not hand-drawn: `python3 scripts/generate_brand_art.py` writes
   `assets/images/placeholders/*.svg` (one per kind of business, plus news — served by
   `category_placeholder()`), `assets/images/ads/house-ad-{,burgundy-,navy-,cream-}{strip,wide,box,tall}.svg`
-  (the creative an unsold zone falls back to, four palettes so no two unsold zones on a page repeat)
-  and `assets/images/ads/templates/` (editable advertiser banners + README). It is deterministic and
+  (the creative an unsold zone falls back to, four palettes so no two unsold zones on a page repeat),
+  `assets/images/ads/templates/` (editable advertiser banners + README) and
+  `assets/images/ads/previews/` (one per `slot_key`: the zone drawn in place on a page wireframe
+  and labelled with its size — the admin's "Ads Preview" thumbnails). It is deterministic and
   safe to re-run. The hero illustration `assets/images/home/hero-pearland.svg` is hand-authored.
 - **Helpers** (autoloaded): `site_setting` (settings + feature flags), `image` (uploads/resize:
   `safe_upload_image`, `uploadAndResize`, `responsive_img`), `view` — escaping (`e`, `e_attr`,
@@ -184,4 +200,5 @@ them. Get the run order from `database/README.md`.
 
 ## Deeper docs
 `CHANGELOG.md` (history) · `README.md` (setup/ops) · `PROJECT_AUDIT_REPORT.md` (full audit) ·
-`REVIEW_AND_ISSUES.md` (known issues) · `database/README.md` (migration order).
+`REVIEW_AND_ISSUES.md` (known issues) · `database/README.md` (migration order) ·
+`docs/AD_INVENTORY.md` (every ad zone, per page, with sizes — generated).

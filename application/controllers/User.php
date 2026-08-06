@@ -212,6 +212,63 @@ class User extends CI_Controller
 	}
 
 	/**
+	 * The ad zones a page carries, primed in one query.
+	 *
+	 * Seventeen public pages rendered no advertising at all — search results,
+	 * the FAQ, contact, the policy pages, products, classified/house/rental
+	 * detail, pricing, services, quotes, claim and the auth screens. Every one
+	 * of them is a page a visitor reaches from the directory, and none of them
+	 * carried so much as a house ad, so the site read as having no advertisers.
+	 *
+	 * Three shapes, because what a page can hold depends on whether it has a
+	 * column to hang a box off:
+	 *
+	 *   'full'   main + sidebar        6 zones — 3 wide, 3 down the side
+	 *   'wide'   full-width editorial  3 wide zones (no sidebar to fill)
+	 *   'banner' a single narrow form  2 wide zones, top and bottom
+	 *
+	 * Every key is a `plans.slug` sold on /pricing-plan, deliberately: a
+	 * package a customer has ALREADY bought fills these positions the moment
+	 * the page ships, rather than each page minting inventory nobody can buy.
+	 * That is also why nothing here is page-specific — "site wide" finally
+	 * means site wide. See migrations 0017 / 0019 / 0024.
+	 *
+	 * Priming matters: without it each include fires its own `ORDER BY RAND()`,
+	 * so a six-zone page costs six queries instead of one.
+	 *
+	 * @param  string $shape 'full' | 'wide' | 'banner'
+	 * @return array<string,string> view key => slot_key
+	 */
+	private function pageAdSlots($shape = 'full')
+	{
+		$slots = array(
+			'top'    => 'top-banner-site-wide',
+			'bottom' => 'bottom-banner-site-wide',
+		);
+
+		if ($shape !== 'banner') {
+			$slots['inline'] = 'middle-banner-category';
+		}
+
+		// The same six the directory and the content sections carry, in the
+		// same order — see contentAdSlots(). Deliberately not a seventh box:
+		// `right-side-banner-3` exists and is sold, but it is the homepage's
+		// third sidebar position, and a sidebar that is three boxes plus a
+		// skyscraper is an ad column with a page attached.
+		if ($shape === 'full') {
+			$slots['side_1']   = 'right-side-banner-1';
+			$slots['side_2']   = 'right-side-banner-2';
+			$slots['side_sky'] = 'right-panel-skyscraper';
+		}
+
+		if (method_exists($this->usermodel, 'primeAdSlots')) {
+			$this->usermodel->primeAdSlots(array_values($slots));
+		}
+
+		return $slots;
+	}
+
+	/**
 	 * Per-page stylesheets for the content sections: the shared page kit, the
 	 * components those six pages add, and the two house promo cards. Loaded
 	 * through the $page_css hook in views/header.php, after the shared sheets.
@@ -511,13 +568,9 @@ class User extends CI_Controller
 			}
 		}
 
-		// Two site-wide positions only: this page is full-width editorial, with
-		// no sidebar to hang the other four zones off.
-		$data['ad_slots'] = array(
-			'top'    => 'top-banner-site-wide',
-			'bottom' => 'bottom-banner-site-wide',
-		);
-		$this->usermodel->primeAdSlots(array_values($data['ad_slots']));
+		// Full-width editorial — no sidebar to hang a box off, so the three
+		// wide positions and nothing else.
+		$data['ad_slots'] = $this->pageAdSlots('wide');
 		$data['page_css'] = $this->contentPageCss();
 
 		$data['title']            = 'About Pearland411 — The Local Directory for Pearland, TX';
@@ -568,6 +621,9 @@ class User extends CI_Controller
 		$this->load->model('usermodel');
 		$data = array();
 		$data['title'] = 'FAQ';
+		// Advertising. Three wide zones; this page is full-width, with no column to hang a box off.
+		$data['ad_slots'] = $this->pageAdSlots('wide');
+
 		$this->load->view('header', $data);
 		$this->load->view('faq');
 		$this->load->view('footer');
@@ -583,6 +639,9 @@ class User extends CI_Controller
 		$data['canonical_url']    = base_url('contact-us');
 		$data['page_css'] = $this->contentPageCss();
 		$this->loadHeaderCategories($data);
+		// Advertising. Six zones — three wide, three down the sidebar.
+		$data['ad_slots'] = $this->pageAdSlots('full');
+
 		$this->load->view('header', $data);
 		$this->load->view('contact-us', $data);
 		$this->load->view('footer');
@@ -706,6 +765,9 @@ class User extends CI_Controller
 		$this->load->model('usermodel');
 		$data = array();
 		$data['title'] = 'Privacy Policy';
+		// Advertising. Three wide zones; this page is full-width, with no column to hang a box off.
+		$data['ad_slots'] = $this->pageAdSlots('wide');
+
 		$this->load->view('header', $data);
 		$this->load->view('privacy_policy');
 		$this->load->view('footer');
@@ -718,6 +780,9 @@ class User extends CI_Controller
 		$this->load->model('usermodel');
 		$data = array();
 		$data['title'] = 'Terms of Use';
+		// Advertising. Three wide zones; this page is full-width, with no column to hang a box off.
+		$data['ad_slots'] = $this->pageAdSlots('wide');
+
 		$this->load->view('header', $data);
 		$this->load->view('terms_of_use');
 		$this->load->view('footer');
@@ -910,6 +975,9 @@ class User extends CI_Controller
 			$data['meta_description'] = 'Search results for ' . $search_query . ' on Pearland411';
 
 			// Load header, search page, and footer
+			// Advertising. Six zones — three wide, three down the sidebar.
+			$data['ad_slots'] = $this->pageAdSlots('full');
+
 			$this->load->view('header', $data);
 			$this->load->view('search', $data);
 			$this->load->view('footer');
@@ -1686,6 +1754,9 @@ class User extends CI_Controller
 
 		$data['title'] = "Pearland | All Products";
 		$this->loadHeaderCategories($data);
+		// Advertising. Six zones — three wide, three down the sidebar.
+		$data['ad_slots'] = $this->pageAdSlots('full');
+
 		$this->load->view('header', $data);
 		$this->load->view('all-products', $data);
 		$this->load->view('footer');
@@ -1731,6 +1802,9 @@ class User extends CI_Controller
 		$data['title'] = $data['product']->product_name . " | Product Details";
 
 		// Load views
+		// Advertising. Six zones — three wide, three down the sidebar.
+		$data['ad_slots'] = $this->pageAdSlots('full');
+
 		$this->load->view('header', $data);
 		$this->load->view('product_details', $data);
 		$this->load->view('footer');
@@ -2488,6 +2562,9 @@ class User extends CI_Controller
 		// the categories column came up empty on signup and sign-in.
 		$this->loadHeaderCategories($data);
 
+		// Advertising. A banner above and below the form. No sidebar, and nothing between the fields.
+		$data['ad_slots'] = $this->pageAdSlots('banner');
+
 		$this->load->view('header', $data);
 
 		$this->load->view('register', $data);
@@ -2555,6 +2632,9 @@ class User extends CI_Controller
 		$data['title'] = isset($data['title']) ? $data['title'] : 'Sign in — Pearland411';
 		$data['page_css'] = $this->contentPageCss();
 		$this->loadHeaderCategories($data);
+
+		// Advertising. A banner above and below the form. No sidebar, and nothing between the fields.
+		$data['ad_slots'] = $this->pageAdSlots('banner');
 
 		$this->load->view('header', $data);
 
@@ -5059,6 +5139,9 @@ class User extends CI_Controller
 		$this->loadHeaderCategories($data);
 
 		// Load views
+		// Advertising. Six zones — three wide, three down the sidebar.
+		$data['ad_slots'] = $this->pageAdSlots('full');
+
 		$this->load->view('header', $data);
 		$this->load->view('house_details', $data);
 		$this->load->view('footer');
@@ -5075,6 +5158,9 @@ class User extends CI_Controller
 		$this->loadHeaderCategories($data);
 		$data['title'] = 'Advertise on Pearland411';
 		$data['meta_description'] = 'Display ads on Pearland411 — homepage, listing, and category placements. Request pricing and inventory from our sales team.';
+		// Advertising. A banner above and below the form. No sidebar, and nothing between the fields.
+		$data['ad_slots'] = $this->pageAdSlots('banner');
+
 		$this->load->view('header', $data);
 		$this->load->view('post_your_ads', $data);
 		$this->load->view('footer');
@@ -5960,6 +6046,9 @@ class User extends CI_Controller
 		$data['related_classifieds'] = $related_classifieds;
 
 		// Load views
+		// Advertising. Six zones — three wide, three down the sidebar.
+		$data['ad_slots'] = $this->pageAdSlots('full');
+
 		$this->load->view('header', $data);
 		$this->load->view('classifieds_details', $data);
 		$this->load->view('footer');
@@ -6289,6 +6378,9 @@ class User extends CI_Controller
 		$this->loadHeaderCategories($data);
 
 		// Load views
+		// Advertising. Six zones — three wide, three down the sidebar.
+		$data['ad_slots'] = $this->pageAdSlots('full');
+
 		$this->load->view('header', $data);
 		$this->load->view('rental_details', $data);
 		$this->load->view('footer');
@@ -7151,6 +7243,9 @@ class User extends CI_Controller
 		$data['title'] = 'Pricing Plans - Choose Your Plan';
 
 		// Load views
+		// Advertising. Three wide zones; this page is full-width, with no column to hang a box off.
+		$data['ad_slots'] = $this->pageAdSlots('wide');
+
 		$this->load->view('header', $data);
 		$this->load->view('pricing_plan', $data);
 		$this->load->view('footer', $data);
@@ -8077,6 +8172,9 @@ class User extends CI_Controller
 		$data['page_css']   = $this->contentPageCss();
 		$this->loadHeaderCategories($data);
 
+		// Advertising. Three wide zones; this page is full-width, with no column to hang a box off.
+		$data['ad_slots'] = $this->pageAdSlots('wide');
+
 		$this->load->view('header', $data);
 		$this->load->view('services_index', $data);
 		$this->load->view('footer');
@@ -8130,6 +8228,9 @@ class User extends CI_Controller
 			$data['prefill']['email'] = isset($session['email_id']) ? $session['email_id'] : '';
 		}
 
+		// Advertising. Six zones — three wide, three down the sidebar.
+		$data['ad_slots'] = $this->pageAdSlots('full');
+
 		$this->load->view('header', $data);
 		$this->load->view('service_details', $data);
 		$this->load->view('footer');
@@ -8182,6 +8283,9 @@ class User extends CI_Controller
 		$data['canonical_url']    = base_url('request-quote');
 		$data['page_css']         = $this->contentPageCss();
 		$this->loadHeaderCategories($data);
+
+		// Advertising. Six zones — three wide, three down the sidebar.
+		$data['ad_slots'] = $this->pageAdSlots('full');
 
 		$this->load->view('header', $data);
 		$this->load->view('request_quote', $data);
@@ -8356,6 +8460,9 @@ class User extends CI_Controller
 		$data['meta_description'] = 'Coupon code ' . $coupon->coupon_code . ' for ' . ($coupon->listing_name ?? $coupon->owner_name);
 		$data['canonical_url']    = base_url('coupons/' . (int) $coupon->coupon_id);
 
+		// Advertising. Six zones — three wide, three down the sidebar.
+		$data['ad_slots'] = $this->pageAdSlots('full');
+
 		$this->load->view('header', $data);
 		$this->load->view('coupon_details', $data);
 		$this->load->view('footer');
@@ -8423,6 +8530,9 @@ class User extends CI_Controller
 				);
 				$this->loadHeaderCategories($data);
 				$data['title'] = 'Claim ' . $listing->listing_name . ' — Pearland411';
+				// Advertising. A banner above and below the form. No sidebar,
+				// and nothing between the fields.
+				$data['ad_slots'] = $this->pageAdSlots('banner');
 				$this->load->view('header', $data);
 				$this->load->view('claim_listing', $data);
 				$this->load->view('footer');
@@ -8496,6 +8606,10 @@ class User extends CI_Controller
 		$this->loadHeaderCategories($data);
 		$data['title']         = 'Claim ' . $listing->listing_name . ' — Pearland411';
 		$data['canonical_url'] = base_url('claim-listing/' . rawurlencode($slug));
+
+		// Advertising. A banner above and below the form. No sidebar, and
+		// nothing between the fields.
+		$data['ad_slots'] = $this->pageAdSlots('banner');
 
 		$this->load->view('header', $data);
 		$this->load->view('claim_listing', $data);

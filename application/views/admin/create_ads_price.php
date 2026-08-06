@@ -26,30 +26,38 @@
                         </div>
                         <!--FILED END-->
                         <!--FILED START-->
-                        <!-- <div class="row">
-                          <div class="col-md-12">
-                            <div class="form-group">
-                              <input type="text" class="form-control" name="size" value="<?= set_value('size');?>" placeholder="Ad image size" required>
-                            </div>
-                            <span class="text-danger"><?//= form_error("size")?form_error("size"):'' ;?></span>
-                          </div>
-                        </div> -->
-                        <!--FILED END-->
-                        <!--FILED START-->
+                        <?php // The position code. A view asks for a zone by this
+                              // string, and a package fills it when plans.slug
+                              // matches — so a row without one is a price with no
+                              // position, which is what every hand-made row was. ?>
                         <div class="row">
                           <div class="col-md-12">
                             <div class="form-group">
-                              <input type="number" class="form-control" name="width" value="<?= set_value('width');?>" placeholder="Ad image width" required>
+                              <label>Slot key <span style="font-weight:400;color:#5a6472;">(position code — leave blank to derive it from the name)</span></label>
+                              <input type="text" class="form-control" name="slot_key" value="<?= set_value('slot_key');?>"
+                                     placeholder="e.g. right-side-banner-1" pattern="[a-zA-Z0-9\-]+"
+                                     maxlength="60">
                             </div>
-                            <span class="text-danger"><?= form_error("width")?form_error("width"):'' ;?></span>
+                            <span class="text-danger"><?= form_error("slot_key")?form_error("slot_key"):'' ;?></span>
                           </div>
                         </div>
                         <!--FILED END-->
                         <!--FILED START-->
+                        <?php // Stored as ads_prices.size ("728x90"). Every page
+                              // reserves exactly this box before the creative
+                              // loads, so it is what an advertiser is quoted. ?>
                         <div class="row">
-                          <div class="col-md-12">
+                          <div class="col-md-6">
                             <div class="form-group">
-                              <input type="number" class="form-control" name="height" value="<?= set_value('height');?>" placeholder="Ad image height" required>
+                              <label>Ad width (px)</label>
+                              <input type="number" class="form-control" name="width" value="<?= set_value('width');?>" placeholder="e.g. 728" min="10" max="9999" required>
+                            </div>
+                            <span class="text-danger"><?= form_error("width")?form_error("width"):'' ;?></span>
+                          </div>
+                          <div class="col-md-6">
+                            <div class="form-group">
+                              <label>Ad height (px)</label>
+                              <input type="number" class="form-control" name="height" value="<?= set_value('height');?>" placeholder="e.g. 90" min="10" max="9999" required>
                             </div>
                             <span class="text-danger"><?= form_error("height")?form_error("height"):'' ;?></span>
                           </div>
@@ -70,8 +78,14 @@
                         <div class="row">
                           <div class="col-md-12">
                             <div class="form-group">
-                              <label>Choose Ad preview image</label>
-                              <input type="file" name="img" class="form-control">
+                              <label>Choose Ad preview image <span style="font-weight:400;color:#5a6472;">(optional)</span></label>
+                              <input type="file" name="img" class="form-control" accept="image/*">
+                              <p style="margin:6px 0 0;font-size:12.5px;color:#5a6472;">
+                                Leave this empty and the zone gets a generated preview —
+                                a page wireframe with the position highlighted and its pixel
+                                size labelled. This image is only the thumbnail shown here;
+                                it is never served to visitors.
+                              </p>
                             </div>
                           </div>
                         </div>

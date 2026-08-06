@@ -714,3 +714,71 @@ if (!function_exists('listing_gallery_paths')) {
         return array_values(array_filter(array_map('trim', array_map('strval', $decoded)), 'strlen'));
     }
 }
+
+if (!function_exists('ad_zone_preview')) {
+    /**
+     * The preview thumbnail for one sellable ad zone, as a web path.
+     *
+     * /admin/ads-price shows a thumbnail of every zone so an operator can see
+     * what they are selling. It read `ads_prices.img` and printed
+     * `base_url($row->img)` unconditionally — but only the handful of rows
+     * created by hand before the slot_key migrations ever had an image. Every
+     * zone seeded by 0006 / 0017 / 0019 / 0024 has NULL there, and
+     * `base_url(NULL)` is the site root, so the browser fetched the homepage as
+     * an image and drew a broken-image icon. That is the empty "Ads Preview"
+     * column in the report.
+     *
+     * Resolution order:
+     *   1. An uploaded image, when the file is actually on disk. A row whose
+     *      upload was later deleted falls through rather than breaking again.
+     *   2. assets/images/ads/previews/<slot_key>.svg — the zone drawn in its
+     *      real position on a page wireframe, labelled with its pixel size.
+     *   3. assets/images/ads/previews/zone-<WxH>.svg — same drawing, placed by
+     *      shape, for a pricing row an operator added by hand.
+     *   4. zone-generic.svg.
+     *
+     * All of these are written by `python3 scripts/generate_brand_art.py`.
+     *
+     * @param  object|array|null $row An ads_prices row (or anything with
+     *                                slot_key / size / img).
+     * @return string Web path relative to the docroot, for base_url().
+     */
+    function ad_zone_preview($row)
+    {
+        $get = function ($key) use ($row) {
+            if (is_array($row))  return isset($row[$key])  ? (string) $row[$key]  : '';
+            if (is_object($row)) return isset($row->$key)  ? (string) $row->$key  : '';
+            return '';
+        };
+
+        $base = defined('FCPATH') ? FCPATH : rtrim(getcwd(), '/\\') . '/';
+
+        // 1. A real upload. Guard the path: `img` is operator-supplied and is
+        // about to be handed to base_url(), so a stored "../" must not escape.
+        $img = trim($get('img'));
+        if ($img !== '' && strpos($img, '..') === false && !preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $img)) {
+            if (is_file($base . ltrim($img, '/'))) {
+                return ltrim($img, '/');
+            }
+        }
+
+        $dir = 'assets/images/ads/previews/';
+
+        // 2. The zone's own drawing, keyed by slot_key.
+        $slot = strtolower(trim($get('slot_key')));
+        if ($slot !== '' && preg_match('/^[a-z0-9\-]+$/', $slot) && is_file($base . $dir . $slot . '.svg')) {
+            return $dir . $slot . '.svg';
+        }
+
+        // 3. By size, for a pricing row we didn't seed.
+        if (preg_match('/^\s*(\d{2,4})\s*[xX\*]\s*(\d{2,4})\s*$/', $get('size'), $m)) {
+            $by_size = $dir . 'zone-' . (int) $m[1] . 'x' . (int) $m[2] . '.svg';
+            if (is_file($base . $by_size)) {
+                return $by_size;
+            }
+        }
+
+        // 4. Something is always better than a broken image.
+        return $dir . 'zone-generic.svg';
+    }
+}

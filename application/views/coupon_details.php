@@ -67,6 +67,11 @@ $biz_url  = !empty($coupon->listing_slug)
 			<!-- ============================================================ MAIN -->
 			<div class="p411-shell__main">
 
+				<div class="p411-adrow">
+					<?php $slot = $ad_slots['top'] ?? '';
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
+				</div>
+
 				<?php if (!empty($coupon->coupon_photo)): ?>
 					<div class="p411-card p411-card--flush">
 						<figure class="p411-ct-figure">
@@ -124,6 +129,12 @@ $biz_url  = !empty($coupon->listing_slug)
 					</p>
 				</div>
 
+				<div class="p411-adrow" style="margin-top:22px;">
+					<?php $slot = $ad_slots['inline'] ?? '';
+					$slot_creative = 'house-ad-cream';
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
+				</div>
+
 			</div>
 
 			<!-- ========================================================= SIDEBAR -->
@@ -141,7 +152,7 @@ $biz_url  = !empty($coupon->listing_slug)
 					</div>
 				<?php endif; ?>
 
-				<?php $slot = 'right-side-banner-1';
+				<?php $slot = $ad_slots['side_1'] ?? '';
 				$slot_creative = 'house-ad-burgundy';
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
@@ -157,7 +168,23 @@ $biz_url  = !empty($coupon->listing_slug)
 
 				<?php include APPPATH . 'views/partials/service_promo.php'; ?>
 
+				<?php $slot = $ad_slots['side_2'] ?? '';
+				$slot_fallback_partial = 'banner_design_promo.php';
+				$slot_creative = 'banner-design';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+				<?php // 295x600. Held back until sold — an unsold half-page house
+				      // ad does more harm than the zone is worth. ?>
+				<?php $slot = $ad_slots['side_sky'] ?? '';
+				$slot_fallback = false;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
 			</aside>
+		</div>
+
+		<div class="p411-adrow" style="margin-top:6px;">
+			<?php $slot = $ad_slots['bottom'] ?? '';
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
 		</div>
 	</div>
 </section>

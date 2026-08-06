@@ -51,14 +51,34 @@
 															<select name="ads_price_id" required="required" class="form-control" id="adposi">
 																<option value="">Choose Ads Position *</option>
 																<?php
-																if($adsPrices && $adsPrices != null){
-																	foreach ($adsPrices as $key => $value) {
-																?>
-																<option myTag="<?= $value->cost;?>" value="<?= $value->id;?>" <?= ($value->id == $ad->ads_price_id)? 'selected': '';?> ><?= $value->name;?> (<?= $value->cost;?> /per day)</option>
-																<?php
+																/*
+																 * See create_ads.php — a zone with no slot_key
+																 * renders on no page, so it is separated out
+																 * rather than sitting in the list looking live.
+																 * The zone this ad is already booked against
+																 * stays selectable either way, so re-saving an
+																 * existing booking can't silently move it.
+																 */
+																$ap_live = $ap_dead = array();
+																foreach (($adsPrices ?: array()) as $value) {
+																	$ap_current = ((int) $value->id === (int) $ad->ads_price_id);
+																	if ($ap_current || (trim((string) ($value->slot_key ?? '')) !== '' && (int) $value->status === 1)) {
+																		$ap_live[] = $value;
+																	} else {
+																		$ap_dead[] = $value;
 																	}
 																}
 																?>
+																<?php foreach ($ap_live as $value): ?>
+																	<option myTag="<?= e_attr($value->cost);?>" value="<?= (int) $value->id;?>" <?= ((int) $value->id === (int) $ad->ads_price_id) ? 'selected': '';?>><?= e($value->name);?> (<?= e($value->cost);?> /per day)<?= trim((string) ($value->slot_key ?? '')) === '' ? ' — not on any page' : '' ?></option>
+																<?php endforeach; ?>
+																<?php if ($ap_dead): ?>
+																	<optgroup label="Not on any page — fix the zone first">
+																		<?php foreach ($ap_dead as $value): ?>
+																			<option value="<?= (int) $value->id;?>" disabled><?= e($value->name);?> <?= trim((string) ($value->slot_key ?? '')) === '' ? '— no position code' : '— switched off' ?></option>
+																		<?php endforeach; ?>
+																	</optgroup>
+																<?php endif; ?>
 															</select> <a href="<?= base_url('admin/ads-price');?>" class="frmtip" target="_blank">Pricing details</a>
 														</div>
                             							<span class="text-danger"><?= form_error("ads_price_id")?form_error("ads_price_id"):'' ;?></span>

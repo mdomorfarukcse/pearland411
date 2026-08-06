@@ -173,6 +173,12 @@
             </div>
         </div>
 
+        <div class="container">
+            <div class="p411-adrow" style="margin:22px 0;">
+                <?php $slot = $ad_slots['top'] ?? '';
+                include APPPATH . 'views/partials/ad_slot.php'; ?>
+            </div>
+        </div>
         <!-- Content Section -->
         <div class="terms-content">
             <div class="container">
@@ -198,6 +204,12 @@
                     <p><strong>5. Content Ownership</strong><br>
                         Any content you upload — including business details, photos, or descriptions — remains your property. However, by submitting content to Pearland411, you grant us a non-exclusive license to display and promote it on our platform.</p>
 
+                    <div class="p411-adrow" style="margin:22px 0;">
+                        <?php $slot = $ad_slots['inline'] ?? '';
+                        $slot_creative = 'house-ad-cream';
+                        include APPPATH . 'views/partials/ad_slot.php'; ?>
+                    </div>
+
                     <p><strong>6. Accuracy of Information</strong><br>
                         While we strive to ensure accuracy, Pearland411 does not guarantee that all listings or information are current, complete, or error-free. Users are encouraged to verify details directly with businesses.</p>
 
@@ -221,6 +233,13 @@
                         <p>📍 Location: Pearland, Texas, USA</p>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="p411-adrow" style="margin:0 0 28px;">
+                <?php $slot = $ad_slots['bottom'] ?? '';
+                include APPPATH . 'views/partials/ad_slot.php'; ?>
             </div>
         </div>
     </div>

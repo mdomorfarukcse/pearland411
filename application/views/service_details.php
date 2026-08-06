@@ -68,6 +68,12 @@ $sd_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 			<!-- ============================================================ MAIN -->
 			<div class="p411-shell__main">
 
+				<div class="p411-adrow">
+					<?php $slot = $ad_slots['top'] ?? '';
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
+				</div>
+
+
 				<div class="p411-card">
 					<div class="p411-card__head">
 						<h2>What this is</h2>
@@ -108,6 +114,12 @@ $sd_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 
 				<?php $promo_variant = 'banner';
 				include APPPATH . 'views/partials/service_promo.php'; ?>
+
+				<div class="p411-adrow" style="margin-top:22px;">
+					<?php $slot = $ad_slots['inline'] ?? '';
+					$slot_creative = 'house-ad-cream';
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
+				</div>
 			</div>
 
 			<!-- ===================================================== QUOTE FORM -->
@@ -182,7 +194,29 @@ $sd_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 					<a class="p411-btn p411-btn--block p411-btn--ghost" href="<?= e_url(base_url('services')) ?>">See all services</a>
 				</div>
 
+				<?php // Below the quote form, not above it — the form is why the
+				      // visitor is here and must not be pushed under an ad. ?>
+				<?php $slot = $ad_slots['side_1'] ?? '';
+				$slot_creative = 'house-ad-burgundy';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+				<?php $slot = $ad_slots['side_2'] ?? '';
+				$slot_fallback_partial = 'banner_design_promo.php';
+				$slot_creative = 'banner-design';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+				<?php // 295x600. Held back until sold — an unsold half-page house
+				      // ad does more harm than the zone is worth. ?>
+				<?php $slot = $ad_slots['side_sky'] ?? '';
+				$slot_fallback = false;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
 			</aside>
+		</div>
+
+		<div class="p411-adrow" style="margin-top:6px;">
+			<?php $slot = $ad_slots['bottom'] ?? '';
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
 		</div>
 	</div>
 </section>
