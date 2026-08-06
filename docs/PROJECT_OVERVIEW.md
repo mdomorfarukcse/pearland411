@@ -66,6 +66,17 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   element on the site, so every pseudo-element must state its own position, font and size; and
   `pearland-brand.css` paints the pager and `.form-control:focus` with `!important` in the 2025
   style sheet's olive `#909D3E`, which specificity cannot outrank.
+- **Admin media fields:** `views/admin/partials/media_field.php` renders one image upload with
+  what is already stored beneath it — lightbox, filename, and a Remove tickbox per image for
+  galleries. Driven by `assets/admin/js/media-preview.js`, which is markup-first: `data-preview`
+  on a file input previews the chosen files, `data-lightbox` (or any `<img>` inside
+  `[data-media-grid]`) opens full size, `data-video-preview` renders a player per YouTube URL as
+  you type. Used by the listing, news, blog, video and event edit screens.
+- **Public form validation:** `assets/js/form-validate.js` attaches to any `<form data-validate>`
+  and validates from the markup's own attributes (`required`, `type`, `minlength`, `maxlength`,
+  `pattern`, plus `data-match` for confirm fields). It binds in the **capture** phase, so a form
+  that also posts over AJAX cannot send an invalid payload. The server validates independently —
+  this is the courtesy layer, not the guard.
 - **Reusable blocks:** `partials/ad_slot.php` (one sellable ad zone; options `$slot_class`,
   `$slot_label`, `$slot_fallback`, `$slot_alias`, `$slot_creative`, `$slot_fallback_partial`),
   `partials/site_footer.php` (the site footer — rendered by `views/footer.php` **and** by the
@@ -85,7 +96,9 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   safe to re-run. The hero illustration `assets/images/home/hero-pearland.svg` is hand-authored.
 - **Helpers** (autoloaded): `site_setting` (settings + feature flags), `image` (uploads/resize:
   `safe_upload_image`, `uploadAndResize`, `responsive_img`), `view` — escaping (`e`, `e_attr`,
-  `e_url`, `e_nl2br`), `json_ld`, `pearland_slug`, `external_url()` (an operator-supplied link, given a scheme and
+  `e_url`, `e_nl2br`), `json_ld`, `pearland_slug`, `form_recipient_email()` (one address for every public form, set
+  at `/admin/setting`; falls back through the form's own override, `contact_email`, then
+  `MAIL_FROM_ADDRESS`), `external_url()` (an operator-supplied link, given a scheme and
   refused unless it is http/https/mailto/tel), `listing_gallery_paths()` (decode
   `listings.listing_image_gallery`; the read and the write must agree, or adding one photograph
   wipes the rest), `category_placeholder()` (a listing with no
