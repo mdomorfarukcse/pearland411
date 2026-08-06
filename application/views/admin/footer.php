@@ -37,6 +37,7 @@
      Wires automatically to every <table data-admin-table>, plus any
      <table> following the legacy #pg-sear input. -->
 <script src="<?= base_url('assets/admin/js/admin-table.js') ?>"></script>
+<script src="<?= base_url('assets/admin/js/media-preview.js') ?>?v=<?= @filemtime(FCPATH . 'assets/admin/js/media-preview.js') ?: 1 ?>"></script>
 
 <!-- CKEditor 4 (4.22.1 — last free release; suppresses the "not secure" nag). -->
 <script src="https://cdn.ckeditor.com/4.22.1/standard/ckeditor.js"></script>

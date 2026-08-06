@@ -34,6 +34,8 @@
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
 
   <link rel="stylesheet" href="<?= base_url() ?>assets/admin/css/admin-style.css">
+  <?php // Image/video widgets on the edit screens. See assets/admin/js/media-preview.js ?>
+  <link rel="stylesheet" href="<?= base_url('assets/admin/css/media-preview.css') ?>?v=<?= @filemtime(FCPATH . 'assets/admin/css/media-preview.css') ?: 1 ?>">
 
   <link rel="stylesheet" href="<?= base_url() ?>assets/css/fonts.css">
   <!-- Brand palette + typography overrides — loaded last so it wins. -->

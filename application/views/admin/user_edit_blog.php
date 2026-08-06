@@ -83,8 +83,14 @@
 										<div class="row">
 											<div class="col-md-12">
 												<div class="form-group">
-													<label>Choose banner image</label>
-													<input type="file" name="blog_image" class="form-control">
+													<?php
+													$mf_name    = 'blog_image';
+													$mf_label   = 'Choose banner image';
+													$mf_hint    = 'Leave empty to keep the current image.';
+													$mf_current = $blog->blog_image ?? '';
+													$mf_empty   = 'No banner uploaded yet.';
+													include APPPATH . 'views/admin/partials/media_field.php';
+													?>
 												</div>
 											</div>
 										</div>
