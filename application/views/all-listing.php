@@ -76,6 +76,10 @@ $dir_swatch = function ($name) {
 	return $palette[crc32((string) $name) % count($palette)];
 };
 
+// The category being browsed, for category-targeted ad bookings (0024).
+// Resolved in the controller so this page and the ad query agree on the id.
+$ad_category_id = isset($current_category_id) ? $current_category_id : null;
+
 $showing_from = $total_listings > 0 ? $current_offset + 1 : 0;
 $showing_to   = $current_offset + count($allListings);
 ?>
@@ -134,7 +138,27 @@ $showing_to   = $current_offset + count($allListings);
 						      // nothing is filtered. ?>
 						<span><?= $cat_slug === '' ? number_format($total_listings) . ' listings' : 'Browse everything' ?></span>
 					</a>
-					<?php foreach (array_slice($categoriesWithCounts, 0, 7) as $cat): ?>
+					<?php
+					// The strip shows the seven busiest categories. Two problems with
+					// slicing blind: a quieter section (Sports and Health among them)
+					// never appears, so "where do I find it in the dashboard?"; and the
+					// category you are *currently browsing* could be missing from the
+					// strip you are standing on. Pull the active one in if the slice
+					// dropped it, and always offer the full list.
+					$cat_strip = array_slice($categoriesWithCounts, 0, 7);
+					if ($cat_slug !== '') {
+						$in_strip = FALSE;
+						foreach ($cat_strip as $c) {
+							if ($dir_cat_slug($c) === $cat_slug) { $in_strip = TRUE; break; }
+						}
+						if (!$in_strip) {
+							foreach ($categoriesWithCounts as $c) {
+								if ($dir_cat_slug($c) === $cat_slug) { $cat_strip[] = $c; break; }
+							}
+						}
+					}
+					?>
+					<?php foreach ($cat_strip as $cat): ?>
 						<?php $slug_here = $dir_cat_slug($cat); ?>
 						<a href="<?= e_url($dir_cat_url($slug_here)) ?>" class="<?= $slug_here === $cat_slug ? 'is-active' : '' ?>">
 							<b><?= e($cat->category_name) ?></b>
@@ -143,6 +167,10 @@ $showing_to   = $current_offset + count($allListings);
 							<?php endif; ?>
 						</a>
 					<?php endforeach; ?>
+					<a href="<?= e_url(base_url('all-category')) ?>">
+						<b>See all categories</b>
+						<span>Every section, A&ndash;Z</span>
+					</a>
 				</div>
 			</div>
 		</div>
@@ -155,9 +183,15 @@ $showing_to   = $current_offset + count($allListings);
 			<div class="p411-shell__main">
 
 				<div class="p411-adrow">
-					<?php $slot = $ad_slots['top'];
-					$slot_alias = 'listing-top';
-					include APPPATH . 'views/partials/ad_slot.php'; ?>
+					<?php
+					// On a category page, ask for that category's header banner first
+					// (top-banner-category, seeded by migration 0024) and fall back to
+					// the site-wide top banner when it is unsold. "No option to add a
+					// header banner in Business Listings" was this slot not existing.
+					$slot = $cat_slug !== '' ? 'top-banner-category' : $ad_slots['top'];
+					$slot_alias = $cat_slug !== '' ? array($ad_slots['top'], 'listing-top') : 'listing-top';
+					$slot_category = $ad_category_id;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
 				</div>
 
 				<?php if (!empty($allListings)): ?>
@@ -264,7 +298,8 @@ $showing_to   = $current_offset + count($allListings);
 								<div class="p411-adrow p411-adrow--grid">
 									<?php $slot = $ad_slots['inline'];
 									$slot_alias = 'listing-inline';
-									include APPPATH . 'views/partials/ad_slot.php'; ?>
+									$slot_category = $ad_category_id;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
 								</div>
 							<?php endif; ?>
 						<?php endforeach; ?>
@@ -283,7 +318,16 @@ $showing_to   = $current_offset + count($allListings);
 								<path d="m20 20-3.5-3.5"></path>
 							</svg>
 						</div>
-						<?php if ($cat_slug !== ''): ?>
+						<?php if (!empty($category_not_found)): ?>
+							<?php // The slug matched no category at all. This used to be titled
+							      // "General" over an empty list, so a stale or renamed link looked
+							      // like a real section that happened to be empty. ?>
+							<h3>That category doesn&rsquo;t exist</h3>
+							<p>
+								There&rsquo;s no category at this address &mdash; it may have been renamed or
+								removed. Browse the full list to find what you&rsquo;re looking for.
+							</p>
+						<?php elseif ($cat_slug !== ''): ?>
 							<h3>No businesses in <?= e($cat_name) ?> yet</h3>
 							<p>
 								Nothing is listed under this category at the moment. Try another category,
@@ -312,7 +356,8 @@ $showing_to   = $current_offset + count($allListings);
 					<div class="p411-adrow" style="margin-top:22px;">
 						<?php $slot = $ad_slots['inline'];
 						$slot_alias = 'listing-inline';
-						include APPPATH . 'views/partials/ad_slot.php'; ?>
+						$slot_category = $ad_category_id;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
 					</div>
 
 					<?php // A results page with nothing on it leaves a tall empty column
@@ -332,6 +377,7 @@ $showing_to   = $current_offset + count($allListings);
 				// web-services pitch; an unsold zone sells the space itself
 				// rather than repeating it.
 				$slot_creative = 'house-ad';
+				$slot_category = $ad_category_id;
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
 				<?php // Static house promo — never sold, never rotated. ?>
@@ -425,6 +471,7 @@ $showing_to   = $current_offset + count($allListings);
 				// Kept as the creative for the case where the partial is
 				// missing, so the position never renders the generic house ad.
 				$slot_creative = 'banner-design';
+				$slot_category = $ad_category_id;
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
 				<!-- One enquiry, sent to the Pearland411 team -->
@@ -458,8 +505,8 @@ $showing_to   = $current_offset + count($allListings);
 						</div>
 						<div class="form-group">
 							<label class="sr-only" for="dir_enq_phone">Phone</label>
-							<input id="dir_enq_phone" type="tel" name="enquiry_mobile" class="form-control" required
-								   placeholder="Enter mobile number*" pattern="[0-9+\-\s()]{7,20}"
+							<input id="dir_enq_phone" type="tel" name="enquiry_mobile" class="form-control"
+								   placeholder="Enter mobile number" pattern="[0-9+\-\s()]{7,20}"
 								   title="7 to 20 characters: digits, spaces, + ( ) and - are allowed"
 								   value="<?= e_attr(isset($user) && isset($user->mobile_number) ? $user->mobile_number : '') ?>">
 						</div>
@@ -476,6 +523,7 @@ $showing_to   = $current_offset + count($allListings);
 				      // does more harm than the zone is worth. ?>
 				<?php $slot = $ad_slots['side_sky'];
 				$slot_fallback = false;
+				$slot_category = $ad_category_id;
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
 			</aside>
@@ -484,7 +532,8 @@ $showing_to   = $current_offset + count($allListings);
 		<!-- ==================================================== BOTTOM AD -->
 		<div class="p411-adrow" style="margin-top:6px;">
 			<?php $slot = $ad_slots['bottom'];
-			include APPPATH . 'views/partials/ad_slot.php'; ?>
+			$slot_category = $ad_category_id;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
 		</div>
 	</div>
 
@@ -555,9 +604,45 @@ $showing_to   = $current_offset + count($allListings);
 		var fail = document.getElementById('dir_enq_fail');
 		var btn  = document.getElementById('dir_enquiry_submit');
 
+		// Field-level errors. The response carries `message` and an `errors`
+		// map keyed by field name; this used to read only `.success` and throw
+		// both away, so every failure showed the same fixed banner — "Sorry,
+		// that didn't send" — with nothing to say which box was wrong.
+		var FIELDS = ['enquiry_name', 'enquiry_email', 'enquiry_mobile', 'enquiry_message'];
+
+		function clearFieldErrors() {
+			FIELDS.forEach(function (name) {
+				var input = form.querySelector('[name="' + name + '"]');
+				if (!input) return;
+				input.removeAttribute('aria-invalid');
+				input.style.borderColor = '';
+				var note = input.parentNode.querySelector('.p411-field-err');
+				if (note) note.parentNode.removeChild(note);
+			});
+		}
+
+		function showFieldErrors(errors) {
+			var firstBad = null;
+			FIELDS.forEach(function (name) {
+				if (!errors[name]) return;
+				var input = form.querySelector('[name="' + name + '"]');
+				if (!input) return;
+				input.setAttribute('aria-invalid', 'true');
+				input.style.borderColor = '#c0392b';
+				var note = document.createElement('small');
+				note.className = 'p411-field-err';
+				note.style.cssText = 'display:block;color:#c0392b;margin-top:4px;';
+				note.textContent = errors[name];
+				input.parentNode.appendChild(note);
+				if (!firstBad) firstBad = input;
+			});
+			if (firstBad) firstBad.focus();
+		}
+
 		form.addEventListener('submit', function (e) {
 			e.preventDefault();
 			ok.style.display = fail.style.display = 'none';
+			clearFieldErrors();
 			btn.disabled = true;
 
 			var xhr = new XMLHttpRequest();
@@ -566,12 +651,25 @@ $showing_to   = $current_offset + count($allListings);
 			xhr.onreadystatechange = function () {
 				if (xhr.readyState !== 4) return;
 				btn.disabled = false;
-				var success = false;
+
+				var payload = null;
 				if (xhr.status === 200) {
-					try { success = !!JSON.parse(xhr.responseText).success; } catch (err) { success = false; }
+					try { payload = JSON.parse(xhr.responseText); } catch (err) { payload = null; }
 				}
-				if (success) { ok.style.display = 'block'; form.reset(); }
-				else { fail.style.display = 'block'; }
+
+				if (payload && payload.success) {
+					ok.style.display = 'block';
+					form.reset();
+					return;
+				}
+
+				// Say what went wrong, and mark the field it went wrong in, so a
+				// retry does not mean guessing. The form keeps what was typed.
+				fail.textContent = (payload && payload.message)
+					? payload.message
+					: 'Sorry, that didn’t send. Please check your connection and try again.';
+				fail.style.display = 'block';
+				if (payload && payload.errors) showFieldErrors(payload.errors);
 			};
 			xhr.send(new FormData(form));
 		});

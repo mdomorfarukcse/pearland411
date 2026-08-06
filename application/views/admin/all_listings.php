@@ -19,16 +19,39 @@
         <div class="ud-cen-s2">
 
           <h2>Listing details</h2>
+          <?php
+          // A real GET form, not the old #pg-sear box. That one was picked up by
+          // admin-table.js and filtered the ten rows already on the page, so a
+          // business on page four could not be found by typing its name. This
+          // searches every listing in SQL — see Adminmodel::getAllListings().
+          $search_query = isset($search_query) ? $search_query : '';
+          ?>
           <div class="ad-int-sear">
-            <input type="text" id="pg-sear" placeholder="Search this page..">
+            <form method="get" action="<?= base_url('admin/all_listings') ?>" style="display:flex; gap:8px; align-items:center;">
+              <input type="search" name="q" value="<?= e_attr($search_query) ?>" placeholder="Search all listings…" style="min-width:220px;">
+              <button type="submit" class="db-tit-btn" style="position:static; top:auto; right:auto;">Search</button>
+              <?php if ($search_query !== '') { ?>
+                <a href="<?= base_url('admin/all_listings') ?>" style="font-size:0.9rem;">Clear</a>
+              <?php } ?>
+            </form>
           </div>
+          <?php if ($search_query !== '') { ?>
+            <p style="margin:8px 0 0; color:#6b7280;">
+              <?= (int) ($total_rows ?? 0) ?> listing<?= ((int) ($total_rows ?? 0) === 1 ? '' : 's') ?>
+              matching &ldquo;<?= e($search_query) ?>&rdquo; across the whole directory.
+            </p>
+          <?php } ?>
           <div class="listing-action-btns" style="position:absolute; right:35px; top:18px; display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; z-index:5;">
             <a href="<?= base_url() ?>admin/export-listings" class="db-tit-btn" style="position:static; top:auto; right:auto;">Export CSV</a>
             <a href="<?= base_url() ?>admin/import-listings" class="db-tit-btn" style="position:static; top:auto; right:auto;">Import CSV/Excel</a>
             <a href="<?= base_url() ?>admin/add-new-listing" class="db-tit-btn" style="position:static; top:auto; right:auto;">Add new listing</a>
           </div>
 
-          <table data-admin-table class="responsive-table bordered" id="pg-resu">
+          <?php // No data-admin-table here: search and paging are both done by the
+                // server now, and letting admin-table.js add a second "Search this
+                // page" box over the same rows would be two searches with
+                // different reach sitting on top of each other. ?>
+          <table class="responsive-table bordered" id="pg-resu">
             <thead>
               <tr>
                 <th>No</th>
@@ -113,7 +136,9 @@
                     <td><?= admin_actions(array(
                       'view'   => base_url('listing-details/' . rawurlencode((string) $value->listing_slug)),
                       'edit'   => base_url('admin/edit-listing/' . rawurlencode((string) $value->listing_slug)),
-                      'delete' => base_url('admin/delete_listing/' . rawurlencode((string) $value->listing_slug)),
+                      // Delete by id, not slug: two businesses with the same name
+                      // share a slug, and deleting by slug took both of them.
+                      'delete' => base_url('admin/delete_listing/' . (int) $value->listing_id),
                       'delete_confirm' => 'Delete this listing?',
                     ), 'listing') ?></td>
                   </tr>

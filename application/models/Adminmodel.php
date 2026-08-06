@@ -1009,11 +1009,23 @@
 
 		public function updateVideoCategory($slug, $info)
 		{
-			if ($this->db->where('category_slug', $slug)->update('video_categories', $info)) {
-				return true;
-			} else {
+			// Confirm the row is actually there before reporting success.
+			// CI3's update() returns TRUE whenever the query *runs*, so an
+			// UPDATE that matched nothing still read as a save — which is how
+			// renaming a video category could report "Successfully Updated"
+			// without changing anything. affected_rows() alone is not enough:
+			// MySQL reports 0 when the submitted values equal the stored ones,
+			// and re-saving an unchanged form is not a failure.
+			$exists = $this->db->select('category_id')
+				->from('video_categories')
+				->where('category_slug', $slug)
+				->get()->row();
+
+			if (!$exists) {
 				return false;
 			}
+
+			return (bool) $this->db->where('category_slug', $slug)->update('video_categories', $info);
 		}
 
 		/*===================================
@@ -1271,13 +1283,29 @@
      		Update marketplace Category Information
      		====================================*/
 
-		public function updatemarketplaceCategory($id, $info)
+		/**
+		 * Update a marketplace category, keyed on its slug.
+		 *
+		 * The same defect the video category edit had: this keyed on
+		 * `category_id`, an INT, while its only caller
+		 * (Admin::edit_marketplace_category) loads the row by `category_slug`
+		 * and passes that slug straight through. MySQL casts the string to 0,
+		 * nothing matches — and CI3's update() returns TRUE whenever the query
+		 * runs, so the admin was told "Successfully Updated" every time while
+		 * the category never changed. Found while fixing tracker row 25.
+		 */
+		public function updatemarketplaceCategory($slug, $info)
 		{
-			if ($this->db->where('category_id', $id)->update('marketplace_categories', $info)) {
-				return true;
-			} else {
+			$exists = $this->db->select('category_id')
+				->from('marketplace_categories')
+				->where('category_slug', $slug)
+				->get()->row();
+
+			if (!$exists) {
 				return false;
 			}
+
+			return (bool) $this->db->where('category_slug', $slug)->update('marketplace_categories', $info);
 		}
 		/*===================================
 			Delete marketplace Category Information
@@ -1718,10 +1746,83 @@
 		 * True when a listing slug already exists (used to keep slugs unique
 		 * on import).
 		 */
+		/*=================================================
+		LISTING <-> SUB-CATEGORY (many-to-many, 0023)
+		=================================================*/
+
+		/**
+		 * The sub_category_ids attached to a listing.
+		 *
+		 * @return int[]
+		 */
+		public function listingSubCategoryIds($listing_id)
+		{
+			if (!$this->db->table_exists('listing_sub_category_map')) {
+				return array();
+			}
+
+			$rows = $this->db->select('sub_category_id')
+				->from('listing_sub_category_map')
+				->where('listing_id', (int) $listing_id)
+				->get()->result();
+
+			return array_map(function ($r) { return (int) $r->sub_category_id; }, $rows);
+		}
+
+		/**
+		 * Replace a listing's sub-categories with exactly $ids.
+		 *
+		 * Deletes then inserts rather than diffing: the set is small, and the
+		 * write is a single logical "these are the subcategories now".
+		 *
+		 * @param int   $listing_id
+		 * @param int[] $ids
+		 */
+		public function saveListingSubCategories($listing_id, array $ids)
+		{
+			if (!$this->db->table_exists('listing_sub_category_map')) {
+				return;
+			}
+
+			$listing_id = (int) $listing_id;
+			$ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+
+			$this->db->where('listing_id', $listing_id)->delete('listing_sub_category_map');
+
+			if (empty($ids)) {
+				return;
+			}
+
+			$batch = array();
+			foreach ($ids as $id) {
+				$batch[] = array('listing_id' => $listing_id, 'sub_category_id' => $id);
+			}
+			$this->db->insert_batch('listing_sub_category_map', $batch);
+		}
+
 		public function listingSlugExists($slug)
 		{
 			return $this->db->from('listings')
 				->where('listing_slug', $slug)
+				->count_all_results() > 0;
+		}
+
+		/**
+		 * Whether $table already has a row whose $column is $slug.
+		 *
+		 * The general form of listingSlugExists(), for the content tables that
+		 * had no uniqueness pass at all. Table and column are checked against
+		 * the schema rather than interpolated blind, since both reach the query
+		 * builder as identifiers.
+		 */
+		public function slugExists($table, $column, $slug)
+		{
+			if (!$this->db->table_exists($table) || !$this->db->field_exists($column, $table)) {
+				return false;
+			}
+
+			return $this->db->from($table)
+				->where($column, $slug)
 				->count_all_results() > 0;
 		}
 
@@ -1757,20 +1858,103 @@
 		/*==============
 		LISTINGS
     ==============*/
-		public function getAllListings($limit = NULL, $offset = NULL)
+		/**
+		 * The columns an admin listings search looks in.
+		 *
+		 * Name and address are the obvious ones; postal code and category are
+		 * there because that is how staff actually look a business up.
+		 */
+		private function adminListingSearchColumns()
 		{
-			return $data = $this->db->select('listings.listing_id,listings.listing_name, listings.postal_code,listings.listing_status,listings.listing_id,listings.listing_slug, listings.created_at,listings.listing_image, user.user_id,user.name,categories.category_name,sub_categories.sub_category_name')->from('listings')
+			return array(
+				'listings.listing_name',
+				'listings.listing_address',
+				'listings.postal_code',
+				'listings.listing_email',
+				'listings.listing_mobile',
+				'categories.category_name',
+				'user.name',
+			);
+		}
+
+		/**
+		 * Add a word-by-word search to the query currently being built.
+		 *
+		 * Every word has to appear somewhere in the row, but not in the same
+		 * column and not next to each other — so "central bbq" finds "Central
+		 * Texas BBQ". Same rule as the public search
+		 * (Usermodel::applySearchTerms), which is private to that model.
+		 * Capped at six words so a pasted paragraph cannot build a
+		 * hundred-clause query.
+		 */
+		private function applyAdminListingSearch($q)
+		{
+			$terms = preg_split('/\s+/', trim((string) $q), -1, PREG_SPLIT_NO_EMPTY);
+			if (empty($terms)) {
+				return;
+			}
+			$terms   = array_slice(array_unique($terms), 0, 6);
+			$columns = $this->adminListingSearchColumns();
+
+			$this->db->group_start();
+			foreach ($terms as $term) {
+				$this->db->group_start();
+				$first = true;
+				foreach ($columns as $column) {
+					$first ? $this->db->like($column, $term) : $this->db->or_like($column, $term);
+					$first = false;
+				}
+				$this->db->group_end();
+			}
+			$this->db->group_end();
+		}
+
+		/**
+		 * @param int|null    $limit
+		 * @param int|null    $offset
+		 * @param string|null $q Search text. Applied in SQL, across every
+		 *                       listing — the admin table's box used to be a
+		 *                       browser-side filter over the ten rows the
+		 *                       server had already sent, so a business on page
+		 *                       four could not be found by typing its name.
+		 */
+		public function getAllListings($limit = NULL, $offset = NULL, $q = NULL)
+		{
+			$this->db->select('listings.listing_id,listings.listing_name, listings.postal_code,listings.listing_status,listings.listing_id,listings.listing_slug, listings.created_at,listings.listing_image, user.user_id,user.name,categories.category_name,sub_categories.sub_category_name')->from('listings')
 				->join('user', 'listings.user_id = user.user_id', 'left')
 				->where('is_deleted', 0)
 				->join('listing_categories as categories', 'categories.category_id = listings.category_id', 'LEFT')
-				->join('listing_sub_categories as sub_categories', 'sub_categories.sub_category_id = listings.sub_category_id', 'LEFT')
-				->order_by('listing_id', 'DESC')
+				->join('listing_sub_categories as sub_categories', 'sub_categories.sub_category_id = listings.sub_category_id', 'LEFT');
+
+			$this->applyAdminListingSearch($q);
+
+			return $this->db->order_by('listing_id', 'DESC')
 				->limit($limit, $offset)
 				->get()->result();
 		}
+
+		/**
+		 * How many listings the admin table has, honouring the same search.
+		 *
+		 * The pager used to be sized with count(getAllListings(NULL, NULL)),
+		 * which pulled every row with all three joins on every page load just
+		 * to measure it. Distinct from countAllListings(), which is the
+		 * dashboard's count_all('listings') and includes trashed rows.
+		 */
+		public function countAdminListings($q = NULL)
+		{
+			$this->db->from('listings')
+				->join('user', 'listings.user_id = user.user_id', 'left')
+				->where('listings.is_deleted', 0)
+				->join('listing_categories as categories', 'categories.category_id = listings.category_id', 'LEFT');
+
+			$this->applyAdminListingSearch($q);
+
+			return (int) $this->db->count_all_results();
+		}
 		public function getAllDeletedListings($limit = NULL, $offset = NULL)
 		{
-			return $data = $this->db->select('listings.listing_id,listings.listing_name, listings.postal_code,listings.listing_status,listings.listing_id,listings.listing_slug,listings.created_at,listings.listing_image, user.user_id,user.name,categories.category_name,sub_categories.sub_category_name')->from('listings')
+			return $data = $this->db->select('listings.listing_id,listings.listing_name, listings.postal_code,listings.listing_status,listings.listing_id,listings.listing_slug,listings.created_at,listings.deleted_date,listings.listing_image, user.user_id,user.name,categories.category_name,sub_categories.sub_category_name')->from('listings')
 				->join('user', 'listings.user_id = user.user_id', 'left')
 				->where('is_deleted', 1)
 				->join('listing_categories as categories', 'categories.category_id = listings.category_id', 'LEFT')
@@ -1808,19 +1992,56 @@
 			}
 		}
 
-		public function softDeleteListing($slug)
+		/**
+		 * The last database error message, for surfacing a rejected write to the
+		 * operator instead of redirecting them to a blank form.
+		 */
+		public function lastDbError()
 		{
-			$data = array('is_deleted' => 1);
-			if ($this->db->where('listing_slug', $slug)->update('listings', $data)) {
-				return true;
-			} else {
-				return false;
-			}
+			$err = $this->db->error();
+			return empty($err['message']) ? 'No further detail was reported by the database.' : $err['message'];
 		}
 
-		public function permanentDeleteListing($slug)
+		/*
+		 * The three listing delete/restore methods below key on `listing_id`.
+		 *
+		 * They used to key on `listing_slug`, which is not unique: both
+		 * add_listing_scratch() and edit_listing() derived the slug from the
+		 * business name with no uniqueness pass, so two businesses called the
+		 * same thing carried the identical slug — and one click on Delete
+		 * flipped is_deleted on both of them. That is the reported "deleting one
+		 * duplicate listing also deletes the original". Permanent delete was
+		 * worse: it removed every row sharing the slug and unlinked the image
+		 * they had in common.
+		 */
+
+		public function softDeleteListing($listing_id)
 		{
-			$data = $this->db->select('*')->from('listings')->where('listing_slug', $slug)->get()->row();
+			$data = array(
+				'is_deleted'   => 1,
+				'deleted_date' => date('Y-m-d H:i:s'),
+			);
+			return (bool) $this->db->where('listing_id', (int) $listing_id)->update('listings', $data);
+		}
+
+		/**
+		 * Bring a listing back out of the trash. Clears the deletion stamp —
+		 * the old code *set* deleted_date to now while restoring, and wrote the
+		 * whole row object back, which meant every column went into the UPDATE.
+		 */
+		public function restoreListing($listing_id)
+		{
+			$data = array(
+				'is_deleted'   => 0,
+				'deleted_date' => NULL,
+			);
+			return (bool) $this->db->where('listing_id', (int) $listing_id)->update('listings', $data);
+		}
+
+		public function permanentDeleteListing($listing_id)
+		{
+			$listing_id = (int) $listing_id;
+			$data = $this->db->select('*')->from('listings')->where('listing_id', $listing_id)->get()->row();
 
 			if (!$data) {
 				return false; // Return false if no record is found
@@ -1836,7 +2057,7 @@
 				}
 			}
 
-			if ($this->db->where('listing_slug', $slug)->delete('listings')) {
+			if ($this->db->where('listing_id', $listing_id)->delete('listings')) {
 				if (!empty($img)) {
 					unlink($img);
 				}

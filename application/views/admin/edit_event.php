@@ -184,7 +184,7 @@
 
                         <div class="form-group">
 
-                          <input type="text" name="event_contact_name" required="required" class="form-control" value="<?= $event->event_contact_name; ?>" placeholder="Contact person*">
+                          <input type="text" name="event_contact_name" class="form-control" value="<?= $event->event_contact_name; ?>" placeholder="Contact person*">
 
                         </div>
 
@@ -196,7 +196,7 @@
 
                         <div class="form-group">
 
-                          <input type="text" name="event_mobile" required="required" class="form-control" value="<?= $event->event_mobile; ?>" placeholder="Contact phone number*">
+                          <input type="text" name="event_mobile" class="form-control" value="<?= $event->event_mobile; ?>" placeholder="Contact phone number*">
 
                         </div>
 
@@ -216,7 +216,7 @@
 
                         <div class="form-group">
 
-                          <input type="email" name="event_email" required="required" class="form-control" value="<?= $event->event_email; ?>" placeholder="Contact Email Id *">
+                          <input type="email" name="event_email" class="form-control" value="<?= $event->event_email; ?>" placeholder="Contact Email Id *">
 
                         </div>
 

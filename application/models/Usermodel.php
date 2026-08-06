@@ -104,19 +104,48 @@ class Usermodel extends CI_Model
 
 	function registerUser()
 	{
-		$this->form_validation->set_rules('name', 'Name', 'trim|required|min_length[3]');
-		$this->form_validation->set_rules('mobile_number', 'Phone', 'trim|required|min_length[10]|max_length[20]');
+		$this->form_validation->set_rules('name', 'Name', 'trim|required|min_length[3]|max_length[100]');
+
+		// A phone rule, not just a length. "aaaaaaaaaa" used to pass, because
+		// min_length[10] is the only thing that was checked.
+		$this->form_validation->set_rules(
+			'mobile_number',
+			'Phone',
+			'trim|required|min_length[10]|max_length[20]|regex_match[/^[0-9+\-\s()]{10,20}$/]',
+			array('regex_match' => 'Please enter a valid %s number.')
+		);
+
 		$this->form_validation->set_rules(
 			'email_id',
 			'Email',
-			'trim|required|valid_email|is_unique[user.email_id]',
+			'trim|required|valid_email|max_length[190]|is_unique[user.email_id]',
 			array(
 				'required'      => 'You have not provided %s.',
 				'is_unique'     => 'This %s already exists.'
 			)
 		);
 
-		$this->form_validation->set_rules('password', 'Password', 'trim|required|min_length[6]');
+		// Eight, matching what the form has always promised ("At least 8
+		// characters"). The server accepted six, so the field's own placeholder
+		// was wrong and "123456" was a valid password. Confirmation catches the
+		// typo that otherwise locks someone out of the account they just made.
+		$this->form_validation->set_rules('password', 'Password', 'trim|required|min_length[8]|max_length[128]');
+		$this->form_validation->set_rules(
+			'password_confirm',
+			'Confirm password',
+			'trim|required|matches[password]',
+			array('matches' => 'The two passwords do not match.')
+		);
+
+		// Honeypot: a field no human sees, hidden in CSS rather than with
+		// type="hidden" so a form-filling bot completes it. Anything that puts
+		// a value in it is not a person. This is the cheap half of "allows
+		// errors and troll attacks" — per-IP rate limiting is already applied
+		// in User::register(), but it does nothing against a rotating proxy.
+		if (trim((string) $this->input->post('website_url')) !== '') {
+			$this->form_validation->set_message('required', 'Registration could not be completed.');
+			return FALSE;
+		}
 
 		if ($this->form_validation->run()) {
 			// Generate a verification token (stored raw because we email
@@ -2239,11 +2268,26 @@ class Usermodel extends CI_Model
 		return array_merge($upcoming, $past);
 	}
 
+	/**
+	 * Insert a row, defaulting user_id to the signed-in member.
+	 *
+	 * The default only applies when the caller did NOT supply a user_id. It
+	 * used to overwrite one unconditionally, from `userdata('logged_user')` —
+	 * but an admin session carries `logged_admin`, never `logged_user`, so for
+	 * every admin-side caller that read NULL and blanked the author the admin
+	 * had just picked from the "Choose a user" dropdown. Admin::add_blog() goes
+	 * through here, which is why blog bylines came out as "Unknown" while news
+	 * (which uses Adminmodel::add()) was fine. That is the reported "User Name
+	 * still not updated across the entire website".
+	 */
 	public function add($tableName, $data)
 	{
-		$session = $this->session->userdata('logged_user');
-		$logged_id = $session['logged_id'];
-		$data['user_id'] = $logged_id;
+		if (!array_key_exists('user_id', $data) || $data['user_id'] === NULL || $data['user_id'] === '') {
+			$session = $this->session->userdata('logged_user');
+			if (is_array($session) && isset($session['logged_id'])) {
+				$data['user_id'] = $session['logged_id'];
+			}
+		}
 
 		if ($this->db->insert($tableName, $data)) {
 			return TRUE;
@@ -3244,10 +3288,31 @@ class Usermodel extends CI_Model
 	 * replaces used a different slug rule from the one the links are built
 	 * with, so a punctuated category showed its businesses under "General".
 	 */
+	/**
+	 * Heading for a category slug, or '' when the slug matches no category.
+	 *
+	 * Returns '' rather than the old 'General'. A slug that resolves to
+	 * nothing also makes directoryQuery() add `where('1 = 0')`, so the page
+	 * showed the heading "General" over an empty list and looked like a real,
+	 * empty section — which is how a stale "Sports and Health" link read as
+	 * "it redirects to the General section". The caller decides what to do
+	 * with a miss; User::all_listing() now says the category was not found.
+	 */
+	/**
+	 * The category id for a slug, or NULL. Public wrapper over
+	 * resolveCategoryIdBySlug() so controllers can hand the id to the views
+	 * that need it (category-targeted ad bookings, migration 0024) without
+	 * each of them re-deriving it with a different slug rule.
+	 */
+	public function categoryIdBySlug($category_slug, $table = 'listing_categories')
+	{
+		return $this->resolveCategoryIdBySlug($category_slug, $table);
+	}
+
 	public function getCategoryNameBySlug($category_slug, $table = 'listing_categories')
 	{
 		$cat_id = $this->resolveCategoryIdBySlug($category_slug, $table);
-		if ($cat_id === NULL) return 'General';
+		if ($cat_id === NULL) return '';
 
 		return $this->getCategoryName($cat_id, $table);
 	}
@@ -3390,8 +3455,17 @@ class Usermodel extends CI_Model
 		$limit_field = $content_type . '_limit';
 		$limit = isset($subscription->$limit_field) ? $subscription->$limit_field : 0;
 
-		// -1 means unlimited
-		if ($limit == -1) {
+		// -1 and 0 both mean unlimited.
+		//
+		// They have to agree with the dashboards, which have always read
+		// `($limit === -1 || $limit === 0)` as unlimited. This method used to
+		// treat 0 as "none allowed", so a plan row with 0 in its *_limit column
+		// — the column default — made canUserAddContent() refuse every add
+		// while the page it came from said the allowance was unlimited. That is
+		// "cannot add more news" and "cannot add more events" with nothing on
+		// screen to explain it. A plan that genuinely allows nothing is
+		// expressed by not granting the capability, not by a 0 quota.
+		if ($limit == -1 || $limit == 0) {
 			return true;
 		}
 
@@ -3774,9 +3848,21 @@ class Usermodel extends CI_Model
 	}
 
 	/**
-	 * Global search function that searches across all content types
+	 * Global search across every content type.
+	 *
+	 * $limit is the cap PER SECTION, and it is honoured — the parameter was
+	 * declared and then ignored, with each section hard-coded to a literal
+	 * (listings 20, categories 10, …). A query matching 200 businesses showed
+	 * 20 and /search had no pager, no "load more" and no offset, so there was
+	 * no way to reach the 21st. That is "display all available results, not
+	 * just the first 10".
+	 *
+	 * Each section fetches one row beyond the cap so the caller can tell
+	 * "exactly $limit" from "at least $limit, probably more" without paying for
+	 * a COUNT per section. The extra row is trimmed off here and recorded in
+	 * `has_more`.
 	 */
-	public function globalSearch($search_term, $limit = 50, $offset = 0)
+	public function globalSearch($search_term, $limit = 20, $offset = 0)
 	{
 		$results = array(
 			'listings'    => array(),
@@ -3808,23 +3894,39 @@ class Usermodel extends CI_Model
 			return site_setting($key, '1') !== '0';
 		};
 
+		$limit = max(1, min(500, (int) $limit));
+		$probe = $limit + 1; // one past the cap, to detect "there are more"
+
 		// The core directory, categories, the services catalog and coupons are
 		// always on — see the note on /admin/setting.
-		$results['listings']   = $this->searchListings($search_term, 20);
-		$results['categories'] = $this->searchCategories($search_term, 10);
-		$results['services']   = $this->searchServices($search_term, 10);
-		$results['coupons']    = $this->searchCoupons($search_term, 10);
+		$results['listings']   = $this->searchListings($search_term, $probe);
+		$results['categories'] = $this->searchCategories($search_term, $probe);
+		$results['services']   = $this->searchServices($search_term, $probe);
+		$results['coupons']    = $this->searchCoupons($search_term, $probe);
 
-		if ($on('service_news_enabled'))        $results['news']        = $this->searchNews($search_term, 20);
-		if ($on('service_events_enabled'))      $results['events']      = $this->searchEvents($search_term, 15);
-		if ($on('service_blog_enabled'))        $results['blogs']       = $this->searchBlogs($search_term, 15);
-		if ($on('service_products_enabled'))    $results['products']    = $this->searchProducts($search_term, 15);
-		if ($on('service_videos_enabled'))      $results['videos']      = $this->searchVideo($search_term, 15);
-		if ($on('service_classifieds_enabled')) $results['classifieds'] = $this->searchClassifieds($search_term, 15);
+		if ($on('service_news_enabled'))        $results['news']        = $this->searchNews($search_term, $probe);
+		if ($on('service_events_enabled'))      $results['events']      = $this->searchEvents($search_term, $probe);
+		if ($on('service_blog_enabled'))        $results['blogs']       = $this->searchBlogs($search_term, $probe);
+		if ($on('service_products_enabled'))    $results['products']    = $this->searchProducts($search_term, $probe);
+		if ($on('service_videos_enabled'))      $results['videos']      = $this->searchVideo($search_term, $probe);
+		if ($on('service_classifieds_enabled')) $results['classifieds'] = $this->searchClassifieds($search_term, $probe);
 		if ($on('service_realestate_enabled')) {
-			$results['house']  = $this->searchHouse($search_term, 15);
-			$results['rental'] = $this->searchRental($search_term, 15);
+			$results['house']  = $this->searchHouse($search_term, $probe);
+			$results['rental'] = $this->searchRental($search_term, $probe);
 		}
+
+		// Trim the probe row back off and remember which sections were cut, so
+		// the page can offer "show more" instead of silently stopping.
+		$results['has_more'] = array();
+		foreach ($results as $section => $rows) {
+			if (!is_array($rows) || $section === 'has_more') continue;
+			if (count($rows) > $limit) {
+				$results['has_more'][$section] = TRUE;
+				$results[$section] = array_slice($rows, 0, $limit);
+			}
+		}
+
+		$results['limit'] = $limit;
 
 		// Calculate total count
 		$results['total_count'] = count($results['listings']) + count($results['news']) +
@@ -6016,13 +6118,27 @@ class Usermodel extends CI_Model
 	 * Returns an object with photo / link / size / slot_key, or null
 	 * when there's nothing live for that slot.
 	 */
-	public function getAdForSlot($slot_key)
+	/**
+	 * The ad to run in a slot, optionally for the category being browsed.
+	 *
+	 * $category_id is the listing category the visitor is looking at, or NULL
+	 * on a page that has no category. An ad booked against that category wins
+	 * over an untargeted one in the same slot; an untargeted booking still
+	 * runs everywhere, which is every ad sold before migration 0024. Ads had
+	 * one targeting dimension — the slot — so "category-specific banners"
+	 * could not be sold at all.
+	 */
+	public function getAdForSlot($slot_key, $category_id = NULL)
 	{
 		if (empty($slot_key)) return null;
 
+		$category_id = ($category_id === NULL || $category_id === '') ? NULL : (int) $category_id;
+
 		// Served from primeAdSlots() when the page primed its zones up
-		// front, so seven homepage slots cost one query, not seven.
-		if (self::$ad_slot_cache !== null && array_key_exists($slot_key, self::$ad_slot_cache)) {
+		// front, so seven homepage slots cost one query, not seven. The cache
+		// is only consulted for untargeted lookups — a category-specific one
+		// has to ask, because the primed set is not filtered by category.
+		if ($category_id === NULL && self::$ad_slot_cache !== null && array_key_exists($slot_key, self::$ad_slot_cache)) {
 			$live = self::$ad_slot_cache[$slot_key]['ads'];
 			if (!$live) return null;
 			return $live[array_rand($live)];
@@ -6031,15 +6147,33 @@ class Usermodel extends CI_Model
 		if (!$this->db->table_exists('ads')) return null;
 		if (!$this->db->field_exists('slot_key', 'ads_prices')) return null;
 
+		$targeted = $category_id !== NULL && $this->db->field_exists('category_id', 'ads');
+
 		$today = date('Y-m-d H:i:s');
-		return $this->db
+		$this->db
 			->select('a.id, a.ad_photo, a.ad_link, ap.size, ap.slot_key')
 			->from('ads a')
 			->join('ads_prices ap', 'ap.id = a.ads_price_id', 'inner')
 			->where('ap.slot_key', $slot_key)
 			->where('a.ad_status', 1)
 			->where('a.ad_start_date <=', $today)
-			->where('a.ad_end_date >=',   $today)
+			->where('a.ad_end_date >=',   $today);
+
+		if ($targeted) {
+			// This category, or no category at all.
+			$this->db->group_start()
+				->where('a.category_id', $category_id)
+				->or_where('a.category_id IS NULL', NULL, FALSE)
+				->group_end();
+			// A booking for this category outranks the general one.
+			$this->db->order_by('a.category_id IS NULL', '', FALSE);
+		} elseif ($this->db->field_exists('category_id', 'ads')) {
+			// No category in play, so only untargeted bookings may run —
+			// otherwise the Restaurants banner would show on the homepage.
+			$this->db->where('a.category_id IS NULL', NULL, FALSE);
+		}
+
+		return $this->db
 			->order_by('RAND()', '', false)
 			->limit(1)
 			->get()

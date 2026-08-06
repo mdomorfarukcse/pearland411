@@ -989,10 +989,14 @@ class Admin extends CI_Controller
 			$total_rows = $this->adminmodel->countAllListingSubCategory();
 
 			// Pagination Configuration
+			// 100 per page, matching all_listing_category(): sub-categories are
+			// few, the inline search in admin-table.js only sees the rows the
+			// server sent, and the view asks for data-page-size="0" so the whole
+			// page is visible at once. Bulk delete ticks what you can see.
 			$config = [
 				'base_url'         => base_url('admin/all_listing_sub_category'),
 				'total_rows'       => $total_rows,
-				'per_page'         => 10,
+				'per_page'         => 100,
 				'uri_segment'      => 3,
 				'use_page_numbers' => TRUE,
 				'num_links'        => 3,
@@ -1150,6 +1154,8 @@ class Admin extends CI_Controller
 		if (!empty($this->input->post('category_id'))) {
 			$category_id = $this->input->post('category_id');
 			$data['sub_categories'] = $this->adminmodel->ListingSubCategoryByCateId($category_id);
+			// What is already ticked, so switching category does not wipe it.
+			$data['selected'] = array_map('intval', (array) $this->input->post('selected'));
 			$this->load->view('admin/get_sub_categories', $data);
 		}
 	}
@@ -1158,11 +1164,17 @@ class Admin extends CI_Controller
 	=====================*/
 	public function all_listings()
 	{
+		// ?q= searches every listing in SQL. The box above this table used to be
+		// a browser-side filter over the ten rows the server had already sent,
+		// so a business on page four could not be found by typing its name.
+		$q = trim((string) $this->input->get('q', TRUE));
+
 		$config = [
 			'base_url' => base_url('admin/all_listings'),
 			'per_page' => 10,
-			'total_rows' => count($this->adminmodel->getAllListings(NULL, NULL)),
+			'total_rows' => $this->adminmodel->countAdminListings($q),
 			'uri_segment' => 3,
+			'reuse_query_string' => TRUE,
 		];
 
 		$config['full_tag_open'] = '<ul class="pagination">';
@@ -1185,8 +1197,10 @@ class Admin extends CI_Controller
 		$this->pagination->initialize($config);
 
 		$page = ($this->uri->segment(3)) ? $this->uri->segment(3) : 0;
-		$data['AllListings']   = $this->adminmodel->getAllListings($config['per_page'], $page);
+		$data['AllListings']   = $this->adminmodel->getAllListings($config['per_page'], $page, $q);
 		$data['start_number'] = $page + 1;
+		$data['search_query'] = $q;
+		$data['total_rows']   = $config['total_rows'];
 
 		// Collect listing IDs and get their view counts via the new reusable model method
 		$listing_ids = array();
@@ -1245,29 +1259,33 @@ class Admin extends CI_Controller
 	{
 		$data['categories'] 	= $this->usermodel->getAllValues('listing_categories');
 		$data['users'] 		  	= $this->adminmodel->getActiveUsersForDropdown();
-		if (!empty($this->input->post('user_id'))) {
-			// Debug: Log form submission
-			error_log("Form submitted with user_id: " . $this->input->post('user_id'));
-			error_log("Files uploaded: " . print_r($_FILES, true));
-
-			// Temporary: Skip validation to focus on upload logic
-			$skip_validation = isset($_POST['listing_name']) && !empty($_POST['listing_name']);
-
-			if (!$skip_validation && $this->form_validation->run('admin_listing_scratch') == FALSE) {
-				error_log("Form validation failed");
+		// Every POST goes through validation. This used to be gated on a
+		// non-empty user_id, so submitting with no user selected fell straight
+		// through to the render at the bottom: the form came back blank, with
+		// no error and no listing created, which is what "the Submit Listing
+		// button does nothing" was. user_id is a required rule, so an empty one
+		// is now reported like any other missing field.
+		if ($this->input->method(TRUE) === 'POST') {
+			if ($this->form_validation->run('admin_listing_scratch') == FALSE) {
 				$this->load->view('admin/header', $data);
 				$this->load->view('admin/add_new_listings_start');
 				$this->load->view('admin/footer');
+				return;
 			} else {
-				error_log("Processing listing (validation " . ($skip_validation ? "skipped" : "passed") . ")");
-				$listing_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('listing_name'));
+				// Two businesses with the same name produced the same slug, and
+				// both the delete and the restore paths key on the slug — so one
+				// delete took out both rows. Same helper the CSV importer uses.
+				$listing_slug = $this->makeUniqueListingSlug($this->input->post('listing_name'));
 				$info = array(
 					'user_id' => $this->input->post('user_id'),
 					'listing_name' => $this->input->post('listing_name'),
 					'featured_listing' => $this->input->post('featured_listing'),
 					'spotlight_listing' => $this->input->post('spotlight_listing'),
 					'category_id' => $this->input->post('category_id'),
-					'sub_category_id' => $this->input->post('sub_category_id'),
+					// First of the selected sub-categories. The full set goes into
+					// listing_sub_category_map after the write; this column is kept
+					// in step so the readers that still use it keep working.
+					'sub_category_id' => ($__subs = $this->postedSubCategoryIds()) ? $__subs[0] : NULL,
 					'listing_mobile' => $this->input->post('listing_mobile'),
 					'listing_whatsapp' => $this->input->post('listing_whatsapp'),
 					'display_phone' => $this->input->post('display_phone'),
@@ -1286,7 +1304,13 @@ class Admin extends CI_Controller
 					'listing_seo_title' => $this->input->post('listing_seo_title'),
 					'listing_seo_keywords' => $this->input->post('listing_seo_keywords'),
 					'listing_seo_description' => $this->input->post('listing_seo_description'),
-					'listing_slug' => $listing_slug
+					'listing_slug' => $listing_slug,
+					// Publish it. The column's default is the unpublished value,
+					// so a listing added here used to save successfully and then
+					// be invisible to every public query — the same defect
+					// 0020_listing_status_normalise.sql fixed for the CSV import,
+					// which is why import_listings() writes this explicitly too.
+					'listing_status' => 1
 				);
 
 				// Auto-generate Google Map embed URL from lat/lng
@@ -1310,14 +1334,8 @@ class Admin extends CI_Controller
 					$gallery_images = [];
 					$files_count = count($_FILES['listing_image_gallery']['name']);
 
-					// Debug: Log gallery upload attempt
-					error_log("Gallery upload attempt - Files count: " . $files_count);
-
 					for ($i = 0; $i < $files_count; $i++) {
 						if (!empty($_FILES['listing_image_gallery']['name'][$i])) {
-							// Debug: Log each file
-							error_log("Processing gallery file: " . $_FILES['listing_image_gallery']['name'][$i]);
-
 							// Create temporary file array for each image
 							$_FILES['gallery_temp'] = array(
 								'name' => $_FILES['listing_image_gallery']['name'][$i],
@@ -1337,26 +1355,22 @@ class Admin extends CI_Controller
 							if ($uploaded_image) {
 								// Store path with assets prefix like logo image
 								$gallery_images[] = 'assets/images/listings/' . basename($uploaded_image);
-								error_log("Gallery image uploaded: " . $uploaded_image);
-							} else {
-								error_log("Gallery image upload failed for: " . $_FILES['listing_image_gallery']['name'][$i]);
 							}
 						}
 					}
 					if (!empty($gallery_images)) {
 						$info['listing_image_gallery'] = json_encode($gallery_images);
-						error_log("Gallery images stored in DB: " . $info['listing_image_gallery']);
-					} else {
-						error_log("No gallery images to store");
 					}
-				} else {
-					error_log("No gallery files detected in upload");
 				}
 
 				if ($this->adminmodel->addListing($info)) {
-					$this->session->set_flashdata('message', 'Lisitng Added Successfully.');
+					$this->adminmodel->saveListingSubCategories($this->db->insert_id(), $this->postedSubCategoryIds());
+					$this->session->set_flashdata('message', 'Listing added successfully.');
 					redirect('admin/all_listings', 'refresh');
 				} else {
+					// Say why. This used to redirect with no flashdata at all, so a
+					// rejected insert looked exactly like the button doing nothing.
+					$this->session->set_flashdata('error', 'Could not save the listing. ' . $this->adminmodel->lastDbError());
 					redirect('admin/add_listing_scratch', 'refresh');
 				}
 			}
@@ -1745,6 +1759,23 @@ class Admin extends CI_Controller
 		return $this->db->count_all_results() > 0;
 	}
 
+	/**
+	 * The sub-category ids posted by the admin listing forms.
+	 *
+	 * The field is `sub_category_id[]` now — a listing may sit under several.
+	 * Returns ints, de-duplicated, empties dropped.
+	 *
+	 * @return int[]
+	 */
+	private function postedSubCategoryIds()
+	{
+		$ids = $this->input->post('sub_category_id');
+		if (!is_array($ids)) {
+			$ids = ($ids === NULL || $ids === '') ? array() : array($ids);
+		}
+		return array_values(array_unique(array_filter(array_map('intval', $ids))));
+	}
+
 	private function makeUniqueListingSlug($name)
 	{
 		$base = preg_replace('/[^A-Za-z0-9-]+/', '-', $name);
@@ -1756,6 +1787,38 @@ class Admin extends CI_Controller
 		$slug = $base;
 		$suffix = 1;
 		while ($this->adminmodel->listingSlugExists($slug)) {
+			$suffix++;
+			$slug = $base . '-' . $suffix;
+		}
+		return $slug;
+	}
+
+	/**
+	 * A slug for $title that no row in $table.$column already holds.
+	 *
+	 * Two articles with the same headline produced the same slug. Where the
+	 * column is unique that made the second INSERT fail — and the controller
+	 * reported a flat "Adding News Failed!!" with no reason, which is what
+	 * "cannot add more news" looks like from the admin's side. Where it is not
+	 * unique it is worse but quieter: every lookup is
+	 * getSingleValue($slug, …), so the second article is unreachable and edits
+	 * meant for it land on the first.
+	 *
+	 * @param string      $title
+	 * @param string      $table
+	 * @param string      $column
+	 * @param string|null $fallback Used when the title slugs to nothing.
+	 */
+	private function makeUniqueContentSlug($title, $table, $column, $fallback = 'post')
+	{
+		$base = pearland_slug($title);
+		if ($base === '') {
+			$base = $fallback;
+		}
+
+		$slug = $base;
+		$suffix = 1;
+		while ($this->adminmodel->slugExists($table, $column, $slug)) {
 			$suffix++;
 			$slug = $base . '-' . $suffix;
 		}
@@ -1779,18 +1842,21 @@ class Admin extends CI_Controller
 			return;
 		}
 
-		if (!empty($data['listing']->category_id)) {
-			$data['sub_category_listing'] = $this->adminmodel->ListingSubCategoryByCateId($data['listing']->category_id);
-		}
+		// Load the sub-category list unconditionally. Guarded on category_id, a
+		// listing with no category rendered the select with zero options — not
+		// even the placeholder — and the AJAX that fills it only fires onChange.
+		$data['sub_category_listing'] = !empty($data['listing']->category_id)
+			? $this->adminmodel->ListingSubCategoryByCateId($data['listing']->category_id)
+			: array();
+
+		// Every sub-category attached to this listing (migration 0023).
+		$data['listing_sub_categories'] = $this->adminmodel->listingSubCategoryIds($data['listing']->listing_id);
 
 		if ($this->form_validation->run('admin_listing_scratch') == FALSE) {
-			error_log("EDIT Form validation failed");
 			$this->load->view('admin/header', $data);
 			$this->load->view('admin/edit_listings');
 			$this->load->view('admin/footer');
 		} else {
-			error_log("EDIT Form validation passed, processing listing update");
-			error_log("EDIT Files uploaded: " . print_r($_FILES, true));
 			$listing_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('listing_name'));
 			$info = array(
 				'user_id' => $this->input->post('user_id'),
@@ -1798,7 +1864,10 @@ class Admin extends CI_Controller
 				'featured_listing' => $this->input->post('featured_listing'),
 				'spotlight_listing' => $this->input->post('spotlight_listing'),
 				'category_id' => $this->input->post('category_id'),
-				'sub_category_id' => $this->input->post('sub_category_id'),
+				// First of the selected sub-categories. The full set goes into
+					// listing_sub_category_map after the write; this column is kept
+					// in step so the readers that still use it keep working.
+					'sub_category_id' => ($__subs = $this->postedSubCategoryIds()) ? $__subs[0] : NULL,
 				'listing_mobile' => $this->input->post('listing_mobile'),
 				'listing_whatsapp' => $this->input->post('listing_whatsapp'),
 				'display_phone' => $this->input->post('display_phone'),
@@ -1836,19 +1905,25 @@ class Admin extends CI_Controller
 				$info['listing_image'] = uploadWithoutResize($img_info);
 			}
 
-			// Handle Gallery Images Upload for Edit
+			// Gallery: keep what is already there, drop what was ticked for
+			// removal, append what was just uploaded.
+			//
+			// This block used to build a fresh array from the POST alone and
+			// json_encode it over the column, never reading the stored value —
+			// so adding one photograph deleted every photograph already on the
+			// listing, and there was no way to remove a single image because the
+			// only way to change the gallery at all was to replace all of it.
+			$existing_gallery = listing_gallery_paths($data['listing']->listing_image_gallery ?? null);
+			$remove_gallery   = (array) $this->input->post('remove_gallery');
+			$kept_gallery     = array_values(array_diff($existing_gallery, $remove_gallery));
+			$gallery_changed  = (count($kept_gallery) !== count($existing_gallery));
+
 			if ($_FILES && isset($_FILES['listing_image_gallery']['name'][0]) && !empty($_FILES['listing_image_gallery']['name'][0])) {
 				$gallery_images = [];
 				$files_count = count($_FILES['listing_image_gallery']['name']);
 
-				// Debug: Log gallery upload attempt for edit
-				error_log("EDIT Gallery upload attempt - Files count: " . $files_count);
-
 				for ($i = 0; $i < $files_count; $i++) {
 					if (!empty($_FILES['listing_image_gallery']['name'][$i])) {
-						// Debug: Log each file
-						error_log("EDIT Processing gallery file: " . $_FILES['listing_image_gallery']['name'][$i]);
-
 						// Create temporary file array for each image
 						$_FILES['gallery_temp'] = array(
 							'name' => $_FILES['listing_image_gallery']['name'][$i],
@@ -1868,27 +1943,26 @@ class Admin extends CI_Controller
 						if ($uploaded_image) {
 							// Store path with assets prefix like logo image
 							$gallery_images[] = 'assets/images/listings/' . basename($uploaded_image);
-							error_log("EDIT Gallery image uploaded: " . $uploaded_image);
-						} else {
-							error_log("EDIT Gallery image upload failed for: " . $_FILES['listing_image_gallery']['name'][$i]);
 						}
 					}
 				}
 				if (!empty($gallery_images)) {
-					$info['listing_image_gallery'] = json_encode($gallery_images);
-					error_log("EDIT Gallery images stored in DB: " . $info['listing_image_gallery']);
-				} else {
-					error_log("EDIT No gallery images to store");
+					$kept_gallery    = array_merge($kept_gallery, $gallery_images);
+					$gallery_changed = TRUE;
 				}
-			} else {
-				error_log("EDIT No gallery files detected in upload");
+			}
+
+			if ($gallery_changed) {
+				$info['listing_image_gallery'] = empty($kept_gallery) ? NULL : json_encode(array_values($kept_gallery));
 			}
 
 			if ($this->adminmodel->update($slug, $info, 'listing_slug', 'listings')) {
-				$this->session->set_flashdata('message', 'Lisitng Updated Successfully.');
+				$this->adminmodel->saveListingSubCategories($data['listing']->listing_id, $this->postedSubCategoryIds());
+				$this->session->set_flashdata('message', 'Listing updated successfully.');
 				redirect('admin/all-listings');
 			} else {
-				redirect('admin/edit-listing');
+				$this->session->set_flashdata('error', 'Could not update the listing. ' . $this->adminmodel->lastDbError());
+				redirect('admin/edit-listing/' . rawurlencode((string) $slug));
 			}
 		}
 	}
@@ -2054,33 +2128,45 @@ class Admin extends CI_Controller
 	/*=================== 
     	Restore Listing 
 	===================*/
-	public function restore_listing($listing_slug)
+	public function restore_listing($listing_id = NULL)
 	{
-		$listings = $this->adminmodel->getSingleValue($listing_slug, 'listing_slug', 'listings');
-
-		$listings->is_deleted 	= 0;
-		$listings->deleted_date = date('Y-m-d H:i:s');
-
-		if ($this->adminmodel->update($listing_slug, $listings, 'listing_slug', 'listings')) {
-			$this->session->set_flashdata('message', 'Successfully Listing Restored!!');
+		// Restore used to read the whole row, set two properties on it and write
+		// every column back keyed on the slug. Three ways that 500'd: a slug that
+		// matched nothing returned NULL and setting a property on NULL is fatal
+		// in PHP 8; a trashed row with an empty slug called this with no argument
+		// at all; and the write included `deleted_date`, a column nothing else in
+		// the application creates or writes. Now it is an id and two columns.
+		if ($listing_id === NULL || !ctype_digit((string) $listing_id)) {
+			$this->session->set_flashdata('error', 'That listing could not be identified, so nothing was restored.');
 			redirect('admin/trash-listing', 'refresh');
-		} else {
-			$this->session->set_flashdata('message', 'Listing Restore Failed!!');
-			redirect('admin/trash-listing', 'refresh');
+			return;
 		}
+
+		if ($this->adminmodel->restoreListing($listing_id)) {
+			$this->session->set_flashdata('message', 'Listing restored.');
+		} else {
+			$this->session->set_flashdata('error', 'Could not restore that listing. ' . $this->adminmodel->lastDbError());
+		}
+		redirect('admin/trash-listing', 'refresh');
 	}
 
 	/*===============================
 		Listing Delete Permanently
 	=================================*/
 
-	public function listing_delete($slug)
+	public function listing_delete($listing_id = NULL)
 	{
-		if ($this->adminmodel->permanentDeleteListing($slug)) {
-			$this->session->set_flashdata('message', 'Successfully Removed Listing!!');
+		if ($listing_id === NULL || !ctype_digit((string) $listing_id)) {
+			$this->session->set_flashdata('error', 'That listing could not be identified, so nothing was removed.');
+			redirect('admin/trash-listing', 'refresh');
+			return;
+		}
+
+		if ($this->adminmodel->permanentDeleteListing($listing_id)) {
+			$this->session->set_flashdata('message', 'Listing permanently removed.');
 			redirect('admin/trash-listing');
 		} else {
-			$this->session->set_flashdata('message', 'Listing Remove Failed!!');
+			$this->session->set_flashdata('error', 'Could not remove that listing. ' . $this->adminmodel->lastDbError());
 			redirect('admin/trash-listing', 'refresh');
 		}
 	}
@@ -2088,13 +2174,19 @@ class Admin extends CI_Controller
 	/*====================
 		Delete Listing (Soft Delete - Move to Trash)
 	=====================*/
-	public function delete_listing($slug)
+	public function delete_listing($listing_id = NULL)
 	{
-		if ($this->adminmodel->softDeleteListing($slug)) {
+		if ($listing_id === NULL || !ctype_digit((string) $listing_id)) {
+			$this->session->set_flashdata('error', 'That listing could not be identified, so nothing was deleted.');
+			redirect('admin/all-listings', 'refresh');
+			return;
+		}
+
+		if ($this->adminmodel->softDeleteListing($listing_id)) {
 			$this->session->set_flashdata('message', 'Listing successfully moved to trash!');
 			redirect('admin/all-listings');
 		} else {
-			$this->session->set_flashdata('message', 'Failed to delete listing!');
+			$this->session->set_flashdata('error', 'Failed to delete listing. ' . $this->adminmodel->lastDbError());
 			redirect('admin/all-listings', 'refresh');
 		}
 	}
@@ -2849,11 +2941,10 @@ class Admin extends CI_Controller
 			$this->load->view('admin/add_new_blogs');
 			$this->load->view('admin/footer');
 		} else {
-			$isenquiry = htmlentities($this->input->post('isenquiry'), ENT_QUOTES) == 'on' ? 1 : 0;
-			$blog_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('blog_name'));
+			$isenquiry = $this->input->post('isenquiry') == 'on' ? 1 : 0;
+			$blog_slug = $this->makeUniqueContentSlug($this->input->post('blog_name'), 'blogs', 'blog_slug', 'post');
 			$info = array(
-				// 'blog_id'			=> htmlentities($this->input->post('blog_id'), ENT_QUOTES),
-				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
+				'user_id'			=> $this->input->post('user_id'),
 				// Stored as typed. These used to go through htmlentities(), which
 				// encoded the editor's markup — so the column held
 				// "&lt;p&gt;…" and, since every read escapes again on output,
@@ -2887,7 +2978,11 @@ class Admin extends CI_Controller
 				$this->session->set_flashdata('message', 'Successfully Added Blog!!');
 				redirect('admin/blog-list');
 			} else {
-				$this->session->set_flashdata('message', 'Adding Blog Failed!!');
+				$this->session->set_flashdata('error', 'Could not save the blog post. ' . $this->adminmodel->lastDbError());
+				// Redirect, don't fall through. These branches used to set the
+				// message and then end the request with no view loaded at all —
+				// a blank white page, nothing saved, no explanation.
+				redirect('admin/blog-list');
 			}
 		}
 	}
@@ -2910,16 +3005,21 @@ class Admin extends CI_Controller
 			$this->load->view('admin/user_edit_blog');
 			$this->load->view('admin/footer');
 		} else {
-			$isenquiry = htmlentities($this->input->post('isenquiry'), ENT_QUOTES) == 'on' ? 1 : 0;
-			$blog_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('blog_name'));
+			$isenquiry = $this->input->post('isenquiry') == 'on' ? 1 : 0;
+			// The slug is NOT regenerated. It is this post's permalink, and the
+			// URL of the page the admin is standing on. Rewriting it from the
+			// title on every save meant that saving once changed the address,
+			// so going back to the bookmarked edit URL hit "Blog not found." —
+			// which is what "the date is not updated, where can I change it?"
+			// looked like from the outside. It also escalated: a title holding
+			// an encoded apostrophe produced "America-039-s", then
+			// "America-amp-039-s" the next time round.
 			$info = array(
-				'blog_id'			=> htmlentities($this->input->post('blog_id'), ENT_QUOTES),
-				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
+				'user_id'			=> $this->input->post('user_id'),
 				// Stored as typed — see the note in add_blog().
 				'blog_name'    		=> $this->input->post('blog_name'),
 				'blog_description'  => $this->input->post('blog_description'),
 				'isenquiry'         => $isenquiry,
-				'blog_slug'			=> $blog_slug
 			);
 
 			// Publish date is editable here — posts that predate this field
@@ -3077,16 +3177,22 @@ class Admin extends CI_Controller
 			$this->load->view('admin/add_new_news');
 			$this->load->view('admin/footer');
 		} else {
-			$news_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('news_title'));
+			$news_slug = $this->makeUniqueContentSlug($this->input->post('news_title'), 'news', 'news_slug', 'news');
 			$info = array(
-				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'news_title'    	=> htmlentities($this->input->post('news_title'), ENT_QUOTES),
-				'news_description'  => htmlentities($this->input->post('news_description'), ENT_QUOTES),
-				'news_category_id'  => htmlentities($this->input->post('news_category_id'), ENT_QUOTES),
-				'news_seo_title'  	=> htmlentities($this->input->post('news_seo_title'), ENT_QUOTES),
-				'news_seo_description' => htmlentities($this->input->post('news_seo_description'), ENT_QUOTES),
-				'news_seo_keywords' => htmlentities($this->input->post('news_seo_keywords'), ENT_QUOTES),
-				'featured_news'  	=> htmlentities($this->input->post('featured_news'), ENT_QUOTES),
+				'user_id'			=> $this->input->post('user_id'),
+				// Stored as typed, like the blog paths and like events. These used
+				// to go through htmlentities(), so the column held "&lt;p&gt;…"
+				// rather than markup — and because every read escapes again on
+				// output, the reader saw a literal "<p>" on the News page. The
+				// title had the same treatment, which is why an apostrophe showed
+				// up as "&#039;".
+				'news_title'    	=> $this->input->post('news_title'),
+				'news_description'  => $this->input->post('news_description'),
+				'news_category_id'  => $this->input->post('news_category_id'),
+				'news_seo_title'  	=> $this->input->post('news_seo_title'),
+				'news_seo_description' => $this->input->post('news_seo_description'),
+				'news_seo_keywords' => $this->input->post('news_seo_keywords'),
+				'featured_news'  	=> $this->input->post('featured_news'),
 				'news_slug'			=> $news_slug
 			);
 
@@ -3105,7 +3211,11 @@ class Admin extends CI_Controller
 				$this->session->set_flashdata('message', 'Successfully Added News!!');
 				redirect('admin/news-list');
 			} else {
-				$this->session->set_flashdata('message', 'Adding News Failed!!');
+				$this->session->set_flashdata('error', 'Could not save the news article. ' . $this->adminmodel->lastDbError());
+				// Redirect, don't fall through. These branches used to set the
+				// message and then end the request with no view loaded at all —
+				// a blank white page, nothing saved, no explanation.
+				redirect('admin/news-list');
 			}
 		}
 	}
@@ -3129,15 +3239,18 @@ class Admin extends CI_Controller
 			$this->load->view('admin/user_edit_news', $data);
 			$this->load->view('admin/footer');
 		} else {
+			// Stored as typed — see the note in add_news(). The slug is
+			// deliberately NOT regenerated here: it is this article's permalink,
+			// and rewriting it on every save broke the admin's own edit URL.
 			$info = array(
-				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'news_title'    		=> htmlentities($this->input->post('news_title'), ENT_QUOTES),
-				'news_description'  => htmlentities($this->input->post('news_description'), ENT_QUOTES),
-				'news_category_id'  => htmlentities($this->input->post('news_category_id'), ENT_QUOTES),
-				'news_seo_title'  => htmlentities($this->input->post('news_seo_title'), ENT_QUOTES),
-				'news_seo_description'  => htmlentities($this->input->post('news_seo_description'), ENT_QUOTES),
-				'news_seo_keywords'  => htmlentities($this->input->post('news_seo_keywords'), ENT_QUOTES),
-				'featured_news'  => htmlentities($this->input->post('featured_news'), ENT_QUOTES)
+				'user_id'			=> $this->input->post('user_id'),
+				'news_title'    		=> $this->input->post('news_title'),
+				'news_description'  => $this->input->post('news_description'),
+				'news_category_id'  => $this->input->post('news_category_id'),
+				'news_seo_title'  => $this->input->post('news_seo_title'),
+				'news_seo_description'  => $this->input->post('news_seo_description'),
+				'news_seo_keywords'  => $this->input->post('news_seo_keywords'),
+				'featured_news'  => $this->input->post('featured_news')
 			);
 
 			if ($_FILES && $_FILES['news_image']['name']) {
@@ -3439,12 +3552,19 @@ class Admin extends CI_Controller
 				$info['category_image'] = $old_image;
 			}
 
-			if ($this->adminmodel->updatemarketplaceCategory($slug, $info)) {
-				$this->session->set_flashdata('message', 'Successfully Updated Video Category!!');
+			// updateVideoCategory(), not updatemarketplaceCategory(). This used
+			// to call the marketplace one, which updates a different TABLE
+			// (marketplace_categories) on a different KEY (category_id, an INT,
+			// compared against a slug string that MySQL casts to 0). Nothing
+			// ever matched — but CI3's update() returns TRUE whenever the query
+			// runs, so renaming a video category reported "Successfully Updated"
+			// every time while the name never changed.
+			if ($this->adminmodel->updateVideoCategory($slug, $info)) {
+				$this->session->set_flashdata('message', 'Video category updated.');
 				redirect('admin/all_video_category', 'refresh');
 			} else {
-				$this->session->set_flashdata('message', 'Sorry, Update Video Category failed!!');
-				redirect('admin/edit_video_category', 'refresh');
+				$this->session->set_flashdata('error', 'Sorry, updating the video category failed. ' . $this->adminmodel->lastDbError());
+				redirect('admin/edit_video_category/' . rawurlencode((string) $slug), 'refresh');
 			}
 		}
 	}
@@ -3552,18 +3672,21 @@ class Admin extends CI_Controller
 			$this->load->view('admin/add_new_video');
 			$this->load->view('admin/footer');
 		} else {
-			$video_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('video_title'));
+			$video_slug = $this->makeUniqueContentSlug($this->input->post('video_title'), 'video', 'video_slug', 'video');
+			// Stored as typed — see the note in add_news(). video_code in
+			// particular must not be encoded: youtube_id() parses it, and an
+			// encoded "&" in a watch URL stops the id being found.
 			$info = array(
-				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'video_title'    		=> htmlentities($this->input->post('video_title'), ENT_QUOTES),
-				'video_code'    		=> htmlentities($this->input->post('video_code'), ENT_QUOTES),
-				'featured_video'    		=> htmlentities($this->input->post('featured_video'), ENT_QUOTES),
-				'video_description'  => htmlentities($this->input->post('video_description'), ENT_QUOTES),
-				'video_category_id'  => htmlentities($this->input->post('video_category_id'), ENT_QUOTES),
-				'video_seo_title'  => htmlentities($this->input->post('video_seo_title'), ENT_QUOTES),
-				'video_seo_description'  => htmlentities($this->input->post('video_seo_description'), ENT_QUOTES),
-				'video_seo_keywords'  => htmlentities($this->input->post('video_seo_keywords'), ENT_QUOTES),
-				'video_slug'  => htmlentities($video_slug, ENT_QUOTES)
+				'user_id'			=> $this->input->post('user_id'),
+				'video_title'    		=> $this->input->post('video_title'),
+				'video_code'    		=> $this->input->post('video_code'),
+				'featured_video'    		=> $this->input->post('featured_video'),
+				'video_description'  => $this->input->post('video_description'),
+				'video_category_id'  => $this->input->post('video_category_id'),
+				'video_seo_title'  => $this->input->post('video_seo_title'),
+				'video_seo_description'  => $this->input->post('video_seo_description'),
+				'video_seo_keywords'  => $this->input->post('video_seo_keywords'),
+				'video_slug'  => $video_slug
 			);
 
 			if ($_FILES && $_FILES['video_image']['name']) {
@@ -3579,7 +3702,11 @@ class Admin extends CI_Controller
 				$this->session->set_flashdata('message', 'Successfully Added Video!!');
 				redirect('admin/video-list');
 			} else {
-				$this->session->set_flashdata('message', 'Adding Video Failed!!');
+				$this->session->set_flashdata('error', 'Could not save the video. ' . $this->adminmodel->lastDbError());
+				// Redirect, don't fall through. These branches used to set the
+				// message and then end the request with no view loaded at all —
+				// a blank white page, nothing saved, no explanation.
+				redirect('admin/video-list');
 			}
 		}
 	}
@@ -3597,18 +3724,18 @@ class Admin extends CI_Controller
 			$this->load->view('admin/edit_video', $data);
 			$this->load->view('admin/footer');
 		} else {
-			$video_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('video_title'));
+			// Stored as typed — see the note in add_news(). The slug is not
+			// regenerated: it is this video's permalink.
 			$info = array(
-				'user_id'			=> htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'video_title'    		=> htmlentities($this->input->post('video_title'), ENT_QUOTES),
-				'video_code'    		=> htmlentities($this->input->post('video_code'), ENT_QUOTES),
-				'featured_video'    		=> htmlentities($this->input->post('featured_video'), ENT_QUOTES),
-				'video_description'  => htmlentities($this->input->post('video_description'), ENT_QUOTES),
-				'video_category_id'  => htmlentities($this->input->post('video_category_id'), ENT_QUOTES),
-				'video_seo_title'  => htmlentities($this->input->post('video_seo_title'), ENT_QUOTES),
-				'video_seo_description'  => htmlentities($this->input->post('video_seo_description'), ENT_QUOTES),
-				'video_seo_keywords'  => htmlentities($this->input->post('video_seo_keywords'), ENT_QUOTES),
-				'video_slug'  => htmlentities($video_slug, ENT_QUOTES)
+				'user_id'			=> $this->input->post('user_id'),
+				'video_title'    		=> $this->input->post('video_title'),
+				'video_code'    		=> $this->input->post('video_code'),
+				'featured_video'    		=> $this->input->post('featured_video'),
+				'video_description'  => $this->input->post('video_description'),
+				'video_category_id'  => $this->input->post('video_category_id'),
+				'video_seo_title'  => $this->input->post('video_seo_title'),
+				'video_seo_description'  => $this->input->post('video_seo_description'),
+				'video_seo_keywords'  => $this->input->post('video_seo_keywords')
 			);
 
 			if ($_FILES && $_FILES['video_image']['name']) {
@@ -4090,6 +4217,13 @@ class Admin extends CI_Controller
 	public function edit_marketplace_category($slug)
 	{
 		$data['category'] = $this->adminmodel->getSingleValue($slug, 'category_slug', 'marketplace_categories');
+		if (empty($data['category'])) {
+			// getSingleValue() returns NULL on a miss, and reading a property
+			// off NULL is fatal in PHP 8.
+			$this->session->set_flashdata('error', 'Marketplace category not found.');
+			redirect('admin/all_marketplace_category');
+			return;
+		}
 		$old_image        = $data['category']->category_image;
 
 		$this->form_validation->set_rules('category_name', 'Category Name', 'trim|required');
@@ -4871,7 +5005,7 @@ class Admin extends CI_Controller
 				$this->session->set_flashdata('message', 'Successfully Added Event!!');
 				redirect('admin/all-events');
 			} else {
-				$this->session->set_flashdata('message', 'Adding Event Failed!!');
+				$this->session->set_flashdata('error', 'Could not save the event. ' . $this->adminmodel->lastDbError());
 				redirect('admin/add-new-event');
 			}
 		}
@@ -5361,6 +5495,9 @@ class Admin extends CI_Controller
 
 		$data['users'] 		= $this->adminmodel->getAllValues('user');
 		$data['adsPrices'] 	= $this->adminmodel->allAdsPrices();
+		// Category targeting (migration 0024): an ad may be booked for one
+		// listing category, or left open to run in its slot everywhere.
+		$data['adCategories'] = $this->usermodel->getAllValues('listing_categories');
 
 		$this->form_validation->set_rules('user_id', 'User', 'trim|required');
 		$this->form_validation->set_rules('ads_price_id', 'Ads Position', 'trim|required');
@@ -5376,9 +5513,15 @@ class Admin extends CI_Controller
 			$this->load->view('admin/create_ads');
 			$this->load->view('admin/footer');
 		} else {
+			// Blank means "run everywhere in this slot", which is how every ad
+			// booked before 0024 behaves.
+			$ad_category = $this->input->post('category_id');
+			$ad_category = ($ad_category === NULL || $ad_category === '') ? NULL : (int) $ad_category;
+
 			$info = array(
-				'u_id'            => htmlentities($this->input->post('user_id'), ENT_QUOTES),
-				'ads_price_id'    => htmlentities($this->input->post('ads_price_id'), ENT_QUOTES),
+				'u_id'            => $this->input->post('user_id'),
+				'ads_price_id'    => $this->input->post('ads_price_id'),
+				'category_id'     => $ad_category,
 				'ad_start_date'   => date('Y-m-d h:i:s', strtotime($this->input->post('ad_start_date'))),
 				'ad_end_date'     => date('Y-m-d h:i:s', strtotime($this->input->post('ad_end_date'))),
 				'ad_link'         => htmlentities($this->input->post('ad_link'), ENT_QUOTES),

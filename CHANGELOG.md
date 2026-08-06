@@ -6,6 +6,154 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-05 — The manager's error tracker, worked through end to end
+
+47 findings from `PEARLAND411_PROJECT_TRACKER.pdf`, recorded by Angel and
+Monette over the life of the project. Every row was re-verified against the
+code rather than taken from the tracker's own STATUS column, which turned out
+to be wrong in both directions: row 9 is marked **Fixed** and was never
+possible, and rows 29/40 are marked open but had been fixed and simply not
+deployed.
+
+### Fixed — data loss and launch blockers
+
+- **A new business listing could not be submitted** (row 44). Three independent
+  causes. The Featured and Spotlight checkboxes carried `required` while
+  sitting on step 1, which the multistep JS hides by the time you reach Submit
+  on step 3 — unticking either made the browser abort the submit and say
+  nothing, because it cannot focus an invalid control inside a `display:none`
+  container. The save path was gated on a non-empty `user_id`, so a submit
+  without one fell through to a blank re-render. And a rejected INSERT
+  redirected with no flashdata, which with `db_debug` off is indistinguishable
+  from a dead button.
+- **Deleting one duplicate deleted the original too** (row 45). Both delete
+  paths keyed on `listing_slug`, which is not unique — the slug is derived from
+  the business name with no uniqueness pass. Permanent delete was worse: it
+  removed every row sharing the slug and unlinked the image they had in common.
+  Deletes and restore key on `listing_id` now, and new listings go through the
+  `makeUniqueListingSlug()` that until now only the CSV importer used.
+- **Restore returned HTTP 500** (row 46). It wrote `listings.deleted_date`, a
+  column that appeared exactly once in the whole application — on that line.
+  Migration `0022` creates it; the soft delete sets it and restore clears it.
+- **Adding a gallery image wiped the gallery** (row 20) and **there was no way
+  to remove one** (row 19). The update path never read the stored JSON before
+  overwriting it. It merges now, and the edit form grew a Remove tickbox per
+  image.
+- **Multi-image upload saved one image** (row 43). CI3's loader ignores a second
+  `load->library()` for a class it already holds, so `image_lib` kept the first
+  file's paths for every subsequent image. All three upload helpers call
+  `initialize()` per file.
+
+### Fixed — content
+
+- **HTML tags shown as plain text on News and Videos** (rows 26, 47). The admin
+  write paths ran the editor body through `htmlentities()`, so the column held
+  `&lt;p&gt;`; every read escapes again on output. Titles too, which is why an
+  apostrophe surfaced as `&#039;`. Stored as typed now, like events and like the
+  blog paths fixed in the previous entry. Existing rows: `php index.php cli
+  decode_content_entities`.
+- **"Special characters are not allowed" and "the date is not updated"**
+  (rows 15, 40). One root cause: `edit_blog()` regenerated `blog_slug` from the
+  title on every save and then updated `WHERE blog_slug =` the *old* slug, so
+  saving once changed the post's address and the bookmarked edit URL 404'd.
+  Slugs are permalinks now. The six member-side generators replaced spaces and
+  nothing else, so an apostrophe or `&` went into the URL and CI3 answered *"The
+  URI you submitted has disallowed characters"* — they use `pearland_slug()`.
+- **The author picked in admin was discarded** (row 13). `Usermodel::add()`
+  overwrote `user_id` from `userdata('logged_user')`; an admin session carries
+  `logged_admin`, so it wrote NULL.
+- **Renaming a video category silently did nothing** (row 25). It called
+  `updatemarketplaceCategory()` — wrong table, wrong key — and CI3's `update()`
+  returns TRUE whenever the query runs, so every rename reported success. The
+  correct method existed and was dead code. The marketplace category edit had
+  the identical defect and is fixed too.
+- **"Cannot add more news / events"** (rows 12, 14). A failed save ended the
+  request with no view and no redirect — a blank page. Plus colliding slugs, and
+  `canUserAddContent()` treating a `0` limit as "none allowed" while every
+  dashboard reads `0` as unlimited.
+- **Event contact person, phone and email are optional** (row 17), as is the
+  banner image, which was `required` in markup with no server rule behind it.
+
+### Fixed — public site
+
+- **The enquiry form accepted anything and explained nothing** (row 32).
+  Server-side validation was `if (empty($name) || empty($email))`; a 10 MB
+  message was inserted verbatim. Proper rules now, keyed by field, and the
+  browser marks the offending box — the script read only `.success` and threw
+  the message away. A failed submit keeps what was typed.
+- **"Sports and Health" showed as "General"** (row 34). An unresolvable slug
+  returned the literal `'General'` over an empty list, which reads as a real but
+  empty section rather than a dead link.
+- **Search stopped at the first handful** (row 22). `globalSearch()` declared
+  `$limit`/`$offset` and ignored both, and `/search` had no pager at all.
+- **Login and registration** (row 27). The server accepted a six-character
+  password while the form promised eight. Real rules, a confirmation field, a
+  phone format and a honeypot. A CAPTCHA is the remaining gap — see below.
+- **Social links returned you to the homepage** (row 7). `site_setting()`
+  returns the stored string verbatim, so `www.facebook.com/x` is a *relative*
+  href. New `external_url()` adds the scheme and refuses `javascript:`.
+
+### Fixed — presentation
+
+- **The favicon was Google's** (row 24) — the theme's Google Maps pin, never
+  touched since the initial import. `scripts/generate_favicon.py` draws the
+  pear mark in brand colours; there is now a root `/favicon.ico` too.
+- **Double entry on the listing page** (row 33): the "Get a quote" modal held a
+  second, identical copy of the sidebar enquiry form.
+- **The logo was letterboxed** (row 38), **the About "second row" sat hard
+  left** (row 36), and **event cards did not line up** (row 21) — the card title
+  was unclamped while the excerpt below it was clamped to three lines.
+- Row 35 (Vision/Mission icon) and row 37 (spacing) adjusted by eye.
+
+### Added
+
+- **A listing can hold several sub-categories** (row 9). Never possible before:
+  `listings.sub_category_id` is one INT and there was no join table. Migration
+  `0023` adds `listing_sub_category_map`.
+- **Banners can be sold per category** (row 18), and the directory has a header
+  banner slot. Ads had one targeting dimension — the slot — so
+  `middle-banner-category` was a single global item shown on category pages, not
+  a banner sold per category. Migration `0024` adds `ads.category_id`.
+
+### Verified
+
+The presentation changes were rendered against the real stylesheets with
+Chromium and measured, not eyeballed: the About orphan row is centred at
+1440/1280/1024/768/390 with no horizontal overflow; the logo box overflows at
+no breakpoint and a wide mark now uses 94% of the available height rather than
+about 40%; event cards' meta lists and footers start at the same offset across
+a row of deliberately uneven content. `listing_gallery_paths()`, the gallery
+merge, the enquiry rules, the search limit clamp and `external_url()` were each
+exercised across their edge cases.
+
+### Not changed, deliberately
+
+- **Row 39, the featured icon.** Rendered, it is centred — 5.39px above the icon
+  against 5.41px below — and the `stars` ligature is present in
+  `assets/css/icon.woff2`, so it draws as a glyph rather than the letters of the
+  word. Needs a screenshot of what was actually seen.
+- **A CAPTCHA on registration.** Provider is a product decision.
+- Products and classifieds still store entity-encoded bodies. They are not in
+  the tracker and `content_text()` decodes them on the way out; converting them
+  belongs with the rest of that section's rebuild.
+
+### Key files
+
+`application/controllers/Admin.php`, `User.php`, `Cli.php`
+(`decode_content_entities`), `application/models/Adminmodel.php`,
+`Usermodel.php`, `application/helpers/view_helper.php` (`external_url()`,
+`listing_gallery_paths()`), `image_helper.php`,
+`application/config/form_validation.php`, `scripts/generate_favicon.py` (new),
+`assets/css/directory.css`, `content.css`, and the admin and public views for
+listings, events, news, videos, blogs, search, about and the directory.
+
+Migrations: `0022_listing_deleted_date.sql`, `0023_listing_subcategory_map.sql`,
+`0024_ads_category_target.sql` — all mirrored into
+`migrations_combined_phpmyadmin.sql`. Plus the one-off
+`php index.php cli decode_content_entities`.
+
+---
+
 ## 2026-08-05 — Blog detail page rebuilt, and `<p>` stops showing up in the text
 
 Two reports: the detail page rendered as a white page, and `<p>` and `&rsquo;`

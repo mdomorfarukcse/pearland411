@@ -629,3 +629,76 @@ if (!function_exists('us_date_ts')) {
         return ($ts === false || $ts <= 0) ? false : $ts;
     }
 }
+
+if (!function_exists('external_url')) {
+    /**
+     * An operator-supplied link, made safe to put in an href.
+     *
+     * Settings are stored verbatim, so a social URL saved as
+     * "www.facebook.com/pearland411" — which is how people type them — is a
+     * *relative* href. The browser resolves it against the current page and
+     * the visitor lands back on Pearland411. That is the reported "clicking
+     * the social media links returns you to the homepage": the links were
+     * there and pointed at the right place, they just had no scheme.
+     *
+     * Adds https:// when a scheme is missing, and returns '' for anything that
+     * is not an ordinary web link, so a stored "javascript:" can never reach an
+     * href.
+     *
+     * @param  mixed $url
+     * @return string '' when there is nothing safe to link to.
+     */
+    function external_url($url)
+    {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return '';
+        }
+
+        // Protocol-relative is already resolvable; give it a scheme anyway so
+        // the link works from a page served over http during setup.
+        if (strpos($url, '//') === 0) {
+            $url = 'https:' . $url;
+        }
+
+        if (preg_match('#^[a-z][a-z0-9+.\-]*:#i', $url)) {
+            $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+            if (!in_array($scheme, array('http', 'https', 'mailto', 'tel'), TRUE)) {
+                return '';
+            }
+            return $url;
+        }
+
+        return 'https://' . ltrim($url, '/');
+    }
+}
+
+if (!function_exists('listing_gallery_paths')) {
+    /**
+     * The gallery image paths stored on a listing, as a clean list.
+     *
+     * `listings.listing_image_gallery` holds a JSON array of paths. Four places
+     * decoded it by hand — the two admin views, the public listing page and the
+     * member's edit form — and the admin update path did not decode it at all,
+     * which is how adding one photograph wiped the rest of the gallery. One
+     * function so the read and the write agree on what the column contains.
+     *
+     * Returns [] for NULL, '', malformed JSON, or a JSON scalar.
+     *
+     * @param  mixed $value Raw column value.
+     * @return array<int,string>
+     */
+    function listing_gallery_paths($value)
+    {
+        if (empty($value)) {
+            return array();
+        }
+
+        $decoded = json_decode((string) $value, true);
+        if (!is_array($decoded)) {
+            return array();
+        }
+
+        return array_values(array_filter(array_map('trim', array_map('strval', $decoded)), 'strlen'));
+    }
+}

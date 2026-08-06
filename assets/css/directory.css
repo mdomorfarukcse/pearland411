@@ -1037,19 +1037,41 @@
 .p411-ld__hero > .container { position: relative; z-index: 2; padding-top: 28px; padding-bottom: 30px; }
 
 .p411-ld__ident { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+/*
+ * The logo box grows sideways for a wide logo instead of forcing every mark
+ * into a 104px square. `object-fit: contain` never cropped anything, but a
+ * landscape wordmark letterboxed down to a thin strip inside the square with
+ * empty white above and below it — visible in full, and far too small to read,
+ * which is what "the logo is not displayed in full" was describing. Height is
+ * still fixed so the hero row keeps its rhythm; width follows the artwork up to
+ * a limit, and a tall or square mark is unchanged.
+ */
 .p411-ld__logo {
 	flex: none;
-	width: 104px;
+	min-width: 104px;
+	max-width: 240px;
 	height: 104px;
 	border-radius: var(--p411-r);
 	background: #fff;
 	border: 3px solid rgba(255, 255, 255, .85);
 	overflow: hidden;
-	display: grid;
-	place-items: center;
+	/* Flex, not `display: grid; place-items: center`. A percentage height on a
+	   centred grid item has no definite height to resolve against, so the image
+	   below kept its intrinsic size and was simply clipped by overflow:hidden.
+	   A flex container with a fixed height gives `height: 100%` something real. */
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	box-shadow: 0 10px 26px rgba(10, 12, 34, .35);
 }
-.p411-ld__logo img { width: 100%; height: 100%; object-fit: contain; padding: 6px; }
+.p411-ld__logo img {
+	height: 100%;
+	width: auto;
+	max-width: 100%;
+	object-fit: contain;
+	padding: 6px;
+	box-sizing: border-box;
+}
 .p411-ld__head { flex: 1; min-width: 260px; color: #fff; }
 .p411-ld__head h1 {
 	color: #fff;
@@ -1331,7 +1353,9 @@
 	.p411-hero h1 { font-size: 25px; }
 	.p411-hero > .container { padding-top: 26px; padding-bottom: 26px; }
 	.p411-ld__head h1 { font-size: 22px; }
-	.p411-ld__logo { width: 78px; height: 78px; }
+	/* Height, min and max together — setting `width` alone would fight the
+	   min-width above and leave the box 104 wide and 78 tall. */
+	.p411-ld__logo { min-width: 78px; max-width: 180px; height: 78px; }
 	.p411-sec__head h2 { font-size: 19px; }
 	.p411-card { padding: 16px 14px; }
 	.p411-results { grid-template-columns: 1fr; }

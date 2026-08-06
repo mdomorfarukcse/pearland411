@@ -27,7 +27,7 @@
               <tr>
                 <th>No</th>
                 <th>Listing Name</th>
-                <th>Created Date</th>
+                <th>Category</th>
                 <th>Deleted Date</th>
                 <th>Created by</th>
                 <th>Edit</th>
@@ -49,8 +49,10 @@
                     <td>
                       <img src="<?= (empty($value->listing_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($value->listing_image) ?>"><?= $value->listing_name; ?><span><?= date('d, M Y', strtotime($value->created_at)); ?></span>
                     </td>
-                    <td><span class="db-list-rat"><?= $value->category_name ?></span></td>
-                    <td><span class="db-list-rat"><?= $value->postal_code ?></span></td>
+                    <td><span class="db-list-rat"><?= e($value->category_name ?? '') ?></span></td>
+                    <?php // Was postal_code under a "Deleted Date" heading. The column
+                          // it wanted is now written by softDeleteListing(). ?>
+                    <td><span class="db-list-rat"><?= e(us_date($value->deleted_date ?? null)) ?></span></td>
                     <td>
                       <span class="db-list-ststus"><?= $value->name; ?></span>
                     </td>
@@ -58,10 +60,10 @@
                       <a href="<?= base_url('admin/edit-listing/' . $value->listing_slug); ?>" class="db-list-edit">Edit</a>
                     </td>
                     <td>
-                      <a href="#" onclick="javascript:restoreConfirm('<?php echo base_url('admin/restore-listing/' . $value->listing_slug); ?>');" class="db-list-edit">Restore</a>
+                      <a href="#" onclick="javascript:restoreConfirm('<?php echo base_url('admin/restore-listing/' . (int) $value->listing_id); ?>');" class="db-list-edit">Restore</a>
                     </td>
                     <td>
-                      <a href="#" onclick="javascript:deleteConfirm('<?php echo base_url('admin/listing-delete/' . $value->listing_slug); ?>');" class="db-list-edit">Delete Permanently</a>
+                      <a href="#" onclick="javascript:deleteConfirm('<?php echo base_url('admin/listing-delete/' . (int) $value->listing_id); ?>');" class="db-list-edit">Delete Permanently</a>
                     </td>
                     <td>
                       <a href="<?= base_url('admin/listing-preview/' . $value->listing_slug); ?>" class="db-list-edit" target="_blank">Preview</a>
