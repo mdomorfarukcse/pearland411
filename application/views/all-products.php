@@ -41,6 +41,14 @@
 		</div>
 		<div class="container">
 			<div class="row">
+				<div class="col-12">
+					<div class="p411-adrow" style="margin-bottom:18px;">
+						<?php $slot = $ad_slots['top'] ?? '';
+						include APPPATH . 'views/partials/ad_slot.php'; ?>
+					</div>
+				</div>
+			</div>
+			<div class="row">
 				<div class="col-md-3 fil-mob-view">
 					<form id="productFilterForm" method="get" action="<?= base_url('all-products') ?>">
 						<div class="filt-com lhs-cate">
@@ -123,23 +131,28 @@
 							<a href="<?= base_url('all-products') ?>" class="btn btn-warning" style="padding: 5px 15px;">Clear Filter</a>
 						</div>
 					</form>
+					<?php
+					/*
+					 * Two real ad zones. What was here: <img src="images/ads/ads1.jpg">
+					 * — a path with no `assets/` prefix, so it 404'd on every request
+					 * — inside a link to the themeforest page the theme was bought
+					 * from. Two broken images advertising someone else's template.
+					 */
+					?>
 					<div class="filt-com lhs-ads">
-						<ul>
-							<li>
-								<div class="ads-box">
-									<a href="https://themeforest.net/item/bizbook-directory-listings-template/25391222"> <span>Ad</span>
-										<img src="images/ads/ads1.jpg" alt="">
-									</a>
-								</div>
-							</li>
-							<li>
-								<div class="ads-box">
-									<a href="https://themeforest.net/item/bizbook-directory-listings-template/25391222"> <span>Ad</span>
-										<img src="images/ads/ads2.jpg" alt="">
-									</a>
-								</div>
-							</li>
-						</ul>
+						<?php $slot = $ad_slots['side_1'] ?? '';
+						$slot_creative = 'house-ad-burgundy';
+						include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+						<?php $slot = $ad_slots['side_2'] ?? '';
+						$slot_fallback_partial = 'banner_design_promo.php';
+						$slot_creative = 'banner-design';
+						include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+						<?php // 295x600, held back until sold. ?>
+						<?php $slot = $ad_slots['side_sky'] ?? '';
+						$slot_fallback = false;
+						include APPPATH . 'views/partials/ad_slot.php'; ?>
 					</div>
 					<!--END-->
 				</div>
@@ -308,6 +321,21 @@
 								}
 							</style>
 						<?php endif; ?>
+
+						<div class="p411-adrow" style="margin:22px 0 0;">
+							<?php $slot = $ad_slots['inline'] ?? '';
+							$slot_creative = 'house-ad-cream';
+							include APPPATH . 'views/partials/ad_slot.php'; ?>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="col-12">
+					<div class="p411-adrow" style="margin-top:10px;">
+						<?php $slot = $ad_slots['bottom'] ?? '';
+						include APPPATH . 'views/partials/ad_slot.php'; ?>
 					</div>
 				</div>
 			</div>

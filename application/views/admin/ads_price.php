@@ -35,12 +35,25 @@
             <tr>
               
               <td><?= $j;?></td>
-              <td><?= $value->name;?></td>
               <td>
-                <img src="<?= base_url($value->img); ?>" alt="">
+                <?= e($value->name);?>
+                <?php // The names alone don't separate "#1 Right Side Banner"
+                      // from "#1 Right Banner (Category)". The slot_key is what
+                      // the views ask for and what a package's plans.slug must
+                      // equal, so it is the only unambiguous identifier here. ?>
+                <?php if (!empty($value->slot_key)): ?>
+                  <br><code class="ads-price-slot"><?= e($value->slot_key) ?></code>
+                <?php endif; ?>
               </td>
-              <td><?= $value->size; ?></td>
-              <td><?= $value->cost; ?>$</td>
+              <td>
+                <?php // Never base_url() a possibly-empty column — that resolves
+                      // to the site root and renders as a broken image. ?>
+                <img class="ads-price-preview" src="<?= base_url(ad_zone_preview($value)) ?>"
+                     alt="<?= e_attr($value->name . ' ad zone, shown in place on the page') ?>"
+                     width="240" height="180" loading="lazy" decoding="async">
+              </td>
+              <td><?= e($value->size); ?></td>
+              <td><?= e($value->cost); ?>$</td>
               <td><span class="db-list-rat"><?= ($value->status ==  1) ? 'Active':'In-Active';?></span></td>
               <td><a href="<?= base_url('admin/ads-price-edit/'.$value->id);?>" class="db-list-edit">Edit</a></td>
             </tr>
@@ -49,9 +62,10 @@
               } else {
             ?>
             <tr>
-              <td colspan="8">No Data Available!</td>
+              <td colspan="7">No Data Available!</td>
             </tr>
             <?php } ?>
+          </tbody>
           </table>
         </div>
       </div>

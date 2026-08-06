@@ -411,6 +411,15 @@
     <div class="container">
         <div class="row">
             <div class="col-lg-8">
+                <?php // Above the results, and outside the `if` — the zone renders
+                      // whether or not there is a query and whether or not anything
+                      // matched. A no-results page is exactly where a paid banner
+                      // should not go missing. ?>
+                <div class="p411-adrow" style="margin-bottom:18px;">
+                    <?php $slot = $ad_slots['top'] ?? '';
+                    include APPPATH . 'views/partials/ad_slot.php'; ?>
+                </div>
+
                 <?php if (!empty($search_query)): ?>
                     <!-- Result Stats -->
                     <div class="result-stats">
@@ -504,6 +513,12 @@
                                 </div>
                             </div>
                         <?php endif; ?>
+
+                        <div class="p411-adrow" style="margin:6px 0 22px;">
+                            <?php $slot = $ad_slots['inline'] ?? '';
+                            $slot_creative = 'house-ad-cream';
+                            include APPPATH . 'views/partials/ad_slot.php'; ?>
+                        </div>
 
                         <!-- News -->
                         <?php if (isset($search_results['news']) && !empty($search_results['news'])): ?>
@@ -1056,6 +1071,11 @@
 
             <!-- Sidebar -->
             <div class="col-lg-4">
+
+                <?php $slot = $ad_slots['side_1'] ?? '';
+                $slot_creative = 'house-ad-burgundy';
+                include APPPATH . 'views/partials/ad_slot.php'; ?>
+
                 <!-- Search Tips -->
                 <div class="sidebar-card">
                     <h6 class="sidebar-title">
@@ -1155,6 +1175,26 @@
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
+
+                <?php $slot = $ad_slots['side_2'] ?? '';
+                $slot_fallback_partial = 'banner_design_promo.php';
+                $slot_creative = 'banner-design';
+                include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+                <?php // 295x600. Held back until sold — an unsold half-page house
+                      // ad does more harm than the zone is worth. ?>
+                <?php $slot = $ad_slots['side_sky'] ?? '';
+                $slot_fallback = false;
+                include APPPATH . 'views/partials/ad_slot.php'; ?>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="p411-adrow" style="margin-top:10px;">
+                    <?php $slot = $ad_slots['bottom'] ?? '';
+                    include APPPATH . 'views/partials/ad_slot.php'; ?>
+                </div>
             </div>
         </div>
     </div>

@@ -209,6 +209,13 @@
                 <span class="last-updated">Last Updated: October 2025</span>
             </div>
         </div>
+
+        <div class="container">
+            <div class="p411-adrow" style="margin:22px 0;">
+                <?php $slot = $ad_slots['top'] ?? '';
+                include APPPATH . 'views/partials/ad_slot.php'; ?>
+            </div>
+        </div>
         <div class="container">
             <div class="privacy-container">
 
@@ -259,6 +266,11 @@
                         </ul>
                     </div>
 
+                    <div class="p411-adrow" style="margin:22px 0;">
+                        <?php $slot = $ad_slots['inline'] ?? '';
+                        $slot_creative = 'house-ad-cream';
+                        include APPPATH . 'views/partials/ad_slot.php'; ?>
+                    </div>
                     <div class="privacy-section">
                         <h2>5. Your Rights</h2>
                         <p>You have the right to:</p>
@@ -291,6 +303,13 @@
                         <a href="mailto:support@pearland411.com">support@pearland411.com</a>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="p411-adrow" style="margin:0 0 28px;">
+                <?php $slot = $ad_slots['bottom'] ?? '';
+                include APPPATH . 'views/partials/ad_slot.php'; ?>
             </div>
         </div>
     </div>

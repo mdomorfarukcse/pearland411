@@ -250,6 +250,13 @@
             </div>
         </section>
 
+        <div class="container">
+            <div class="p411-adrow" style="margin-top:22px;">
+                <?php $slot = $ad_slots['top'] ?? '';
+                include APPPATH . 'views/partials/ad_slot.php'; ?>
+            </div>
+        </div>
+
         <!-- FAQ Section -->
         <section class="p411-faq-section">
             <div class="container">
@@ -347,6 +354,12 @@
                         <div class="p411-faq-answer">
                             <p>Yes, you can log in to your dashboard anytime to edit, update, or remove your listings whenever needed.</p>
                         </div>
+                    </div>
+
+                    <div class="p411-adrow" style="margin:6px 0 18px;">
+                        <?php $slot = $ad_slots['inline'] ?? '';
+                        $slot_creative = 'house-ad-cream';
+                        include APPPATH . 'views/partials/ad_slot.php'; ?>
                     </div>
 
                     <!-- FAQ Item 6 -->
@@ -447,6 +460,13 @@
                 </div>
             </div>
         </section>
+
+        <div class="container">
+            <div class="p411-adrow" style="margin-bottom:22px;">
+                <?php $slot = $ad_slots['bottom'] ?? '';
+                include APPPATH . 'views/partials/ad_slot.php'; ?>
+            </div>
+        </div>
     </div>
 
     <script>

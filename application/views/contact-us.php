@@ -55,6 +55,11 @@ $c_err = $this->session->flashdata('contact_error');
 			<!-- ============================================================ FORM -->
 			<div class="p411-shell__main">
 
+				<div class="p411-adrow">
+					<?php $slot = $ad_slots['top'] ?? '';
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
+				</div>
+
 				<div class="p411-card p411-form">
 					<div class="p411-card__head">
 						<h2>Send us a message</h2>
@@ -111,6 +116,12 @@ $c_err = $this->session->flashdata('contact_error');
 					</form>
 				</div>
 
+				<div class="p411-adrow" style="margin-top:22px;">
+					<?php $slot = $ad_slots['inline'] ?? '';
+					$slot_creative = 'house-ad-cream';
+					include APPPATH . 'views/partials/ad_slot.php'; ?>
+				</div>
+
 				<?php $promo_variant = 'banner';
 				include APPPATH . 'views/partials/service_promo.php'; ?>
 
@@ -118,6 +129,13 @@ $c_err = $this->session->flashdata('contact_error');
 
 			<!-- ========================================================= SIDEBAR -->
 			<aside class="p411-shell__side">
+
+				<?php // Above the contact card deliberately: the sidebar's own
+				      // content is short here, so a zone below the fold would
+				      // never be seen. ?>
+				<?php $slot = $ad_slots['side_1'] ?? '';
+				$slot_creative = 'house-ad-burgundy';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
 				<div class="p411-card">
 					<div class="p411-card__head">
@@ -202,7 +220,23 @@ $c_err = $this->session->flashdata('contact_error');
 					</ul>
 				</div>
 
+				<?php $slot = $ad_slots['side_2'] ?? '';
+				$slot_fallback_partial = 'banner_design_promo.php';
+				$slot_creative = 'banner-design';
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
+				<?php // 295x600. Held back until sold — an unsold half-page house
+				      // ad does more harm than the zone is worth. ?>
+				<?php $slot = $ad_slots['side_sky'] ?? '';
+				$slot_fallback = false;
+				include APPPATH . 'views/partials/ad_slot.php'; ?>
+
 			</aside>
+		</div>
+
+		<div class="p411-adrow" style="margin-top:6px;">
+			<?php $slot = $ad_slots['bottom'] ?? '';
+			include APPPATH . 'views/partials/ad_slot.php'; ?>
 		</div>
 	</div>
 </section>
