@@ -72,11 +72,30 @@ on click and closes on Escape, and ticking Remove greys the right cell and
 leaves its neighbour alone. `content_text()` was exercised across CRLF, LF,
 headings, `<br>`, lists and legacy entity-encoded bodies.
 
+### Also fixed
+
+**Special characters, everywhere else.** The first pass covered News, Blogs and
+Videos. Products, Classifieds, Marketplace, Ads and Sliders were still running
+every text field through `htmlentities()` on the way in — 79 call sites — so an
+apostrophe stored as `&#039;` and came back that way in the edit box, because
+`set_value()` escapes on output and a value that is already encoded gets
+encoded twice. Four **slugs** were encoded too, which is worse than cosmetic.
+Output already escaped (`e()` / `htmlspecialchars()` on titles), so storing raw
+is what those views expect; the two description views moved onto the same
+`nl2br(e(content_text(...)))` convention as news and blogs.
+`cli decode_content_entities` now covers those tables as well, taking titles,
+tags and SEO fields rather than just the body.
+
 ### Not changed
 
 `edit_product.php`'s `gallery_image[]` — no admin controller reads that field,
 so there is no column to show current images from. Wiring it up is a separate
 change from making the existing ones visible.
+
+The **featured icon** (About Us). Rendered against the real stylesheets it
+measures 5.39px above the icon against 5.41px below, and the `stars` ligature
+is present in `assets/css/icon.woff2`, so it draws as a glyph rather than the
+letters of the word. Waiting on a screenshot of what was actually seen.
 
 ### Key files
 
