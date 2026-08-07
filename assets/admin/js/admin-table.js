@@ -184,30 +184,33 @@
         }
 
         var sizeSelect = toolbar.querySelector('.admin-table-per-page');
+
         if (sizeSelect) {
+            // Navigate, rather than wrap this in its own <form>. On the category
+            // screens the toolbar is inserted before a table that already sits
+            // inside the bulk-delete <form>, and a nested form is invalid HTML —
+            // the parser throws the inner one away, so the control would do
+            // nothing on exactly those pages.
             function applySize() {
-                // Round-trip rather than re-slice locally: most admin lists are
-                // paginated by the server, so the rows for page 1 of 50 are not
-                // in the DOM to begin with. ?per_page is remembered in the
-                // session, so the choice sticks across the admin.
                 var url = new URL(window.location.href);
-                // ?show=, not ?per_page= — see admin_helper.php.
+
+                // ?show=, not ?per_page=: that is CI_Pagination's own reserved
+                // segment and reuse_query_string strips it from every link.
                 url.searchParams.set('show', sizeSelect.value);
 
-                // Back to page one. CodeIgniter's pager puts the page number in
-                // the PATH — /admin/all_listings/20 — not the query string, so
-                // a trailing numeric segment has to come off too; leaving it
-                // would apply the old offset to the new page size.
+                // Back to the first page. CodeIgniter puts the offset in the
+                // PATH — /admin/all_listings/20 — so that segment has to come
+                // off, or the old offset is applied to the new page size.
                 url.searchParams.delete('page');
                 url.pathname = url.pathname.replace(/\/\d+\/?$/, '');
 
-                window.location.href = url.toString();
+                window.location.assign(url.toString());
             }
 
             sizeSelect.addEventListener('change', applySize);
-            // Belt and braces: if anything ever does wrap this in select2 or
-            // chosen, those fire jQuery events only, which the native listener
-            // above would never see.
+            // select2 and chosen dispatch jQuery events only, which a native
+            // listener never sees. Harmless if both fire — the second
+            // navigation is to the same URL.
             if (window.jQuery) { window.jQuery(sizeSelect).on('change', applySize); }
         }
 
