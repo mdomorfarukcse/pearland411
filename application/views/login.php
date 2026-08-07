@@ -23,10 +23,6 @@ $login_error   = !empty($loginSucess['message']) ? (string) $loginSucess['messag
 <section class="p411-ct p411-ct--auth">
 	<div class="container">
 
-		<div class="p411-adrow" style="margin:18px 0 0;">
-			<?php $slot = $ad_slots['top'] ?? '';
-			include APPPATH . 'views/partials/ad_slot.php'; ?>
-		</div>
 
 		<nav class="p411-crumb" aria-label="Breadcrumb">
 			<a href="<?= base_url() ?>">Home</a>
@@ -107,10 +103,6 @@ $login_error   = !empty($loginSucess['message']) ? (string) $loginSucess['messag
 			or <a href="<?= base_url('contact-us') ?>">send us a message</a>.
 		</p>
 
-		<div class="p411-adrow" style="margin:6px 0 26px;">
-			<?php $slot = $ad_slots['bottom'] ?? '';
-			include APPPATH . 'views/partials/ad_slot.php'; ?>
-		</div>
 
 	</div>
 </section>

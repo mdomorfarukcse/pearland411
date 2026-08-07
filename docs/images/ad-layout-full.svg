@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 1266"
-     width="1120" height="1266" role="img"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 1188"
+     width="1120" height="1188" role="img"
      aria-label="Pearland411 full page layout: Main column + sidebar — six zones">
   <title>Pearland411 ad layout — Main column + sidebar — six zones</title>
   <style>
@@ -18,7 +18,7 @@
       <stop offset="0.6" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
   </defs>
-  <rect width="1120" height="1266" fill="#FFFFFF"/>
+  <rect width="1120" height="1188" fill="#FFFFFF"/>
   <rect x="28" y="28" width="1064" height="52" rx="6" fill="#20245B"/><rect x="48" y="46" width="128" height="16" rx="4" fill="#FFFFFF" opacity="0.85"/><rect x="1016" y="50" width="64" height="8" rx="4" fill="#FFFFFF" opacity="0.35"/><rect x="928" y="50" width="64" height="8" rx="4" fill="#FFFFFF" opacity="0.35"/><rect x="840" y="50" width="64" height="8" rx="4" fill="#FFFFFF" opacity="0.35"/><rect x="752" y="50" width="64" height="8" rx="4" fill="#FFFFFF" opacity="0.35"/><rect x="664" y="50" width="64" height="8" rx="4" fill="#FFFFFF" opacity="0.35"/>
   <g>
     <rect x="28" y="96" width="1064" height="62" rx="6" fill="url(#zone)"/>
@@ -67,13 +67,5 @@
           dominant-baseline="central" class="zsize" font-size="24">900x100</text>
     <text x="560.0" y="1067.4" text-anchor="middle" dominant-baseline="central" class="zkey" font-size="13">bottom-banner-site-wide</text>
   </g>
-  
-  <g>
-    <rect x="28" y="1104" width="1064" height="52" rx="6" fill="url(#zone)"/>
-    <rect x="28" y="1104" width="1064" height="52" rx="6" fill="url(#sheen)"/>
-    <text x="560.0" y="1130.0" text-anchor="middle"
-          dominant-baseline="central" class="zsize" font-size="20">970x90</text>
-    
-  </g>
-  <text x="1084" y="1171" text-anchor="end" class="zkey-out" font-size="11">footer-banner</text><rect x="28" y="1182" width="1064" height="56" rx="6" fill="#20245B"/><rect x="54" y="1206" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/><rect x="316" y="1206" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/><rect x="578" y="1206" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/><rect x="840" y="1206" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/>
+  <rect x="28" y="1104" width="1064" height="56" rx="6" fill="#20245B"/><rect x="54" y="1128" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/><rect x="316" y="1128" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/><rect x="578" y="1128" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/><rect x="840" y="1128" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/>
 </svg>

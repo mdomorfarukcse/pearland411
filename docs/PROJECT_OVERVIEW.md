@@ -84,7 +84,7 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `pattern`, plus `data-match` for confirm fields). It binds in the **capture** phase, so a form
   that also posts over AJAX cannot send an invalid payload. The server validates independently —
   this is the courtesy layer, not the guard.
-- **Advertising:** every public page carries zones — **34 pages, 204 placements**; the full
+- **Advertising:** **28 public pages, 156 placements**; the full
   table, with sizes and prices, is **[`docs/AD_INVENTORY.md`](./AD_INVENTORY.md)**, generated
   from the source by `python3 scripts/ad_inventory.py` (re-run it after moving a zone). A page
   declares its zones with `User::pageAdSlots($shape)` — `full` (main + sidebar, 6 zones),
@@ -92,8 +92,13 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   costs one query rather than six. Every `slot_key` is a `plans.slug` sold on `/pricing-plan`,
   so nothing here is page-specific inventory: buying a site-wide package fills the position on
   all of them. `/checkout`, `/checkout-success`, `/user/*` and `/admin/*` are deliberately
-  ad-free. Unsold zones show a house creative (the skyscraper is held back until sold);
-  `service_ads_enabled` at `/admin/setting` switches the lot off. In admin, a zone with no
+  ad-free, and so are `/login`, `/register`, `/privacy-policy`, `/terms-of-use`, `/pricing-plan`
+  and `/claim-listing` — deliberately, see docs/AD_INVENTORY.md for why. An unsold zone shows a
+  house creative, but only the first `ads_house_max_per_page` of them (default **2**, at
+  `/admin/setting`); past that budget it renders nothing, so a page never looks like a wall of
+  house ads. `User::thinPageAdCap()` drops that to 1 when a search or category comes back empty.
+  The skyscraper is held back until sold, and the unsold top banner hides below 768px. **A sold ad
+  is exempt from all of it.** `service_ads_enabled` switches advertising off entirely. In admin, a zone with no
   `slot_key` renders on no page and is shown as such in the booking dropdown rather than
   looking bookable, and `ad_zone_preview()` (view helper) gives every pricing row a thumbnail —
   a real upload if there is one, otherwise the generated wireframe in

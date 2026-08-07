@@ -49,27 +49,19 @@
 
 	<?php
 	/*
-	 * Site-wide footer banner.
+	 * The site-wide footer banner used to render here, and no longer does.
 	 *
-	 * Buffered, and the wrapper only printed when something came back:
-	 * ad_slot.php renders NOTHING when advertising is switched off in
-	 * /admin/setting, and the wrapper was left behind as an empty near-white
-	 * (#f9fafb) strip between the page and the band below it — the gap the
-	 * client reported. The band is cream now for the same reason: even with a
-	 * banner in it, a white strip between a cream page and the cream
-	 * call-to-action band read as a rendering fault.
+	 * Two reasons. It sat directly under `bottom-banner-site-wide`, so the
+	 * foot of every page was a 900x100 banner stacked on a 970x90 banner —
+	 * two wide ads within one screen, with the call-to-action band below
+	 * them. And `footer-banner` is a 0006 zone whose slot_key matches no
+	 * package on /pricing-plan, so it was inventory nobody could actually
+	 * buy: 33 pages of house ad earning nothing and costing a screenful.
+	 *
+	 * The zone still exists in `ads_prices` and ad_slot.php still knows how
+	 * to draw it, so re-instating it is one include — but sell it first.
 	 */
-	ob_start();
-	$slot = 'footer-banner';
-	include APPPATH . 'views/partials/ad_slot.php';
-	$__footer_ad = trim(ob_get_clean());
 	?>
-	<?php if ($__footer_ad !== ''): ?>
-		<section class="p411-footad">
-			<div class="container"><?= $__footer_ad ?></div>
-		</section>
-	<?php endif; ?>
-	<?php unset($__footer_ad); ?>
 
 	<!-- START -->
 	<section>

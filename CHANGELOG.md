@@ -6,6 +6,101 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-06 — Fewer, better ad positions, and money moved off dead ones
+
+Advertising had been added to every public page. Reviewing it, seven
+placements on a full page was one or two too many and in several places
+plainly wrong. **204 placements → 156, across 28 pages instead of 34**, losing
+nothing sellable.
+
+### Changed
+
+- **Six pages carry no advertising at all now.** `/login` and `/register` —
+  someone typing a password should not be looking at an ad; it reads as less
+  trustworthy and the traffic is repeat users who never click one.
+  `/privacy-policy` and `/terms-of-use` — the pages a payment processor, an app
+  reviewer or a cautious customer opens to check the site is legitimate.
+  `/pricing-plan` — three house ads pitching ad packages on the page that sells
+  ad packages is circular. `/claim-listing` — a business owner proving they own
+  a listing, not a browsing page.
+- **The footer strip is gone, site-wide.** It sat directly under
+  `bottom-banner-site-wide`, so every page ended in a 900x100 stacked on a
+  970x90 with the call-to-action band under that. And `footer-banner` is a 0006
+  zone whose slot_key matches no `plans.slug`, so it was inventory nobody could
+  buy: 33 pages of house ad earning nothing.
+
+### Added
+
+- **A house-ad budget: `ads_house_max_per_page`, default 2.** Every unsold zone
+  used to fall back to a house creative, so a site with no advertisers rendered
+  as 100% house ads on every page — which reads as "nobody advertises here",
+  not as premium inventory. Past the budget an unsold zone renders nothing at
+  all. Includes run in page order, so the budget spends itself on the positions
+  nearest the top. `0` shows none, `-1` restores the old behaviour. Editable at
+  `/admin/setting` → Advertising.
+
+  **A sold ad is never affected.** The cap governs house creatives only; an
+  advertiser who paid for a position keeps it.
+- **`User::thinPageAdCap()`** — a page whose search or category comes back
+  empty allows one house ad, not two. "No businesses in this category yet"
+  beside a leaderboard, a sidebar box and a skyscraper is advertising
+  outnumbering content, and that empty category page is what was reported.
+  Wired into `/all-listing`, `/all-category`, `/search` and `/coupons`.
+- **The unsold top banner is hidden below 768px.** Local-directory traffic is
+  mostly phones, and the leaderboard plus its "Sponsored" label consumed the
+  first screen before a single business appeared. Only the house version
+  hides — a paid banner runs on every device, which is what was bought.
+
+### Database
+
+- **`database/ad_zone_audit.sql`** — read-only, four SELECTs, safe on
+  production. Shows which positions render, **how much money is already sitting
+  on positions that render nowhere**, which bookings are stuck awaiting
+  approval or expired, and which packages have no zone behind them.
+- **`database/migrations/0025_ad_zone_reconciliation.sql`** — repoints bookings
+  from the pre-0006 hand-made zones (`Above Footer Left`,
+  `Feature Business Right 1`, `Home Page Below Slider left`, …) onto the
+  equivalent live zone, then deactivates those rows so nothing new can be
+  booked against them. The six `Usermodel::get*Ads()` methods that once drew
+  them are dead code no view calls, so an ad booked against one was paid for,
+  dated, approved and rendered on zero pages.
+
+  Nothing is deleted: the rows stay, and each booking keeps its own
+  `ad_cost_per_day` / `ad_total_cost`, so billing history is untouched. Also
+  retires `footer-banner`, backfills any missing `size`, and seeds the house-ad
+  cap. Idempotent. Mirrored into the phpMyAdmin bundle.
+
+### Not done — needs your prices
+
+Category targeting has worked in the admin booking form since 0024, but
+`/pricing-plan` does not offer it, so no customer knows it exists. That is the
+change most likely to raise revenue — the constraint is demand, not supply;
+156 placements earn nothing until someone buys — but it needs a per-category
+package and a price, which are yours to set.
+
+### Key files
+
+`application/views/partials/ad_slot.php` (house-ad budget, mobile rule),
+`application/controllers/User.php` (`thinPageAdCap()`, six methods stripped),
+`application/controllers/Admin.php` + `views/admin/admin_setting.php` (the new
+setting), `application/views/footer.php`, six public views,
+`database/ad_zone_audit.sql`, `database/migrations/0025_*`,
+`scripts/ad_inventory.py`.
+
+### Verified
+
+The reconciliation logic proven on a fixture mirroring the reported table —
+legacy rows, canonical rows and bookings across both: seven mapped bookings
+move, the unmapped one is kept rather than silently lost, every dead zone ends
+inactive, no row or booking is deleted, the billing total is unchanged, and a
+second run changes nothing. Both SQL files parse as MySQL. The partial's suite
+gains nine cases for the budget: the default renders exactly 2, the budget goes
+to the top of the page, the fifth zone renders nothing, the setting raises and
+lowers it, `0` and `-1` behave, a thin page overrides to 1, and **a paid ad
+still renders past an exhausted budget without consuming it**.
+
+---
+
 ## 2026-08-06 — Banner artwork drawn at each zone's exact size
 
 Reported as "banner not showing properly": the navy top banner rendered as

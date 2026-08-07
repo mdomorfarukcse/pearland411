@@ -88,6 +88,45 @@ if (!$__ad && !$__fallback) {
 	return;
 }
 
+// ---- How many house ads this page is allowed ----------------------------
+// An unsold zone falls back to a house creative. With six zones on a page
+// that meant six house ads and no advertisers, which does not read as
+// premium inventory — it reads as "nobody advertises here". Cap how many a
+// page may fill; the rest render nothing at all. Includes run in page order,
+// so the budget spends itself on the positions nearest the top, which are
+// the ones worth advertising.
+//
+//   $ad_house_cap  per-page override the controller may set. Browse pages
+//                  with no results set it to 1: a "nothing found" page
+//                  carrying three house ads is advertising outnumbering
+//                  content, which is the one layout search engines actually
+//                  penalise. -1 means no cap.
+//   ads_house_max_per_page  the site-wide default, editable at /admin/setting.
+//
+// A SOLD ad is never touched by this. Someone paid for the position.
+if (!$__ad) {
+	$__cap = isset($ad_house_cap) && $ad_house_cap !== ''
+		? (int) $ad_house_cap
+		: (int) site_setting('ads_house_max_per_page', '2');
+
+	if ($__cap >= 0) {
+		$__house_shown = isset($GLOBALS['__pearland411_house_ads'])
+			? (int) $GLOBALS['__pearland411_house_ads'] : 0;
+
+		if ($__house_shown >= $__cap) {
+			unset($slot_class, $slot_label, $slot_fallback, $slot_alias, $slot_creative,
+				$slot_fallback_partial, $slot_category, $__ci, $__ad, $__meta, $__fallback, $__cap,
+				$__house_shown, $__ad_cat);
+			return;
+		}
+	}
+
+	// Past the gate: whatever this include renders below is a house ad.
+	$GLOBALS['__pearland411_house_ads'] =
+		(isset($GLOBALS['__pearland411_house_ads']) ? (int) $GLOBALS['__pearland411_house_ads'] : 0) + 1;
+	unset($__cap, $__house_shown);
+}
+
 // ---- Unsold, and the includer supplied a house partial -------------------
 // Render it and stop: the sizing, the "Sponsored" microlabel and the creative
 // picking below all describe an <img> the partial isn't going to emit.
@@ -234,6 +273,18 @@ if ($__need_css) define('PEARLAND411_AD_SLOT_CSS', 1);
 		 * them the two are identical.
 		 */
 		.ad-slot__link img { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+		/*
+		 * Above the fold on a phone, the top leaderboard and its "Sponsored"
+		 * label eat the first screen before a single business appears — and
+		 * local-directory traffic is mostly phones. Only the UNSOLD one is
+		 * hidden: a paid banner there is revenue, and an advertiser bought
+		 * that position on every device.
+		 */
+		@media (max-width: 767px) {
+			.ad-slot--default.ad-slot-top-banner-site-wide,
+			.ad-slot--default.ad-slot-top-banner-category { display: none; }
+		}
 	</style>
 <?php endif; ?>
 
