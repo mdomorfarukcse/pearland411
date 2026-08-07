@@ -59,7 +59,12 @@
               '<input type="search" class="form-control admin-table-search" placeholder="Search this page…" style="max-width:280px;">') +
             (opts_html
                 ? '<label class="admin-table-size" style="display:flex;align-items:center;gap:6px;margin:0;font-weight:400;color:#6b7280;font-size:0.9rem;">' +
-                  'Show <select class="form-control admin-table-per-page" style="width:auto;display:inline-block;padding:2px 8px;height:auto;">' +
+                  // no-select2: the admin footer runs select2 over every <select>
+                  // that does not opt out. It replaces the control with its own
+                  // widget and fires jQuery events, which do NOT reach a native
+                  // addEventListener('change') — so this dropdown rendered with
+                  // select2's arrow and did nothing when you picked a size.
+                  'Show <select class="form-control admin-table-per-page admin-table-size no-select2" style="width:auto;display:inline-block;padding:2px 8px;height:auto;">' +
                   opts_html + '</select></label>'
                 : '') +
             '<span class="admin-table-counter" style="color:#6b7280;font-size:0.9rem;"></span>';
@@ -179,24 +184,34 @@
         }
 
         var sizeSelect = toolbar.querySelector('.admin-table-per-page');
-        if (sizeSelect) {
-            sizeSelect.addEventListener('change', function () {
-                // Round-trip rather than re-slice locally: most admin lists are
-                // paginated by the server, so the rows for page 1 of 50 are not
-                // in the DOM to begin with. ?per_page is remembered in the
-                // session, so the choice sticks across the admin.
-                var url = new URL(window.location.href);
-                url.searchParams.set('per_page', sizeSelect.value);
 
-                // Back to page one. CodeIgniter's pager puts the page number in
-                // the PATH — /admin/all_listings/20 — not the query string, so
-                // a trailing numeric segment has to come off too; leaving it
-                // would apply the old offset to the new page size.
+        if (sizeSelect) {
+            // Navigate, rather than wrap this in its own <form>. On the category
+            // screens the toolbar is inserted before a table that already sits
+            // inside the bulk-delete <form>, and a nested form is invalid HTML —
+            // the parser throws the inner one away, so the control would do
+            // nothing on exactly those pages.
+            function applySize() {
+                var url = new URL(window.location.href);
+
+                // ?show=, not ?per_page=: that is CI_Pagination's own reserved
+                // segment and reuse_query_string strips it from every link.
+                url.searchParams.set('show', sizeSelect.value);
+
+                // Back to the first page. CodeIgniter puts the offset in the
+                // PATH — /admin/all_listings/20 — so that segment has to come
+                // off, or the old offset is applied to the new page size.
                 url.searchParams.delete('page');
                 url.pathname = url.pathname.replace(/\/\d+\/?$/, '');
 
-                window.location.href = url.toString();
-            });
+                window.location.assign(url.toString());
+            }
+
+            sizeSelect.addEventListener('change', applySize);
+            // select2 and chosen dispatch jQuery events only, which a native
+            // listener never sees. Harmless if both fire — the second
+            // navigation is to the same URL.
+            if (window.jQuery) { window.jQuery(sizeSelect).on('change', applySize); }
         }
 
         render();
