@@ -648,6 +648,12 @@ class Admin extends CI_Controller
 			// One address for every public form. Blank falls back to
 			// contact_email, then MAIL_FROM_ADDRESS.
 			'forms_recipient_email',
+			// How many unsold zones on a page may fill with a house
+			// ("advertise here") creative. Defaults to 2 — see ad_slot.php.
+			// Every zone filling meant a page of house ads and no advertisers,
+			// which reads as "nobody advertises here". 0 = never show one;
+			// -1 = no cap, the old behaviour.
+			'ads_house_max_per_page',
 		);
 
 		if ($this->input->method() === 'post') {

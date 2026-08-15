@@ -179,10 +179,6 @@ function pp_features($plan, $cat)
         <?php // A leaderboard at the head of the catalogue. This page sells the
               // zones, so it also shows one: an advertiser can see the position
               // they are about to buy on the page that describes it. ?>
-        <div class="p411-adrow" style="margin:22px 0 0;">
-            <?php $slot = $ad_slots['top'] ?? '';
-            include APPPATH . 'views/partials/ad_slot.php'; ?>
-        </div>
 
         <div class="pp-err" id="ppErr"></div>
 
@@ -308,11 +304,6 @@ function pp_features($plan, $cat)
             </section>
         <?php endforeach; ?>
 
-        <div class="p411-adrow" style="margin:34px 0 0;">
-            <?php $slot = $ad_slots['inline'] ?? '';
-            $slot_creative = 'house-ad-cream';
-            include APPPATH . 'views/partials/ad_slot.php'; ?>
-        </div>
 
         <?php
         /* Talk to a person: phone, email and a callback form. Shared partial —
@@ -320,12 +311,6 @@ function pp_features($plan, $cat)
         include APPPATH . 'views/partials/sales_help.php';
         ?>
 
-        <div class="p411-adrow" style="margin:26px 0 34px;">
-            <?php $slot = $ad_slots['bottom'] ?? '';
-            include APPPATH . 'views/partials/ad_slot.php'; ?>
-        </div>
-    </div>
-</div>
 
 <!-- Sticky bundle bar: appears only when 2+ things are combined -->
 <div class="pp-bar" id="ppBar">

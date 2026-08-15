@@ -239,6 +239,27 @@ class User extends CI_Controller
 	 * @param  string $shape 'full' | 'wide' | 'banner'
 	 * @return array<string,string> view key => slot_key
 	 */
+	/**
+	 * The house-ad budget for a page whose result set can come back empty.
+	 *
+	 * "No businesses in this category yet" beside a leaderboard, a sidebar box
+	 * and a skyscraper is advertising outnumbering content — the one layout
+	 * search engines actually penalise, and the exact page the client
+	 * screenshotted. One house creative on an empty page; the site default
+	 * (`ads_house_max_per_page`, 2) when there is something to read.
+	 *
+	 * NULL means "no override" — ad_slot.php then reads the site setting.
+	 * A SOLD ad is never affected either way; this governs house creatives
+	 * only, and an advertiser who paid for the position keeps it.
+	 *
+	 * @param  int      $result_count Rows the page is about to render.
+	 * @return int|null
+	 */
+	private function thinPageAdCap($result_count)
+	{
+		return (int) $result_count > 0 ? NULL : 1;
+	}
+
 	private function pageAdSlots($shape = 'full')
 	{
 		$slots = array(
@@ -765,8 +786,8 @@ class User extends CI_Controller
 		$this->load->model('usermodel');
 		$data = array();
 		$data['title'] = 'Privacy Policy';
-		// Advertising. Three wide zones; this page is full-width, with no column to hang a box off.
-		$data['ad_slots'] = $this->pageAdSlots('wide');
+		// No advertising on this page. A page a payment processor, an app reviewer or a cautious customer opens
+		// to check the site is legitimate. Advertising on it works against that.
 
 		$this->load->view('header', $data);
 		$this->load->view('privacy_policy');
@@ -780,8 +801,7 @@ class User extends CI_Controller
 		$this->load->model('usermodel');
 		$data = array();
 		$data['title'] = 'Terms of Use';
-		// Advertising. Three wide zones; this page is full-width, with no column to hang a box off.
-		$data['ad_slots'] = $this->pageAdSlots('wide');
+		// No advertising on this page. See privacy_policy() — a trust page, not a browsing page.
 
 		$this->load->view('header', $data);
 		$this->load->view('terms_of_use');
@@ -976,6 +996,9 @@ class User extends CI_Controller
 
 			// Load header, search page, and footer
 			// Advertising. Six zones — three wide, three down the sidebar.
+			// A query that matched nothing gets one house ad, not several.
+			$data['ad_house_cap'] = $this->thinPageAdCap(
+				isset($data['total_results']) ? $data['total_results'] : 0);
 			$data['ad_slots'] = $this->pageAdSlots('full');
 
 			$this->load->view('header', $data);
@@ -1878,6 +1901,8 @@ class User extends CI_Controller
 
 		$data['total_listings'] = (int) $this->usermodel->countListingsByCategory(NULL);
 
+		$data['ad_house_cap'] = $this->thinPageAdCap(count($by_letter));
+
 		// Same six zones as the directory and the content pages.
 		$data['ad_slots'] = array(
 			'top'      => 'top-banner-site-wide',
@@ -2086,6 +2111,9 @@ class User extends CI_Controller
 		// Featured rail — prefers the category being browsed, tops up site-wide.
 		$data['randListings']       = $this->usermodel->getFeaturedListingsForDirectory($cat_slug, 3);
 		$data['categoriesWithCounts'] = $this->usermodel->getCategoriesWithCounts(12);
+
+		// A category with nothing in it gets one house ad, not six.
+		$data['ad_house_cap'] = $this->thinPageAdCap($total_listings);
 
 		// Ad zones. Priming means the six placements below cost one query
 		// rather than six. Every key is a `plans.slug` from /pricing-plan, so
@@ -2562,8 +2590,7 @@ class User extends CI_Controller
 		// the categories column came up empty on signup and sign-in.
 		$this->loadHeaderCategories($data);
 
-		// Advertising. A banner above and below the form. No sidebar, and nothing between the fields.
-		$data['ad_slots'] = $this->pageAdSlots('banner');
+		// No advertising on this page. See login() — no advertising on an account form.
 
 		$this->load->view('header', $data);
 
@@ -2633,8 +2660,8 @@ class User extends CI_Controller
 		$data['page_css'] = $this->contentPageCss();
 		$this->loadHeaderCategories($data);
 
-		// Advertising. A banner above and below the form. No sidebar, and nothing between the fields.
-		$data['ad_slots'] = $this->pageAdSlots('banner');
+		// No advertising on this page. Someone typing a password should not be looking at an ad — it reads as
+		// less trustworthy, and this traffic is repeat users who never click one.
 
 		$this->load->view('header', $data);
 
@@ -7243,8 +7270,8 @@ class User extends CI_Controller
 		$data['title'] = 'Pricing Plans - Choose Your Plan';
 
 		// Load views
-		// Advertising. Three wide zones; this page is full-width, with no column to hang a box off.
-		$data['ad_slots'] = $this->pageAdSlots('wide');
+		// No advertising on this page. This page sells the ad packages. Three house ads pitching ad packages on
+		// the page that sells ad packages is circular — the content is the pitch.
 
 		$this->load->view('header', $data);
 		$this->load->view('pricing_plan', $data);
@@ -8425,6 +8452,7 @@ class User extends CI_Controller
 	{
 		$data = array();
 		$data['coupons']  = $this->usermodel->getActiveCoupons(60);
+		$data['ad_house_cap'] = $this->thinPageAdCap(count($data['coupons']));
 		$data['ad_slots'] = $this->contentAdSlots();
 		$data['page_css'] = $this->contentPageCss();
 		$this->loadHeaderCategories($data);
@@ -8530,9 +8558,9 @@ class User extends CI_Controller
 				);
 				$this->loadHeaderCategories($data);
 				$data['title'] = 'Claim ' . $listing->listing_name . ' — Pearland411';
-				// Advertising. A banner above and below the form. No sidebar,
-				// and nothing between the fields.
-				$data['ad_slots'] = $this->pageAdSlots('banner');
+		// No advertising on this page. A business owner proving they own a listing. Short, high-intent, and not
+		// somewhere to sell a banner.
+
 				$this->load->view('header', $data);
 				$this->load->view('claim_listing', $data);
 				$this->load->view('footer');
@@ -8607,9 +8635,8 @@ class User extends CI_Controller
 		$data['title']         = 'Claim ' . $listing->listing_name . ' — Pearland411';
 		$data['canonical_url'] = base_url('claim-listing/' . rawurlencode($slug));
 
-		// Advertising. A banner above and below the form. No sidebar, and
-		// nothing between the fields.
-		$data['ad_slots'] = $this->pageAdSlots('banner');
+		// No advertising on this page. A business owner proving they own a listing. Short, high-intent, and not
+		// somewhere to sell a banner.
 
 		$this->load->view('header', $data);
 		$this->load->view('claim_listing', $data);

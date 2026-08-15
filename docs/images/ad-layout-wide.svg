@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 1016"
-     width="1120" height="1016" role="img"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 938"
+     width="1120" height="938" role="img"
      aria-label="Pearland411 wide page layout: Full-width — three wide zones">
   <title>Pearland411 ad layout — Full-width — three wide zones</title>
   <style>
@@ -18,7 +18,7 @@
       <stop offset="0.6" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
   </defs>
-  <rect width="1120" height="1016" fill="#FFFFFF"/>
+  <rect width="1120" height="938" fill="#FFFFFF"/>
   <rect x="28" y="28" width="1064" height="52" rx="6" fill="#20245B"/><rect x="48" y="46" width="128" height="16" rx="4" fill="#FFFFFF" opacity="0.85"/><rect x="1016" y="50" width="64" height="8" rx="4" fill="#FFFFFF" opacity="0.35"/><rect x="928" y="50" width="64" height="8" rx="4" fill="#FFFFFF" opacity="0.35"/><rect x="840" y="50" width="64" height="8" rx="4" fill="#FFFFFF" opacity="0.35"/><rect x="752" y="50" width="64" height="8" rx="4" fill="#FFFFFF" opacity="0.35"/><rect x="664" y="50" width="64" height="8" rx="4" fill="#FFFFFF" opacity="0.35"/>
   <g>
     <rect x="28" y="96" width="1064" height="62" rx="6" fill="url(#zone)"/>
@@ -43,13 +43,5 @@
           dominant-baseline="central" class="zsize" font-size="24">900x100</text>
     <text x="560.0" y="817.4" text-anchor="middle" dominant-baseline="central" class="zkey" font-size="13">bottom-banner-site-wide</text>
   </g>
-  
-  <g>
-    <rect x="28" y="854" width="1064" height="52" rx="6" fill="url(#zone)"/>
-    <rect x="28" y="854" width="1064" height="52" rx="6" fill="url(#sheen)"/>
-    <text x="560.0" y="880.0" text-anchor="middle"
-          dominant-baseline="central" class="zsize" font-size="20">970x90</text>
-    
-  </g>
-  <text x="1084" y="921" text-anchor="end" class="zkey-out" font-size="11">footer-banner</text><rect x="28" y="932" width="1064" height="56" rx="6" fill="#20245B"/><rect x="54" y="956" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/><rect x="316" y="956" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/><rect x="578" y="956" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/><rect x="840" y="956" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/>
+  <rect x="28" y="854" width="1064" height="56" rx="6" fill="#20245B"/><rect x="54" y="878" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/><rect x="316" y="878" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/><rect x="578" y="878" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/><rect x="840" y="878" width="188" height="8" rx="4" fill="#FFFFFF" opacity="0.3"/>
 </svg>

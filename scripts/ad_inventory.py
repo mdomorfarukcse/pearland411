@@ -110,6 +110,18 @@ EXCLUDED = [
      'Payment. An ad beside a card form costs conversions and invites phishing comparisons.'),
     ('/checkout-success', 'checkout_success_view.php',
      'The receipt. Same reason.'),
+    ('/login, /register', 'login.php, register.php',
+     'Someone typing a password should not be looking at an ad — it reads as less trustworthy, '
+     'and the traffic is repeat users who never click one.'),
+    ('/privacy-policy, /terms-of-use', 'privacy_policy.php, terms_of_use.php',
+     'The pages a payment processor, an app reviewer or a cautious customer opens to check the '
+     'site is legitimate. Advertising on them works against that.'),
+    ('/pricing-plan', 'pricing_plan.php',
+     'This page sells the ad packages. House ads pitching ad packages on the page that sells ad '
+     'packages is circular — the content is the pitch.'),
+    ('/claim-listing/<slug>', 'claim_listing.php',
+     'A business owner proving they own a listing. Short, high-intent, and not somewhere to sell '
+     'a banner.'),
     ('/user/*', 'user_* views',
      'The member dashboard is not public. Advertising to a customer inside the product they '
      'just bought is a separate decision.'),
@@ -257,8 +269,12 @@ def markdown(pages):
     a('- Every `slot_key` below is also a `plans.slug` on `/pricing-plan`, so buying the package')
     a('  fills the position. That is why the same key repeats across pages: a *site-wide*')
     a('  purchase is meant to be site-wide.')
-    a('- An unsold zone shows a **house creative** ("advertise here"), not a blank gap — except')
-    a('  the skyscraper, which is held back until sold. A real booking always wins the position.')
+    a('- An unsold zone shows a **house creative** ("advertise here") — but only the first')
+    a('  `ads_house_max_per_page` of them (default **2**, at `/admin/setting`). Past that budget an')
+    a('  unsold zone renders nothing at all, so a page never looks like a wall of house ads. Pages')
+    a('  whose search or category comes back empty use one. The skyscraper is held back until sold')
+    a('  regardless. **A sold ad is never affected by any of this** — a real booking always wins')
+    a('  its position, on every device.')
     a('- The global off switch is `service_ads_enabled` at `/admin/setting`; with it off every')
     a('  zone on this page renders nothing at all, not an empty box.')
     a('')
@@ -467,10 +483,9 @@ def layout_svg(shape):
     body.append(zone_rect(pad, y, inner, 62, SHAPE_SLOTS['bottom']))
     y += 62 + 26
 
-    # the footer strip, rendered by views/footer.php on every page but the
-    # self-contained homepage — so it belongs in all three shells.
-    body.append(zone_rect(pad, y, inner, 52, 'footer-banner'))
-    y += 52 + 26
+    # The footer strip used to sit here, on every page. It was removed: it
+    # stacked directly under the page-foot banner, and its slot_key matched no
+    # package, so it was inventory nobody could buy. See views/footer.php.
 
     # footer
     body.append(f'<rect x="{pad}" y="{y}" width="{inner}" height="56" rx="6" fill="{NAVY}"/>')

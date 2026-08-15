@@ -215,6 +215,26 @@ $s = isset($settings) ? $settings : array();
 			</div>
 		</section>
 
+		<!-- Advertising --------------------------------------------------- -->
+		<section class="setting-card">
+			<h2>Advertising</h2>
+			<p class="hint">
+				A zone with nothing sold in it falls back to a house &ldquo;advertise here&rdquo;
+				banner. When every zone did that, a page carried six house ads and no advertisers
+				&mdash; which reads as <em>nobody advertises here</em>, not as premium inventory.
+				This caps how many a single page may fill; the rest render nothing at all, and the
+				page looks quieter and more sold-out. <strong>A paid ad is never affected</strong>
+				&mdash; the cap governs house creatives only. Pages whose search or category comes
+				back empty use one regardless.
+			</p>
+			<div class="setting-row">
+				<label for="ads_house_max_per_page">House ads per page<small>Default 2. Use 0 to never show one, or &minus;1 for no cap.</small></label>
+				<input type="number" id="ads_house_max_per_page" name="ads_house_max_per_page"
+					   min="-1" max="12" step="1"
+					   value="<?= e_attr(($s['ads_house_max_per_page'] ?? '') !== '' ? $s['ads_house_max_per_page'] : '2') ?>">
+			</div>
+		</section>
+
 		<!-- Top menu ------------------------------------------------------ -->
 		<section class="setting-card">
 			<h2>Top menu categories</h2>
