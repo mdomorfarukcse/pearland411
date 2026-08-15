@@ -7,9 +7,11 @@
  * unlabelled form on a white page, with the zip-code radios styled as the
  * theme's `radi-v4` pills and a copy of the unused "Get quote" modal below.
  *
- * The sales-representative list now comes from sales_representatives()
+ * The "who helped you" list comes from enquiry_departments()
  * (application/helpers/view_helper.php) — the same list the callback panel on
- * /pricing-plan offers, so the two cannot drift.
+ * /pricing-plan offers, so the two cannot drift. It used to name nine
+ * individual reps; most have since left, and a dropdown of former staff is
+ * worse than no dropdown, so it names departments instead.
  *
  * From User::register(): $registrationSucess, $reset.
  */
@@ -24,7 +26,7 @@ $done  = !empty($registrationSucess['status']);
 $rv = function ($field) use ($reset) { return $reset ? '' : set_value($field); };
 
 $zip_codes = array('77581', '77584', '77588');
-$reps      = function_exists('sales_representatives') ? sales_representatives() : array();
+$reps      = function_exists('enquiry_departments') ? enquiry_departments() : array();
 ?>
 
 <section class="p411-ct p411-ct--auth">
@@ -136,10 +138,10 @@ $reps      = function_exists('sales_representatives') ? sales_representatives() 
 
 						<?php if (!empty($reps)): ?>
 							<div class="form-group">
-								<label for="sale_representative">Sales representative</label>
+								<label for="sale_representative">Did someone here help you sign up?</label>
 								<div class="p411-select">
 									<select name="sale_representative" id="sale_representative" class="form-control">
-										<option value="">None &mdash; I came here myself</option>
+										<option value="">No &mdash; I came here myself</option>
 										<?php foreach ($reps as $rep): ?>
 											<option value="<?= e_attr($rep) ?>"><?= e($rep) ?></option>
 										<?php endforeach; ?>

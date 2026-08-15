@@ -6,6 +6,102 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-15 — Enquiries go to a department, and package leads stop hiding in the contact pile
+
+Two problems reported against the callback panel on `/pricing-plan` ("Would you
+rather we set it up for you?"), which turned out to be the same problem seen
+from two sides: **nothing about a message said where it was supposed to go.**
+
+### Fixed
+
+- **A package callback no longer arrives looking like a contact-form message.**
+  The callback panel and `/contact-us` both post to `/contact-submit`, and both
+  wrote `enquiry_type = 'contact'`. The only thing telling them apart was the
+  free-text `enquiry_source` string, and nothing filtered on it — so somebody
+  leaving a phone number to **buy a package** landed in the same undifferentiated
+  pile as a general website question, in a list that was neither sorted nor
+  filtered, and could sit there unread. Package leads now file as
+  `enquiry_type = 'package'` and get their own tab at `/admin/enquiries`.
+  The panel carries the type in a `topic` field, so it stays right wherever the
+  partial is included; the server whitelists it and falls back to the page it
+  posted from.
+- **The enquiry list is newest-first.** `Adminmodel::getEnquiries()` was an
+  unordered, unfiltered `SELECT *`, so the message that just came in could
+  appear anywhere in the table.
+- **The "Page Name" link no longer breaks on a contact enquiry.** Both enquiry
+  views computed the back-link with two variables declared outside the loop and
+  never reset: once one listing enquiry had rendered, every later row inherited
+  its link, and rows with no id column produced `admin//` plus a PHP notice for
+  reading an empty property name. The link is now derived per row and rendered
+  as plain text when there is nothing to link to.
+
+### Security
+
+- **`admin/saved_enquiries.php` echoed every field raw.** Enquiry names and
+  message bodies are typed by the public and stored unescaped by design
+  ("escape on output"), so a submitted `<script>` tag ran inside the admin
+  panel. Now escaped through `e()` / `e_nl2br()`, matching `all_enquiry.php`.
+
+### Changed
+
+- **The forms ask for a department, not a person.** The dropdown named nine
+  individual sales reps; most no longer work here, so a caller could ask by name
+  for somebody who left and the enquiry then waited on a person who was never
+  going to pick it up. It offers **Sales Department, Customer Service, Billing
+  Department, Advertising & Marketing, Technical Support** instead — the first is
+  the default and is what the panel preselects. A department outlives whoever
+  staffs it, which is the point of routing to one. The same list replaces the
+  named reps on `/register` ("Did someone here help you sign up?").
+- **The alert email says who it is for.** Subject and body carry the department
+  and whether it is a package callback or a contact message, and a department
+  with a mailbox of its own receives it directly — otherwise it falls through
+  `form_recipient_email()` to the site-wide address exactly as before, so
+  leaving the mailboxes blank changes nothing.
+
+### Added
+
+- **`enquiry_departments()`, `default_enquiry_department()`,
+  `normalise_enquiry_department()`, `enquiry_department_email()`** in
+  `helpers/view_helper.php`, replacing `sales_representatives()`. The posted
+  department is matched back against the list, so the column only ever holds a
+  department that exists — and an unknown value falls back to the default rather
+  than being rejected, because an enquiry is never worth losing over a dropdown.
+- **`/admin/setting` → Enquiry routing** — the department list (one per line;
+  blank uses the built-in list) and optional `Department = address` mailboxes.
+  The old rep list claimed in its docblock to be editable at `/admin/setting`
+  and was not: `sales_representatives` was never in the settings whitelist, so
+  the only way to change it was a direct SQL insert. These two keys are wired up
+  properly.
+- **Department column and filter tabs** on `/admin/enquiries` and
+  `/admin/saved-enquiry`, with a count per tab.
+
+### Database
+
+- **`database/migrations/0026_enquiry_departments.sql`** — adds
+  `enquiries.enquiry_department` and an index on `enquiry_type`; reclassifies the
+  callback requests already in the table from `contact` to `package` and
+  backfills their department, so the new tabs are not empty on day one; and
+  **deletes the `sales_representatives` setting**, which is where the departed
+  staff names live on production — they are not in the code, the code's fallback
+  was being overridden by that row. `enquiries` predates this repo's migrations,
+  so every step is guarded on the table existing. Idempotent. Mirrored into
+  `database/migrations_combined_phpmyadmin.sql`.
+
+  The text of past enquiries is **not** rewritten — a message that says
+  "Asked for: <name>" stays as it was sent, because it is a record of what
+  somebody actually wrote.
+
+### Key files
+
+`application/helpers/view_helper.php`, `application/views/partials/sales_help.php`,
+`application/controllers/User.php` (`contact_submit`), `application/controllers/Admin.php`
+(`enquiries`, `admin_setting`), `application/models/Adminmodel.php`,
+`application/views/admin/all_enquiry.php`, `application/views/admin/saved_enquiries.php`,
+`application/views/admin/admin_setting.php`, `application/views/register.php`,
+`database/migrations/0026_enquiry_departments.sql`.
+
+---
+
 ## 2026-08-06 — Fewer, better ad positions, and money moved off dead ones
 
 Advertising had been added to every public page. Reviewing it, seven

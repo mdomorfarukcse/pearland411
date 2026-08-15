@@ -113,7 +113,7 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `/request-service`; the unsold fallback for `right-side-banner-2` via `$slot_fallback_partial`) —
   neither promo is sold or rotated, so neither is ever empty — `partials/sales_help.php` (phone,
   email and a callback form for people who would rather not check out online; posts to
-  `/contact-submit` with `return_to`, and offers the `sales_representatives()` list) — plus
+  `/contact-submit` with `return_to` and `topic`, and offers the `enquiry_departments()` list) — plus
   `partials/web_dev_cta.php`, `partials/seo_head.php`.
 - **Brand artwork** is generated, not hand-drawn: `python3 scripts/generate_brand_art.py` writes
   `assets/images/placeholders/*.svg` (one per kind of business, plus news — served by
@@ -125,7 +125,10 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   safe to re-run. The hero illustration `assets/images/home/hero-pearland.svg` is hand-authored.
 - **Helpers** (autoloaded): `site_setting` (settings + feature flags), `image` (uploads/resize:
   `safe_upload_image`, `uploadAndResize`, `responsive_img`), `view` — escaping (`e`, `e_attr`,
-  `e_url`, `e_nl2br`), `json_ld`, `pearland_slug`, `form_recipient_email()` (one address for every public form, set
+  `e_url`, `e_nl2br`), `json_ld`, `pearland_slug`, `enquiry_departments()` / `normalise_enquiry_department()` /
+  `enquiry_department_email()` (the departments a public form can address a message to — Sales,
+  Customer Service, Billing… — editable at `/admin/setting`; these replaced a hard-coded list of
+  nine named sales reps, most of whom have left), `form_recipient_email()` (one address for every public form, set
   at `/admin/setting`; falls back through the form's own override, `contact_email`, then
   `MAIL_FROM_ADDRESS`), `external_url()` (an operator-supplied link, given a scheme and
   refused unless it is http/https/mailto/tel), `listing_gallery_paths()` (decode
@@ -167,8 +170,9 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Packages (customer) | `/pricing-plan` | `User::pricing_plan` → `pricing_plan.php` | lists all active `plans`; carries `partials/sales_help.php` (`#talk-to-us`) so a caller can buy by phone |
 | Start a free plan | `/start-free` (POST) | `User::start_free_plan` → `Usermodel::activateFreePlan` | free tiers are excluded from cart/checkout, so this is the only way to get one; login required, never downgrades an existing subscription |
 | Site search | `/search?q=`, `/search-suggestions` (AJAX) | `User::search` → `Usermodel::globalSearch` | Word-by-word: `searchTerms()` splits the query, `applySearchTerms()` ANDs the words and ORs the columns, `searchRelevanceOrder()` ranks name matches first. Sections switched off at `/admin/setting` are not searched |
-| Sign in / register | `/login`, `/register` | `User::login`, `register` | Shared kit (`.p411-ct--auth`); the rep list comes from `sales_representatives()` |
-| Contact | `/contact-us` → `/contact-submit` | `User::contact_us`, `contact_submit` | Shared kit; an email address **or** a phone number is enough; `return_to` sends callback requests back to the page they came from |
+| Sign in / register | `/login`, `/register` | `User::login`, `register` | Shared kit (`.p411-ct--auth`); the "who helped you sign up" list comes from `enquiry_departments()` |
+| Contact | `/contact-us` → `/contact-submit` | `User::contact_us`, `contact_submit` | Shared kit; an email address **or** a phone number is enough; `return_to` sends callback requests back to the page they came from. The posted `topic` sets `enquiries.enquiry_type` — `package` for the `/pricing-plan` callback panel, `contact` for this page — which is what splits sales leads from general questions in admin. `department` (whitelisted against `enquiry_departments()`) records who it is for and picks the mailbox |
+| Enquiries (admin) | `/admin/enquiries[?type=]`, `/admin/saved-enquiry` | `Admin::enquiries`, `saved_enquiry` | One tab per `enquiry_type`, newest first; Department column. Departments and their optional mailboxes are set at `/admin/setting` → Enquiry routing |
 | Deals & coupons | `/coupons`, `/coupons/<id>` | `User::coupons`, `coupon_details` | Shared kit + 5 ad zones on the index |
 | Services (web/IT) | `/services[?category=]`, `/services/<slug>` | `User::services`, `service_details` | Shared kit; each service page carries its own quote form |
 | Custom quote | `/request-quote[?service=<slug>]` (GET form), `/request-service[/<slug>]` (POST) | `User::request_quote`, `request_service` | One POST handler for both forms — rate-limited 5/IP/hour, saved to `service_requests`, emailed to `site_setting('service_quote_email')` with the sender as Reply-To |

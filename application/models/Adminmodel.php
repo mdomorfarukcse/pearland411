@@ -2210,14 +2210,52 @@
 
 
 
-		public function getEnquiries()
+		/**
+		 * Enquiries for the admin list, newest first.
+		 *
+		 * $type filters on `enquiry_type`, which is what separates a package
+		 * callback from a general contact-form message — see migration 0026.
+		 * '' means every type. The SELECT used to be unordered as well as
+		 * unfiltered, so the newest message could land anywhere in the table.
+		 *
+		 * @param  string $type Optional enquiry_type to restrict to.
+		 * @return array
+		 */
+		public function getEnquiries($type = '')
 		{
-			return $data = $this->db->get('enquiries')->result();
+			$type = trim((string) $type);
+			if ($type !== '') $this->db->where('enquiry_type', $type);
+
+			return $this->db->order_by('enquiry_created_at', 'DESC')
+							->order_by('enquiry_id', 'DESC')
+							->get('enquiries')->result();
+		}
+
+		/**
+		 * How many enquiries there are of each type, for the filter tabs.
+		 *
+		 * @return array enquiry_type => count
+		 */
+		public function getEnquiryTypeCounts()
+		{
+			$rows = $this->db->select('enquiry_type, COUNT(*) AS total')
+							 ->group_by('enquiry_type')
+							 ->get('enquiries')->result();
+
+			$counts = array();
+			foreach ($rows as $row) {
+				$counts[(string) $row->enquiry_type] = (int) $row->total;
+			}
+
+			return $counts;
 		}
 
 		public function savedEnquiry()
 		{
-			return $data = $this->db->where('enquiry_save', 1)->get('enquiries')->result();
+			return $this->db->where('enquiry_save', 1)
+							->order_by('enquiry_created_at', 'DESC')
+							->order_by('enquiry_id', 'DESC')
+							->get('enquiries')->result();
 		}
 
 		public function deleteEnquiry($id)

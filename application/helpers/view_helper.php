@@ -473,39 +473,122 @@ if (!function_exists('category_placeholder')) {
     }
 }
 
-if (!function_exists('sales_representatives')) {
+if (!function_exists('enquiry_departments')) {
     /**
-     * The named sales reps a caller can be put through to.
+     * The departments a visitor can address an enquiry to.
      *
-     * The signup form (views/register.php) has carried this list inline since
-     * the site launched; the callback panel on /pricing-plan needs the same
-     * names, and two hand-kept copies is how one of them goes stale. Editable
-     * without a deploy through the `sales_representatives` setting in
-     * /admin/setting — one name per line, or comma separated.
+     * This replaces the named sales-rep list the signup form and the
+     * /pricing-plan callback panel used to offer. Nine people were named in
+     * those dropdowns and most of them no longer work here, so a caller could
+     * ask by name for somebody who left — and the enquiry then sat waiting for
+     * a person who was never going to pick it up. A department outlives whoever
+     * staffs it, which is the whole point of routing to one.
      *
-     * @return string[]
+     * Editable without a deploy through the `enquiry_departments` setting at
+     * /admin/setting — one department per line, or comma separated. The first
+     * entry is the default: it is what a form preselects and what the server
+     * falls back to when nothing valid was posted.
+     *
+     * @return string[] Never empty — the built-in list is the floor.
      */
-    function sales_representatives()
+    function enquiry_departments()
     {
-        $raw = trim((string) site_setting('sales_representatives', ''));
+        $fallback = array(
+            'Sales Department',
+            'Customer Service',
+            'Billing Department',
+            'Advertising & Marketing',
+            'Technical Support',
+        );
 
-        if ($raw !== '') {
-            $names = preg_split('/[\r\n,]+/', $raw);
-        } else {
-            $names = array(
-                'Joshua Hari', 'Gloria Bennett-Green', 'Shawn House', 'Melinda Trussell',
-                'BJ Thomas', 'Melissa Kelton', 'Rashad Ramkissoon', 'Rafaela Ruffino',
-                'Eddie Noschese',
-            );
-        }
+        $raw   = trim((string) site_setting('enquiry_departments', ''));
+        $names = $raw !== '' ? preg_split('/[\r\n,]+/', $raw) : $fallback;
 
         $out = array();
         foreach ($names as $name) {
             $name = trim((string) $name);
-            if ($name !== '') $out[] = $name;
+            if ($name !== '' && !in_array($name, $out, true)) $out[] = $name;
         }
 
-        return $out;
+        return $out ?: $fallback;
+    }
+}
+
+if (!function_exists('default_enquiry_department')) {
+    /**
+     * The department an enquiry goes to when the visitor picked none.
+     *
+     * @return string
+     */
+    function default_enquiry_department()
+    {
+        $departments = enquiry_departments();
+
+        return (string) reset($departments);
+    }
+}
+
+if (!function_exists('normalise_enquiry_department')) {
+    /**
+     * Resolve a posted department to one we actually have.
+     *
+     * The value arrives from a `<select>`, so anything at all can be posted.
+     * Matching it back against enquiry_departments() means the column only ever
+     * holds a real department — no free text, and no way to file an enquiry
+     * under a department that doesn't exist. Unknown or blank falls back to the
+     * default rather than being rejected: an enquiry is never worth losing over
+     * a dropdown.
+     *
+     * @param  string $value Posted department label.
+     * @return string        Always one of enquiry_departments().
+     */
+    function normalise_enquiry_department($value)
+    {
+        $value = trim((string) $value);
+
+        if ($value !== '') {
+            foreach (enquiry_departments() as $department) {
+                if (strcasecmp($department, $value) === 0) return $department;
+            }
+        }
+
+        return default_enquiry_department();
+    }
+}
+
+if (!function_exists('enquiry_department_email')) {
+    /**
+     * The mailbox a department's enquiries should be delivered to, if one is set.
+     *
+     * Read from the `enquiry_department_emails` setting at /admin/setting: one
+     * `Department = address` pair per line. A department with no line here (or
+     * no setting at all) returns '' and the caller falls through
+     * form_recipient_email() to the site-wide address, so this is purely an
+     * opt-in refinement — nothing breaks by leaving it blank.
+     *
+     * @param  string $department
+     * @return string '' when the department has no address of its own.
+     */
+    function enquiry_department_email($department)
+    {
+        $department = trim((string) $department);
+        if ($department === '') return '';
+
+        $raw = trim((string) site_setting('enquiry_department_emails', ''));
+        if ($raw === '') return '';
+
+        foreach (preg_split('/[\r\n]+/', $raw) as $line) {
+            $parts = explode('=', $line, 2);
+            if (count($parts) !== 2) continue;
+
+            if (strcasecmp(trim($parts[0]), $department) !== 0) continue;
+
+            $address = trim($parts[1]);
+
+            return filter_var($address, FILTER_VALIDATE_EMAIL) ? $address : '';
+        }
+
+        return '';
     }
 }
 
