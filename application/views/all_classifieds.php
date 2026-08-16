@@ -162,7 +162,7 @@
                         <?= e($classifieds->classifieds_title); ?><span><?= date('d, M Y', strtotime($classifieds->created_at)); ?></span>
                       </td>
                       <td><a href="" class="db-list-ststus" target="_blank"><?= $classifieds->category_name ?></a></td>
-                      <td><a href="" class="db-list-ststus" target="_blank"><?= $classifieds->name; ?></a></td>
+                      <td><a href="" class="db-list-ststus" target="_blank"><?= e($classifieds->name) ?></a></td>
                       <td><a href="" class="db-list-ststus" target="_blank"><?= isset($classifieds->views) ? $classifieds->views : 0 ?></a></td>
                       <td>
                         <span class="db-list-ststus">

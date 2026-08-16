@@ -32,7 +32,7 @@
 																if($users && $users != null){
 																	foreach ($users as $key => $value) {
 																?>
-																<option value="<?= $value->user_id;?>" <?= ($value->user_id == $ad->u_id)? 'selected': '';?> ><?= $value->name;?></option>
+																<option value="<?= $value->user_id;?>" <?= ($value->user_id == $ad->u_id)? 'selected': '';?> ><?= e($value->name) ?></option>
 																
 																<?php
 																	}

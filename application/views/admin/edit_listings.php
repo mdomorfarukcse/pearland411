@@ -177,7 +177,7 @@
                               if (isset($users) && count($users) > 0) {
                                 foreach ($users as $value) {
                               ?>
-                                  <option value="<?= $value->user_id; ?>" <?= (isset($listing) && $listing->user_id == $value->user_id) ? 'SELECTED' : '' ?>><?= $value->name; ?></option>
+                                  <option value="<?= $value->user_id; ?>" <?= (isset($listing) && $listing->user_id == $value->user_id) ? 'SELECTED' : '' ?>><?= e($value->name) ?></option>
                               <?php
                                 }
                               }

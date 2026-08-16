@@ -49,7 +49,7 @@
 					if(count($users) > 0){
 						foreach ($users as $value) {
 				?>
-				<option value="<?= $value->user_id;?>"><?= $value->name;?></option>
+				<option value="<?= $value->user_id;?>"><?= e($value->name) ?></option>
 				<?php	
 						}
 					}

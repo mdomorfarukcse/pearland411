@@ -67,7 +67,7 @@
 
 																?>
 
-																		<option value="<?= $value->user_id; ?>" <?= $value->user_id == $product->user_id ? 'selected' : ''; ?>><?= $value->name; ?></option>
+																		<option value="<?= $value->user_id; ?>" <?= $value->user_id == $product->user_id ? 'selected' : ''; ?>><?= e($value->name) ?></option>
 
 																<?php
 

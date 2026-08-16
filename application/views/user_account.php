@@ -1214,7 +1214,7 @@ if (isset($user_transactions_data) && is_array($user_transactions_data)) {
                                                 <div style="display: flex; align-items: center; gap: 10px;">
                                                     <span style="font-size: 1.2rem;"><?= $info['icon'] ?></span>
                                                     <div>
-                                                        <div style="font-weight: 500; color: #495057;"><?= $info['name'] ?></div>
+                                                        <div style="font-weight: 500; color: #495057;"><?= e($info['name']) ?></div>
                                                         <div style="font-size: 0.8rem; color: #6c757d; text-transform: capitalize;"><?= str_replace('_', ' ', $key) ?></div>
                                                     </div>
                                                 </div>

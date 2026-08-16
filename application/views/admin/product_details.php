@@ -186,7 +186,7 @@
 
 							<img src="<?= base_url() ?>assets/images/user/3.jpg" alt="">
 
-							<h4><?= $product->name; ?></h4>
+							<h4><?= e($product->name) ?></h4>
 
 							<b>Join on <?= date('M Y', strtotime($product->user_created)); ?></b>
 

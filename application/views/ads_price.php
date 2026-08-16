@@ -27,7 +27,7 @@
               <tr>
                 
                 <td><?= $j;?></td>
-                <td><?= $value->name;?></td>
+                <td><?= e($value->name) ?></td>
                 <td>
                   <img src="<?= base_url($value->img); ?>" alt="">
                 </td>

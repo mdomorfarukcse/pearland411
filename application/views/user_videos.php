@@ -156,7 +156,7 @@
                         <img src="<?= (empty($video->video_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($video->video_image) ?>"><?= $video->video_title; ?><span><?= date('d, M Y', strtotime($video->created_at)); ?></span>
                       </td>
                       <td><a href="" class="db-list-ststus" target="_blank"><?= $video->category_name ?></a></td>
-                      <td><a href="" class="db-list-ststus" target="_blank"><?= $video->name; ?></a></td>
+                      <td><a href="" class="db-list-ststus" target="_blank"><?= e($video->name) ?></a></td>
                       <td><?= isset($video->views) ? $video->views : 0 ?></td>
                       <td>
                         <span class="db-list-ststus">

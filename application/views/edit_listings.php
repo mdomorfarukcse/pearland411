@@ -336,12 +336,12 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-6">
 									<div class="form-group">
-										<input type="text" name="listing_lat" class="form-control" placeholder="Latitude i.e 40.730610" value="<?= $listing->listing_lat ?>" <?= $caps['can_map'] ? '' : 'disabled' ?>>
+										<input type="text" name="listing_lat" class="form-control" placeholder="Latitude i.e 40.730610" value="<?= e_attr($listing->listing_lat) ?>" <?= $caps['can_map'] ? '' : 'disabled' ?>>
 									</div>
 								</div>
 								<div class="col-md-6">
 									<div class="form-group">
-										<input type="text" name="listing_lng" class="form-control" placeholder="Longitude i.e -73.935242" value="<?= $listing->listing_lng ?>" <?= $caps['can_map'] ? '' : 'disabled' ?>>
+										<input type="text" name="listing_lng" class="form-control" placeholder="Longitude i.e -73.935242" value="<?= e_attr($listing->listing_lng) ?>" <?= $caps['can_map'] ? '' : 'disabled' ?>>
 											<?= cap_lock_note($caps['can_map']) ?>
 									</div>
 								</div>
