@@ -648,6 +648,11 @@ class Admin extends CI_Controller
 			// One address for every public form. Blank falls back to
 			// contact_email, then MAIL_FROM_ADDRESS.
 			'forms_recipient_email',
+			// Enquiry routing. The departments a visitor can address a message
+			// to (one per line; blank uses the built-in list), and an optional
+			// `Department = address` mailbox per line for each. These replaced
+			// the named sales reps the forms used to list — see migration 0026.
+			'enquiry_departments', 'enquiry_department_emails',
 			// How many unsold zones on a page may fill with a house
 			// ("advertise here") creative. Defaults to 2 — see ad_slot.php.
 			// Every zone filling meant a page of house ads and no advertisers,
@@ -5251,13 +5256,30 @@ class Admin extends CI_Controller
 		 ENQUIRY
 		 ==============*/
 
+	/**
+	 * Every enquiry, with a tab per kind.
+	 *
+	 * `?type=package` is the one that matters: a callback request from the
+	 * packages panel on /pricing-plan is a sales lead, not a website question,
+	 * and until migration 0026 both were written as `contact` and shown in one
+	 * undifferentiated list. See User::contact_submit().
+	 */
 	public function enquiries()
 	{
 		$data['logged_id'] = NULL;
 		$session 		   = $this->session->userdata('logged_admin');
 		$data['logged_id'] = $session['logged_id'];
 
-		$data['enquiries'] = $this->adminmodel->getEnquiries();
+		$counts = $this->adminmodel->getEnquiryTypeCounts();
+
+		// Whitelisted against the types actually present, so the filter can
+		// only ever narrow to something real.
+		$type = trim((string) $this->input->get('type'));
+		if ($type !== '' && !isset($counts[$type])) $type = '';
+
+		$data['enquiry_type']   = $type;
+		$data['enquiry_counts'] = $counts;
+		$data['enquiries']      = $this->adminmodel->getEnquiries($type);
 
 		$this->load->view('admin/header');
 		// $this->load->view('admin/inc/left_sidebar');

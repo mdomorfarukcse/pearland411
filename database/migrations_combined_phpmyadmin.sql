@@ -1028,4 +1028,78 @@ UPDATE `ads_prices` SET `size` = '970x90'  WHERE `slot_key` = 'footer-banner'   
 INSERT IGNORE INTO `site_settings` (`setting_key`, `setting_value`, `updated_at`)
 VALUES ('ads_house_max_per_page', '2', NOW());
 
+
+-- ============================================================
+-- 0026_enquiry_departments.sql
+-- ============================================================
+-- Splits package callbacks out of the general contact pile, and replaces the
+-- named sales reps on the public forms with departments. See
+-- database/migrations/0026_enquiry_departments.sql for the full reasoning;
+-- this is the same migration rewritten in the inline prepared-statement style
+-- this bundle uses, because phpMyAdmin's importer cannot parse the procedure
+-- form.
+--
+-- `enquiries` predates this repo's migrations, so every step below is guarded
+-- on the table existing (@t) as well as on the column/index (@c).
+
+-- 1. The department column. NULL = filed before departments existed.
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'enquiries');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'enquiries'
+             AND COLUMN_NAME  = 'enquiry_department');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `enquiries` ADD COLUMN `enquiry_department` VARCHAR(80) NULL DEFAULT NULL',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 2. An index behind the admin tabs — /admin/enquiries filters on enquiry_type.
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'enquiries'
+             AND INDEX_NAME   = 'enquiries_type_idx');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `enquiries` ADD KEY `enquiries_type_idx` (`enquiry_type`)',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 3. Reclassify the callback requests already in the table, so the new tabs
+--    are not empty on day one and the existing leads stop hiding among the
+--    general messages. Matched with LIKE on the ASCII prefix of
+--    'Pricing plan - callback': the em dash in the real string is the one
+--    character whose bytes depend on the client charset, and an import that
+--    negotiates latin1 would match nothing and silently leave leads misfiled.
+SET @s := IF(@t = 1,
+    'UPDATE `enquiries` SET `enquiry_type` = ''package'' WHERE `enquiry_source` LIKE ''Pricing plan%'' AND `enquiry_type` = ''contact''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 4. Backfill the department. A package callback was a sales lead; a
+--    contact-form message was not. Anything else keeps NULL rather than being
+--    guessed at. Re-checks the column, since step 1 is a no-op on a database
+--    that already has it and @c is reused above.
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'enquiries'
+             AND COLUMN_NAME  = 'enquiry_department');
+SET @s := IF(@t = 1 AND @c = 1,
+    'UPDATE `enquiries` SET `enquiry_department` = ''Sales Department'' WHERE `enquiry_type` = ''package'' AND (`enquiry_department` IS NULL OR `enquiry_department` = '''')',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := IF(@t = 1 AND @c = 1,
+    'UPDATE `enquiries` SET `enquiry_department` = ''Customer Service'' WHERE `enquiry_type` = ''contact'' AND (`enquiry_department` IS NULL OR `enquiry_department` = '''')',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 5. Retire the named-rep list. The nine names shown on the live site are not
+--    in the code — the code's fallback was overridden by this row, and
+--    sales_representatives() is gone. The text of past enquiries is NOT
+--    touched: a message that says "Asked for: <name>" stays as it was sent.
+--    The department list is deliberately not seeded — blank means "use the
+--    built-in list" in enquiry_departments().
+DELETE FROM `site_settings` WHERE `setting_key` = 'sales_representatives';
+
 SET FOREIGN_KEY_CHECKS = 1;

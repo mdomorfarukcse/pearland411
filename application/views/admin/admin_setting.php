@@ -215,6 +215,29 @@ $s = isset($settings) ? $settings : array();
 			</div>
 		</section>
 
+		<!-- Enquiry routing --------------------------------------------- -->
+		<section class="setting-card">
+			<h2>Enquiry routing</h2>
+			<p class="hint">
+				The contact form and the callback panel on <code>/pricing-plan</code> ask the
+				visitor <strong>which department</strong> they need. This used to be a list of nine
+				sales representatives by name; most of them no longer work here, so a caller could
+				ask for somebody who left and the message would sit waiting for a person who was
+				never going to pick it up. A department outlives whoever staffs it.
+				The first one in the list is the default &mdash; it is what the forms preselect.
+			</p>
+			<div class="setting-row">
+				<label for="enquiry_departments">Departments<small>One per line. Leave blank for the built-in list: Sales Department, Customer Service, Billing Department, Advertising &amp; Marketing, Technical Support.</small></label>
+				<textarea id="enquiry_departments" name="enquiry_departments" rows="6"
+						  placeholder="Sales Department&#10;Customer Service&#10;Billing Department&#10;Advertising &amp; Marketing&#10;Technical Support"><?= e($s['enquiry_departments'] ?? '') ?></textarea>
+			</div>
+			<div class="setting-row">
+				<label for="enquiry_department_emails">Department mailboxes<small>Optional, one <code>Department = address</code> per line. A department listed here gets its messages directly; anything not listed falls back to the address above, so leaving this blank changes nothing.</small></label>
+				<textarea id="enquiry_department_emails" name="enquiry_department_emails" rows="6"
+						  placeholder="Sales Department = sales@pearland411.com&#10;Billing Department = billing@pearland411.com"><?= e($s['enquiry_department_emails'] ?? '') ?></textarea>
+			</div>
+		</section>
+
 		<!-- Advertising --------------------------------------------------- -->
 		<section class="setting-card">
 			<h2>Advertising</h2>

@@ -7,20 +7,26 @@
  * A large share of the people buying a listing or a banner are not going to
  * complete a checkout: they want to talk to somebody. This panel gives them
  * three ways to do that without leaving the page — call, email, or leave a
- * number for a callback — and lets them ask for the representative they
- * already deal with (the same list the signup form offers, from
- * sales_representatives()).
+ * number for a callback — and lets them pick the department they need (from
+ * enquiry_departments(), the same list the signup form offers).
  *
  * The callback form posts to /contact-submit, the same action the contact page
- * uses; `return_to` brings them back here rather than to /contact-us, and the
- * enquiry is filed as "Pricing plan — callback". Either an email address or a
- * phone number is enough — this form asks for the phone.
+ * uses; `return_to` brings them back here rather than to /contact-us. Either an
+ * email address or a phone number is enough — this form asks for the phone.
+ *
+ * `$help_topic` is what decides which inbox the enquiry lands in. This panel
+ * sells packages, so it files as `package` and shows up under "Marketing
+ * packages" in admin rather than mixed in with general contact-form messages —
+ * which is what used to happen, and the reason a callback request could sit
+ * unread among website questions.
  *
  * Variables (all optional):
  *   $help_title    (string) heading override
  *   $help_lede     (string) intro line override
  *   $help_return   (string) `return_to` value; must be whitelisted in
  *                  User::contact_submit(). Default 'pricing-plan'.
+ *   $help_topic    (string) enquiry type; whitelisted in User::contact_submit().
+ *                  Default 'package'.
  *
  * Like partials/ad_slot.php this ships its own CSS and emits it once per
  * request, because it is included by views that do not all load the page kit.
@@ -29,11 +35,12 @@
 $help_title  = isset($help_title)  ? (string) $help_title  : 'Would you rather we set it up for you?';
 $help_lede   = isset($help_lede)   ? (string) $help_lede   : 'You do not have to order online. Call us and one of our sales representatives will take your details over the phone, pick the right package with you and get your business or your ad live — no forms, no card details typed into a website.';
 $help_return = isset($help_return) ? (string) $help_return : 'pricing-plan';
+$help_topic  = isset($help_topic)  ? (string) $help_topic  : 'package';
 
 $help_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 $help_email = trim((string) site_setting('contact_email', 'sales@pearland411.com'));
 $help_tel   = preg_replace('/[^0-9+]/', '', $help_phone);
-$help_reps  = function_exists('sales_representatives') ? sales_representatives() : array();
+$help_depts = function_exists('enquiry_departments') ? enquiry_departments() : array();
 
 // CI loads partials in the caller's scope, so the session comes off the
 // instance rather than `$this` — this file is included from plain views too.
@@ -250,6 +257,7 @@ if ($help_css) define('PEARLAND411_SALES_HELP_CSS', 1);
 
 		<form method="post" action="<?= base_url('contact-submit') ?>">
 			<input type="hidden" name="return_to" value="<?= e_attr($help_return) ?>">
+			<input type="hidden" name="topic" value="<?= e_attr($help_topic) ?>">
 			<input type="hidden" name="subject" value="Callback request">
 
 			<div class="p411-help__field">
@@ -269,13 +277,12 @@ if ($help_css) define('PEARLAND411_SALES_HELP_CSS', 1);
 				</div>
 			</div>
 
-			<?php if (!empty($help_reps)): ?>
+			<?php if (!empty($help_depts)): ?>
 				<div class="p411-help__field">
-					<label for="help_rep">Ask for someone in particular?</label>
-					<select id="help_rep" name="sales_representative">
-						<option value="">Anyone available</option>
-						<?php foreach ($help_reps as $rep): ?>
-							<option value="<?= e_attr($rep) ?>"><?= e($rep) ?></option>
+					<label for="help_dept">Who do you need?</label>
+					<select id="help_dept" name="department">
+						<?php foreach ($help_depts as $department): ?>
+							<option value="<?= e_attr($department) ?>"><?= e($department) ?></option>
 						<?php endforeach; ?>
 					</select>
 				</div>
@@ -295,6 +302,6 @@ if ($help_css) define('PEARLAND411_SALES_HELP_CSS', 1);
 </section>
 
 <?php
-unset($help_title, $help_lede, $help_return, $help_phone, $help_email, $help_tel,
-	$help_reps, $help_ok, $help_err, $help_css, $__ci);
+unset($help_title, $help_lede, $help_return, $help_topic, $help_phone, $help_email,
+	$help_tel, $help_depts, $help_ok, $help_err, $help_css, $__ci);
 ?>

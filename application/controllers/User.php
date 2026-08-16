@@ -676,6 +676,17 @@ class User extends CI_Controller
 	 * silently lost. This action validates, persists into `enquiries`,
 	 * notifies the admin address, acknowledges to the sender, and
 	 * redirects back to /contact-us with a flash.
+	 *
+	 * Two forms post here: the contact page, and the callback panel on
+	 * /pricing-plan (views/partials/sales_help.php). They are not the same
+	 * enquiry. Someone leaving their number to buy a package is a sales lead;
+	 * someone asking a question through /contact-us is not. Both used to be
+	 * written with `enquiry_type = 'contact'`, so the admin list showed one
+	 * undifferentiated pile and a package lead could sit unread among website
+	 * questions. The posted `topic` (whitelisted below) now sets the type, and
+	 * `department` records who it is for — Sales, Billing, Customer Service —
+	 * instead of the named representative the panel used to ask for, most of
+	 * whom no longer work here.
 	 */
 	public function contact_submit()
 	{
@@ -729,53 +740,80 @@ class User extends CI_Controller
 		// what it is rather than reading it as a general enquiry.
 		$source = $back === 'pricing-plan' ? 'Pricing plan — callback' : 'Contact Us';
 
-		// The callback panel lets a caller ask for the representative they
-		// already deal with. Carried in the message so it reaches whoever
-		// picks the enquiry up — `enquiries` has no column for it.
-		$rep = trim((string) $this->input->post('sales_representative'));
-		if ($rep !== '') {
-			$message = 'Asked for: ' . $rep . "\n\n" . $message;
+		// Which inbox it belongs in. Whitelisted, not trusted: `topic` comes
+		// off a hidden field, and the type column drives the admin filters.
+		// A callback from the packages panel is a `package` lead; anything
+		// else stays a `contact` message, which is what /contact-us posts.
+		$topic = trim((string) $this->input->post('topic'));
+		if (!in_array($topic, array('package', 'contact'), true)) {
+			$topic = $back === 'pricing-plan' ? 'package' : 'contact';
 		}
 
-		$this->db->insert('enquiries', array(
+		// Who it is for. Matched back against enquiry_departments() so the
+		// column only ever holds a department we actually have.
+		$department = normalise_enquiry_department($this->input->post('department'));
+
+		$row = array(
 			'enquiry_name'       => $name,
 			'enquiry_email'      => $email,
 			'enquiry_mobile'     => $phone,
 			'enquiry_message'    => ($subject !== '' ? '[' . $subject . '] ' : '') . $message,
 			'enquiry_source'     => $source,
-			'enquiry_type'       => 'contact',
+			'enquiry_type'       => $topic,
 			'enquiry_save'       => 0,
 			'enquiry_created_at' => date('Y-m-d H:i:s'),
-		));
+		);
+
+		// `enquiries` predates the repo's migrations, so the column may not be
+		// there yet on an install that hasn't run 0026. Losing the department
+		// is survivable; losing the enquiry to a fatal is not — so when the
+		// column is missing the department rides along in the message instead.
+		if ($this->db->field_exists('enquiry_department', 'enquiries')) {
+			$row['enquiry_department'] = $department;
+		} else {
+			$row['enquiry_message'] = 'For: ' . $department . "\n\n" . $row['enquiry_message'];
+		}
+
+		$this->db->insert('enquiries', $row);
 
 		$this->load->library('mailer');
 
 		// Acknowledge to the sender — only when they left an address.
 		if (trim($email) !== '') {
-			$ack = '<p>Thanks — we received your message and will get back to you shortly.</p>'
+			$ack = '<p>Thanks — we received your message and passed it to '
+				. html_escape($department) . '. Someone there will get back to you shortly.</p>'
 				. '<p>For reference, you sent:</p>'
 				. '<blockquote>' . nl2br(html_escape($message)) . '</blockquote>';
 			$this->mailer->send($email, 'We received your message', $ack);
 		}
 
-		// Notify the admin address.
-		$admin_to = form_recipient_email();
+		// Notify the admin address. A department with a mailbox of its own gets
+		// it directly; everything else falls through to the site-wide address,
+		// so leaving the department emails blank changes nothing.
+		$admin_to = form_recipient_email(enquiry_department_email($department));
 		if ($admin_to) {
-			$alert = '<p>New contact-form submission:</p>'
+			$alert = '<p>New ' . ($topic === 'package' ? 'package callback request' : 'contact-form submission') . ':</p>'
 				. '<ul>'
-				. '<li>Name: '    . html_escape($name)    . '</li>'
-				. '<li>Email: '   . html_escape($email)   . '</li>'
-				. '<li>Phone: '   . html_escape($phone)   . '</li>'
-				. '<li>Subject: ' . html_escape($subject) . '</li>'
+				. '<li>Department: ' . html_escape($department) . '</li>'
+				. '<li>Name: '       . html_escape($name)       . '</li>'
+				. '<li>Email: '      . html_escape($email)      . '</li>'
+				. '<li>Phone: '      . html_escape($phone)      . '</li>'
+				. '<li>Subject: '    . html_escape($subject)    . '</li>'
+				. '<li>Page: '       . html_escape($source)     . '</li>'
 				. '</ul>'
 				. '<p>Message:</p><blockquote>' . nl2br(html_escape($message)) . '</blockquote>';
-			$this->mailer->send($admin_to, '[Pearland411] Contact-Us message from ' . $name, $alert);
+			$this->mailer->send(
+				$admin_to,
+				'[Pearland411] ' . ($topic === 'package' ? 'Package callback' : 'Contact-Us message')
+					. ' for ' . $department . ' from ' . $name,
+				$alert
+			);
 		}
 
 		$this->session->set_flashdata('contact_success',
 			$back === 'pricing-plan'
-				? 'Thanks! One of our sales representatives will call you back shortly.'
-				: 'Thanks! We received your message and will be in touch soon.');
+				? 'Thanks! Someone from ' . $department . ' will call you back shortly.'
+				: 'Thanks! We passed this to ' . $department . ' and will be in touch soon.');
 		redirect($back);
 	}
 

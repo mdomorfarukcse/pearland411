@@ -1,4 +1,59 @@
- 
+<?php
+/**
+ * /admin/saved-enquiry — the enquiries someone ticked "Save" on.
+ *
+ * Same shape as admin/all_enquiry.php, minus the filter tabs (a saved list is
+ * already a hand-picked subset). Two things were wrong here and are fixed:
+ *
+ *  * Every field was echoed raw. `enquiry_name`, `enquiry_message` and the
+ *    rest are typed by the public into /contact-us and the callback panel and
+ *    stored unescaped by design ("escape on output"), so a message containing
+ *    a <script> tag ran inside the admin panel. They go through e() now.
+ *  * The back-link variables were declared outside the loop and never reset,
+ *    so once one listing enquiry had rendered every later row inherited its
+ *    link, and rows with no id column produced `admin//` plus a notice for
+ *    reading an empty property name.
+ *
+ * From Admin::saved_enquiry(): $enquiries.
+ */
+
+/** Plain-English name for an enquiry_type. Mirrors admin/all_enquiry.php. */
+$enq_label = function ($type) {
+  $labels = array(
+    'package'     => 'Marketing package',
+    'contact'     => 'Contact form',
+    'listing'     => 'Listing',
+    'blog'        => 'Blog',
+    'event'       => 'Event',
+    'news'        => 'News',
+    'video'       => 'Video',
+    'product'     => 'Product',
+    'rental'      => 'Rental',
+    'classifieds' => 'Classifieds',
+    'general'     => 'General',
+  );
+  $type = (string) $type;
+
+  return isset($labels[$type]) ? $labels[$type] : ($type !== '' ? ucfirst($type) : 'Other');
+};
+
+/** The admin page this enquiry points back at, or '' when it has none. */
+$enq_link = function ($enq) {
+  $targets = array(
+    'listing' => array('listing_preview', 'listing_id'),
+    'blog'    => array('blog_details',    'blog_id'),
+    'event'   => array('event_details',   'event_id'),
+  );
+  $type = (string) $enq->enquiry_type;
+
+  if (!isset($targets[$type])) return '';
+
+  list($route, $id_field) = $targets[$type];
+  $id = isset($enq->$id_field) ? trim((string) $enq->$id_field) : '';
+
+  return $id === '' ? '' : base_url('admin/' . $route . '/' . rawurlencode($id));
+};
+?>
 
 <!-- START -->
 <section>
@@ -21,6 +76,7 @@
             <th>Phone</th>
             <th>Message</th>
             <th>Type</th>
+            <th>Department</th>
             <th>Page Name</th>
             <th>Delete</th>
          </tr>
@@ -29,71 +85,61 @@
       <?php
         if ($enquiries != NULL) {
           $i = 1;
-          $link = '';
-          $id = '';
           foreach ($enquiries as $enq) {
-          if ($enq->enquiry_type == 'listing') {
-            $link = 'listing_preview';
-            $id   = 'listing_id'; 
-          } 
-          if ($enq->enquiry_type == 'blog') {
-            $link = 'blog_details';
-            $id   = 'blog_id';
-          }
-          if ($enq->enquiry_type == 'event') {
-            $link = 'event_details';
-            $id   = 'event_id';
-          }
-      ?>      
+          $link = $enq_link($enq);
+      ?>
       <tr>
         <td><?= $i; ?></td>
         <td>
-          <?= $enq->enquiry_name; ?> <span><?= date('d, M Y',strtotime($enq->enquiry_created_at)); ?></span>
+          <?= e($enq->enquiry_name); ?> <span><?= date('d, M Y',strtotime($enq->enquiry_created_at)); ?></span>
         </td>
         <td>
-          <?= $enq->enquiry_email; ?>
+          <?= e($enq->enquiry_email); ?>
         </td>
         <td>
-          <?= $enq->enquiry_mobile; ?>
+          <?= e($enq->enquiry_mobile); ?>
         </td>
         <td>
-          <?= $enq->enquiry_message; ?>
+          <?= e_nl2br($enq->enquiry_message); ?>
         </td>
         <td>
-          <?= ucfirst($enq->enquiry_type); ?>
+          <?= e($enq_label($enq->enquiry_type)); ?>
         </td>
         <td>
-          <a href="<?= base_url('admin/'.$link.'/'.$enq->$id);?>"><?= $enq->enquiry_source; ?></a>
-        </td>               
+          <?= e(isset($enq->enquiry_department) && trim((string) $enq->enquiry_department) !== ''
+                ? $enq->enquiry_department
+                : '—'); ?>
+        </td>
+        <td>
+          <?php if ($link !== ''): ?>
+            <a href="<?= e_attr($link); ?>"><?= e($enq->enquiry_source); ?></a>
+          <?php else: ?>
+            <?= e($enq->enquiry_source); ?>
+          <?php endif; ?>
+        </td>
         <td>
           <a onclick="javascript:deleteConfirm('<?php echo base_url().'admin/delete-saved-enquiry/'.$enq->enquiry_id;?>');"  href="#" class="db-list-edit">Delete</a>
         </td>
 
       </tr>
-      <?php 
-        $i++;   
+      <?php
+        $i++;
           }
         } else {
       ?>
         <tr>
-          <td colspan="6"> No Blogs Available!!</td>
+          <td colspan="9">No saved enquiries yet.</td>
         </tr>
-      <?php } ?>                          
+      <?php } ?>
       </tbody>
     </table>
 
   </div>
 </div>
-<div class="ad-pgnat">
-  <ul class="pagination">
-    <li class="page-item"><a class="page-link" href="#">Previous</a></li>
-    <li class="page-item active"><a class="page-link" href="#">1</a></li>
-    <li class="page-item"><a class="page-link" href="#">2</a></li>
-    <li class="page-item"><a class="page-link" href="#">3</a></li>
-    <li class="page-item"><a class="page-link" href="#">Next</a></li>
-  </ul>
-</div>
+<?php /* The pager here was five hard-coded links to "#" — it never paged
+         anything. The rows-per-page control on [data-admin-table] is the
+         real one. */ ?>
 </div>
 </div>
 </section>
-<!-- END -->    
+<!-- END -->
