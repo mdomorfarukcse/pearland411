@@ -56,8 +56,30 @@
 
                               <label>Choose category image</label>
 
-                              <!--<input type="file" name="category_image[cate1]" id="category_image" class="form-control" >-->
                               <input type="file" name="category_image" id="category_image" class="form-control" >
+                              <small class="form-text text-muted"><?= image_guidance('category') ?></small>
+
+                            </div>
+
+                          </div>
+
+                        </div>
+
+                        <div class="row">
+
+                          <div class="col-md-12">
+
+                            <div class="form-group">
+
+                              <?php // The editorial header banner (migration 0027). ?>
+                              <label>Category header banner</label>
+
+                              <input type="file" name="category_banner" id="category_banner" class="form-control" >
+                              <small class="form-text text-muted">
+                                Shown across the top of this category&rsquo;s directory page.
+                                <strong>1600 &times; 420 px</strong> works best.
+                                Leave empty to use the standard directory header.
+                              </small>
 
                             </div>
 

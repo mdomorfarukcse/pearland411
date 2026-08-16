@@ -86,6 +86,39 @@
 												</div>
 												<!--FILED END-->
 												<!--FILED START-->
+												<?php
+												// Mirrors the same field on admin/create_ads.php. The booking
+												// form could set a category from the start but this one could
+												// not, so a targeted ad could never be re-pointed or released
+												// back to site-wide once created. Selected from the stored
+												// value rather than set_select(), because this form is
+												// populated from the row, not from the last POST.
+												$__ad_cat_id = isset($ad->category_id) && $ad->category_id !== NULL
+													? (int) $ad->category_id : 0;
+												?>
+												<div class="row">
+													<div class="col-md-12">
+														<div class="form-group ca-sh-user">
+															<label for="ad_category_id">Show only in category</label>
+															<select name="category_id" class="form-control" id="ad_category_id">
+																<option value="">All categories &mdash; run this ad site-wide in its position</option>
+																<?php if (!empty($adCategories)) {
+																	foreach ($adCategories as $__cat) { ?>
+																		<option value="<?= (int) $__cat->category_id ?>"<?= (int) $__cat->category_id === $__ad_cat_id ? ' selected' : '' ?>><?= e($__cat->category_name) ?></option>
+																<?php }
+																} ?>
+															</select>
+															<small class="form-text text-muted">
+																Pick a category to sell that category&rsquo;s banner. A category booking
+																takes the position ahead of a site-wide one; leave it on
+																&ldquo;All categories&rdquo; to behave exactly as before.
+															</small>
+														</div>
+														<span class="text-danger"><?= form_error("category_id") ? form_error("category_id") : ''; ?></span>
+													</div>
+												</div>
+												<!--FILED END-->
+												<!--FILED START-->
 												<div class="row">
 													<div class="col-md-12">
 														<div class="form-group">

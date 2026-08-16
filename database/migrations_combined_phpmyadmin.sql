@@ -1102,4 +1102,34 @@ PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 --    built-in list" in enquiry_departments().
 DELETE FROM `site_settings` WHERE `setting_key` = 'sales_representatives';
 
+-- ============================================================
+-- 0027_category_header_banner.sql
+-- ============================================================
+-- Adds the EDITORIAL half of "No option to add category-specific banners and
+-- header banner in Business Listings". 0024 added the sold half
+-- (`ads.category_id` plus the `top-banner-category` zone); this adds the
+-- category's own header artwork, which is not inventory. See
+-- database/migrations/0027_category_header_banner.sql for the full reasoning;
+-- this is the same migration in the inline prepared-statement style this
+-- bundle uses, because phpMyAdmin's importer cannot parse the procedure form.
+--
+-- NULL means "use the standard directory header", so every existing category
+-- looks exactly as it does today. No seed, no backfill.
+--
+-- `listing_categories` predates this repo's migrations, so the step is guarded
+-- on the table existing (@t) as well as on the column (@c).
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'listing_categories');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'listing_categories'
+             AND COLUMN_NAME  = 'category_banner');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `listing_categories` ADD COLUMN `category_banner` VARCHAR(255) NULL DEFAULT NULL',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
 SET FOREIGN_KEY_CHECKS = 1;

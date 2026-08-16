@@ -2149,6 +2149,18 @@ class User extends CI_Controller
 		// For category-targeted ad bookings (migration 0024).
 		$data['current_category_id']   = $cat_slug !== '' ? $this->usermodel->categoryIdBySlug($cat_slug) : NULL;
 
+		// The category's own header artwork (migration 0027). NULL, a missing
+		// column on an install that has not run 0027, or a file that is no
+		// longer on disk all fall through to the standard directory hero.
+		$data['current_category_banner'] = NULL;
+		if ($cat_slug !== '' && $data['current_category_id']) {
+			$__cat_row = $this->usermodel->getSingleValue(
+				$data['current_category_id'], 'category_id', 'listing_categories');
+			if ($__cat_row && !empty($__cat_row->category_banner)) {
+				$data['current_category_banner'] = (string) $__cat_row->category_banner;
+			}
+		}
+
 		// Featured rail — prefers the category being browsed, tops up site-wide.
 		$data['randListings']       = $this->usermodel->getFeaturedListingsForDirectory($cat_slug, 3);
 		$data['categoriesWithCounts'] = $this->usermodel->getCategoriesWithCounts(12);

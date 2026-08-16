@@ -2373,11 +2373,16 @@
           ==================*/
 		public function getAllAds()
 		{
-			$data =  $this->db->select('ads.*,u.name as username,u.profile_image as user_image,u.user_created as user_join,ap.name as ads_price_name')
+			// The category join MUST be LEFT. CodeIgniter's join() defaults to
+			// INNER, and ads.category_id is NULL for every site-wide booking —
+			// which today is most of the book — so an inner join would empty
+			// this list rather than annotate it.
+			$data =  $this->db->select('ads.*,u.name as username,u.profile_image as user_image,u.user_created as user_join,ap.name as ads_price_name,lc.category_name as ad_category_name')
 				->from('ads')
 				->where('ads.ad_status', 1)
 				->join('user as u', 'ads.u_id = u.user_id')
 				->join('ads_prices as ap', 'ads.ads_price_id = ap.id')
+				->join('listing_categories as lc', 'lc.category_id = ads.category_id', 'left')
 				->get()->result();
 			return $data;
 		}

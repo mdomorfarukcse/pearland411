@@ -6,6 +6,196 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-16 — Third tracker round: the fixes that only reached one of two code paths
+
+Eighteen rows arrived on a new copy of the manager's error tracker. Every
+screenshot in it is stamped **Tue Jul 21**, which predates both the 2026-08-05
+and 2026-08-06 rounds — so the first job was working out what was still true.
+Seven rows were already fixed and are recorded as such below rather than
+touched again.
+
+The pattern behind most of what remained: **a fix that landed on the admin path
+and not on the member path.** This codebase carries two near-duplicate
+implementations of almost every content operation — `Admin.php` +
+`views/admin/*` and `User.php` + `views/*` — and the previous rounds repeatedly
+patched one. Angel's note on the gallery row, *"This is still not fix"*, was
+correct for exactly that reason.
+
+### Fixed
+
+- **A business owner lost every photo by adding one.** The 2026-08-06 gallery
+  fix went into `Admin::edit_listing` only. `User::edit_listing` still wrote
+  `json_encode()` of just the newly uploaded files and never read the stored
+  column, so adding one photo replaced the gallery. It merges now and honours
+  `remove_gallery` the same way the admin path does. Removal is read **outside**
+  the `can_photos` gate on purpose: an owner on a downgraded plan can no longer
+  add photos but must still be able to delete a published one. The plan's
+  `photo_limit` is measured against what will remain after the save rather than
+  against a single upload, or the cap could be passed one upload at a time.
+- **The member edit form had no way to remove a gallery image.** It rendered its
+  own read-only `<img>` loop; it now includes `views/admin/partials/media_field.php`,
+  the same partial the admin screen uses, so the two behave identically. The
+  partial gained an optional `$mf_disabled` for the freemium lock.
+- **`/search` printed `<p>` and `&rsquo;` as visible text.** All nine result
+  sections built their excerpt with `strip_tags()` + byte-based `substr()` +
+  `htmlspecialchars()`, so a legacy entity-encoded body was never decoded and
+  its ampersands were escaped a second time. They use `content_excerpt()` + `e()`
+  now, like `/news` and `/blog-posts`. That also ends a mid-character
+  truncation: cutting 150 **bytes** through a curly apostrophe handed
+  `htmlspecialchars()` invalid UTF-8, which prints a replacement glyph on
+  PHP ≥ 8.1 and drops the whole description on anything older, leaving a bare
+  `...`.
+- **The member write paths were still entity-encoding on the way in** — 30 call
+  sites in `User.php`, the half of the 2026-08-06 change that only reached
+  `Admin.php`. A business name typed `Joe's BBQ` was stored `Joe&#039;s BBQ`.
+  Six views echoed `listing_name` and friends unescaped, two inside `value=""`
+  attributes; storing raw is only safe once output escapes, so those are fixed
+  in the same commit.
+- **The admin category and sub-category lists searched only the rows already on
+  screen.** The box was labelled "Search this page.." and was exactly that, so a
+  record on page 3 came back as no match — which is what the tracker's
+  "Ora Zimmerman → No matches" screenshot shows. Both lists use the server-side
+  `?q=` contract from `/admin/all_listings` now, matching word by word;
+  sub-categories also match on their parent category name.
+- **"View Sub Cate" asked for the wrong page.** It passed the category id as the
+  third URI segment, which `all_listing_sub_category($page = 1)` reads as the
+  **page number** — so viewing category 7 showed page 7 of every sub-category.
+  It passes `?category_id=` now, and that branch seeds `start_number`, which it
+  never set.
+- **Re-clicking the current page number left the admin panel.** Ten pagers built
+  their active item as `<a href="/">`, so clicking it went to the public
+  homepage and lost anything typed into the page.
+- **Pricing cards read "$15 per" with nothing after it.** `billing_interval` was
+  echoed raw with no guard, and the column stores the adjective `monthly` where
+  the copy needs a noun. New `billing_interval_noun()` normalises it and falls
+  back to **month**. Card rows also did not line up across a band — a shorter
+  description raised that card's divider and button — so the cards are a
+  five-row subgrid.
+- **`/news-details` paragraph spacing was decided by incidental whitespace.** The
+  view flattened the body to text and rebuilt the breaks with `nl2br()`, so the
+  gap between two paragraphs depended on how much space the editor happened to
+  leave between the tags — uneven inside a single article. New `content_html()`
+  keeps the author's own `<p>` elements and `content.css` pins the rhythm. It
+  drops every attribute from the whitelisted tags, which is what stops an
+  imported article's inline `style="color:…"` repainting the page.
+- **The homepage carried no section strip at all.** `index.php` is a
+  self-contained page and simply did not have the element, so Classifieds
+  appeared nowhere on `/` and the strip disagreed with every other page — the
+  "items on Homepage and Admin don't match" row. It is now
+  `views/partials/section_strip.php`, included by both.
+- **Auto resolved *both* menu category slots to health categories.** "fitness"
+  only matches "Health, Wellness & Fitness", so the strip read that beside
+  "Healthcare" where Sports was expected. The token is gone and the two slots
+  can no longer resolve to the same category.
+- **`.hom-nav` hung out of the header bar on mobile.** `style.css` clamps
+  `.hom-top` to `height: 55px` below 993px while leaving the row a floated
+  stack, and the 90px logo is 54px tall. The row is laid out rather than
+  clamped, and the logo is capped by **height** — both marks are ~1.67:1, so a
+  width cap never bounded the height.
+- **FAQ item 10's "Contact Us" was `href="#"`.**
+- **The `/news` "See packages" house ad** linked to `/post-your-ads`, a lead form
+  with no packages on it.
+- **Social links sent visitors back into the site.** The footer icons were fixed
+  earlier by `external_url()`; the per-business buttons on `/listing-details`
+  never got it, so a schemeless `www.facebook.com/x` was emitted as a relative
+  href. A sold ad's click-through had the same defect plus an empty `ad_link`
+  falling to `href="#"`.
+- **The admin header printed the literal "Admin User"** — a theme placeholder on
+  all ~104 admin screens — so renaming the account changed nothing. Renaming
+  yourself in sub-admins also never refreshed the session, which would have
+  re-created the same symptom one layer down.
+- **`/pricing-plan#talk-to-us`** had ~170px of blank navy under the email link.
+- **`/search` never linked `promo-cards.css`,** so its sidebar house card
+  rendered unstyled.
+
+### Added
+
+- **`content_html()`** — the markup-preserving sibling of `content_text()`, for
+  views that render a whole article rather than summarise it. Structural tags
+  only, every attribute dropped bar `href`/`title` on a link. Used by
+  `/news-details` and `/services/<slug>`.
+- **`author_name()`** — one definition of the creator-name fallback. Seeded rows
+  carry `user_id = 0`, so the same event read "Hosted by Pearland411" on the
+  site and blank in the admin table.
+- **`image_guidance()` and on-screen upload sizes**, which answers the tracker's
+  "what is the optimal image size?". The directory card crops to **16:9** and a
+  gallery tile to **4:3**, both `object-fit: cover`, so a square logo loses its
+  top and bottom. Recommended **1200 × 675** for the logo and **1600 × 1200**
+  for gallery photos — those boxes at 2x. Shown on all four listing upload
+  forms.
+- **Category header banners, finishing the banner row.** `0024` had already
+  built the *sold* half (`ads.category_id`, the `top-banner-category` zone).
+  Three gaps remained and are closed: the admin **edit** screen never got the
+  targeting field, so a targeted ad could be created and never changed; the
+  bookings list did not show what an ad was targeted at; and `/listing-details`
+  passed no category, so `getAdForSlot()` fell into its untargeted branch and
+  actively filtered a category's own banner **out** of its listings' pages. The
+  *editorial* half is new: `listing_categories.category_banner`, uploaded in
+  Business Listings and rendered as the hero of `/all_listing/<slug>`, where
+  every category used to draw the same photograph.
+- **`cli decode_content_entities` covers `listings` and `user`,** and its guard
+  is per table rather than per run — one global flag meant a table added later
+  could never run on a site that had already done the first six, while clearing
+  it would decode those six twice and unwrap their literal `&amp;`.
+
+### Security
+
+- Six views echoed public-entered listing fields unescaped, two inside
+  attributes; ten admin lists echoed `user.name` raw. All now go through
+  `e()` / `e_attr()`. This had to land with the input-encoding removal above,
+  not after it.
+- `content_html()` strips `<script>`/`<style>` **and their contents** before
+  whitelisting, unwraps a link whose href fails `external_url()`, and keeps tags
+  balanced — verified against attribute-XSS, `javascript:` hrefs and orphan tags.
+
+### Already fixed — verified, not touched
+
+The clipped sponsored banner, the rows-per-page dropdown, live form validation,
+`asset_css()` cache-busting, the "Request a custom quote" destination,
+word-by-word search matching, and the settings-driven top-menu slots were all
+confirmed working in current code. The tracker rows describing them are stale.
+
+### Not changed — flagged for the operator
+
+- **`uploadAndResize()` does not resize.** Its width/height lines are commented
+  out, so CI's `Image_lib` copies the file at its original dimensions and every
+  upload is stored full size. Turning it on rewrites what is written for every
+  image on the site, so it is called out rather than bundled into a bug-fix
+  round.
+- **Homepage copy** (hero headline, popular searches) is still hard-coded. Making
+  it editable needs a page editor, which is a feature rather than a fix.
+- **17 unreferenced views** remain in the tree, including `all-listing2.php` and
+  the `add_listing_step_*` set.
+
+### Migrations
+
+`database/migrations/0027_category_header_banner.sql` — adds
+`listing_categories.category_banner`. NULL means "use the standard directory
+header", so there is no seed, no backfill, and every existing category is
+unchanged. Mirrored into `database/migrations_combined_phpmyadmin.sql` in that
+bundle's inline-PREPARE style and added to `database/README.md`.
+
+**Also run** (no database was reachable from the build environment):
+
+```bash
+php index.php cli decode_content_entities          # report
+php index.php cli decode_content_entities apply    # write
+```
+
+### Key files
+
+`application/controllers/User.php`, `Admin.php`, `Cli.php`,
+`application/models/Adminmodel.php`, `application/helpers/view_helper.php`
+(`content_html`, `author_name`, `image_guidance`, `billing_interval_noun`),
+`application/views/partials/section_strip.php` (new),
+`views/admin/partials/media_field.php`, `edit_listings.php`, `search.php`,
+`news_details.php`, `listing_details.php`, `all-listing.php`, `index.php`,
+`header.php`, `pricing_plan.php`, `partials/ad_slot.php`,
+`partials/sales_help.php`, `faq.php`, the admin category and ad views, and
+`assets/css/{content,site-header,home-sections}.css`.
+
+---
+
 ## 2026-08-15 — Enquiries go to a department, and package leads stop hiding in the contact pile
 
 Two problems reported against the callback panel on `/pricing-plan` ("Would you

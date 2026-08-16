@@ -87,8 +87,24 @@ $showing_to   = $current_offset + count($allListings);
 <section class="p411-dir">
 
 	<!-- ============================================================ HERO -->
+	<?php
+	// The category's own header artwork (migration 0027), falling back to the
+	// one photograph every category used to share. Same path check as
+	// ad_zone_preview(): the value is operator-supplied and goes into a CSS
+	// url() inside a style attribute, so a stored "../" must not escape the
+	// web root and a scheme-relative "//host" must not load off-site. A file
+	// that has since been deleted falls back rather than rendering a 404.
+	$dir_hero = 'assets/images/all-listing-bg.webp';
+	$dir_cat_banner = isset($current_category_banner) ? trim((string) $current_category_banner) : '';
+	if ($dir_cat_banner !== ''
+		&& strpos($dir_cat_banner, '..') === false
+		&& !preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $dir_cat_banner)
+		&& file_exists(FCPATH . ltrim($dir_cat_banner, '/'))) {
+		$dir_hero = ltrim($dir_cat_banner, '/');
+	}
+	?>
 	<div class="p411-hero">
-		<div class="p411-hero__bg" style="background-image:url('<?= base_url('assets/images/all-listing-bg.webp') ?>');" aria-hidden="true"></div>
+		<div class="p411-hero__bg" style="background-image:url('<?= e_attr(base_url($dir_hero)) ?>');" aria-hidden="true"></div>
 		<div class="container">
 			<nav class="p411-crumb" aria-label="Breadcrumb">
 				<a href="<?= base_url() ?>">Home</a>

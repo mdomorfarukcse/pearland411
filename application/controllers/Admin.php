@@ -886,6 +886,19 @@ class Admin extends CI_Controller
 				$data['category_image'] = uploadAndResize($img_info);
 			}
 
+			// Editorial header banner (migration 0027). Guarded on the column so
+			// the form still works on an install that has not run 0027.
+			if (!empty($_FILES['category_banner']['name'])
+				&& $this->db->field_exists('category_banner', 'listing_categories')) {
+				$data['category_banner'] = uploadAndResize([
+					'upload_path' => 'images/services',
+					'quality'     => '80%',
+					'height'      => 420,
+					'width'       => 1600,
+					'image_name'  => 'category_banner'
+				]);
+			}
+
 			if ($this->adminmodel->addListingCategory($data)) {
 				$this->session->set_flashdata('message', 'Successfully Added Listing Category!!');
 				redirect('admin/all_listing_category');
@@ -941,6 +954,39 @@ class Admin extends CI_Controller
 				$info['category_image'] = uploadAndResize($img_info);
 			} else {
 				$info['category_image'] = $old_image;
+			}
+
+			// The editorial header banner (migration 0027). Wide artwork behind
+			// the title on /all_listing/<slug>; NULL means "use the standard
+			// directory header", which is what every category did before.
+			// Written only when the column exists, so the screen keeps working
+			// on an install that has not run 0027 yet.
+			if ($this->db->field_exists('category_banner', 'listing_categories')) {
+				$old_banner = isset($data['category']->category_banner)
+					? $data['category']->category_banner : null;
+
+				if (!empty($_FILES['category_banner']['name'])) {
+					$banner_info = [
+						'upload_path' => 'images/services',
+						'quality'     => '80%',
+						'height'      => 420,
+						'width'       => 1600,
+						'image_name'  => 'category_banner'
+					];
+
+					if ($old_banner && file_exists('./' . $old_banner)) {
+						unlink('./' . $old_banner);
+					}
+
+					$info['category_banner'] = uploadAndResize($banner_info);
+				} elseif ($this->input->post('remove_category_banner')) {
+					if ($old_banner && file_exists('./' . $old_banner)) {
+						unlink('./' . $old_banner);
+					}
+					$info['category_banner'] = null;
+				} else {
+					$info['category_banner'] = $old_banner;
+				}
 			}
 
 			if ($this->adminmodel->updateListingCategory($id, $info)) {
@@ -5626,6 +5672,9 @@ class Admin extends CI_Controller
 		$data['users'] 		= $this->adminmodel->getAllValues('user');
 		$data['adsPrices'] 	= $this->adminmodel->allAdsPrices();
 		$data['ad']			= $this->adminmodel->getSingleValue($id, 'id', 'ads');
+		// Category targeting was added to the booking form but never to this
+		// one, so a targeted ad could be created and then never changed.
+		$data['adCategories'] = $this->usermodel->getAllValues('listing_categories');
 		$old_image        	= $data['ad']->ad_photo;
 
 		$this->form_validation->set_rules('user_id', 'User', 'trim|required');
@@ -5652,6 +5701,16 @@ class Admin extends CI_Controller
 				'ad_cost_per_day' => $this->input->post('ad_cost_per_day'),
 				'ad_total_cost'   => $this->input->post('ad_total_cost')
 			);
+
+			// Same normalisation as create_ads(): '' means site-wide, stored as
+			// NULL. This column is now owned by the form, so the matching
+			// <select> in views/admin/ads_edit.php is not optional — without it
+			// every re-save would silently retarget a paid category booking to
+			// run site-wide.
+			$ad_category = $this->input->post('category_id');
+			$info['category_id'] = ($ad_category === NULL || $ad_category === '')
+				? NULL
+				: (int) $ad_category;
 
 			if ($_FILES && $_FILES['ad_photo']['name']) {
 				$img_info = [
