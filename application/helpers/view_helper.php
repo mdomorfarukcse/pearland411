@@ -556,6 +556,38 @@ if (!function_exists('normalise_enquiry_department')) {
     }
 }
 
+if (!function_exists('billing_interval_noun')) {
+    /**
+     * `plans.billing_interval` as the noun the price copy needs.
+     *
+     * The column is legacy free text: the admin form writes the adjective
+     * 'monthly', older rows hold NULL or '', and the pricing card printed
+     * `'per ' . $value` with no guard — which is how a card came to read
+     * "$15 per" with nothing after it, and "per monthly" once a row was
+     * populated. Anything unrecognised collapses to the house default rather
+     * than being echoed raw, because a dangling preposition on a price is
+     * worse than a wrong-but-grammatical one, and only the recurring
+     * categories reach this branch at all.
+     *
+     * @param  string $interval Stored interval, in any of its historical spellings.
+     * @param  string $default  Noun to use when the value is blank or unknown.
+     * @return string           A bare noun: month, year, week or day.
+     */
+    function billing_interval_noun($interval, $default = 'month')
+    {
+        $map = array(
+            'month'  => 'month', 'monthly'  => 'month', 'mo' => 'month', '30' => 'month',
+            'year'   => 'year',  'yearly'   => 'year',  'annual' => 'year', 'annually' => 'year',
+            'week'   => 'week',  'weekly'   => 'week',
+            'day'    => 'day',   'daily'    => 'day',
+        );
+
+        $key = strtolower(trim((string) $interval));
+
+        return isset($map[$key]) ? $map[$key] : $default;
+    }
+}
+
 if (!function_exists('enquiry_department_email')) {
     /**
      * The mailbox a department's enquiries should be delivered to, if one is set.

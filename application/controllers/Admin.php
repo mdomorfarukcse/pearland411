@@ -820,7 +820,7 @@ class Admin extends CI_Controller
 		];
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -1203,7 +1203,7 @@ class Admin extends CI_Controller
 
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -2122,7 +2122,7 @@ class Admin extends CI_Controller
 
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -2599,7 +2599,7 @@ class Admin extends CI_Controller
 		// Pagination styling
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -6725,6 +6725,16 @@ class Admin extends CI_Controller
 				), $this->input->post('password') ?: null);
 
 				if ($ok) {
+					// Editing yourself has to refresh the session copy, which is
+					// otherwise only written at login: the name would keep showing
+					// the old value, and a self-demotion would leave super-admin
+					// menu items on screen until logout.
+					if ((int) $id === $self_id && is_array($current)) {
+						$current['admin_name']  = $this->input->post('admin_name');
+						$current['admin_email'] = $this->input->post('admin_email');
+						$current['role']        = $role;
+						$this->session->set_userdata('logged_admin', $current);
+					}
 					$this->session->set_flashdata('message', 'Sub-admin updated.');
 					redirect('admin/sub-admins');
 					return;

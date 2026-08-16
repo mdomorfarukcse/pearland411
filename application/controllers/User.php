@@ -1038,6 +1038,9 @@ class User extends CI_Controller
 			$data['ad_house_cap'] = $this->thinPageAdCap(
 				isset($data['total_results']) ? $data['total_results'] : 0);
 			$data['ad_slots'] = $this->pageAdSlots('full');
+			// The sidebar's unsold zone falls back to banner_design_promo.php,
+			// whose styling lives entirely in this sheet.
+			$data['page_css'] = array('assets/css/promo-cards.css');
 
 			$this->load->view('header', $data);
 			$this->load->view('search', $data);
@@ -1161,7 +1164,7 @@ class User extends CI_Controller
 		];
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -1259,7 +1262,7 @@ class User extends CI_Controller
 		];
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -1632,7 +1635,7 @@ class User extends CI_Controller
 		];
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -4001,7 +4004,7 @@ class User extends CI_Controller
 		];
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -4395,6 +4398,10 @@ class User extends CI_Controller
 		$caps = $this->listingCapabilities($data['listing']->user_id);
 		$data['caps'] = $caps;
 
+		// The logo and gallery fields render through the shared media_field
+		// partial, whose styling lives here. Set before either view load below.
+		$data['page_css'] = array('assets/admin/css/media-preview.css');
+
 		if ($data['listing']->category_id != '') {
 			$data['sub_category_listing'] = $this->adminmodel->ListingSubCategoryByCateId($data['listing']->category_id);
 		}
@@ -4462,13 +4469,34 @@ class User extends CI_Controller
 					$info['listing_image'] = uploadAndResize($img_info);
 				}
 
-				// Handle Gallery Images Upload for User Edit
+				// Handle Gallery Images Upload for User Edit.
+				//
+				// Adding a photo used to replace the whole gallery, because this
+				// path wrote json_encode() of just the newly uploaded files and
+				// never read the stored column. The admin screen was fixed for
+				// this in the 2026-08-06 round; the owner's own form was not, so
+				// an owner adding one photo silently lost the rest.
+				//
+				// Removal is read outside the can_photos gate on purpose: an
+				// owner on a downgraded plan can no longer add photos, but must
+				// still be able to delete ones already published.
+				$existing_gallery = listing_gallery_paths($data['listing']->listing_image_gallery ?? null);
+				$remove_gallery   = (array) $this->input->post('remove_gallery');
+				$kept_gallery     = array_values(array_diff($existing_gallery, $remove_gallery));
+				$gallery_changed  = (count($kept_gallery) !== count($existing_gallery));
+
 				if ($caps['can_photos'] && $_FILES && isset($_FILES['listing_image_gallery']['name'][0]) && !empty($_FILES['listing_image_gallery']['name'][0])) {
 					$gallery_images = [];
 					$files_count = count($_FILES['listing_image_gallery']['name']);
 					// Cap gallery photos to the plan's photo_limit (-1 = unlimited).
-					if ($caps['photo_limit'] >= 0 && $files_count > $caps['photo_limit']) {
-						$files_count = (int) $caps['photo_limit'];
+					// The limit is on the gallery, not on one upload: now that new
+					// files are added to the kept ones rather than replacing them,
+					// it has to be measured against what will remain after this
+					// save, or an owner could pass the cap one upload at a time.
+					if ($caps['photo_limit'] >= 0) {
+						$slots_left = (int) $caps['photo_limit'] - count($kept_gallery);
+						if ($slots_left < 0) { $slots_left = 0; }
+						if ($files_count > $slots_left) { $files_count = $slots_left; }
 					}
 
 					// Debug: Log gallery upload attempt
@@ -4505,13 +4533,23 @@ class User extends CI_Controller
 						}
 					}
 					if (!empty($gallery_images)) {
-						$info['listing_image_gallery'] = json_encode($gallery_images);
-						error_log("USER EDIT Gallery images stored in DB: " . $info['listing_image_gallery']);
+						$kept_gallery    = array_merge($kept_gallery, $gallery_images);
+						$gallery_changed = TRUE;
+						error_log("USER EDIT Gallery images added: " . count($gallery_images));
 					} else {
 						error_log("USER EDIT No gallery images to store");
 					}
 				} else {
 					error_log("USER EDIT No gallery files detected in upload");
+				}
+
+				// Only write the column when something actually changed, so a save
+				// that touches no photos leaves the gallery exactly as it was.
+				if ($gallery_changed) {
+					$info['listing_image_gallery'] = empty($kept_gallery)
+						? NULL
+						: json_encode(array_values($kept_gallery));
+					error_log("USER EDIT Gallery stored in DB: " . var_export($info['listing_image_gallery'], TRUE));
 				}
 
 				// Debug: Service fields check for edit
@@ -4576,7 +4614,7 @@ class User extends CI_Controller
 		];
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -5264,7 +5302,7 @@ class User extends CI_Controller
 		];
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';

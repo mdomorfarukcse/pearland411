@@ -420,39 +420,40 @@ if (!function_exists('cap_lock_note')) {
 									<!--FILED START-->
 									<div class="row">
 										<div class="col-md-12">
-											<div class="form-group">
-												<label>Upload Listing Logo</label>
-												<input type="file" name="listing_profile_image" class="form-control" <?= $caps['can_photos'] ? '' : 'disabled' ?>>
-													<?= cap_lock_note($caps['can_photos']) ?>
-												<?php if (isset($listing) && !empty($listing->listing_image)) { ?>
-													<img src="<?= base_url($listing->listing_image) ?>" alt="Current Logo" style="max-width:120px; margin-top:10px;" />
-												<?php } ?>
-											</div>
+											<?php
+											// Same partial the admin edit screen uses, so the owner's
+											// form and the admin's behave identically.
+											$mf_name     = 'listing_profile_image';
+											$mf_id       = 'listing_profile_image';
+											$mf_label    = 'Upload Listing Logo';
+											$mf_current  = isset($listing->listing_image) ? $listing->listing_image : '';
+											$mf_disabled = !$caps['can_photos'];
+											$mf_empty    = 'No logo uploaded yet.';
+											include APPPATH . 'views/admin/partials/media_field.php';
+											?>
+											<?= cap_lock_note($caps['can_photos']) ?>
 										</div>
 									</div>
 									<!--GALLERY IMAGES START-->
 									<div class="row">
 										<div class="col-md-12">
-											<div class="form-group">
-												<label>Upload Gallery Images (Multiple Images)</label>
-												<input type="file" name="listing_image_gallery[]" class="form-control" multiple accept="image/*" <?= $caps['can_photos'] ? '' : 'disabled' ?>>
-													<?php if ($caps['can_photos'] && $caps['photo_limit'] >= 0): ?><small class="form-text text-muted">Your package allows up to <?= (int) $caps['photo_limit'] ?> gallery photo(s).</small><?php endif; ?>
-													<?= cap_lock_note($caps['can_photos']) ?>
-												<small class="form-text text-muted">You can select multiple images for your gallery. Supported formats: JPG, PNG, GIF</small>
-												<?php if (isset($listing) && !empty($listing->listing_image_gallery)) {
-													$gallery_images = json_decode($listing->listing_image_gallery, true);
-													if ($gallery_images && is_array($gallery_images)) { ?>
-														<div class="current-gallery" style="margin-top:10px;">
-															<label>Current Gallery Images:</label>
-															<div class="gallery-images" style="display:flex; flex-wrap:wrap; gap:10px;">
-																<?php foreach ($gallery_images as $gallery_img) { ?>
-																	<img src="<?= base_url($gallery_img) ?>" alt="Gallery Image" style="max-width:80px; height:60px; object-fit:cover; border:1px solid #ddd;" />
-																<?php } ?>
-															</div>
-														</div>
-												<?php }
-												} ?>
-											</div>
+											<?php
+											$mf_name     = 'listing_image_gallery[]';
+											$mf_id       = 'listing_image_gallery';
+											$mf_label    = 'Upload Gallery Images (Multiple Images)';
+											$mf_hint     = 'You can select several at once. New images are <strong>added</strong> to the ones below &mdash; nothing is replaced.'
+											               . ($caps['can_photos'] && $caps['photo_limit'] >= 0
+											                  ? ' Your package allows up to ' . (int) $caps['photo_limit'] . ' gallery photo(s).'
+											                  : '')
+											               . ' Supported formats: JPG, PNG, GIF.';
+											$mf_current  = listing_gallery_paths(isset($listing->listing_image_gallery) ? $listing->listing_image_gallery : null);
+											$mf_multiple = true;
+											$mf_remove   = 'remove_gallery[]';
+											$mf_disabled = !$caps['can_photos'];
+											$mf_empty    = 'No gallery images uploaded yet.';
+											include APPPATH . 'views/admin/partials/media_field.php';
+											?>
+											<?= cap_lock_note($caps['can_photos']) ?>
 										</div>
 									</div>
 									<!--GALLERY IMAGES END-->
@@ -690,3 +691,6 @@ if (!function_exists('cap_lock_note')) {
 		updateStepDisplay();
 	});
 </script>
+<?php // Previews chosen files, opens stored images full size, greys a ticked Remove.
+      // Same behaviour as the admin edit screens, which use the same partial. ?>
+<script src="<?= base_url('assets/admin/js/media-preview.js') ?>"></script>

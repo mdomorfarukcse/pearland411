@@ -227,6 +227,13 @@ switch ($__creative) {
 		$__href = base_url('pricing-plan');
 		$__alt  = 'Featured business placement available on Pearland411';
 		break;
+	// These two creatives have "See packages" drawn into the artwork, so they
+	// have to land on the packages, not on the lead form below.
+	case 'house-ad':
+	case 'house-ad-cream':
+		$__href = base_url('pricing-plan');
+		$__alt  = 'Advertising packages on Pearland411';
+		break;
 	default:
 		$__href = base_url('post-your-ads');
 		$__alt  = 'Advertise your business on Pearland411';

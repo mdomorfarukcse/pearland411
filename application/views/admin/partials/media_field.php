@@ -22,6 +22,11 @@
  *   $mf_id        (string) input id; defaults to a slug of $mf_name.
  *   $mf_required  (bool)
  *   $mf_empty     (string) message when nothing is stored yet.
+ *   $mf_disabled  (bool)   lock the file input — the member form uses this for
+ *                          plans that don't include photos. The stored images
+ *                          and their Remove tickboxes stay live: someone on a
+ *                          downgraded plan must still be able to delete a photo
+ *                          they can no longer replace.
  *
  * Every one is unset at the end, so a page can include this repeatedly.
  */
@@ -34,6 +39,7 @@ $mf_hint     = isset($mf_hint) ? (string) $mf_hint : '';
 $mf_multiple = !empty($mf_multiple);
 $mf_remove   = isset($mf_remove) ? (string) $mf_remove : '';
 $mf_required = !empty($mf_required);
+$mf_disabled = !empty($mf_disabled);
 $mf_empty    = isset($mf_empty) ? (string) $mf_empty : 'Nothing uploaded yet.';
 $mf_id       = isset($mf_id) ? (string) $mf_id : preg_replace('/[^A-Za-z0-9_]/', '_', $mf_name);
 
@@ -56,7 +62,8 @@ $mf_preview_id = $mf_id . '_preview';
 	       accept="image/*"
 	       data-preview="#<?= e_attr($mf_preview_id) ?>"
 	       <?= $mf_multiple ? 'multiple' : '' ?>
-	       <?= $mf_required ? 'required' : '' ?>>
+	       <?= $mf_required ? 'required' : '' ?>
+	       <?= $mf_disabled ? 'disabled' : '' ?>>
 	<?php if ($mf_hint !== ''): ?>
 		<small class="form-text text-muted"><?= $mf_hint ?></small>
 	<?php endif; ?>
@@ -94,5 +101,6 @@ $mf_preview_id = $mf_id . '_preview';
 </div>
 <?php
 unset($mf_name, $mf_label, $mf_hint, $mf_current, $mf_multiple, $mf_remove,
-      $mf_id, $mf_required, $mf_empty, $mf_items, $mf_preview_id, $mf_path, $mf_i);
+      $mf_id, $mf_required, $mf_disabled, $mf_empty, $mf_items, $mf_preview_id,
+      $mf_path, $mf_i);
 ?>

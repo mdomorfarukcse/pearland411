@@ -127,6 +127,23 @@ function pp_features($plan, $cat)
     .pp-feats li:before{content:"";position:absolute;left:0;top:4px;width:15px;height:15px;border-radius:50%;background:#F1F7E5;}
     .pp-feats li:after{content:"";position:absolute;left:4.5px;top:8px;width:5px;height:8px;border-right:2px solid var(--go);border-bottom:2px solid var(--go);transform:rotate(42deg);}
     .pp-cta{margin-top:auto;}
+    /* Cards in a band are already equal height (grid stretch), but their inner
+       rows were free to sit wherever their own content ended: a two-line
+       description on one card and a four-line one on the next pushed the price,
+       the feature divider and the button to different heights across the row.
+       Subgrid pins name / description / price / features / CTA to shared row
+       tracks, so the cards line up without hard-coded heights.
+       row-gap:0 is required — the card would otherwise inherit .pp-grid's 20px
+       gap between its own five rows, while the gutter between cards survives
+       because the gap stays on the parent. Browsers without subgrid fall
+       through and keep the flex layout exactly as it was. */
+    @supports (grid-template-rows: subgrid){
+        .pp-card{display:grid;grid-template-rows:subgrid;grid-row:span 5;row-gap:0;}
+        /* Left at auto the CTA would bottom-align inside its shared track and a
+           single-button card would drop out of line again — the original bug. */
+        .pp-cta{margin-top:0;}
+        .pp-desc:empty{margin:0;}
+    }
     .pp-buy{display:block;width:100%;text-align:center;background:var(--brand);color:#fff;border:none;padding:12px;border-radius:10px;font-family:inherit;font-weight:700;font-size:14.5px;cursor:pointer;text-decoration:none;transition:.15s;}
     .pp-buy:hover{background:#171A45;color:#fff;}
     .pp-buy.free{background:#fff;color:var(--brand);border:1.5px solid var(--brand);}
@@ -241,7 +258,7 @@ function pp_features($plan, $cat)
                         $isOwned  = (isset($user_subscription) && $user_subscription && (int) $user_subscription->plan_id === (int) $plan->id);
                         $feats    = pp_features($plan, $catKey);
                         $per      = $catKey === 'business-listing' || $catKey === 'special'
-                                    ? 'per ' . htmlspecialchars($plan->billing_interval)
+                                    ? 'per ' . billing_interval_noun(isset($plan->billing_interval) ? $plan->billing_interval : '')
                                     : 'one-time';
                         ?>
                         <div class="pp-card <?= $inCart ? 'is-selected' : '' ?> <?= $isOwned ? 'owned' : '' ?>" data-card="<?= (int) $plan->id ?>">
@@ -254,9 +271,10 @@ function pp_features($plan, $cat)
                             <?php endif; ?>
 
                             <h3 class="pp-name"><?= htmlspecialchars($plan->name) ?></h3>
-                            <?php if (!empty($plan->description)): ?>
-                                <p class="pp-desc"><?= htmlspecialchars($plan->description) ?></p>
-                            <?php endif; ?>
+                            <?php /* Always emitted, even when empty: the card is a
+                                      five-row subgrid, and skipping this element
+                                      would shift every later row up one track. */ ?>
+                            <p class="pp-desc"><?= htmlspecialchars(isset($plan->description) ? $plan->description : '') ?></p>
 
                             <div class="pp-price">
                                 <span class="amt">$<?= number_format($price, ($price - floor($price)) > 0 ? 2 : 0) ?></span>

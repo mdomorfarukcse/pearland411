@@ -86,7 +86,7 @@
                                                     <h4 class="mt-0"><?php echo $plan->name; ?></h4>
                                                     <h2 class="text-<?php echo $color; ?>">
                                                         <?php echo $plan->currency; ?><?php echo $plan->price; ?>
-                                                        <span class="font-13 text-muted">/ <?php echo $plan->billing_interval; ?></span>
+                                                        <span class="font-13 text-muted">/ <?= e(billing_interval_noun(isset($plan->billing_interval) ? $plan->billing_interval : '')) ?></span>
                                                     </h2>
                                                 </div>
                                                 <div class="pricing-features mt-4">
