@@ -266,3 +266,30 @@ html { max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
 	.hom-top, .hom-nav .bl li a, .news-menu ul li a { transition: none !important; }
 }
+
+/* ---- narrow widths: lay the bar out instead of clamping it ------------- */
+/*
+ * Also geometry rather than paint, for the same reason as the block above.
+ *
+ * style.css:26355 pins `.hom-top` to `height: 55px` below 993px while leaving
+ * its row a floated stack. With `box-sizing: border-box` and the bar's own
+ * padding that leaves a 40px content box, but the logo is 90px wide on a
+ * 3891x2327 file — 54px tall — and `.menu` adds `margin-top: 10px`, so the row
+ * simply hangs out of the bar. That is the reported "hom-nav out of its
+ * orientation": nothing clips it, so it overlaps whatever follows.
+ *
+ * The bar is left at 55px deliberately, because `.news-top-menu` clears it
+ * with a hard-coded `margin-top` rather than by measuring. If the bar is ever
+ * allowed to grow, that clearance has to move with it, in this file.
+ */
+@media (max-width: 992px) {
+	.hom-nav { display: flex; align-items: center; gap: 12px; }
+	.hom-nav .top-log { flex: none; line-height: 0; }
+	.hom-nav .ic-logo { width: auto; height: 34px; }
+	.hom-nav .menu { float: none; margin: 0; padding: 0 0 0 12px; }
+	/* margin-right leaves room for `.mob-me-ic`, which is absolutely positioned. */
+	.hom-nav .top-ser { float: none; flex: 1 1 auto; width: auto; padding: 0; margin-right: 46px; }
+	/* The bar's height changes at 992 but the strip's clearance only at 980
+	   (style.css:29590), which left a 5px seam between 981 and 992px. */
+	.news-top-menu { margin-top: 55px; }
+}

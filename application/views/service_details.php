@@ -84,11 +84,12 @@ $sd_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 
 						<?php if (!empty($service->body)): ?>
 							<?php
-							/* Admin-edited HTML from the `services` table. A small
-							   set of inline tags is allowed and everything else
-							   stripped, as defence in depth. */
-							$allowed = '<p><br><strong><b><em><i><ul><ol><li><a><h2><h3><h4><blockquote>';
-							echo strip_tags((string) $service->body, $allowed);
+							/* Admin-edited HTML from the `services` table, through the
+							   same sanitiser the news body uses: structural tags kept,
+							   every attribute dropped bar href/title on a link. bare
+							   strip_tags() left attributes intact, so a pasted
+							   style="color:…" repainted the page. */
+							echo content_html($service->body);
 							?>
 						<?php endif; ?>
 					</div>

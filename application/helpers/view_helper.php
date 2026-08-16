@@ -218,6 +218,99 @@ if (!function_exists('content_text')) {
     }
 }
 
+if (!function_exists('content_html')) {
+    /**
+     * A stored article body as safe, structural HTML — paragraphs kept.
+     *
+     * The sibling of content_text(), for the places that render a whole article
+     * rather than summarise it. content_text() flattens the body to plain text
+     * and the view rebuilds the breaks with nl2br(), which means the gap between
+     * two paragraphs depends on how much incidental whitespace the editor left
+     * between the tags: the same article reads evenly in one place and
+     * cluttered in another. Keeping the author's own <p> elements and spacing
+     * them in CSS makes the rhythm a property of the page, not of the paste.
+     *
+     * The tag whitelist is structure only, and every attribute is dropped apart
+     * from href/title on a link — that is what stops an imported article's
+     * inline `style="color:#ff0000"` from repainting the page, which is the
+     * other half of the same complaint. Output is safe to echo unescaped;
+     * do NOT wrap it in e().
+     *
+     * @param  string $value Stored body, possibly legacy entity-encoded.
+     * @return string        Sanitised HTML.
+     */
+    function content_html($value)
+    {
+        $value = (string) $value;
+
+        // Same legacy guard as content_text(): a body stored through
+        // htmlentities() holds "&lt;p&gt;…" and has to be decoded before there
+        // is any markup to keep. The signal is an encoded CLOSING tag, so a post
+        // that merely talks about "&lt;p&gt;" keeps showing what it typed.
+        if (strpos($value, '<') === false && preg_match('#&lt;\s*/\s*[a-z]#i', $value)) {
+            $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        }
+
+        // strip_tags() drops the tags but keeps what is between them, so a
+        // <script> body would survive as visible text. Remove these outright.
+        $value = preg_replace('#<\s*(script|style)\b[^>]*>.*?<\s*/\s*\1\s*>#is', '', $value);
+        $value = preg_replace('#<\s*(script|style)\b[^>]*/?>#i', '', $value);
+
+        $allowed = '<p><br><strong><b><em><i><u><ul><ol><li><a><h2><h3><h4><blockquote>';
+        $value   = strip_tags($value, $allowed);
+
+        // Anchors are handled as whole pairs — they cannot nest, so the lazy
+        // match pairs each open tag with its own close. A link whose href does
+        // not survive external_url() is unwrapped to its text rather than
+        // rewritten, which keeps the tags balanced.
+        $value = preg_replace_callback('#<\s*a\b([^>]*)>(.*?)<\s*/\s*a\s*>#is', function ($m) {
+            $href = '';
+            if (preg_match('#\bhref\s*=\s*(["\'])(.*?)\1#is', $m[1], $h)) {
+                $href = external_url(html_entity_decode($h[2], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            }
+            if ($href === '') {
+                return $m[2];
+            }
+            $attrs = ' href="' . e_attr($href) . '" rel="nofollow noopener" target="_blank"';
+            if (preg_match('#\btitle\s*=\s*(["\'])(.*?)\1#is', $m[1], $t)) {
+                $attrs .= ' title="' . e_attr(html_entity_decode($t[2], ENT_QUOTES | ENT_HTML5, 'UTF-8')) . '"';
+            }
+            // Parked behind sentinels so the unpaired-tag sweep below cannot
+            // mistake a link this function just built for one it has not seen.
+            // strip_tags() has already run, so no literal "<" survives in the
+            // text and these control characters cannot occur in the content.
+            return "\x02a" . $attrs . "\x03" . $m[2] . "\x02/a\x03";
+        }, $value);
+
+        // Any unpaired anchor tag left over goes, so the markup stays balanced.
+        $value = preg_replace('#<\s*/?\s*a\b[^>]*>#i', '', $value);
+
+        // Everything else on the whitelist is structure — no attributes at all.
+        $value = preg_replace('#<\s*(' . 'p|br|strong|b|em|i|u|ul|ol|li|h2|h3|h4|blockquote'
+            . ')\b[^>]*?(/?)\s*>#i', '<$1$2>', $value);
+
+        $value = str_replace(array("\x02", "\x03"), array('<', '>'), $value);
+
+        $value = str_replace("\xC2\xA0", ' ', $value);           // stray &nbsp;
+        $value = trim($value);
+
+        // A legacy row stored as plain text has no block tags to space. Fall
+        // back to content_text()'s paragraphing so those rows read the same.
+        if ($value !== '' && !preg_match('#<\s*(p|ul|ol|h2|h3|h4|blockquote)\b#i', $value)) {
+            $paras = preg_split("/\n{2,}/", content_text($value));
+            $value = '';
+            foreach ($paras as $para) {
+                $para = trim($para);
+                if ($para !== '') {
+                    $value .= '<p>' . nl2br(e($para)) . '</p>';
+                }
+            }
+        }
+
+        return $value;
+    }
+}
+
 if (!function_exists('content_excerpt')) {
     /**
      * A one-paragraph summary of a stored body, cut on a word boundary.

@@ -718,6 +718,17 @@
 }
 .p411-prose .p411-lede { margin-top: 0; }
 
+/* One rhythm for every paragraph in a stored body, stated here rather than
+   inherited. The article view used to flatten the body to text and rebuild the
+   breaks with <br>, so the gap between paragraphs was whatever whitespace the
+   editor happened to leave between the tags — even within one article. With
+   real <p> elements the spacing has to be pinned, because Bootstrap's
+   `p { margin-bottom: 1rem }` and directory.css's `p + p { margin-top: 10px }`
+   would otherwise compound into an uneven 16/26px alternation. */
+.p411-prose p { margin: 0 0 14px; }
+.p411-prose p + p { margin-top: 0; }
+.p411-prose p:last-child { margin-bottom: 0; }
+
 /* Stored HTML — the admin-entered body of a service, an article, a listing —
    only ever got paragraph and link styling from the kit. Headings came out at
    browser defaults and every list lost its markers to the theme's global
