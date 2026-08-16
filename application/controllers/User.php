@@ -3007,14 +3007,14 @@ class User extends CI_Controller
 		$old_image = isset($current_user->profile_image) ? $current_user->profile_image : null;
 
 		$info = array(
-			'name'          => htmlentities($this->input->post('name'), ENT_QUOTES),
-			'email_id'      => htmlentities($this->input->post('email_id'), ENT_QUOTES),
-			'mobile_number' => htmlentities($this->input->post('mobile_number'), ENT_QUOTES),
-			'user_address'  => htmlentities($this->input->post('user_address'), ENT_QUOTES),
-			'user_state'    => htmlentities($this->input->post('user_state'), ENT_QUOTES),
-			'user_zip_code' => htmlentities($this->input->post('user_zip_code'), ENT_QUOTES),
-			'user_contact_email' => htmlentities($this->input->post('user_contact_email'), ENT_QUOTES),
-			'user_website'  => htmlentities($this->input->post('user_website'), ENT_QUOTES),
+			'name'          => $this->input->post('name'),
+			'email_id'      => $this->input->post('email_id'),
+			'mobile_number' => $this->input->post('mobile_number'),
+			'user_address'  => $this->input->post('user_address'),
+			'user_state'    => $this->input->post('user_state'),
+			'user_zip_code' => $this->input->post('user_zip_code'),
+			'user_contact_email' => $this->input->post('user_contact_email'),
+			'user_website'  => $this->input->post('user_website'),
 			'user_updated'  => date('Y-m-d H:i:s'),
 		);
 
@@ -3549,27 +3549,27 @@ class User extends CI_Controller
 
 			$info = array(
 
-				'listing_name' 		=> htmlentities($this->input->post('listing_name'), ENT_QUOTES),
+				'listing_name' 		=> $this->input->post('listing_name'),
 
-				'listing_mobile'	=> htmlentities($this->input->post('listing_mobile'), ENT_QUOTES),
+				'listing_mobile'	=> $this->input->post('listing_mobile'),
 
-				'listing_email'		=> htmlentities($this->input->post('listing_email'), ENT_QUOTES),
+				'listing_email'		=> $this->input->post('listing_email'),
 
-				'listing_whatsapp'	=> htmlentities($this->input->post('listing_whatsapp'), ENT_QUOTES),
+				'listing_whatsapp'	=> $this->input->post('listing_whatsapp'),
 
-				'listing_website'	=> htmlentities($this->input->post('listing_website'), ENT_QUOTES),
+				'listing_website'	=> $this->input->post('listing_website'),
 
-				'listing_address'	=> htmlentities($this->input->post('listing_address'), ENT_QUOTES),
+				'listing_address'	=> $this->input->post('listing_address'),
 
-				'listing_lat'		=> htmlentities($this->input->post('listing_lat'), ENT_QUOTES),
+				'listing_lat'		=> $this->input->post('listing_lat'),
 
-				'listing_lng'		=> htmlentities($this->input->post('listing_lng'), ENT_QUOTES),
+				'listing_lng'		=> $this->input->post('listing_lng'),
 
-				'country_id'		=> htmlentities($this->input->post('country_id'), ENT_QUOTES),
+				'country_id'		=> $this->input->post('country_id'),
 
-				'city_name'			=> htmlentities($this->input->post('city_name'), ENT_QUOTES),
+				'city_name'			=> $this->input->post('city_name'),
 
-				'category_id'		=> htmlentities($this->input->post('category_id'), ENT_QUOTES),
+				'category_id'		=> $this->input->post('category_id'),
 
 				// 'sub_category_id'=>
 
@@ -3659,11 +3659,11 @@ class User extends CI_Controller
 			$this->load->view('footer');
 		} else {
 
-			$inserted_id = htmlentities($this->input->post('listing_id'), ENT_QUOTES);
+			$inserted_id = $this->input->post('listing_id');
 
 			$info = array(
 
-				'service_name' 		=> htmlentities($this->input->post('service_name'), ENT_QUOTES),
+				'service_name' 		=> $this->input->post('service_name'),
 
 			);
 
@@ -3722,19 +3722,19 @@ class User extends CI_Controller
 			$this->load->view('footer');
 		} else {
 
-			$inserted_id = htmlentities($this->input->post('listing_id'), ENT_QUOTES);
+			$inserted_id = $this->input->post('listing_id');
 
 
 
 			$info = array(
 
-				'service_1_name' 		=> htmlentities($this->input->post('service_1_name'), ENT_QUOTES),
+				'service_1_name' 		=> $this->input->post('service_1_name'),
 
-				'service_1_price' 		=> htmlentities($this->input->post('service_1_price'), ENT_QUOTES),
+				'service_1_price' 		=> $this->input->post('service_1_price'),
 
-				'service_1_detail' 		=> htmlentities($this->input->post('service_1_detail'), ENT_QUOTES),
+				'service_1_detail' 		=> $this->input->post('service_1_detail'),
 
-				'service_1_view_more' 	=> htmlentities($this->input->post('service_1_view_more'), ENT_QUOTES),
+				'service_1_view_more' 	=> $this->input->post('service_1_view_more'),
 
 			);
 
@@ -3793,7 +3793,7 @@ class User extends CI_Controller
 			$this->load->view('footer');
 		} else {
 
-			$inserted_id = htmlentities($this->input->post('listing_id'), ENT_QUOTES);
+			$inserted_id = $this->input->post('listing_id');
 
 
 
@@ -3801,9 +3801,9 @@ class User extends CI_Controller
 
 			$info = array(
 
-				'google_map' 	=> htmlentities($this->input->post('google_map'), ENT_QUOTES),
+				'google_map' 	=> $this->input->post('google_map'),
 
-				'360_view' 		=> htmlentities($this->input->post('360_view'), ENT_QUOTES),
+				'360_view' 		=> $this->input->post('360_view'),
 
 			);
 
@@ -3871,7 +3871,7 @@ class User extends CI_Controller
 
 			$info = array();
 
-			$inserted_id = htmlentities($this->input->post('listing_id'), ENT_QUOTES);
+			$inserted_id = $this->input->post('listing_id');
 
 
 

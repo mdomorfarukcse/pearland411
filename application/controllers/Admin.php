@@ -808,14 +808,16 @@ class Admin extends CI_Controller
 
 	public function all_listing_category()
 	{
-		// Categories are usually few — show 100 per page so the inline
-		// search in admin-table.js can match against the whole list
-		// without needing a server-side search round-trip.
+		// Searched in SQL, not in the browser. The old inline filter only saw
+		// the rows the server had already sent, so a category on page 2 came
+		// back "No matches". reuse_query_string carries ?q= across the pager.
+		$q = trim((string) $this->input->get('q', TRUE));
+
 		$config = [
 			'base_url' => base_url('admin/all_listing_category'),
 			'per_page' => admin_per_page(20),
 			'reuse_query_string' => TRUE,
-			'total_rows' => count($this->adminmodel->allListingCategory(NULL, NULL)),
+			'total_rows' => $this->adminmodel->countListingCategories($q),
 			'uri_segment' => 3,
 		];
 		$config['full_tag_open'] = '<ul class="pagination">';
@@ -838,8 +840,10 @@ class Admin extends CI_Controller
 		$this->pagination->initialize($config);
 		$page = ($this->uri->segment(3)) ? $this->uri->segment(3) : 0;
 		$data['start_number'] = $page + 1;
-		$data['all_listing_category']   = $this->adminmodel->allListingCategory($config['per_page'], $page);
+		$data['all_listing_category']   = $this->adminmodel->allListingCategory($config['per_page'], $page, $q);
 		$data['link'] 		   = $this->pagination->create_links();
+		$data['search_query']  = $q;
+		$data['total_rows']    = $config['total_rows'];
 
 		//////////////////////////
 
@@ -998,18 +1002,28 @@ class Admin extends CI_Controller
 	{
 		$this->load->library('pagination');
 
-		// Initialize data array
+		// Initialize data array. start_number is seeded here because the
+		// filtered-by-category branch below does not paginate and would
+		// otherwise leave the view numbering its rows from an undefined variable.
 		$data = array();
 		$data['link'] = '';
+		$data['start_number'] = 1;
+		$data['total_rows'] = 0;
 
 		// Get category ID from URL if present
 		$id = $this->input->get('category_id');
+
+		// Searched in SQL for the same reason as the category list above: the
+		// browser-side filter could only ever match the current page.
+		$q = trim((string) $this->input->get('q', TRUE));
+		$data['search_query'] = $q;
 
 		if (!empty($id)) {
 			$data['all_listing_sub_category'] = $this->adminmodel->ListingSubCategoryByCateId($id);
 		} else {
 			// Get total record count
-			$total_rows = $this->adminmodel->countAllListingSubCategory();
+			$total_rows = $this->adminmodel->countAllListingSubCategory($q);
+			$data['total_rows'] = $total_rows;
 
 			// Pagination Configuration
 			// 100 per page, matching all_listing_category(): sub-categories are
@@ -1056,7 +1070,7 @@ class Admin extends CI_Controller
 			$data['start_number'] = ($page - 1) * $config['per_page'] + 1;
 
 			// Fetch paginated records
-			$data['all_listing_sub_category'] = $this->adminmodel->allListingSubCategory($config['per_page'], $offset);
+			$data['all_listing_sub_category'] = $this->adminmodel->allListingSubCategory($config['per_page'], $offset, $q);
 			$data['link'] = $this->pagination->create_links();
 		}
 

@@ -27,7 +27,7 @@
 							if (count($listings) > 0) {
 								foreach ($listings as $value) {
 						?>
-						<option value="<?= $value['listing_id']; ?>"><?= $value['listing_name'] ;?></option>
+						<option value="<?= $value['listing_id']; ?>"><?= e($value['listing_name']) ?></option>
 						<?php	
 								}
 							}

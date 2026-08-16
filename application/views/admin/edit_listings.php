@@ -187,7 +187,7 @@
                         </div>
                         <div class="col-md-6">
                           <div class="form-group">
-                            <input id="listing_name" name="listing_name" type="text" required="required" class="form-control" placeholder="Listing name *" value="<?= isset($listing) ? $listing->listing_name : '' ?>">
+                            <input id="listing_name" name="listing_name" type="text" required="required" class="form-control" placeholder="Listing name *" value="<?= e_attr(isset($listing) ? $listing->listing_name : '') ?>">
                           </div>
                         </div>
                       </div>
@@ -260,12 +260,12 @@
                       <div class="row">
                         <div class="col-md-6">
                           <div class="form-group">
-                            <input type="text" name="listing_mobile" class="form-control" placeholder="Phone number" value="<?= isset($listing) ? $listing->listing_mobile : '' ?>">
+                            <input type="text" name="listing_mobile" class="form-control" placeholder="Phone number" value="<?= e_attr(isset($listing) ? $listing->listing_mobile : '') ?>">
                           </div>
                         </div>
                         <div class="col-md-6">
                           <div class="form-group">
-                            <input type="text" name="listing_whatsapp" class="form-control" placeholder="Whatsapp Number" value="<?= isset($listing) ? $listing->listing_whatsapp : '' ?>">
+                            <input type="text" name="listing_whatsapp" class="form-control" placeholder="Whatsapp Number" value="<?= e_attr(isset($listing) ? $listing->listing_whatsapp : '') ?>">
                           </div>
                         </div>
                         <div class="col-md-12">
@@ -329,12 +329,12 @@
                       <div class="row">
                         <div class="col-md-6">
                           <div class="form-group">
-                            <input type="email" name="listing_email" class="form-control" placeholder="Email id" value="<?= isset($listing) ? $listing->listing_email : '' ?>">
+                            <input type="email" name="listing_email" class="form-control" placeholder="Email id" value="<?= e_attr(isset($listing) ? $listing->listing_email : '') ?>">
                           </div>
                         </div>
                         <div class="col-md-6">
                           <div class="form-group">
-                            <input type="text" name="listing_website" class="form-control" placeholder="Website(www.website.com)" value="<?= isset($listing) ? $listing->listing_website : '' ?>">
+                            <input type="text" name="listing_website" class="form-control" placeholder="Website(www.website.com)" value="<?= e_attr(isset($listing) ? $listing->listing_website : '') ?>">
                           </div>
                         </div>
                       </div>
@@ -343,7 +343,7 @@
                       <div class="row">
                         <div class="col-md-12">
                           <div class="form-group">
-                            <input type="text" name="listing_address" required="required" class="form-control" placeholder="Business address" value="<?= isset($listing) ? $listing->listing_address : '' ?>">
+                            <input type="text" name="listing_address" required="required" class="form-control" placeholder="Business address" value="<?= e_attr(isset($listing) ? $listing->listing_address : '') ?>">
                           </div>
                         </div>
                         <div class="col-md-12">

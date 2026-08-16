@@ -237,7 +237,7 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-12">
 									<div class="form-group">
-										<input id="listing_name" name="listing_name" type="text" required="required" class="form-control" placeholder="Listing name *" value="<?= $listing->listing_name ?>">
+										<input id="listing_name" name="listing_name" type="text" required="required" class="form-control" placeholder="Listing name *" value="<?= e_attr($listing->listing_name) ?>">
 									</div>
 								</div>
 								<span class="text-danger"><?= form_error("listing_name") ? form_error("listing_name") : ''; ?></span>
@@ -283,12 +283,12 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-6">
 									<div class="form-group">
-										<input type="text" name="listing_mobile" class="form-control" placeholder="Phone number" value="<?= $listing->listing_mobile ?>">
+										<input type="text" name="listing_mobile" class="form-control" placeholder="Phone number" value="<?= e_attr($listing->listing_mobile) ?>">
 									</div>
 								</div>
 								<div class="col-md-6">
 									<div class="form-group">
-										<input type="text" name="listing_whatsapp" class="form-control" placeholder="Whatsapp Number" value="<?= $listing->listing_whatsapp ?>">
+										<input type="text" name="listing_whatsapp" class="form-control" placeholder="Whatsapp Number" value="<?= e_attr($listing->listing_whatsapp) ?>">
 									</div>
 								</div>
 								<div class="col-md-12">
@@ -350,7 +350,7 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-12">
 									<div class="form-group">
-										<input type="email" name="listing_email" class="form-control" placeholder="Email id" value="<?= $listing->listing_email ?>">
+										<input type="email" name="listing_email" class="form-control" placeholder="Email id" value="<?= e_attr($listing->listing_email) ?>">
 									</div>
 								</div>
 							</div>
@@ -358,7 +358,7 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-12">
 									<div class="form-group">
-										<input type="text" name="listing_website" class="form-control" placeholder="Website(www.website.com)" value="<?= $listing->listing_website ?>">
+										<input type="text" name="listing_website" class="form-control" placeholder="Website(www.website.com)" value="<?= e_attr($listing->listing_website) ?>">
 									</div>
 								</div>
 							</div>
@@ -366,7 +366,7 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-12">
 									<div class="form-group">
-										<input type="text" name="listing_address" required="required" class="form-control" placeholder="Business address" value="<?= $listing->listing_address ?>">
+										<input type="text" name="listing_address" required="required" class="form-control" placeholder="Business address" value="<?= e_attr($listing->listing_address) ?>">
 									</div>
 								</div>
 								<div class="col-md-12">

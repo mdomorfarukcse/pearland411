@@ -31,11 +31,27 @@
               <p><?= $this->session->flashdata('message') ?></p>
             </div>
           <?php } ?>
+          <?php
+          // Server-side search, same contract as /admin/all_listings. Matches
+          // the parent category name too, so searching "Home Services" lists
+          // all of its sub-categories. The page-only "pg-sear" input is gone.
+          $search_query = isset($search_query) ? $search_query : '';
+          ?>
           <div class="ad-int-sear">
-
-            <input type="text" id="pg-sear" placeholder="Search this page..">
-
+            <form method="get" action="<?= base_url('admin/all_listing_sub_category') ?>" style="display:flex; gap:8px; align-items:center;">
+              <input type="search" name="q" value="<?= e_attr($search_query) ?>" placeholder="Search all sub-categories…" style="min-width:220px;">
+              <button type="submit" class="db-tit-btn" style="position:static; top:auto; right:auto;">Search</button>
+              <?php if ($search_query !== '') { ?>
+                <a href="<?= base_url('admin/all_listing_sub_category') ?>" style="font-size:0.9rem;">Clear</a>
+              <?php } ?>
+            </form>
           </div>
+          <?php if ($search_query !== '') { ?>
+            <p style="margin:8px 0 0; color:#6b7280;">
+              <?= (int) ($total_rows ?? 0) ?> sub-categor<?= ((int) ($total_rows ?? 0) === 1 ? 'y' : 'ies') ?>
+              matching &ldquo;<?= e($search_query) ?>&rdquo; across every page.
+            </p>
+          <?php } ?>
 
           <a href="<?= base_url() ?>admin/add_new_listing_sub_category" class="db-tit-btn">Add new Listing sub category</a>
 
@@ -45,7 +61,7 @@
               <button type="submit" id="bulk-delete-sub-btn" class="db-tit-btn" style="background:#d9534f;" disabled>Delete Selected</button>
               <span id="bulk-selected-sub-count" style="margin-left:10px;color:#666;"></span>
             </div>
-          <table data-admin-table class="responsive-table bordered tb_cus" id="pg-resu">
+          <table data-admin-table data-server-search data-page-size="0" class="responsive-table bordered tb_cus" id="pg-resu">
 
             <thead>
 

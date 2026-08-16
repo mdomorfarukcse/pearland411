@@ -47,7 +47,7 @@
                   <tr>
                     <td><?= $i; ?></td>
                     <td>
-                      <img src="<?= (empty($value->listing_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($value->listing_image) ?>"><?= $value->listing_name; ?><span><?= date('d, M Y', strtotime($value->created_at)); ?></span>
+                      <img src="<?= (empty($value->listing_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($value->listing_image) ?>"><?= e($value->listing_name) ?><span><?= date('d, M Y', strtotime($value->created_at)); ?></span>
                     </td>
                     <td><span class="db-list-rat"><?= e($value->category_name ?? '') ?></span></td>
                     <?php // Was postal_code under a "Deleted Date" heading. The column

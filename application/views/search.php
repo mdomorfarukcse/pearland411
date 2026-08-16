@@ -476,17 +476,9 @@
                                                 </a>
                                             </h5>
                                             <?php
-                                            $description = isset($listing->listing_description) ? strip_tags($listing->listing_description) : '';
-                                            if (!empty($description)): ?>
-                                                <div class="result-description">
-                                                    <?php
-                                                    if (strlen($description) > 150) {
-                                                        echo htmlspecialchars(substr($description, 0, 150)) . '...';
-                                                    } else {
-                                                        echo htmlspecialchars($description);
-                                                    }
-                                                    ?>
-                                                </div>
+                                            $description = content_excerpt(isset($listing->listing_description) ? $listing->listing_description : '', 150);
+                                            if ($description !== ''): ?>
+                                                <div class="result-description"><?= e($description) ?></div>
                                             <?php endif; ?>
                                             <div class="result-meta">
                                                 <span class="result-badge">Business</span>
@@ -545,17 +537,9 @@
                                                 </a>
                                             </h5>
                                             <?php
-                                            $description = isset($news->news_description) ? strip_tags($news->news_description) : '';
-                                            if (!empty($description)): ?>
-                                                <div class="result-description">
-                                                    <?php
-                                                    if (strlen($description) > 150) {
-                                                        echo htmlspecialchars(substr($description, 0, 150)) . '...';
-                                                    } else {
-                                                        echo htmlspecialchars($description);
-                                                    }
-                                                    ?>
-                                                </div>
+                                            $description = content_excerpt(isset($news->news_description) ? $news->news_description : '', 150);
+                                            if ($description !== ''): ?>
+                                                <div class="result-description"><?= e($description) ?></div>
                                             <?php endif; ?>
                                             <div class="result-meta">
                                                 <span class="result-badge">News</span>
@@ -598,17 +582,9 @@
                                                 </a>
                                             </h5>
                                             <?php
-                                            $description = isset($event->event_description) ? strip_tags($event->event_description) : '';
-                                            if (!empty($description)): ?>
-                                                <div class="result-description">
-                                                    <?php
-                                                    if (strlen($description) > 150) {
-                                                        echo htmlspecialchars(substr($description, 0, 150)) . '...';
-                                                    } else {
-                                                        echo htmlspecialchars($description);
-                                                    }
-                                                    ?>
-                                                </div>
+                                            $description = content_excerpt(isset($event->event_description) ? $event->event_description : '', 150);
+                                            if ($description !== ''): ?>
+                                                <div class="result-description"><?= e($description) ?></div>
                                             <?php endif; ?>
                                             <div class="result-meta">
                                                 <span class="result-badge">Event</span>
@@ -652,17 +628,9 @@
                                                 </a>
                                             </h5>
                                             <?php
-                                            $description = isset($blog->blog_description) ? strip_tags($blog->blog_description) : '';
-                                            if (!empty($description)): ?>
-                                                <div class="result-description">
-                                                    <?php
-                                                    if (strlen($description) > 150) {
-                                                        echo htmlspecialchars(substr($description, 0, 150)) . '...';
-                                                    } else {
-                                                        echo htmlspecialchars($description);
-                                                    }
-                                                    ?>
-                                                </div>
+                                            $description = content_excerpt(isset($blog->blog_description) ? $blog->blog_description : '', 150);
+                                            if ($description !== ''): ?>
+                                                <div class="result-description"><?= e($description) ?></div>
                                             <?php endif; ?>
                                             <div class="result-meta">
                                                 <span class="result-badge">Blog</span>
@@ -705,17 +673,9 @@
                                                 </a>
                                             </h5>
                                             <?php
-                                            $description = isset($product->product_description) ? strip_tags($product->product_description) : '';
-                                            if (!empty($description)): ?>
-                                                <div class="result-description">
-                                                    <?php
-                                                    if (strlen($description) > 150) {
-                                                        echo htmlspecialchars(substr($description, 0, 150)) . '...';
-                                                    } else {
-                                                        echo htmlspecialchars($description);
-                                                    }
-                                                    ?>
-                                                </div>
+                                            $description = content_excerpt(isset($product->product_description) ? $product->product_description : '', 150);
+                                            if ($description !== ''): ?>
+                                                <div class="result-description"><?= e($description) ?></div>
                                             <?php endif; ?>
                                             <div class="result-meta">
                                                 <span class="result-badge">Product</span>
@@ -766,17 +726,9 @@
                                                 </a>
                                             </h5>
                                             <?php
-                                            $description = isset($house->house_description) ? strip_tags($house->house_description) : '';
-                                            if (!empty($description)): ?>
-                                                <div class="result-description">
-                                                    <?php
-                                                    if (strlen($description) > 150) {
-                                                        echo htmlspecialchars(substr($description, 0, 150)) . '...';
-                                                    } else {
-                                                        echo htmlspecialchars($description);
-                                                    }
-                                                    ?>
-                                                </div>
+                                            $description = content_excerpt(isset($house->house_description) ? $house->house_description : '', 150);
+                                            if ($description !== ''): ?>
+                                                <div class="result-description"><?= e($description) ?></div>
                                             <?php endif; ?>
                                             <div class="result-meta">
                                                 <span class="result-badge">House</span>
@@ -793,7 +745,7 @@
                                                         <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
                                                             <path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z" />
                                                         </svg>
-                                                        <?php echo htmlspecialchars(substr($house->house_address, 0, 30)) . (strlen($house->house_address) > 30 ? '...' : ''); ?>
+                                                        <?php echo e(content_excerpt($house->house_address, 30)); ?>
                                                     </span>
                                                 <?php endif; ?>
                                             </div>
@@ -827,17 +779,9 @@
                                                 </a>
                                             </h5>
                                             <?php
-                                            $description = isset($rental->rental_description) ? strip_tags($rental->rental_description) : '';
-                                            if (!empty($description)): ?>
-                                                <div class="result-description">
-                                                    <?php
-                                                    if (strlen($description) > 150) {
-                                                        echo htmlspecialchars(substr($description, 0, 150)) . '...';
-                                                    } else {
-                                                        echo htmlspecialchars($description);
-                                                    }
-                                                    ?>
-                                                </div>
+                                            $description = content_excerpt(isset($rental->rental_description) ? $rental->rental_description : '', 150);
+                                            if ($description !== ''): ?>
+                                                <div class="result-description"><?= e($description) ?></div>
                                             <?php endif; ?>
                                             <div class="result-meta">
                                                 <span class="result-badge">Rental</span>
@@ -859,7 +803,7 @@
                                                         <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
                                                             <path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z" />
                                                         </svg>
-                                                        <?php echo htmlspecialchars(substr($rental->rental_address, 0, 30)) . (strlen($rental->rental_address) > 30 ? '...' : ''); ?>
+                                                        <?php echo e(content_excerpt($rental->rental_address, 30)); ?>
                                                     </span>
                                                 <?php endif; ?>
                                             </div>
@@ -893,17 +837,9 @@
                                                 </a>
                                             </h5>
                                             <?php
-                                            $description = isset($classified->classifieds_description) ? strip_tags($classified->classifieds_description) : (isset($classified->classified_description) ? strip_tags($classified->classified_description) : '');
-                                            if (!empty($description)): ?>
-                                                <div class="result-description">
-                                                    <?php
-                                                    if (strlen($description) > 150) {
-                                                        echo htmlspecialchars(substr($description, 0, 150)) . '...';
-                                                    } else {
-                                                        echo htmlspecialchars($description);
-                                                    }
-                                                    ?>
-                                                </div>
+                                            $description = content_excerpt(isset($classified->classifieds_description) ? $classified->classifieds_description : (isset($classified->classified_description) ? $classified->classified_description : ''), 150);
+                                            if ($description !== ''): ?>
+                                                <div class="result-description"><?= e($description) ?></div>
                                             <?php endif; ?>
                                             <div class="result-meta">
                                                 <span class="result-badge">Classified</span>
@@ -947,17 +883,9 @@
                                                 </a>
                                             </h5>
                                             <?php
-                                            $description = isset($video->video_description) ? strip_tags($video->video_description) : '';
-                                            if (!empty($description)): ?>
-                                                <div class="result-description">
-                                                    <?php
-                                                    if (strlen($description) > 150) {
-                                                        echo htmlspecialchars(substr($description, 0, 150)) . '...';
-                                                    } else {
-                                                        echo htmlspecialchars($description);
-                                                    }
-                                                    ?>
-                                                </div>
+                                            $description = content_excerpt(isset($video->video_description) ? $video->video_description : '', 150);
+                                            if ($description !== ''): ?>
+                                                <div class="result-description"><?= e($description) ?></div>
                                             <?php endif; ?>
                                             <div class="result-meta">
                                                 <span class="result-badge">Video</span>

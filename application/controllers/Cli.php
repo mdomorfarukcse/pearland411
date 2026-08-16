@@ -207,12 +207,23 @@ class Cli extends CI_Controller
         $this->load->helper('view');
         $this->load->helper('site_setting');
 
+        // The guard is per table, not per run. The job originally covered six
+        // tables; `listings` and `user` were added later, once the member-side
+        // write paths stopped encoding too. A single global flag would have
+        // meant the new tables could never run on any site that had already
+        // done the first six — while clearing it would decode those six twice
+        // and unwrap their literal "&amp;" into "&".
         $already = site_setting('content_entities_decoded_at', '');
-        if ($apply && $already !== '' && $force !== 'force') {
-            echo "Already run on {$already}. Decoding twice would unwrap literal entities\n";
-            echo "(\"&amp;\" -> \"&\"). Re-run with:  php index.php cli decode_content_entities apply force\n";
-            return;
-        }
+        $legacy  = array('news', 'video', 'blogs', 'products', 'classifieds', 'marketplace');
+
+        // When a table has no flag of its own but the old global one is set and
+        // the table was in the original six, it is done by definition. Resolved
+        // in memory so a report run stays read-only; persisted below on apply.
+        $decoded_on = function ($table) use ($already, $legacy) {
+            $own = site_setting('content_entities_decoded_' . $table, '');
+            if ($own !== '') return $own;
+            return ($already !== '' && in_array($table, $legacy, TRUE)) ? $already : '';
+        };
 
         $targets = array(
             array('table' => 'news',  'key' => 'news_id',  'cols' => array('news_title', 'news_description')),
@@ -228,6 +239,15 @@ class Cli extends CI_Controller
             array('table' => 'marketplace', 'key' => 'marketplace_id', 'cols' => array(
                 'marketplace_title', 'marketplace_description',
                 'marketplace_seo_title', 'marketplace_seo_description', 'marketplace_seo_keywords')),
+            // Added with the round-3 fix that stopped User.php encoding on the
+            // way in. A member-created business name stored "Joe&#039;s BBQ",
+            // which is what the directory and /search then printed verbatim.
+            array('table' => 'listings', 'key' => 'listing_id', 'cols' => array(
+                'listing_name', 'listing_address', 'listing_description',
+                'service_offered', 'service_locations', 'service_name',
+                'listing_seo_title', 'listing_seo_description')),
+            array('table' => 'user', 'key' => 'user_id', 'cols' => array(
+                'name', 'user_address', 'user_state', 'user_website', 'user_contact_email')),
         );
 
         echo $apply ? "Mode: APPLY (writing changes)\n" : "Mode: REPORT ONLY (pass 'apply' to write)\n";
@@ -237,6 +257,26 @@ class Cli extends CI_Controller
                 echo "-- {$t['table']}: table not present, skipped\n";
                 continue;
             }
+
+            $flag_key  = 'content_entities_decoded_' . $t['table'];
+            $table_run = $decoded_on($t['table']);
+            if ($table_run !== '' && $force !== 'force') {
+                echo sprintf("-- %-12s already decoded on %s, skipped (add 'force' to repeat)\n",
+                    $t['table'] . ':', $table_run);
+                continue;
+            }
+
+            // Columns vary between schema versions; ask before selecting, or the
+            // whole query fails on an older install and takes the run with it.
+            $cols = array();
+            foreach ($t['cols'] as $__c) {
+                if ($this->db->field_exists($__c, $t['table'])) { $cols[] = $__c; }
+            }
+            if (!$cols) {
+                echo "-- {$t['table']}: none of the expected columns present, skipped\n";
+                continue;
+            }
+            $t['cols'] = $cols;
 
             $rows = $this->db->select(implode(',', array_merge(array($t['key']), $t['cols'])))
                 ->from($t['table'])->get()->result();
@@ -263,12 +303,17 @@ class Cli extends CI_Controller
                 }
             }
 
-            echo sprintf("-- %-6s %d of %d row(s) %s\n", $t['table'] . ':', $changed, count($rows), $apply ? 'decoded' : 'would be decoded');
+            echo sprintf("-- %-12s %d of %d row(s) %s\n", $t['table'] . ':', $changed, count($rows), $apply ? 'decoded' : 'would be decoded');
+
+            if ($apply) {
+                site_setting_save($flag_key, date('Y-m-d H:i:s'));
+            }
         }
 
         if ($apply) {
             site_setting_save('content_entities_decoded_at', date('Y-m-d H:i:s'));
-            echo "\nDone. Recorded in site_settings so this cannot be run twice by accident.\n";
+            echo "\nDone. Each table records its own flag in site_settings, so this\n";
+            echo "cannot decode the same table twice by accident.\n";
         } else {
             echo "\nNothing was written. Re-run with:  php index.php cli decode_content_entities apply\n";
         }

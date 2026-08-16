@@ -230,12 +230,54 @@
 		// {
 		// 	return $data = $this->db->select('*')->from('listing_categories')->order_by('category_id', 'DESC')->get()->result();
 		// }
-		public function allListingCategory($limit = null, $offset = null)
+		/**
+		 * Word-by-word LIKE across the given columns, same shape as
+		 * applyAdminListingSearch(): every term must match somewhere, so
+		 * "home services" finds a row whichever order the words are in.
+		 *
+		 * @param string|null $q
+		 * @param array       $columns Qualified column names.
+		 */
+		private function applyListLikeSearch($q, array $columns)
 		{
-			$this->db->select('lc.*, 
+			$terms = preg_split('/\s+/', trim((string) $q), -1, PREG_SPLIT_NO_EMPTY);
+			if (empty($terms) || empty($columns)) {
+				return;
+			}
+			$terms = array_slice(array_unique($terms), 0, 6);
+
+			$this->db->group_start();
+			foreach ($terms as $term) {
+				$this->db->group_start();
+				$first = true;
+				foreach ($columns as $column) {
+					$first ? $this->db->like($column, $term) : $this->db->or_like($column, $term);
+					$first = false;
+				}
+				$this->db->group_end();
+			}
+			$this->db->group_end();
+		}
+
+		/** @return array Columns the category list searches. */
+		private function listingCategorySearchColumns()
+		{
+			return array('lc.category_name');
+		}
+
+		/**
+		 * @param int|null    $limit
+		 * @param int|null    $offset
+		 * @param string|null $q Search text, applied in SQL so it reaches rows
+		 *                       on pages the browser was never sent.
+		 */
+		public function allListingCategory($limit = null, $offset = null, $q = NULL)
+		{
+			$this->db->select('lc.*,
 			(SELECT COUNT(*) FROM listings l WHERE l.category_id = lc.category_id AND (l.is_deleted IS NULL OR l.is_deleted = 0)) as listing_count,
 			(SELECT COUNT(*) FROM listing_sub_categories lsc WHERE lsc.category_id = lc.category_id) as sub_category_count');
 			$this->db->from('listing_categories lc');
+			$this->applyListLikeSearch($q, $this->listingCategorySearchColumns());
 			$this->db->order_by('lc.category_id', 'DESC');
 
 			if ($limit !== null && $offset !== null) {
@@ -243,6 +285,23 @@
 			}
 
 			return $this->db->get()->result();
+		}
+
+		/**
+		 * Row count for the category pager.
+		 *
+		 * Replaces count(allListingCategory(NULL, NULL)), which pulled every row
+		 * — running two correlated subqueries per row — just to measure the pager.
+		 *
+		 * @param  string|null $q
+		 * @return int
+		 */
+		public function countListingCategories($q = NULL)
+		{
+			$this->db->from('listing_categories lc');
+			$this->applyListLikeSearch($q, $this->listingCategorySearchColumns());
+
+			return (int) $this->db->count_all_results();
 		}
 
 
@@ -307,10 +366,23 @@
 		/*===================================
 		Get Listing Sub Category Information
 		====================================*/
-		public function allListingSubCategory($limit = NULL, $offset = 0)
+		/** @return array Columns the sub-category list searches. */
+		private function listingSubCategorySearchColumns()
 		{
-			$this->db->select('sub_cate.category_id, main_cate.category_name, 
-                       sub_cate.sub_category_name, sub_cate.created_at, 
+			return array('sub_cate.sub_category_name', 'main_cate.category_name');
+		}
+
+		/**
+		 * @param int|null    $limit
+		 * @param int         $offset
+		 * @param string|null $q Search text, applied in SQL. Searching the parent
+		 *                       category name too means "Home Services" lists all
+		 *                       of its sub-categories.
+		 */
+		public function allListingSubCategory($limit = NULL, $offset = 0, $q = NULL)
+		{
+			$this->db->select('sub_cate.category_id, main_cate.category_name,
+                       sub_cate.sub_category_name, sub_cate.created_at,
                        sub_cate.sub_category_id, sub_cate.sub_category_slug,
                        (SELECT COUNT(*) FROM listings l WHERE l.sub_category_id = sub_cate.sub_category_id AND (l.is_deleted IS NULL OR l.is_deleted = 0)) as listing_count')
 				->from('listing_sub_categories as sub_cate')
@@ -318,8 +390,9 @@
 					'listing_categories as main_cate',
 					'sub_cate.category_id = main_cate.category_id',
 					'LEFT'
-				)
-				->order_by('sub_cate.sub_category_id', 'DESC');
+				);
+			$this->applyListLikeSearch($q, $this->listingSubCategorySearchColumns());
+			$this->db->order_by('sub_cate.sub_category_id', 'DESC');
 
 			if ($limit !== NULL) {
 				$this->db->limit($limit, $offset);
@@ -328,9 +401,27 @@
 			return $this->db->get()->result();
 		}
 
-		public function countAllListingSubCategory()
+		/**
+		 * Row count for the sub-category pager.
+		 *
+		 * Query-builder rather than count_all() so it can carry the same join and
+		 * search as the list above — a count that ignored the filter would page
+		 * a filtered list against the unfiltered total.
+		 *
+		 * @param  string|null $q
+		 * @return int
+		 */
+		public function countAllListingSubCategory($q = NULL)
 		{
-			return $this->db->count_all('listing_sub_categories');
+			$this->db->from('listing_sub_categories as sub_cate')
+				->join(
+					'listing_categories as main_cate',
+					'sub_cate.category_id = main_cate.category_id',
+					'LEFT'
+				);
+			$this->applyListLikeSearch($q, $this->listingSubCategorySearchColumns());
+
+			return (int) $this->db->count_all_results();
 		}
 
 
