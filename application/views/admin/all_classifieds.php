@@ -51,9 +51,7 @@
                       <?php endif; ?>
                     </td>
                     <td>
-                      <?php if (!empty($classifieds->name)) : ?>
-                        <a href="" class="db-list-ststus" target="_blank"><?= $classifieds->name; ?></a>
-                      <?php endif; ?>
+                      <a href="" class="db-list-ststus" target="_blank"><?= e(author_name($classifieds->name)) ?></a>
                     </td>
                     <?php $cl_views = (isset($views_counts) && isset($views_counts[$classifieds->classifieds_id])) ? $views_counts[$classifieds->classifieds_id] : 0; ?>
                     <td><a href="" class="db-list-ststus" target="_blank"><?= $cl_views; ?></a></td>

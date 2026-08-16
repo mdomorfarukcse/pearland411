@@ -86,7 +86,7 @@ $ev_directions = $ev_address !== ''
 
 /* ---- host -------------------------------------------------------------- */
 
-$host_name   = !empty($event_host['name'])   ? (string) $event_host['name']   : 'Pearland411';
+$host_name   = author_name($event_host['name'] ?? '');
 $host_image  = !empty($event_host['image'])  ? (string) $event_host['image']  : '';
 $host_joined = !empty($event_host['joined']) ? (string) $event_host['joined'] : '';
 

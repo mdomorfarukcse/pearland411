@@ -46,9 +46,7 @@
                       <?php endif; ?>
                     </td>
                     <td>
-                      <?php if (!empty($house->name)) : ?>
-                        <a href="" class="db-list-ststus" target="_blank"><?= $house->name; ?></a>
-                      <?php endif; ?>
+                      <a href="" class="db-list-ststus" target="_blank"><?= e(author_name($house->name)) ?></a>
                     </td>
                     <?php $h_views = (isset($views_counts) && isset($views_counts[$house->house_id])) ? $views_counts[$house->house_id] : 0; ?>
                     <td><a href="" class="db-list-ststus" target="_blank"><?= $h_views; ?></a></td>

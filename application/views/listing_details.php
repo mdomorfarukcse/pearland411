@@ -709,9 +709,17 @@ $ld_stars = function ($value) {
 										'website'  => array('6.png', 'Website'),
 									);
 									foreach ($soc_icons as $key => $meta):
-										if (empty($owner_socials[$key])) continue;
+										// external_url() is what the site footer's own icons use
+										// (partials/site_footer.php:64-71): it adds https:// to a
+										// schemeless "www.facebook.com/x" and returns '' for
+										// anything that is not http/https/mailto/tel. Without it a
+										// schemeless value was emitted as a RELATIVE href, so the
+										// icon navigated back into the site instead of out to the
+										// profile — the reported "sends you to the homepage".
+										$soc_href = external_url($owner_socials[$key] ?? '');
+										if ($soc_href === '') continue;
 									?>
-										<a href="<?= e_url($owner_socials[$key]) ?>" target="_blank" rel="noopener nofollow" aria-label="<?= e_attr($meta[1]) ?>">
+										<a href="<?= e_attr($soc_href) ?>" target="_blank" rel="noopener nofollow" aria-label="<?= e_attr($meta[1]) ?>">
 											<img src="<?= base_url('assets/images/social/' . $meta[0]) ?>" alt="<?= e_attr($meta[1]) ?>" loading="lazy">
 										</a>
 									<?php endforeach; ?>

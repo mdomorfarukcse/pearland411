@@ -298,16 +298,42 @@ if ($__need_css) define('PEARLAND411_AD_SLOT_CSS', 1);
 <aside class="<?= e_attr($__cls) ?>" data-ad-slot="<?= e_attr($slot) ?>" aria-label="Sponsored placement">
 	<span class="ad-slot__label"><?= e($__label) ?></span>
 
+	<?php
+	// A sold banner's click-through, normalised the same way the footer's social
+	// links are: external_url() adds https:// to a schemeless host and rejects
+	// anything that is not http/https/mailto/tel. Left raw, a schemeless
+	// ad_link rendered as a RELATIVE href and sent the visitor back into the
+	// site, and an empty one fell to "#", so a paid placement led nowhere.
+	//
+	// A banner whose link is unusable still renders — the advertiser paid for
+	// the impression — just without an anchor, rather than with a dead one.
+	$__ad_href = ($__ad && !empty($__ad->ad_photo)) ? external_url($__ad->ad_link ?? '') : '';
+	?>
 	<?php if ($__ad && !empty($__ad->ad_photo)): ?>
-		<a class="ad-slot__link" href="<?= e_url($__ad->ad_link ?: '#') ?>"
-		   target="_blank" rel="nofollow sponsored noopener"
-		   data-ad-id="<?= (int) $__ad->id ?>"
-		   style="<?= e_attr($__style) ?>">
-			<img src="<?= base_url($__ad->ad_photo) ?>" alt="Advertisement"
-				<?= $__w ? 'width="' . (int) $__w . '"' : '' ?>
-				<?= $__h ? 'height="' . (int) $__h . '"' : '' ?>
-				loading="lazy" decoding="async">
-		</a>
+		<?php if ($__ad_href !== ''): ?>
+			<a class="ad-slot__link" href="<?= e_attr($__ad_href) ?>"
+			   target="_blank" rel="nofollow sponsored noopener"
+			   data-ad-id="<?= (int) $__ad->id ?>"
+			   style="<?= e_attr($__style) ?>">
+				<img src="<?= base_url($__ad->ad_photo) ?>" alt="Advertisement"
+					<?= $__w ? 'width="' . (int) $__w . '"' : '' ?>
+					<?= $__h ? 'height="' . (int) $__h . '"' : '' ?>
+					loading="lazy" decoding="async">
+			</a>
+		<?php else: ?>
+			<?php /* An <a> with no href: not a link, not focusable, does not
+			         navigate. Kept as an anchor rather than a span because
+			         `display: block` on .ad-slot__link is only declared in this
+			         partial's own <style>, which the non-default variants do not
+			         emit — a span would go inline there and collapse the box. */ ?>
+			<a class="ad-slot__link" data-ad-id="<?= (int) $__ad->id ?>"
+			   style="<?= e_attr($__style) ?>">
+				<img src="<?= base_url($__ad->ad_photo) ?>" alt="Advertisement"
+					<?= $__w ? 'width="' . (int) $__w . '"' : '' ?>
+					<?= $__h ? 'height="' . (int) $__h . '"' : '' ?>
+					loading="lazy" decoding="async">
+			</a>
+		<?php endif; ?>
 	<?php else: ?>
 		<a class="ad-slot__link" href="<?= e_url($__href) ?>"
 			<?= $__external ? 'target="_blank" rel="nofollow sponsored noopener"' : '' ?>

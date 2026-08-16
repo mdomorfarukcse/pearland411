@@ -471,6 +471,7 @@
                           <div class="form-group">
                             <label>Upload Listing Logo</label>
                             <input type="file" name="listing_profile_image" class="form-control">
+                            <small class="form-text text-muted"><?= image_guidance('logo') ?></small>
                           </div>
                         </div>
                       </div>
@@ -482,7 +483,7 @@
                           <div class="form-group">
                             <label>Upload Gallery Images (Multiple)</label>
                             <input type="file" name="listing_image_gallery[]" class="form-control" multiple accept="image/*">
-                            <small class="form-text text-muted">You can select multiple images for gallery</small>
+                            <small class="form-text text-muted">You can select multiple images for gallery. <?= image_guidance('gallery') ?></small>
                           </div>
                         </div>
                       </div>

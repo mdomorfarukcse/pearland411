@@ -48,9 +48,7 @@
                       <span><?= ($__d = us_date($blog->created_at ?? null)) !== '' ? e($__d) : '<em>no date set</em>' ?></span>
                     </td>
                     <td>
-                      <?php if (!empty($blog->name)) : ?>
-                        <a href="#" class="db-list-ststus" target="_blank"><?= e($blog->name); ?></a>
-                      <?php endif; ?>
+                      <a href="#" class="db-list-ststus" target="_blank"><?= e(author_name($blog->name)) ?></a>
                     </td>
                     <?php $b_views = (isset($views_counts) && isset($views_counts[$blog->blog_id])) ? $views_counts[$blog->blog_id] : 0; ?>
                     <td><span class="db-list-rat"><?= (int) $b_views; ?></span></td>

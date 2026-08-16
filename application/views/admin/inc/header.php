@@ -270,7 +270,14 @@
 
 
 
-              <h4>Bizbook Directory Template</h4>
+              <?php
+              // Was the theme's own name. Same session read as admin/header.php.
+              $__hdr_admin = $this->session->userdata('logged_admin');
+              ?>
+              <h4><?= e((is_array($__hdr_admin) && !empty($__hdr_admin['admin_name']))
+                  ? (string) $__hdr_admin['admin_name']
+                  : site_setting('site_title', 'Pearland411')) ?></h4>
+              <?php unset($__hdr_admin); ?>
 
 
 

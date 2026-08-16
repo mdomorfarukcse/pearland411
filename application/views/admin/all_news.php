@@ -56,9 +56,7 @@
                       <?php endif; ?>
                     </td>
                     <td>
-                      <?php if (!empty($news->name)) : ?>
-                        <a href="" class="db-list-ststus" target="_blank"><?= e($news->name); ?></a>
-                      <?php endif; ?>
+                      <a href="" class="db-list-ststus" target="_blank"><?= e(author_name($news->name)) ?></a>
                     </td>
                     <?php $n_views = (isset($views_counts) && isset($views_counts[$news->news_id])) ? $views_counts[$news->news_id] : 0; ?>
                     <td><a href="" class="db-list-ststus" target="_blank"><?= $n_views; ?></a></td>

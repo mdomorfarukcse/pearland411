@@ -51,9 +51,7 @@
                       <?php endif; ?>
                     </td>
                     <td>
-                      <?php if (!empty($video->name)) : ?>
-                        <a href="" class="db-list-ststus" target="_blank"><?= $video->name; ?></a>
-                      <?php endif; ?>
+                      <a href="" class="db-list-ststus" target="_blank"><?= e(author_name($video->name)) ?></a>
                     </td>
                     <?php $v_views = (isset($views_counts) && isset($views_counts[$video->video_id])) ? $views_counts[$video->video_id] : 0; ?>
                     <td><a href="" class="db-list-ststus" target="_blank"><?= $v_views; ?></a></td>

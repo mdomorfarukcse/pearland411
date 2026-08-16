@@ -427,6 +427,7 @@ if (!function_exists('cap_lock_note')) {
 											$mf_id       = 'listing_profile_image';
 											$mf_label    = 'Upload Listing Logo';
 											$mf_current  = isset($listing->listing_image) ? $listing->listing_image : '';
+											$mf_hint     = image_guidance('logo');
 											$mf_disabled = !$caps['can_photos'];
 											$mf_empty    = 'No logo uploaded yet.';
 											include APPPATH . 'views/admin/partials/media_field.php';
@@ -445,7 +446,7 @@ if (!function_exists('cap_lock_note')) {
 											               . ($caps['can_photos'] && $caps['photo_limit'] >= 0
 											                  ? ' Your package allows up to ' . (int) $caps['photo_limit'] . ' gallery photo(s).'
 											                  : '')
-											               . ' Supported formats: JPG, PNG, GIF.';
+											               . ' ' . image_guidance('gallery');
 											$mf_current  = listing_gallery_paths(isset($listing->listing_image_gallery) ? $listing->listing_image_gallery : null);
 											$mf_multiple = true;
 											$mf_remove   = 'remove_gallery[]';

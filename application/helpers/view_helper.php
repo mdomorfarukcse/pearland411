@@ -649,6 +649,65 @@ if (!function_exists('normalise_enquiry_department')) {
     }
 }
 
+if (!function_exists('image_guidance')) {
+    /**
+     * The recommended upload size for one kind of image, as small print.
+     *
+     * "What is the optimal image size?" was asked because nothing on any upload
+     * form said, and the shapes are not guessable: the directory card crops to
+     * 16:9 and a gallery tile to 4:3, both with `object-fit: cover`, so a
+     * square logo loses its top and bottom and a portrait photo loses its
+     * sides. The numbers below are those boxes at 2x for high-density screens.
+     *
+     * Defined once because the same wording has to appear on four forms — the
+     * member and admin add screens and the member and admin edit screens.
+     *
+     * Returns literal HTML: media_field.php echoes $mf_hint unescaped, so never
+     * interpolate stored data into these strings.
+     *
+     * @param  string $kind logo|gallery|cover|category
+     * @return string       HTML for a <small class="form-text text-muted">.
+     */
+    function image_guidance($kind)
+    {
+        $copy = array(
+            'logo' => 'Best size <strong>1200 &times; 675 px</strong> (landscape, 16:9), JPG or PNG under 500&nbsp;KB. '
+                . 'Directory cards crop to a wide rectangle, so keep the logo or main subject centred &mdash; '
+                . 'a square image loses its top and bottom there. Minimum 800 &times; 450 px.',
+            'gallery' => 'Best size <strong>1600 &times; 1200 px</strong> (4:3), JPG under 500&nbsp;KB each. '
+                . 'Tiles crop to 4:3 and open full size when clicked, so upload the good version &mdash; '
+                . 'but nothing wider than 1600 px, or the page becomes slow to load.',
+            'cover' => 'Best size <strong>1600 &times; 500 px</strong> (wide banner), JPG under 800&nbsp;KB. '
+                . 'It sits behind a dark tint at the top of the listing, so avoid small text or fine detail.',
+            'category' => 'Best size <strong>600 &times; 600 px</strong> (square), PNG with a transparent '
+                . 'background, under 200&nbsp;KB. Shown as a small icon, so keep it simple.',
+        );
+
+        return isset($copy[$kind]) ? $copy[$kind] : '';
+    }
+}
+
+if (!function_exists('author_name')) {
+    /**
+     * The name to print for whoever created a piece of content.
+     *
+     * Seeded rows carry `user_id = 0` and no admin, so the COALESCE in the
+     * listing queries yields NULL. The public views each had their own inline
+     * ternary falling back to "Pearland411" while the admin lists had none, so
+     * the same event read "Hosted by Pearland411" on the site and blank in the
+     * admin table. One definition, used by both.
+     *
+     * @param  string|null $name Stored author/creator name, possibly NULL.
+     * @return string            Never empty.
+     */
+    function author_name($name)
+    {
+        $name = trim((string) $name);
+
+        return $name !== '' ? $name : site_setting('site_title', 'Pearland411');
+    }
+}
+
 if (!function_exists('billing_interval_noun')) {
     /**
      * `plans.billing_interval` as the noun the price copy needs.

@@ -45,7 +45,7 @@ $nw_cat_slug = (string) ($news->category_slug ?? '');
 if ($nw_cat_slug === '' && $nw_cat_name !== '') $nw_cat_slug = pearland_slug($nw_cat_name);
 $nw_cat_url  = $nw_cat_slug !== '' ? base_url('news') . '?' . http_build_query(array('category' => $nw_cat_slug)) : '';
 
-$nw_author = isset($news_author) && $news_author !== '' ? (string) $news_author : 'Pearland411';
+$nw_author = author_name($news_author ?? '');
 
 // The body is stored with pasted markup. content_text() turns the block tags
 // into newlines and strips the rest, so the story reads as text — the old view

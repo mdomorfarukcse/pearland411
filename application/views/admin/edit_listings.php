@@ -413,7 +413,7 @@
                           // already contained it. So the current logo never appeared.
                           $mf_name    = 'listing_profile_image';
                           $mf_label   = 'Upload Listing Logo';
-                          $mf_hint    = 'Shown at the top of the listing page. Leave empty to keep the current one. JPG, PNG or GIF.';
+                          $mf_hint    = 'Shown at the top of the listing page. Leave empty to keep the current one. ' . image_guidance('logo');
                           $mf_current = $listing->listing_image ?? '';
                           $mf_empty   = 'No logo uploaded yet.';
                           include APPPATH . 'views/admin/partials/media_field.php';
@@ -424,7 +424,7 @@
                           $mf_name     = 'listing_image_gallery[]';
                           $mf_id       = 'listing_image_gallery';
                           $mf_label    = 'Upload Gallery Images (Multiple Images)';
-                          $mf_hint     = 'You can select several at once. New images are <strong>added</strong> to the ones below &mdash; nothing is replaced.';
+                          $mf_hint     = 'You can select several at once. New images are <strong>added</strong> to the ones below &mdash; nothing is replaced. ' . image_guidance('gallery');
                           $mf_current  = listing_gallery_paths($listing->listing_image_gallery ?? null);
                           $mf_multiple = true;
                           $mf_remove   = 'remove_gallery[]';

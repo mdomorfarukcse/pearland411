@@ -43,7 +43,7 @@ $bd_link   = base_url('blog-details/' . rawurlencode($bd_key));
 $bd_image  = !empty($blog->blog_image) ? base_url($blog->blog_image) : '';
 $bd_date   = us_date_ts($blog->created_at ?? null);
 $bd_views  = (int) ($blog->views ?? 0);
-$bd_author = (isset($blog_author) && $blog_author !== '') ? (string) $blog_author : 'Pearland411';
+$bd_author = author_name($blog_author ?? '');
 
 // content_text() turns the block tags into newlines and strips the rest, and
 // decodes bodies the admin form stored entity-encoded — see the note in

@@ -54,7 +54,7 @@
                           // it wanted is now written by softDeleteListing(). ?>
                     <td><span class="db-list-rat"><?= e(us_date($value->deleted_date ?? null)) ?></span></td>
                     <td>
-                      <span class="db-list-ststus"><?= $value->name; ?></span>
+                      <span class="db-list-ststus"><?= e(author_name($value->name)) ?></span>
                     </td>
                     <td>
                       <a href="<?= base_url('admin/edit-listing/' . $value->listing_slug); ?>" class="db-list-edit">Edit</a>

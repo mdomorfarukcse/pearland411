@@ -67,10 +67,23 @@
 
         <div class="head-s3">
           <div class="head-pro">
+            <?php
+            // Was the literal "Admin User" — a theme placeholder, rendered on all
+            // ~104 admin screens, so renaming the account changed nothing here.
+            // Same session read the public header does (header.php:288-292).
+            $__hdr_admin = $this->session->userdata('logged_admin');
+            $__hdr_name  = (is_array($__hdr_admin) && !empty($__hdr_admin['admin_name']))
+                ? (string) $__hdr_admin['admin_name']
+                : site_setting('site_title', 'Pearland411');
+            $__hdr_id    = (is_array($__hdr_admin) && !empty($__hdr_admin['logged_id']))
+                ? (int) $__hdr_admin['logged_id'] : 0;
+            ?>
             <img src="<?= base_url() ?>assets/images/user/3.jpg" alt="">
             <b>Profile by</b><br>
-            <h4>Admin User</h4>
-            <a href="<?= base_url('admin/setting') ?>" class="fclick"></a>
+            <h4><?= e($__hdr_name) ?></h4>
+            <?php // Points at the screen that can actually change this name. ?>
+            <a href="<?= $__hdr_id ? base_url('admin/sub-admins/edit/' . $__hdr_id) : base_url('admin/setting') ?>" class="fclick"></a>
+            <?php unset($__hdr_admin, $__hdr_name, $__hdr_id); ?>
           </div>
         </div>
       </div>
