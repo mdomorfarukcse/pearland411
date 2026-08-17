@@ -118,27 +118,43 @@ if ($help_css) define('PEARLAND411_SALES_HELP_CSS', 1);
 	   the number answers it. `margin-top` is the deliberate gap after the lede;
 	   the hours then tuck under the pill so the three lines read as one contact
 	   block rather than three stray items. */
+	/* An outline pill, not a solid one. The form column's "Request a call back"
+	   is a solid green button, and a second solid green block beside it made the
+	   two compete for the same job — the panel read as two primary actions with
+	   no order between them. Outlined, the number keeps its full tap target and
+	   its prominence but clearly sits one step behind the button, and it stops
+	   out-shouting the heading it is supposed to be answering. Fills solid on
+	   hover, so the affordance is still obvious. */
 	.p411-help__phone {
 		display: inline-flex;
 		align-items: center;
-		gap: 10px;
+		gap: 12px;
 		margin-top: 26px;
-		padding: 13px 24px 13px 16px;
+		padding: 11px 26px 11px 18px;
 		border-radius: 999px;
-		background: #79B82A;
+		background: transparent;
+		border: 2px solid rgba(143, 203, 70, .55);
 		color: #fff;
 		font-family: 'Poppins', 'Open Sans', sans-serif;
-		font-size: 22px;
+		font-size: 24px;
 		font-weight: 700;
 		letter-spacing: .01em;
 		text-decoration: none;
-		transition: background .16s ease;
+		transition: background .16s ease, border-color .16s ease, color .16s ease;
 	}
 	.p411-help__phone:hover,
-	.p411-help__phone:focus { background: #5E9220; color: #fff; text-decoration: none; }
-	/* The markup sets width/height 30 inline; at 22px type that read as an icon
-	   with a number beside it rather than a number with an icon. */
-	.p411-help__phone svg { flex: none; width: 26px; height: 26px; }
+	.p411-help__phone:focus {
+		background: #79B82A;
+		border-color: #79B82A;
+		color: #fff;
+		text-decoration: none;
+	}
+	/* The markup sets width/height 30 inline; at this size that read as an icon
+	   with a number beside it rather than a number with an icon. The glyph is
+	   drawn with stroke="currentColor", so `color` is what tints it. */
+	.p411-help__phone svg { flex: none; width: 26px; height: 26px; color: #8FCB46; }
+	.p411-help__phone:hover svg,
+	.p411-help__phone:focus svg { color: #fff; }
 
 	.p411-help__hours { margin: 11px 0 0; font-size: 13px; color: rgba(255, 255, 255, .7); }
 	.p411-help__hours b { color: #fff; font-weight: 600; }
