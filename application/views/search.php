@@ -138,16 +138,26 @@
     }
 
     /* ======= Grid Layout for Cards ======= */
+    /* minmax(0, 1fr), NOT 1fr.
+     *
+     * `1fr` is shorthand for `minmax(auto, 1fr)`, and that `auto` floor
+     * resolves to min-content — so a single unbreakable string forces its
+     * track wider than its share and the whole grid overflows the col-lg-8
+     * it sits in, straight across the sidebar. Several listings have a raw
+     * Google URL pasted into their description, which is exactly such a
+     * string, and that is what tore this page's layout apart.
+     *
+     * Same guard the rest of the kit already uses — see content.css. */
     .results-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 20px;
         margin-bottom: 30px;
     }
 
     @media (max-width: 992px) {
         .results-grid {
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
     }
 
@@ -158,6 +168,9 @@
     }
 
     .result-card {
+        /* Grid items default to min-width:auto, i.e. min-content — the same
+           trap as the track sizing above, one level down. */
+        min-width: 0;
         background: white;
         border-radius: 15px;
         padding: 25px;
@@ -192,6 +205,9 @@
     }
 
     .result-description {
+        /* Long pasted URLs have no break opportunity; without this they run
+           past the card edge instead of wrapping inside the 4-line clamp. */
+        overflow-wrap: anywhere;
         color: var(--text-light);
         line-height: 1.6;
         margin-bottom: 15px;
