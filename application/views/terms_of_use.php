@@ -224,5 +224,6 @@
                 </div>
             </div>
         </div>
-
-
+    </div><!-- /.terms-of-use-wrapper -->
+<?php /* Was left open, so footer.php's promo band and the site footer were adopted
+         into it and picked up its 80px vertical padding. */ ?>

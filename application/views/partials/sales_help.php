@@ -74,17 +74,20 @@ if ($help_css) define('PEARLAND411_SALES_HELP_CSS', 1);
 		color: #fff;
 		padding: 30px 32px 32px;
 		/* The form column is the taller of the two and the grid stretches both,
-		   so the surplus used to pile up as a slab of blank navy under the email
-		   link. Making this cell a column and pushing the contact block to its
-		   foot spends that space between the lede and the phone number instead. */
+		   so the surplus has to go somewhere. Centring spreads it evenly above
+		   and below the content, which reads as a deliberately set panel.
+		   Pushing the contact block to the foot instead (the first attempt at
+		   this) only moved the problem: it left one ~250px hole between the
+		   lede and the phone number, with the pill floating at the bottom. */
 		display: flex;
 		flex-direction: column;
+		justify-content: center;
 	}
 	/* Both are inline-flex pills; without this the flex container stretches them
 	   to the full column width. The 900px stacked layout below sets an explicit
 	   width on the phone pill, so it still wins there. */
-	.p411-help__phone { margin-top: auto; align-self: flex-start; }
-	.p411-help__mail  { align-self: flex-start; }
+	.p411-help__phone,
+	.p411-help__mail { align-self: flex-start; }
 	.p411-help__eyebrow {
 		display: inline-block;
 		font-size: 11px;
@@ -109,16 +112,23 @@ if ($help_css) define('PEARLAND411_SALES_HELP_CSS', 1);
 		color: rgba(255, 255, 255, .84);
 	}
 
+	/* 22px, not 25. At 25 the number matched the h2 above it, and as the only
+	   saturated block of colour on a navy ground it won that tie — so the eye
+	   landed on a green blob before reading what it was for. The heading leads,
+	   the number answers it. `margin-top` is the deliberate gap after the lede;
+	   the hours then tuck under the pill so the three lines read as one contact
+	   block rather than three stray items. */
 	.p411-help__phone {
 		display: inline-flex;
 		align-items: center;
-		gap: 12px;
-		padding: 14px 26px 14px 18px;
+		gap: 10px;
+		margin-top: 26px;
+		padding: 13px 24px 13px 16px;
 		border-radius: 999px;
 		background: #79B82A;
 		color: #fff;
 		font-family: 'Poppins', 'Open Sans', sans-serif;
-		font-size: 25px;
+		font-size: 22px;
 		font-weight: 700;
 		letter-spacing: .01em;
 		text-decoration: none;
@@ -126,16 +136,18 @@ if ($help_css) define('PEARLAND411_SALES_HELP_CSS', 1);
 	}
 	.p411-help__phone:hover,
 	.p411-help__phone:focus { background: #5E9220; color: #fff; text-decoration: none; }
-	.p411-help__phone svg { flex: none; }
+	/* The markup sets width/height 30 inline; at 22px type that read as an icon
+	   with a number beside it rather than a number with an icon. */
+	.p411-help__phone svg { flex: none; width: 26px; height: 26px; }
 
-	.p411-help__hours { margin: 14px 0 0; font-size: 13px; color: rgba(255, 255, 255, .7); }
+	.p411-help__hours { margin: 11px 0 0; font-size: 13px; color: rgba(255, 255, 255, .7); }
 	.p411-help__hours b { color: #fff; font-weight: 600; }
 
 	.p411-help__mail {
 		display: inline-flex;
 		align-items: center;
 		gap: 8px;
-		margin-top: 16px;
+		margin-top: 22px;
 		font-size: 14px;
 		font-weight: 600;
 		color: #A9E060;
