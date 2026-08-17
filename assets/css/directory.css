@@ -665,18 +665,28 @@
 	background: linear-gradient(90deg, var(--p411-bu), var(--p411-bu-l));
 }
 
+/* contain, for the reason given at .p411-card__media in home-sections.css:
+   these are business logos more often than photographs, and cover cropped the
+   top and bottom off any square or round mark. Kept in step with that rule. */
 .p411-biz__media {
 	position: relative;
 	aspect-ratio: 16 / 9;
-	background: var(--p411-gray);
+	background: var(--p411-card);
+	border-bottom: 1px solid var(--p411-line);
 	overflow: hidden;
 }
 .p411-biz__media img {
 	display: block;
 	width: 100%;
 	height: 100%;
-	object-fit: cover;
+	object-fit: contain;
+	padding: 14px;
 	transition: transform .35s ease;
+}
+.p411-biz__media img.p411-ph {
+	object-fit: cover;
+	padding: 0;
+	background: var(--p411-gray);
 }
 .p411-biz:hover .p411-biz__media img { transform: scale(1.04); }
 
@@ -850,7 +860,7 @@
 	font-weight: 700;
 	font-size: 17px;
 }
-.p411-rail__thumb img { width: 100%; height: 100%; object-fit: cover; }
+.p411-rail__thumb img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
 .p411-rail__body { min-width: 0; flex: 1; }
 .p411-rail__body b {
 	display: block;
@@ -1342,7 +1352,8 @@
 	box-shadow: var(--p411-sh-h);
 }
 .p411-rel__thumb { aspect-ratio: 16 / 10; background: var(--p411-gray); overflow: hidden; }
-.p411-rel__thumb img { width: 100%; height: 100%; object-fit: cover; }
+.p411-rel__thumb img { width: 100%; height: 100%; object-fit: contain; padding: 10px; }
+.p411-rel__thumb img.p411-ph { object-fit: cover; padding: 0; }
 .p411-rel__body { padding: 11px 13px 13px; }
 .p411-rel__body b { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--p411-navy); }
 .p411-rel__body span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--p411-ink-3); }

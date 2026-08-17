@@ -573,11 +573,33 @@
 }
 .p411-home .p411-card:hover { transform: translateY(-4px); box-shadow: var(--sh-h); border-color: #D6DAE4; }
 
+/* `contain`, not `cover`.
+ *
+ * These cards carry a business's LOGO far more often than a photograph of its
+ * premises, and cover fills the box by cropping whatever does not fit — which
+ * on a round or square mark means slicing the top and bottom off the brand.
+ * Central Texas BBQ's badge lost its outer ring and the words around it that
+ * way. contain fits the whole mark inside the box and pads the remainder, so
+ * every logo arrives intact whatever shape it was drawn in — which is also why
+ * the upload guidance no longer has to tell anyone to centre their subject.
+ *
+ * The plate is white rather than grey because most supplied logos are drawn on
+ * white or transparent grounds, and a white mark on grey reads as a floating
+ * rectangle. A hairline keeps the media area separate from the card body. */
 .p411-home .p411-card__media {
 	position: relative; display: block; aspect-ratio: 16 / 10;
-	background: var(--gray); overflow: hidden; line-height: 0;
+	background: var(--card); border-bottom: 1px solid var(--line);
+	overflow: hidden; line-height: 0;
 }
-.p411-home .p411-card__media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.p411-home .p411-card__media img {
+	width: 100%; height: 100%; display: block;
+	object-fit: contain; padding: 14px;
+}
+/* The category placeholder is artwork drawn to fill its frame, so it keeps
+   cover — contained, it would sit as a small tile in a large empty plate. */
+.p411-home .p411-card__media img.p411-ph {
+	object-fit: cover; padding: 0; background: var(--gray);
+}
 .p411-home .p411-card__cat,
 .p411-home .p411-card__flag {
 	position: absolute; top: 10px;
