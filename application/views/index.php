@@ -122,7 +122,7 @@ $p411_card = function ($row, $opts = array()) use ($p411_excerpt) {
 			<?php if (!empty($row->listing_image)): ?>
 				<?= responsive_img($row->listing_image, $name) ?>
 			<?php else: ?>
-				<img src="<?= e_attr(category_placeholder($cat)) ?>" alt="" loading="lazy" decoding="async">
+				<img class="p411-ph" src="<?= e_attr(category_placeholder($cat)) ?>" alt="" loading="lazy" decoding="async">
 			<?php endif; ?>
 			<?php if ($cat !== ''): ?><span class="p411-card__cat"><?= e($cat) ?></span><?php endif; ?>
 			<?php if ($featured): ?>

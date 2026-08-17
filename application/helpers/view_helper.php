@@ -654,10 +654,15 @@ if (!function_exists('image_guidance')) {
      * The recommended upload size for one kind of image, as small print.
      *
      * "What is the optimal image size?" was asked because nothing on any upload
-     * form said, and the shapes are not guessable: the directory card crops to
-     * 16:9 and a gallery tile to 4:3, both with `object-fit: cover`, so a
-     * square logo loses its top and bottom and a portrait photo loses its
-     * sides. The numbers below are those boxes at 2x for high-density screens.
+     * form said. The listing logo no longer has a wrong answer: those cards
+     * were switched from `object-fit: cover` to `contain`, so a logo of any
+     * shape is shown whole rather than having its top and bottom cropped. The
+     * size below is the recommendation for a sharp result, not a requirement.
+     *
+     * Gallery tiles DO still crop, to 4:3 — they hold photographs, where
+     * filling the tile is right — so that copy still describes a crop. Keep
+     * these two in step with the CSS: `.p411-card__media` /
+     * `.p411-biz__media` (contain) and `.p411-gallery img` (cover).
      *
      * Defined once because the same wording has to appear on four forms — the
      * member and admin add screens and the member and admin edit screens.
@@ -671,9 +676,10 @@ if (!function_exists('image_guidance')) {
     function image_guidance($kind)
     {
         $copy = array(
-            'logo' => 'Best size <strong>1200 &times; 675 px</strong> (landscape, 16:9), JPG or PNG under 500&nbsp;KB. '
-                . 'Directory cards crop to a wide rectangle, so keep the logo or main subject centred &mdash; '
-                . 'a square image loses its top and bottom there. Minimum 800 &times; 450 px.',
+            'logo' => 'Best size <strong>1200 &times; 675 px</strong> (landscape), JPG or PNG under 500&nbsp;KB. '
+                . '<strong>Any shape works</strong> &mdash; square, round or wide &mdash; your whole logo is '
+                . 'shown and nothing is cropped. A PNG with a transparent background sits most cleanly. '
+                . 'Keep the longest side at 600&nbsp;px or more, or it will look soft.',
             'gallery' => 'Best size <strong>1600 &times; 1200 px</strong> (4:3), JPG under 500&nbsp;KB each. '
                 . 'Tiles crop to 4:3 and open full size when clicked, so upload the good version &mdash; '
                 . 'but nothing wider than 1600 px, or the page becomes slow to load.',

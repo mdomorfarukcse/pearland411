@@ -255,7 +255,7 @@ $showing_to   = $current_offset + count($allListings);
 										<?php if (!empty($value->listing_image)): ?>
 											<?= responsive_img($value->listing_image, $name) ?>
 										<?php else: ?>
-											<img src="<?= e_attr($dir_placeholder) ?>" alt="" loading="lazy" decoding="async">
+											<img class="p411-ph" src="<?= e_attr($dir_placeholder) ?>" alt="" loading="lazy" decoding="async">
 										<?php endif; ?>
 									</a>
 									<?php if ($cat_label !== ''): ?>
