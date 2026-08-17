@@ -329,8 +329,20 @@ function pp_features($plan, $cat)
         include APPPATH . 'views/partials/sales_help.php';
         ?>
 
+    </div><!-- /.pp-wrap -->
+</div><!-- /.pp -->
+<?php /* Both of these used to be left open. `.pp-wrap` is
+         `max-width: 1180px; margin: 0 auto`, so everything the view did not
+         emit itself — footer.php's "Add my business" band and the whole site
+         footer — was adopted into a 1180px centred box sitting on `.pp`'s
+         cream background, instead of running the full width of the window.
+         The footer is built to be full-bleed with only its inner content
+         contained, which is why it looked correct on every page except this
+         one. The browser closes unclosed elements at </body>, so the markup
+         never "broke" visibly enough to notice. */ ?>
 
-<!-- Sticky bundle bar: appears only when 2+ things are combined -->
+<!-- Sticky bundle bar: appears only when 2+ things are combined.
+     position: fixed, so it sits outside both wrappers. -->
 <div class="pp-bar" id="ppBar">
     <div class="pp-bar-in">
         <div class="sum">

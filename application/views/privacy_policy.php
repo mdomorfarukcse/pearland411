@@ -294,5 +294,7 @@
                 </div>
             </div>
         </div>
-
-
+    </div><!-- /.privacy-policy-wrapper -->
+<?php /* Was left open, so footer.php's promo band and the site footer were adopted
+         into it. Harmless here only because the wrapper's own rule is commented
+         out — the same mistake on /pricing-plan pulled the footer into a 1180px box. */ ?>
