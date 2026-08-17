@@ -25,7 +25,7 @@ if ($current_subscription) {
     $plan_tax = isset($current_subscription->tax) ? (float)$current_subscription->tax : round($plan_subtotal * 0.10, 2);
     $plan_total = round($plan_subtotal + $plan_tax, 2);
     $plan_price = ($sub_currency ? htmlspecialchars($sub_currency) . ' ' : '$') . number_format($plan_total, 2);
-    $billing_interval = isset($current_subscription->billing_interval) ? $current_subscription->billing_interval : 'month';
+    $billing_interval = billing_interval_noun(isset($current_subscription->billing_interval) ? $current_subscription->billing_interval : '');
     $plan_status = isset($current_subscription->status) ? ucfirst($current_subscription->status) : 'Active';
     $plan_start_date = isset($current_subscription->start_date) ? date('M d, Y', strtotime($current_subscription->start_date)) : null;
     $plan_end_date = isset($current_subscription->end_date) ? date('M d, Y', strtotime($current_subscription->end_date)) : null;
@@ -1214,7 +1214,7 @@ if (isset($user_transactions_data) && is_array($user_transactions_data)) {
                                                 <div style="display: flex; align-items: center; gap: 10px;">
                                                     <span style="font-size: 1.2rem;"><?= $info['icon'] ?></span>
                                                     <div>
-                                                        <div style="font-weight: 500; color: #495057;"><?= $info['name'] ?></div>
+                                                        <div style="font-weight: 500; color: #495057;"><?= e($info['name']) ?></div>
                                                         <div style="font-size: 0.8rem; color: #6c757d; text-transform: capitalize;"><?= str_replace('_', ' ', $key) ?></div>
                                                     </div>
                                                 </div>

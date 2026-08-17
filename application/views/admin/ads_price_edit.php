@@ -32,7 +32,7 @@
                         <div class="row">
                           <div class="col-md-12">
                             <div class="form-group">
-                              <input type="text" class="form-control" name="name" value="<?= $price->name;?>" placeholder="Ad position name" required>
+                              <input type="text" class="form-control" name="name" value="<?= e($price->name) ?>" placeholder="Ad position name" required>
                             </div>
                             <span class="text-danger"><?= form_error("name")?form_error("name"):'' ;?></span>
                           </div>

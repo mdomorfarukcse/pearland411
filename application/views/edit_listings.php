@@ -237,7 +237,7 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-12">
 									<div class="form-group">
-										<input id="listing_name" name="listing_name" type="text" required="required" class="form-control" placeholder="Listing name *" value="<?= $listing->listing_name ?>">
+										<input id="listing_name" name="listing_name" type="text" required="required" class="form-control" placeholder="Listing name *" value="<?= e_attr($listing->listing_name) ?>">
 									</div>
 								</div>
 								<span class="text-danger"><?= form_error("listing_name") ? form_error("listing_name") : ''; ?></span>
@@ -283,12 +283,12 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-6">
 									<div class="form-group">
-										<input type="text" name="listing_mobile" class="form-control" placeholder="Phone number" value="<?= $listing->listing_mobile ?>">
+										<input type="text" name="listing_mobile" class="form-control" placeholder="Phone number" value="<?= e_attr($listing->listing_mobile) ?>">
 									</div>
 								</div>
 								<div class="col-md-6">
 									<div class="form-group">
-										<input type="text" name="listing_whatsapp" class="form-control" placeholder="Whatsapp Number" value="<?= $listing->listing_whatsapp ?>">
+										<input type="text" name="listing_whatsapp" class="form-control" placeholder="Whatsapp Number" value="<?= e_attr($listing->listing_whatsapp) ?>">
 									</div>
 								</div>
 								<div class="col-md-12">
@@ -336,12 +336,12 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-6">
 									<div class="form-group">
-										<input type="text" name="listing_lat" class="form-control" placeholder="Latitude i.e 40.730610" value="<?= $listing->listing_lat ?>" <?= $caps['can_map'] ? '' : 'disabled' ?>>
+										<input type="text" name="listing_lat" class="form-control" placeholder="Latitude i.e 40.730610" value="<?= e_attr($listing->listing_lat) ?>" <?= $caps['can_map'] ? '' : 'disabled' ?>>
 									</div>
 								</div>
 								<div class="col-md-6">
 									<div class="form-group">
-										<input type="text" name="listing_lng" class="form-control" placeholder="Longitude i.e -73.935242" value="<?= $listing->listing_lng ?>" <?= $caps['can_map'] ? '' : 'disabled' ?>>
+										<input type="text" name="listing_lng" class="form-control" placeholder="Longitude i.e -73.935242" value="<?= e_attr($listing->listing_lng) ?>" <?= $caps['can_map'] ? '' : 'disabled' ?>>
 											<?= cap_lock_note($caps['can_map']) ?>
 									</div>
 								</div>
@@ -350,7 +350,7 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-12">
 									<div class="form-group">
-										<input type="email" name="listing_email" class="form-control" placeholder="Email id" value="<?= $listing->listing_email ?>">
+										<input type="email" name="listing_email" class="form-control" placeholder="Email id" value="<?= e_attr($listing->listing_email) ?>">
 									</div>
 								</div>
 							</div>
@@ -358,7 +358,7 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-12">
 									<div class="form-group">
-										<input type="text" name="listing_website" class="form-control" placeholder="Website(www.website.com)" value="<?= $listing->listing_website ?>">
+										<input type="text" name="listing_website" class="form-control" placeholder="Website(www.website.com)" value="<?= e_attr($listing->listing_website) ?>">
 									</div>
 								</div>
 							</div>
@@ -366,7 +366,7 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-12">
 									<div class="form-group">
-										<input type="text" name="listing_address" required="required" class="form-control" placeholder="Business address" value="<?= $listing->listing_address ?>">
+										<input type="text" name="listing_address" required="required" class="form-control" placeholder="Business address" value="<?= e_attr($listing->listing_address) ?>">
 									</div>
 								</div>
 								<div class="col-md-12">
@@ -420,39 +420,41 @@ if (!function_exists('cap_lock_note')) {
 									<!--FILED START-->
 									<div class="row">
 										<div class="col-md-12">
-											<div class="form-group">
-												<label>Upload Listing Logo</label>
-												<input type="file" name="listing_profile_image" class="form-control" <?= $caps['can_photos'] ? '' : 'disabled' ?>>
-													<?= cap_lock_note($caps['can_photos']) ?>
-												<?php if (isset($listing) && !empty($listing->listing_image)) { ?>
-													<img src="<?= base_url($listing->listing_image) ?>" alt="Current Logo" style="max-width:120px; margin-top:10px;" />
-												<?php } ?>
-											</div>
+											<?php
+											// Same partial the admin edit screen uses, so the owner's
+											// form and the admin's behave identically.
+											$mf_name     = 'listing_profile_image';
+											$mf_id       = 'listing_profile_image';
+											$mf_label    = 'Upload Listing Logo';
+											$mf_current  = isset($listing->listing_image) ? $listing->listing_image : '';
+											$mf_hint     = image_guidance('logo');
+											$mf_disabled = !$caps['can_photos'];
+											$mf_empty    = 'No logo uploaded yet.';
+											include APPPATH . 'views/admin/partials/media_field.php';
+											?>
+											<?= cap_lock_note($caps['can_photos']) ?>
 										</div>
 									</div>
 									<!--GALLERY IMAGES START-->
 									<div class="row">
 										<div class="col-md-12">
-											<div class="form-group">
-												<label>Upload Gallery Images (Multiple Images)</label>
-												<input type="file" name="listing_image_gallery[]" class="form-control" multiple accept="image/*" <?= $caps['can_photos'] ? '' : 'disabled' ?>>
-													<?php if ($caps['can_photos'] && $caps['photo_limit'] >= 0): ?><small class="form-text text-muted">Your package allows up to <?= (int) $caps['photo_limit'] ?> gallery photo(s).</small><?php endif; ?>
-													<?= cap_lock_note($caps['can_photos']) ?>
-												<small class="form-text text-muted">You can select multiple images for your gallery. Supported formats: JPG, PNG, GIF</small>
-												<?php if (isset($listing) && !empty($listing->listing_image_gallery)) {
-													$gallery_images = json_decode($listing->listing_image_gallery, true);
-													if ($gallery_images && is_array($gallery_images)) { ?>
-														<div class="current-gallery" style="margin-top:10px;">
-															<label>Current Gallery Images:</label>
-															<div class="gallery-images" style="display:flex; flex-wrap:wrap; gap:10px;">
-																<?php foreach ($gallery_images as $gallery_img) { ?>
-																	<img src="<?= base_url($gallery_img) ?>" alt="Gallery Image" style="max-width:80px; height:60px; object-fit:cover; border:1px solid #ddd;" />
-																<?php } ?>
-															</div>
-														</div>
-												<?php }
-												} ?>
-											</div>
+											<?php
+											$mf_name     = 'listing_image_gallery[]';
+											$mf_id       = 'listing_image_gallery';
+											$mf_label    = 'Upload Gallery Images (Multiple Images)';
+											$mf_hint     = 'You can select several at once. New images are <strong>added</strong> to the ones below &mdash; nothing is replaced.'
+											               . ($caps['can_photos'] && $caps['photo_limit'] >= 0
+											                  ? ' Your package allows up to ' . (int) $caps['photo_limit'] . ' gallery photo(s).'
+											                  : '')
+											               . ' ' . image_guidance('gallery');
+											$mf_current  = listing_gallery_paths(isset($listing->listing_image_gallery) ? $listing->listing_image_gallery : null);
+											$mf_multiple = true;
+											$mf_remove   = 'remove_gallery[]';
+											$mf_disabled = !$caps['can_photos'];
+											$mf_empty    = 'No gallery images uploaded yet.';
+											include APPPATH . 'views/admin/partials/media_field.php';
+											?>
+											<?= cap_lock_note($caps['can_photos']) ?>
 										</div>
 									</div>
 									<!--GALLERY IMAGES END-->
@@ -690,3 +692,6 @@ if (!function_exists('cap_lock_note')) {
 		updateStepDisplay();
 	});
 </script>
+<?php // Previews chosen files, opens stored images full size, greys a ticked Remove.
+      // Same behaviour as the admin edit screens, which use the same partial. ?>
+<script src="<?= base_url('assets/admin/js/media-preview.js') ?>"></script>

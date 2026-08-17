@@ -47,9 +47,7 @@
 										<td><?= e($event->event_name); ?> <span><?= date('d, M Y', strtotime($event->created_at)); ?></span></td>
 										<td><?= date('d, M Y', strtotime($event->event_start_date)); ?></td>
 										<td>
-											<?php if (!empty($event->name)) : ?>
-												<a href="" class="db-list-ststus" target="_blank"><?= e($event->name); ?></a>
-											<?php endif; ?>
+											<a href="" class="db-list-ststus" target="_blank"><?= e(author_name($event->name)) ?></a>
 										</td>
 										<?php $e_views = (isset($views_counts) && isset($views_counts[$event->event_id])) ? $views_counts[$event->event_id] : 0; ?>
 										<td><span class="db-list-rat"><?= $e_views; ?></span></td>

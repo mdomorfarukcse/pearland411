@@ -41,7 +41,7 @@
               <img src="<?=  (empty($marketplace->marketplace_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($marketplace->marketplace_image)?>"><?= $marketplace->marketplace_title; ?><span><?= date('d, M Y',strtotime($marketplace->created_at));?></span>
             </td>
             <td><a href="" class="db-list-ststus" target="_blank"><?= $marketplace->category_name ?></a></td>
-            <td><a href="" class="db-list-ststus" target="_blank"><?= $marketplace->name; ?></a></td>
+            <td><a href="" class="db-list-ststus" target="_blank"><?= e(author_name($marketplace->name)) ?></a></td>
             <td><a href="" class="db-list-ststus" target="_blank">0</a></td>
             <td>
               <?php if ($marketplace->marketplace_status == 0) { ?>

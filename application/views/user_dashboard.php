@@ -290,7 +290,7 @@ if (!function_exists('createSafeSlug')) {
 
 							<td>
 
-								<img src="<?= base_url($value->listing_image); ?>"><?= $value->listing_name; ?> <span><?= date('d, M Y', strtotime($value->created_at)); ?></span>
+								<img src="<?= base_url($value->listing_image); ?>"><?= e($value->listing_name) ?> <span><?= date('d, M Y', strtotime($value->created_at)); ?></span>
 
 							</td>
 

@@ -38,6 +38,8 @@
 
             <th>Ad Position</th>
 
+            <th>Category</th>
+
             <th>Start Date</th>
 
             <th>End Date</th>
@@ -74,7 +76,10 @@
 
                 <td><?= $j; ?></td>
 
-                <td><?= $value->ads_price_name; ?></td>
+                <td><?= e($value->ads_price_name) ?></td>
+
+                <?php // NULL category_id means the booking runs site-wide. ?>
+                <td><?= e($value->ad_category_name ?: 'All categories') ?></td>
 
                 <td><?= date('d, M Y', strtotime($value->ad_start_date)); ?></td>
 

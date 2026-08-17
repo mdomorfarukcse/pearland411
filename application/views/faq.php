@@ -453,7 +453,7 @@
                             </span>
                         </div>
                         <div class="p411-faq-answer">
-                            <p>You can reach our support team anytime through the <a href="#">Contact Us</a> page or by emailing <a href="mailto:support@pearland411.com">support@pearland411.com</a>. We're happy to help with your queries or technical issues.</p>
+                            <p>You can reach our support team anytime through the <a href="<?= e_url(base_url('contact-us')) ?>">Contact Us</a> page or by emailing <a href="mailto:support@pearland411.com">support@pearland411.com</a>. We're happy to help with your queries or technical issues.</p>
                         </div>
                     </div>
 

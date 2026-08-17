@@ -28,6 +28,15 @@ $review_stats    = (isset($review_stats)    && is_array($review_stats))    ? $re
 $owner_socials   = (isset($owner_socials)   && is_array($owner_socials))   ? $owner_socials   : array();
 $listing_category = isset($listing_category) ? $listing_category : null;
 
+// Ad targeting. Without this every ad_slot include on this page falls into
+// getAdForSlot()'s untargeted branch (`WHERE a.category_id IS NULL`), which
+// actively FILTERS OUT a banner bought for this listing's category — so a
+// Restaurants booking appeared on the directory index but never on a
+// restaurant's own page. /all-listing has passed this since 0024; this page
+// never did. Re-assigned before each include below rather than set once,
+// because ad_slot.php unsets it on its early-return paths.
+$ad_category_id = isset($listing_category->category_id) ? (int) $listing_category->category_id : null;
+
 // Totals: the controller derives these, but Admin's preview doesn't.
 if (!isset($review_total)) {
 	$review_total = $review_stats ? array_sum($review_stats) : (int) ($listing->total_reviews ?? 0);
@@ -271,6 +280,7 @@ $ld_stars = function ($value) {
 				<div class="p411-adrow">
 					<?php $slot = $ad_slots['top'];
 					$slot_alias = 'listing-top';
+					$slot_category = $ad_category_id;
 					include APPPATH . 'views/partials/ad_slot.php'; ?>
 				</div>
 
@@ -408,6 +418,7 @@ $ld_stars = function ($value) {
 					<div class="p411-adrow" style="margin:0;">
 						<?php $slot = $ad_slots['inline'];
 						$slot_alias = 'listing-inline';
+						$slot_category = $ad_category_id;
 						include APPPATH . 'views/partials/ad_slot.php'; ?>
 					</div>
 
@@ -709,9 +720,17 @@ $ld_stars = function ($value) {
 										'website'  => array('6.png', 'Website'),
 									);
 									foreach ($soc_icons as $key => $meta):
-										if (empty($owner_socials[$key])) continue;
+										// external_url() is what the site footer's own icons use
+										// (partials/site_footer.php:64-71): it adds https:// to a
+										// schemeless "www.facebook.com/x" and returns '' for
+										// anything that is not http/https/mailto/tel. Without it a
+										// schemeless value was emitted as a RELATIVE href, so the
+										// icon navigated back into the site instead of out to the
+										// profile — the reported "sends you to the homepage".
+										$soc_href = external_url($owner_socials[$key] ?? '');
+										if ($soc_href === '') continue;
 									?>
-										<a href="<?= e_url($owner_socials[$key]) ?>" target="_blank" rel="noopener nofollow" aria-label="<?= e_attr($meta[1]) ?>">
+										<a href="<?= e_attr($soc_href) ?>" target="_blank" rel="noopener nofollow" aria-label="<?= e_attr($meta[1]) ?>">
 											<img src="<?= base_url('assets/images/social/' . $meta[0]) ?>" alt="<?= e_attr($meta[1]) ?>" loading="lazy">
 										</a>
 									<?php endforeach; ?>
@@ -780,6 +799,7 @@ $ld_stars = function ($value) {
 				// The static promo below already carries the web-services
 				// pitch, so an unsold zone sells the space itself.
 				$slot_creative = 'house-ad';
+				$slot_category = $ad_category_id;
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
 				<?php // Static house promo — website development, hosting, local SEO. ?>
@@ -798,10 +818,12 @@ $ld_stars = function ($value) {
 				// Kept as the creative for the case where the partial is
 				// missing, so the position never renders the generic house ad.
 				$slot_creative = 'banner-design';
+				$slot_category = $ad_category_id;
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
 				<?php $slot = $ad_slots['side_sky'];
 				$slot_fallback = false;
+				$slot_category = $ad_category_id;
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
 			</aside>
@@ -810,6 +832,7 @@ $ld_stars = function ($value) {
 		<!-- ==================================================== BOTTOM AD -->
 		<div class="p411-adrow" style="margin-top:6px;">
 			<?php $slot = $ad_slots['bottom'];
+			$slot_category = $ad_category_id;
 			include APPPATH . 'views/partials/ad_slot.php'; ?>
 		</div>
 	</div>

@@ -20,11 +20,27 @@
               <p><?= $this->session->flashdata('message') ?></p>
             </div>
           <?php } ?>
+          <?php
+          // Server-side search, same contract as /admin/all_listings. The id
+          // "pg-sear" is deliberately gone: admin-custom.js binds a page-only
+          // filter to it, which would silently hide rows this search found.
+          $search_query = isset($search_query) ? $search_query : '';
+          ?>
           <div class="ad-int-sear">
-
-            <input type="text" id="pg-sear" placeholder="Search this page..">
-
+            <form method="get" action="<?= base_url('admin/all_listing_category') ?>" style="display:flex; gap:8px; align-items:center;">
+              <input type="search" name="q" value="<?= e_attr($search_query) ?>" placeholder="Search all categories…" style="min-width:220px;">
+              <button type="submit" class="db-tit-btn" style="position:static; top:auto; right:auto;">Search</button>
+              <?php if ($search_query !== '') { ?>
+                <a href="<?= base_url('admin/all_listing_category') ?>" style="font-size:0.9rem;">Clear</a>
+              <?php } ?>
+            </form>
           </div>
+          <?php if ($search_query !== '') { ?>
+            <p style="margin:8px 0 0; color:#6b7280;">
+              <?= (int) ($total_rows ?? 0) ?> categor<?= ((int) ($total_rows ?? 0) === 1 ? 'y' : 'ies') ?>
+              matching &ldquo;<?= e($search_query) ?>&rdquo; across every page.
+            </p>
+          <?php } ?>
 
           <a href="<?= base_url() ?>admin/add_new_listing_category" class="db-tit-btn">Add New Listing Category</a>
 
@@ -37,7 +53,7 @@
 
           <?php // Rows per page comes from the toolbar dropdown (admin-table.js),
                 // so "Select all" only ever ticks rows the admin can see. ?>
-          <table data-admin-table class="responsive-table bordered" id="pg-resu">
+          <table data-admin-table data-server-search data-page-size="0" class="responsive-table bordered" id="pg-resu">
 
             <thead>
 
@@ -98,7 +114,11 @@
 
                     <td><a href="<?= base_url('admin/edit_listing_category/' . $category->category_id); ?>" class="db-list-edit">Edit</a></td>
 
-                    <td><a href="<?= base_url('admin/all_listing_sub_category/' . $category->category_id); ?>" class="db-list-edit">View</a></td>
+                    <?php // ?category_id= — the third URI segment is the PAGE number
+                          // (all_listing_sub_category($page = 1)), so passing the
+                          // category id there asked for page 7 of every sub-category
+                          // rather than filtering to this one. ?>
+                    <td><a href="<?= base_url('admin/all_listing_sub_category') . '?category_id=' . (int) $category->category_id; ?>" class="db-list-edit">View</a></td>
 
                     <td>
                       <a class="db-list-edit" onclick="javascript:deleteConfirm('<?php echo base_url() . 'admin/delete_listing_category/' . $category->category_id; ?>');" href="#">Delete</a>

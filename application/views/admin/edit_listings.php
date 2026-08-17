@@ -177,7 +177,7 @@
                               if (isset($users) && count($users) > 0) {
                                 foreach ($users as $value) {
                               ?>
-                                  <option value="<?= $value->user_id; ?>" <?= (isset($listing) && $listing->user_id == $value->user_id) ? 'SELECTED' : '' ?>><?= $value->name; ?></option>
+                                  <option value="<?= $value->user_id; ?>" <?= (isset($listing) && $listing->user_id == $value->user_id) ? 'SELECTED' : '' ?>><?= e($value->name) ?></option>
                               <?php
                                 }
                               }
@@ -187,7 +187,7 @@
                         </div>
                         <div class="col-md-6">
                           <div class="form-group">
-                            <input id="listing_name" name="listing_name" type="text" required="required" class="form-control" placeholder="Listing name *" value="<?= isset($listing) ? $listing->listing_name : '' ?>">
+                            <input id="listing_name" name="listing_name" type="text" required="required" class="form-control" placeholder="Listing name *" value="<?= e_attr(isset($listing) ? $listing->listing_name : '') ?>">
                           </div>
                         </div>
                       </div>
@@ -260,12 +260,12 @@
                       <div class="row">
                         <div class="col-md-6">
                           <div class="form-group">
-                            <input type="text" name="listing_mobile" class="form-control" placeholder="Phone number" value="<?= isset($listing) ? $listing->listing_mobile : '' ?>">
+                            <input type="text" name="listing_mobile" class="form-control" placeholder="Phone number" value="<?= e_attr(isset($listing) ? $listing->listing_mobile : '') ?>">
                           </div>
                         </div>
                         <div class="col-md-6">
                           <div class="form-group">
-                            <input type="text" name="listing_whatsapp" class="form-control" placeholder="Whatsapp Number" value="<?= isset($listing) ? $listing->listing_whatsapp : '' ?>">
+                            <input type="text" name="listing_whatsapp" class="form-control" placeholder="Whatsapp Number" value="<?= e_attr(isset($listing) ? $listing->listing_whatsapp : '') ?>">
                           </div>
                         </div>
                         <div class="col-md-12">
@@ -329,12 +329,12 @@
                       <div class="row">
                         <div class="col-md-6">
                           <div class="form-group">
-                            <input type="email" name="listing_email" class="form-control" placeholder="Email id" value="<?= isset($listing) ? $listing->listing_email : '' ?>">
+                            <input type="email" name="listing_email" class="form-control" placeholder="Email id" value="<?= e_attr(isset($listing) ? $listing->listing_email : '') ?>">
                           </div>
                         </div>
                         <div class="col-md-6">
                           <div class="form-group">
-                            <input type="text" name="listing_website" class="form-control" placeholder="Website(www.website.com)" value="<?= isset($listing) ? $listing->listing_website : '' ?>">
+                            <input type="text" name="listing_website" class="form-control" placeholder="Website(www.website.com)" value="<?= e_attr(isset($listing) ? $listing->listing_website : '') ?>">
                           </div>
                         </div>
                       </div>
@@ -343,7 +343,7 @@
                       <div class="row">
                         <div class="col-md-12">
                           <div class="form-group">
-                            <input type="text" name="listing_address" required="required" class="form-control" placeholder="Business address" value="<?= isset($listing) ? $listing->listing_address : '' ?>">
+                            <input type="text" name="listing_address" required="required" class="form-control" placeholder="Business address" value="<?= e_attr(isset($listing) ? $listing->listing_address : '') ?>">
                           </div>
                         </div>
                         <div class="col-md-12">
@@ -413,7 +413,7 @@
                           // already contained it. So the current logo never appeared.
                           $mf_name    = 'listing_profile_image';
                           $mf_label   = 'Upload Listing Logo';
-                          $mf_hint    = 'Shown at the top of the listing page. Leave empty to keep the current one. JPG, PNG or GIF.';
+                          $mf_hint    = 'Shown at the top of the listing page. Leave empty to keep the current one. ' . image_guidance('logo');
                           $mf_current = $listing->listing_image ?? '';
                           $mf_empty   = 'No logo uploaded yet.';
                           include APPPATH . 'views/admin/partials/media_field.php';
@@ -424,7 +424,7 @@
                           $mf_name     = 'listing_image_gallery[]';
                           $mf_id       = 'listing_image_gallery';
                           $mf_label    = 'Upload Gallery Images (Multiple Images)';
-                          $mf_hint     = 'You can select several at once. New images are <strong>added</strong> to the ones below &mdash; nothing is replaced.';
+                          $mf_hint     = 'You can select several at once. New images are <strong>added</strong> to the ones below &mdash; nothing is replaced. ' . image_guidance('gallery');
                           $mf_current  = listing_gallery_paths($listing->listing_image_gallery ?? null);
                           $mf_multiple = true;
                           $mf_remove   = 'remove_gallery[]';

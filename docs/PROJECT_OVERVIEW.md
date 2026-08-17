@@ -30,6 +30,10 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `edit_listings.php`, `checkout.php`, `pricing_plan.php`, `user_account.php`, …); admin views in
   `admin/`; shared partials `header.php` / `footer.php` / `user_left_sidebar.php`.
   Note: the **homepage `index.php` is self-contained** (its own header), separate from `header.php`.
+  The one piece of header chrome they *do* share is `views/partials/section_strip.php` — the navy
+  Home · Directory · Events · … strip, included by both. It was `header.php`-only, which is why
+  the homepage had no strip and no Classifieds link at all; keep it data-driven, because anything
+  hard-coded there has to be kept in step on two pages.
 - **Dates:** print them with `us_date($value)` (`application/helpers/view_helper.php`) — US order
   (`Aug 5, 2026`), and `''` rather than the epoch when the stored value is NULL, empty or MySQL's zero
   date. `us_date_ts()` gives the timestamp for the same rules. Applied on the blog pages; the other
@@ -79,7 +83,12 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   galleries. Driven by `assets/admin/js/media-preview.js`, which is markup-first: `data-preview`
   on a file input previews the chosen files, `data-lightbox` (or any `<img>` inside
   `[data-media-grid]`) opens full size, `data-video-preview` renders a player per YouTube URL as
-  you type. Used by the listing, news, blog, video and event edit screens.
+  you type. Used by the listing, news, blog, video and event edit screens — and by the
+  **member-facing** `views/edit_listings.php`, which is the point: the owner's own edit form and
+  the admin's now render the same control, after a round where only the admin one was fixed.
+  `$mf_disabled` locks the file input for a plan without photos while leaving the Remove tickboxes
+  live, so a downgraded owner can still delete a photo they can no longer replace. The public page
+  has to link `assets/admin/css/media-preview.css` (via `page_css`) and the matching JS itself.
 - **Public form validation:** `assets/js/form-validate.js` attaches to any `<form data-validate>`
   and validates from the markup's own attributes (`required`, `type`, `minlength`, `maxlength`,
   `pattern`, plus `data-match` for confirm fields). It binds in the **capture** phase, so a form
@@ -136,7 +145,13 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   wipes the rest), `category_placeholder()` (a listing with no
   photograph → the placeholder for its kind of business), plus the content helpers the
   events/news/videos pages share: `content_text()` / `content_excerpt()` (stored rich text → clean
-  **unescaped** text; escape at output), `youtube_id()` / `youtube_thumb_url()` /
+  **unescaped** text; escape at output), `content_html()` (the same input → sanitised **HTML** with
+  the author's paragraphs kept and every attribute dropped bar `href`/`title` — output is already
+  safe, so never wrap it in `e()`; use it for a whole article, `content_text()` for a summary),
+  `author_name()` (creator-name fallback, one definition for admin and public),
+  `image_guidance()` (the recommended upload size shown beside each image field),
+  `billing_interval_noun()` (`plans.billing_interval` free text → the noun the price copy needs, so
+  a card can never read "$15 per" with nothing after it), `youtube_id()` / `youtube_thumb_url()` /
   `youtube_embed_url()`, and `embed_src()` (pull the `src` out of a pasted map iframe instead of
   echoing admin markup).
 - **Libraries:** `Helcim_lib` (payments), `Mailer` (SMTP email), `Rate_limit`.

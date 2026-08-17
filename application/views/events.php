@@ -183,7 +183,7 @@ $window_label = array(
 							$detail_url  = $ev_url($event);
 							$date_ts     = $ev_ts($event);
 							$is_upcoming = $date_ts !== null && $date_ts >= $today_ts;
-							$host_name   = !empty($event->host_name) ? (string) $event->host_name : 'Pearland411';
+							$host_name   = author_name($event->host_name ?? '');
 							$host_image  = !empty($event->host_image) ? base_url($event->host_image) : '';
 							$excerpt     = content_excerpt($event->event_description ?? '', 130);
 							?>

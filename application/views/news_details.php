@@ -45,7 +45,7 @@ $nw_cat_slug = (string) ($news->category_slug ?? '');
 if ($nw_cat_slug === '' && $nw_cat_name !== '') $nw_cat_slug = pearland_slug($nw_cat_name);
 $nw_cat_url  = $nw_cat_slug !== '' ? base_url('news') . '?' . http_build_query(array('category' => $nw_cat_slug)) : '';
 
-$nw_author = isset($news_author) && $news_author !== '' ? (string) $news_author : 'Pearland411';
+$nw_author = author_name($news_author ?? '');
 
 // The body is stored with pasted markup. content_text() turns the block tags
 // into newlines and strips the rest, so the story reads as text — the old view
@@ -164,7 +164,14 @@ $nw_url = function ($row) {
 						</div>
 
 						<?php if ($nw_body !== ''): ?>
-							<div class="p411-prose"><?= nl2br(e($nw_body)) ?></div>
+							<?php /* content_html() keeps the author's own paragraphs and
+							         spaces them in CSS. Flattening to text and rebuilding
+							         the breaks with nl2br() made the gap between two
+							         paragraphs depend on how much whitespace happened to
+							         sit between the tags, so the same article read evenly
+							         in one place and cluttered in another. Already
+							         sanitised — do not wrap in e(). */ ?>
+							<div class="p411-prose"><?= content_html($news->news_description ?? '') ?></div>
 						<?php else: ?>
 							<div class="p411-empty p411-empty--inline">
 								<h3>This story has no text yet</h3>

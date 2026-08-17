@@ -82,7 +82,7 @@
                                 <td><?= $i; ?></td>
 
                                 <td>
-                                    <strong><?= $review->listing_name; ?></strong>
+                                    <strong><?= e($review->listing_name) ?></strong>
                                 </td>
 
                                 <td>

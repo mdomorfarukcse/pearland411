@@ -27,7 +27,7 @@
                         if($users){
                           foreach($users as $user){
                         ?>
-                        <option value="<?= $user->user_id; ?>"><?= $user->name; ?></option>
+                        <option value="<?= $user->user_id; ?>"><?= e($user->name) ?></option>
 
                         <?php } } ?>
 

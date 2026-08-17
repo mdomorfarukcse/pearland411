@@ -808,19 +808,21 @@ class Admin extends CI_Controller
 
 	public function all_listing_category()
 	{
-		// Categories are usually few — show 100 per page so the inline
-		// search in admin-table.js can match against the whole list
-		// without needing a server-side search round-trip.
+		// Searched in SQL, not in the browser. The old inline filter only saw
+		// the rows the server had already sent, so a category on page 2 came
+		// back "No matches". reuse_query_string carries ?q= across the pager.
+		$q = trim((string) $this->input->get('q', TRUE));
+
 		$config = [
 			'base_url' => base_url('admin/all_listing_category'),
 			'per_page' => admin_per_page(20),
 			'reuse_query_string' => TRUE,
-			'total_rows' => count($this->adminmodel->allListingCategory(NULL, NULL)),
+			'total_rows' => $this->adminmodel->countListingCategories($q),
 			'uri_segment' => 3,
 		];
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -838,8 +840,10 @@ class Admin extends CI_Controller
 		$this->pagination->initialize($config);
 		$page = ($this->uri->segment(3)) ? $this->uri->segment(3) : 0;
 		$data['start_number'] = $page + 1;
-		$data['all_listing_category']   = $this->adminmodel->allListingCategory($config['per_page'], $page);
+		$data['all_listing_category']   = $this->adminmodel->allListingCategory($config['per_page'], $page, $q);
 		$data['link'] 		   = $this->pagination->create_links();
+		$data['search_query']  = $q;
+		$data['total_rows']    = $config['total_rows'];
 
 		//////////////////////////
 
@@ -880,6 +884,19 @@ class Admin extends CI_Controller
 					'image_name'  => 'category_image'
 				];
 				$data['category_image'] = uploadAndResize($img_info);
+			}
+
+			// Editorial header banner (migration 0027). Guarded on the column so
+			// the form still works on an install that has not run 0027.
+			if (!empty($_FILES['category_banner']['name'])
+				&& $this->db->field_exists('category_banner', 'listing_categories')) {
+				$data['category_banner'] = uploadAndResize([
+					'upload_path' => 'images/services',
+					'quality'     => '80%',
+					'height'      => 420,
+					'width'       => 1600,
+					'image_name'  => 'category_banner'
+				]);
 			}
 
 			if ($this->adminmodel->addListingCategory($data)) {
@@ -937,6 +954,39 @@ class Admin extends CI_Controller
 				$info['category_image'] = uploadAndResize($img_info);
 			} else {
 				$info['category_image'] = $old_image;
+			}
+
+			// The editorial header banner (migration 0027). Wide artwork behind
+			// the title on /all_listing/<slug>; NULL means "use the standard
+			// directory header", which is what every category did before.
+			// Written only when the column exists, so the screen keeps working
+			// on an install that has not run 0027 yet.
+			if ($this->db->field_exists('category_banner', 'listing_categories')) {
+				$old_banner = isset($data['category']->category_banner)
+					? $data['category']->category_banner : null;
+
+				if (!empty($_FILES['category_banner']['name'])) {
+					$banner_info = [
+						'upload_path' => 'images/services',
+						'quality'     => '80%',
+						'height'      => 420,
+						'width'       => 1600,
+						'image_name'  => 'category_banner'
+					];
+
+					if ($old_banner && file_exists('./' . $old_banner)) {
+						unlink('./' . $old_banner);
+					}
+
+					$info['category_banner'] = uploadAndResize($banner_info);
+				} elseif ($this->input->post('remove_category_banner')) {
+					if ($old_banner && file_exists('./' . $old_banner)) {
+						unlink('./' . $old_banner);
+					}
+					$info['category_banner'] = null;
+				} else {
+					$info['category_banner'] = $old_banner;
+				}
 			}
 
 			if ($this->adminmodel->updateListingCategory($id, $info)) {
@@ -998,18 +1048,28 @@ class Admin extends CI_Controller
 	{
 		$this->load->library('pagination');
 
-		// Initialize data array
+		// Initialize data array. start_number is seeded here because the
+		// filtered-by-category branch below does not paginate and would
+		// otherwise leave the view numbering its rows from an undefined variable.
 		$data = array();
 		$data['link'] = '';
+		$data['start_number'] = 1;
+		$data['total_rows'] = 0;
 
 		// Get category ID from URL if present
 		$id = $this->input->get('category_id');
+
+		// Searched in SQL for the same reason as the category list above: the
+		// browser-side filter could only ever match the current page.
+		$q = trim((string) $this->input->get('q', TRUE));
+		$data['search_query'] = $q;
 
 		if (!empty($id)) {
 			$data['all_listing_sub_category'] = $this->adminmodel->ListingSubCategoryByCateId($id);
 		} else {
 			// Get total record count
-			$total_rows = $this->adminmodel->countAllListingSubCategory();
+			$total_rows = $this->adminmodel->countAllListingSubCategory($q);
+			$data['total_rows'] = $total_rows;
 
 			// Pagination Configuration
 			// 100 per page, matching all_listing_category(): sub-categories are
@@ -1056,7 +1116,7 @@ class Admin extends CI_Controller
 			$data['start_number'] = ($page - 1) * $config['per_page'] + 1;
 
 			// Fetch paginated records
-			$data['all_listing_sub_category'] = $this->adminmodel->allListingSubCategory($config['per_page'], $offset);
+			$data['all_listing_sub_category'] = $this->adminmodel->allListingSubCategory($config['per_page'], $offset, $q);
 			$data['link'] = $this->pagination->create_links();
 		}
 
@@ -1203,7 +1263,7 @@ class Admin extends CI_Controller
 
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -2122,7 +2182,7 @@ class Admin extends CI_Controller
 
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -2599,7 +2659,7 @@ class Admin extends CI_Controller
 		// Pagination styling
 		$config['full_tag_open'] = '<ul class="pagination">';
 		$config['full_tag_close'] = '</ul>';
-		$config['cur_tag_open'] = '<li class="page-item active"><a href="/" class="page-link">';
+		$config['cur_tag_open'] = '<li class="page-item active"><a href="#" class="page-link">';
 		$config['cur_tag_close'] = '</a></li>';
 		$config['prev_tag_open'] = '<li class="page-link">';
 		$config['prev_tag_close'] = '</li>';
@@ -5612,6 +5672,9 @@ class Admin extends CI_Controller
 		$data['users'] 		= $this->adminmodel->getAllValues('user');
 		$data['adsPrices'] 	= $this->adminmodel->allAdsPrices();
 		$data['ad']			= $this->adminmodel->getSingleValue($id, 'id', 'ads');
+		// Category targeting was added to the booking form but never to this
+		// one, so a targeted ad could be created and then never changed.
+		$data['adCategories'] = $this->usermodel->getAllValues('listing_categories');
 		$old_image        	= $data['ad']->ad_photo;
 
 		$this->form_validation->set_rules('user_id', 'User', 'trim|required');
@@ -5638,6 +5701,16 @@ class Admin extends CI_Controller
 				'ad_cost_per_day' => $this->input->post('ad_cost_per_day'),
 				'ad_total_cost'   => $this->input->post('ad_total_cost')
 			);
+
+			// Same normalisation as create_ads(): '' means site-wide, stored as
+			// NULL. This column is now owned by the form, so the matching
+			// <select> in views/admin/ads_edit.php is not optional — without it
+			// every re-save would silently retarget a paid category booking to
+			// run site-wide.
+			$ad_category = $this->input->post('category_id');
+			$info['category_id'] = ($ad_category === NULL || $ad_category === '')
+				? NULL
+				: (int) $ad_category;
 
 			if ($_FILES && $_FILES['ad_photo']['name']) {
 				$img_info = [
@@ -6725,6 +6798,16 @@ class Admin extends CI_Controller
 				), $this->input->post('password') ?: null);
 
 				if ($ok) {
+					// Editing yourself has to refresh the session copy, which is
+					// otherwise only written at login: the name would keep showing
+					// the old value, and a self-demotion would leave super-admin
+					// menu items on screen until logout.
+					if ((int) $id === $self_id && is_array($current)) {
+						$current['admin_name']  = $this->input->post('admin_name');
+						$current['admin_email'] = $this->input->post('admin_email');
+						$current['role']        = $role;
+						$this->session->set_userdata('logged_admin', $current);
+					}
 					$this->session->set_flashdata('message', 'Sub-admin updated.');
 					redirect('admin/sub-admins');
 					return;

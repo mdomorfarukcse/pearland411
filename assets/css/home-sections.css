@@ -159,6 +159,10 @@
 	position: relative !important;
 	z-index: 30;
 	padding: 10px 0 !important;
+	/* style.css:26355 clamps this bar to height:55px below 993px. This block
+	   never restated height, so the theme's rule was unopposed and the content
+	   box collapsed to 35px behind a 54px logo — the row hung out of the bar. */
+	height: auto;
 	background: var(--nv);
 	box-shadow: 0 1px 0 rgba(255, 255, 255, .06);
 	border-bottom: 3px solid var(--gr);
@@ -325,14 +329,53 @@
 	.p411-home .dir-home-nav-bot ul li a { width: 100%; justify-content: center; }
 }
 
+/* ---- section strip on the homepage ------------------------------------ */
+/*
+ * The homepage now includes partials/section_strip.php, the same element every
+ * other page carries. It loads home-sections.css rather than site-header.css,
+ * so the strip's paint is restated here — the values are copied from
+ * site-header.css:214-232 and must stay in step with it.
+ *
+ * The margin-top reset is the part that is NOT a copy: style.css:29485 gives
+ * the strip `margin-top: 60px` to clear the header bar, which is `position:
+ * fixed` on inner pages. On the homepage `.hom-top` is `position: relative`
+ * (see the block above), so the bar is already in flow and that clearance
+ * would open 60px of dead space between the bar and the strip.
+ */
+.p411-home .news-top-menu { margin-top: 0; background: #171A45; }
+.p411-home .news-menu ul li a {
+	color: rgba(255, 255, 255, .78);
+	font-family: 'Poppins', 'Open Sans', sans-serif;
+	font-size: 13.5px;
+	font-weight: 500;
+	border-bottom: 2px solid transparent;
+}
+.p411-home .news-menu ul li a:after { background: rgba(255, 255, 255, .16); }
+.p411-home .news-menu ul li a:hover {
+	color: #fff;
+	border-bottom-color: #8FCB46;
+	background: rgba(255, 255, 255, .06);
+}
+.p411-home .news-menu ul li a.act {
+	color: #fff;
+	font-weight: 600;
+	background: transparent;
+	border-bottom-color: #79B82A;
+}
+
 @media (max-width: 991px) {
 	.p411-home .hom-nav .bl { display: none; }
-	.p411-home .hom-nav .menu { margin-left: auto; }
-	.p411-home .hom-nav .ic-logo { width: 140px; }
+	/* margin-top overrides the theme's 10px, which sat the Explore chip low in
+	   a flex row that is already centring it. */
+	.p411-home .hom-nav .menu { margin-left: auto; margin-top: 0; }
+	/* Cap the mark's HEIGHT, not its width. Both logo files are ~1.67:1
+	   (3891x2327, 560x335), so a width cap still left a 54px-tall image in a
+	   bar the theme had clamped to 55px. */
+	.p411-home .hom-nav .ic-logo { height: 40px; width: auto; }
 }
 @media (max-width: 575px) {
 	.p411-home .hom-nav .menu h4 { font-size: 13.5px; padding: 7px 8px; }
-	.p411-home .hom-nav .ic-logo { width: 124px; }
+	.p411-home .hom-nav .ic-logo { height: 34px; width: auto; }
 }
 
 /* ===========================================================================

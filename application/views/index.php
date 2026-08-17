@@ -388,6 +388,13 @@ unset($__ext, $__rel);
             </div>
           </div>
 
+          <?php /* The same section strip every other page carries under its
+                   header bar. The homepage is self-contained and simply did not
+                   have one, so Classifieds and the two category slots appeared
+                   nowhere on / and the strip's items disagreed with the rest of
+                   the site. Shared partial, so they cannot drift again. */ ?>
+          <?php include APPPATH . 'views/partials/section_strip.php'; ?>
+
           <!-- ================================================== HERO == -->
           <section class="p411-hero<?= $hero_photo !== '' ? ' p411-hero--photo' : '' ?>">
             <div class="p411-hero__art" aria-hidden="true"

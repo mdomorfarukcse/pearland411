@@ -106,9 +106,7 @@
                     <td><span class="db-list-rat"><?= $view_count; ?></span> </td>
 
                     <td>
-                      <?php if (!empty($value->name)) : ?>
-                        <?= e($value->name); ?>
-                      <?php endif; ?>
+                      <?= e(author_name($value->name)) ?>
                     </td>
 
                     <td>

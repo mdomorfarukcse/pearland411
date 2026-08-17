@@ -73,7 +73,18 @@ if ($help_css) define('PEARLAND411_SALES_HELP_CSS', 1);
 		background: linear-gradient(150deg, #12143A 0%, #20245B 58%, #2C3178 100%);
 		color: #fff;
 		padding: 30px 32px 32px;
+		/* The form column is the taller of the two and the grid stretches both,
+		   so the surplus used to pile up as a slab of blank navy under the email
+		   link. Making this cell a column and pushing the contact block to its
+		   foot spends that space between the lede and the phone number instead. */
+		display: flex;
+		flex-direction: column;
 	}
+	/* Both are inline-flex pills; without this the flex container stretches them
+	   to the full column width. The 900px stacked layout below sets an explicit
+	   width on the phone pill, so it still wins there. */
+	.p411-help__phone { margin-top: auto; align-self: flex-start; }
+	.p411-help__mail  { align-self: flex-start; }
 	.p411-help__eyebrow {
 		display: inline-block;
 		font-size: 11px;

@@ -218,6 +218,99 @@ if (!function_exists('content_text')) {
     }
 }
 
+if (!function_exists('content_html')) {
+    /**
+     * A stored article body as safe, structural HTML — paragraphs kept.
+     *
+     * The sibling of content_text(), for the places that render a whole article
+     * rather than summarise it. content_text() flattens the body to plain text
+     * and the view rebuilds the breaks with nl2br(), which means the gap between
+     * two paragraphs depends on how much incidental whitespace the editor left
+     * between the tags: the same article reads evenly in one place and
+     * cluttered in another. Keeping the author's own <p> elements and spacing
+     * them in CSS makes the rhythm a property of the page, not of the paste.
+     *
+     * The tag whitelist is structure only, and every attribute is dropped apart
+     * from href/title on a link — that is what stops an imported article's
+     * inline `style="color:#ff0000"` from repainting the page, which is the
+     * other half of the same complaint. Output is safe to echo unescaped;
+     * do NOT wrap it in e().
+     *
+     * @param  string $value Stored body, possibly legacy entity-encoded.
+     * @return string        Sanitised HTML.
+     */
+    function content_html($value)
+    {
+        $value = (string) $value;
+
+        // Same legacy guard as content_text(): a body stored through
+        // htmlentities() holds "&lt;p&gt;…" and has to be decoded before there
+        // is any markup to keep. The signal is an encoded CLOSING tag, so a post
+        // that merely talks about "&lt;p&gt;" keeps showing what it typed.
+        if (strpos($value, '<') === false && preg_match('#&lt;\s*/\s*[a-z]#i', $value)) {
+            $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        }
+
+        // strip_tags() drops the tags but keeps what is between them, so a
+        // <script> body would survive as visible text. Remove these outright.
+        $value = preg_replace('#<\s*(script|style)\b[^>]*>.*?<\s*/\s*\1\s*>#is', '', $value);
+        $value = preg_replace('#<\s*(script|style)\b[^>]*/?>#i', '', $value);
+
+        $allowed = '<p><br><strong><b><em><i><u><ul><ol><li><a><h2><h3><h4><blockquote>';
+        $value   = strip_tags($value, $allowed);
+
+        // Anchors are handled as whole pairs — they cannot nest, so the lazy
+        // match pairs each open tag with its own close. A link whose href does
+        // not survive external_url() is unwrapped to its text rather than
+        // rewritten, which keeps the tags balanced.
+        $value = preg_replace_callback('#<\s*a\b([^>]*)>(.*?)<\s*/\s*a\s*>#is', function ($m) {
+            $href = '';
+            if (preg_match('#\bhref\s*=\s*(["\'])(.*?)\1#is', $m[1], $h)) {
+                $href = external_url(html_entity_decode($h[2], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+            }
+            if ($href === '') {
+                return $m[2];
+            }
+            $attrs = ' href="' . e_attr($href) . '" rel="nofollow noopener" target="_blank"';
+            if (preg_match('#\btitle\s*=\s*(["\'])(.*?)\1#is', $m[1], $t)) {
+                $attrs .= ' title="' . e_attr(html_entity_decode($t[2], ENT_QUOTES | ENT_HTML5, 'UTF-8')) . '"';
+            }
+            // Parked behind sentinels so the unpaired-tag sweep below cannot
+            // mistake a link this function just built for one it has not seen.
+            // strip_tags() has already run, so no literal "<" survives in the
+            // text and these control characters cannot occur in the content.
+            return "\x02a" . $attrs . "\x03" . $m[2] . "\x02/a\x03";
+        }, $value);
+
+        // Any unpaired anchor tag left over goes, so the markup stays balanced.
+        $value = preg_replace('#<\s*/?\s*a\b[^>]*>#i', '', $value);
+
+        // Everything else on the whitelist is structure — no attributes at all.
+        $value = preg_replace('#<\s*(' . 'p|br|strong|b|em|i|u|ul|ol|li|h2|h3|h4|blockquote'
+            . ')\b[^>]*?(/?)\s*>#i', '<$1$2>', $value);
+
+        $value = str_replace(array("\x02", "\x03"), array('<', '>'), $value);
+
+        $value = str_replace("\xC2\xA0", ' ', $value);           // stray &nbsp;
+        $value = trim($value);
+
+        // A legacy row stored as plain text has no block tags to space. Fall
+        // back to content_text()'s paragraphing so those rows read the same.
+        if ($value !== '' && !preg_match('#<\s*(p|ul|ol|h2|h3|h4|blockquote)\b#i', $value)) {
+            $paras = preg_split("/\n{2,}/", content_text($value));
+            $value = '';
+            foreach ($paras as $para) {
+                $para = trim($para);
+                if ($para !== '') {
+                    $value .= '<p>' . nl2br(e($para)) . '</p>';
+                }
+            }
+        }
+
+        return $value;
+    }
+}
+
 if (!function_exists('content_excerpt')) {
     /**
      * A one-paragraph summary of a stored body, cut on a word boundary.
@@ -553,6 +646,97 @@ if (!function_exists('normalise_enquiry_department')) {
         }
 
         return default_enquiry_department();
+    }
+}
+
+if (!function_exists('image_guidance')) {
+    /**
+     * The recommended upload size for one kind of image, as small print.
+     *
+     * "What is the optimal image size?" was asked because nothing on any upload
+     * form said, and the shapes are not guessable: the directory card crops to
+     * 16:9 and a gallery tile to 4:3, both with `object-fit: cover`, so a
+     * square logo loses its top and bottom and a portrait photo loses its
+     * sides. The numbers below are those boxes at 2x for high-density screens.
+     *
+     * Defined once because the same wording has to appear on four forms — the
+     * member and admin add screens and the member and admin edit screens.
+     *
+     * Returns literal HTML: media_field.php echoes $mf_hint unescaped, so never
+     * interpolate stored data into these strings.
+     *
+     * @param  string $kind logo|gallery|cover|category
+     * @return string       HTML for a <small class="form-text text-muted">.
+     */
+    function image_guidance($kind)
+    {
+        $copy = array(
+            'logo' => 'Best size <strong>1200 &times; 675 px</strong> (landscape, 16:9), JPG or PNG under 500&nbsp;KB. '
+                . 'Directory cards crop to a wide rectangle, so keep the logo or main subject centred &mdash; '
+                . 'a square image loses its top and bottom there. Minimum 800 &times; 450 px.',
+            'gallery' => 'Best size <strong>1600 &times; 1200 px</strong> (4:3), JPG under 500&nbsp;KB each. '
+                . 'Tiles crop to 4:3 and open full size when clicked, so upload the good version &mdash; '
+                . 'but nothing wider than 1600 px, or the page becomes slow to load.',
+            'cover' => 'Best size <strong>1600 &times; 500 px</strong> (wide banner), JPG under 800&nbsp;KB. '
+                . 'It sits behind a dark tint at the top of the listing, so avoid small text or fine detail.',
+            'category' => 'Best size <strong>600 &times; 600 px</strong> (square), PNG with a transparent '
+                . 'background, under 200&nbsp;KB. Shown as a small icon, so keep it simple.',
+        );
+
+        return isset($copy[$kind]) ? $copy[$kind] : '';
+    }
+}
+
+if (!function_exists('author_name')) {
+    /**
+     * The name to print for whoever created a piece of content.
+     *
+     * Seeded rows carry `user_id = 0` and no admin, so the COALESCE in the
+     * listing queries yields NULL. The public views each had their own inline
+     * ternary falling back to "Pearland411" while the admin lists had none, so
+     * the same event read "Hosted by Pearland411" on the site and blank in the
+     * admin table. One definition, used by both.
+     *
+     * @param  string|null $name Stored author/creator name, possibly NULL.
+     * @return string            Never empty.
+     */
+    function author_name($name)
+    {
+        $name = trim((string) $name);
+
+        return $name !== '' ? $name : site_setting('site_title', 'Pearland411');
+    }
+}
+
+if (!function_exists('billing_interval_noun')) {
+    /**
+     * `plans.billing_interval` as the noun the price copy needs.
+     *
+     * The column is legacy free text: the admin form writes the adjective
+     * 'monthly', older rows hold NULL or '', and the pricing card printed
+     * `'per ' . $value` with no guard — which is how a card came to read
+     * "$15 per" with nothing after it, and "per monthly" once a row was
+     * populated. Anything unrecognised collapses to the house default rather
+     * than being echoed raw, because a dangling preposition on a price is
+     * worse than a wrong-but-grammatical one, and only the recurring
+     * categories reach this branch at all.
+     *
+     * @param  string $interval Stored interval, in any of its historical spellings.
+     * @param  string $default  Noun to use when the value is blank or unknown.
+     * @return string           A bare noun: month, year, week or day.
+     */
+    function billing_interval_noun($interval, $default = 'month')
+    {
+        $map = array(
+            'month'  => 'month', 'monthly'  => 'month', 'mo' => 'month', '30' => 'month',
+            'year'   => 'year',  'yearly'   => 'year',  'annual' => 'year', 'annually' => 'year',
+            'week'   => 'week',  'weekly'   => 'week',
+            'day'    => 'day',   'daily'    => 'day',
+        );
+
+        $key = strtolower(trim((string) $interval));
+
+        return isset($map[$key]) ? $map[$key] : $default;
     }
 }
 

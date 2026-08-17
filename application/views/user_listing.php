@@ -199,7 +199,7 @@
 
 									<td>
 
-										<img src="<?= (empty($value->listing_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($value->listing_image) ?>"><?= $value->listing_name; ?> <span><?= date('d, M Y', strtotime($value->created_at)); ?></span>
+										<img src="<?= (empty($value->listing_image)) ? base_url('assets/images/no_photo.jpg') :  base_url($value->listing_image) ?>"><?= e($value->listing_name) ?> <span><?= date('d, M Y', strtotime($value->created_at)); ?></span>
 
 									</td>
 
