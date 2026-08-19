@@ -233,6 +233,8 @@ unset($__ext, $__rel);
   <link rel="stylesheet" href="<?= asset_css('assets/css/promo-cards.css') ?>">
   <!-- The footer (partials/site_footer.php), shared with every other page. -->
   <link rel="stylesheet" href="<?= asset_css('assets/css/site-footer.css') ?>">
+  <!-- The off-canvas mobile menu (.mob-me-all), shared with views/header.php. -->
+  <link rel="stylesheet" href="<?= asset_css('assets/css/mobile-menu.css') ?>">
 
   <?php // Both of these were loaded from a CDN. The repository already ships
         // the same versions (Bootstrap 4.3.1, jQuery UI 1.12.1), so serving
@@ -1062,10 +1064,12 @@ unset($__ext, $__rel);
   <?php // custom.js calls .autocomplete() and .datepicker() unconditionally,
         // so jQuery UI has to be here or the rest of that file never runs. ?>
   <script src="<?= base_url() ?>assets/js/jquery-ui.js"></script>
-  <script src="<?= base_url() ?>assets/js/custom.js"></script>
+  <script src="<?= base_url() ?>assets/js/custom.js?v=<?= @filemtime(FCPATH . 'assets/js/custom.js') ?: 1 ?>"></script>
   <?php // The homepage carries its own <head>/scripts rather than footer.php's,
-        // so the shared form validator has to be asked for here too. ?>
+        // so the shared form validator and the off-canvas menu have to be
+        // asked for here too. ?>
   <script src="<?= base_url('assets/js/form-validate.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/form-validate.js') ?: 1 ?>"></script>
+  <script src="<?= base_url('assets/js/mobile-menu.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/mobile-menu.js') ?: 1 ?>"></script>
 
   <script>
   /* ------------------------------------------------------------------

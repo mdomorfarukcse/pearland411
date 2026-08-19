@@ -833,6 +833,56 @@
 	color: #fff !important;
 }
 
+/*
+ * First / Last and the ellipsis. The ellipsis used to be an unclickable
+ * `<span>`; it is a link to the middle of the range it stands for now, so it
+ * has to read as one — the reported "you couldn't press the pages found in
+ * between, only the ones showing".
+ */
+.p411-pager .p411-pager__gap .page-link { min-width: 34px; padding-left: 8px; padding-right: 8px; letter-spacing: .08em; }
+.p411-pager .p411-pager__end .page-link { font-weight: 700; }
+/* On a phone the ends and the two outermost numbers are what a thumb misses;
+   Prev / Next / the current page are what it wants. */
+@media (max-width: 480px) {
+	.p411-pager .p411-pager__end { display: none; }
+	.p411-pager .page-link,
+	.p411-pager .pagination li span { min-width: 36px; padding: 7px 9px; font-size: 13px; }
+}
+
+/* ---- pagination: "Go to page" --------------------------------------- */
+/*
+ * The one control that turns "seventeen presses to reach page 20" into one.
+ * A plain GET form (see pager_jump_form()), so it works without JavaScript.
+ */
+.p411-pager__jump {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	margin-top: 12px;
+	font-size: 13px;
+	color: var(--p411-ink-2);
+}
+.p411-pager__jump label { margin: 0; font-weight: 600; }
+.p411-pager__jump input[type="number"] {
+	width: 76px;
+	padding: 7px 9px;
+	border: 1px solid var(--p411-line);
+	border-radius: var(--p411-r-s);
+	background: #fff;
+	color: var(--p411-ink);
+	font-size: 14px;
+	font-weight: 600;
+	text-align: center;
+}
+.p411-pager__jump input[type="number"]:focus {
+	outline: none;
+	border-color: var(--p411-green);
+	box-shadow: 0 0 0 3px var(--p411-green-w);
+}
+.p411-pager__of { color: var(--p411-ink-3); }
+
 /* ---- sidebar: featured rail ----------------------------------------- */
 
 .p411-rail { display: flex; flex-direction: column; gap: 9px; }

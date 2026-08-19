@@ -1055,3 +1055,186 @@ if (!function_exists('ad_zone_preview')) {
         return $dir . 'zone-generic.svg';
     }
 }
+
+if (!function_exists('pager_window')) {
+    /**
+     * The page numbers a pager should offer, as a list.
+     *
+     * Entries are either an int (a page to link) or the string 'gap'. A gap is
+     * NOT decorative: `pager_links()` turns it into a link to the middle of the
+     * range it stands for, so a visitor can cross a long list in a handful of
+     * presses instead of one Next at a time.
+     *
+     * With $radius = 2 and 47 pages, page 9 gives:
+     *   1, gap, 7, 8, 9, 10, 11, gap, 47
+     *
+     * @param  int $current
+     * @param  int $total
+     * @param  int $radius How many pages to show either side of the current one.
+     * @return array<int,int|string>
+     */
+    function pager_window($current, $total, $radius = 2)
+    {
+        $total   = max(0, (int) $total);
+        $radius  = max(1, (int) $radius);
+        $current = min(max(1, (int) $current), max(1, $total));
+
+        if ($total < 1) {
+            return array();
+        }
+
+        $start = max(1, $current - $radius);
+        $end   = min($total, $current + $radius);
+
+        $out = array();
+
+        if ($start > 1) {
+            $out[] = 1;
+            // Only call it a gap when something is actually skipped; with a
+            // single page missing, print the page itself.
+            if ($start === 3)     $out[] = 2;
+            elseif ($start > 3)   $out[] = 'gap';
+        }
+
+        for ($i = $start; $i <= $end; $i++) {
+            $out[] = $i;
+        }
+
+        if ($end < $total) {
+            if ($end === $total - 2)   $out[] = $total - 1;
+            elseif ($end < $total - 2) $out[] = 'gap';
+            $out[] = $total;
+        }
+
+        return $out;
+    }
+}
+
+if (!function_exists('pager_links')) {
+    /**
+     * One `<ul class="pagination">` for the public list pages.
+     *
+     * Replaces the hand-rolled builders that each page grew its own copy of.
+     * What the tracker asked for — "you couldn't press the pages found in
+     * between, only the ones showing … I don't want it to take me 17 clicks to
+     * find page 20" — is answered by three things this adds:
+     *
+     *   - First / Last controls, so either end is always one press away.
+     *   - Live ellipses. The `&hellip;` was a `<span>`, i.e. nothing to press;
+     *     it is a link to the middle of the range it hides, so a 47-page list
+     *     is a few presses across rather than forty.
+     *   - `pager_jump_form()`, rendered next to this by partials/pager.php.
+     *
+     * @param  int      $current   1-based current page.
+     * @param  int      $total     Total pages.
+     * @param  callable $page_url  fn(int $page): string — absolute URL for a page.
+     * @param  int      $radius    Pages either side of the current one.
+     * @return string              '' when there is nothing to page through.
+     */
+    function pager_links($current, $total, callable $page_url, $radius = 2)
+    {
+        $total   = max(0, (int) $total);
+        $current = min(max(1, (int) $current), max(1, $total));
+
+        if ($total < 2) {
+            return '';
+        }
+
+        $item = function ($href, $label, $extra_li = '', $attr = '') {
+            return '<li class="page-item' . $extra_li . '"><a class="page-link" href="'
+                . e_attr($href) . '"' . $attr . '>' . $label . '</a></li>';
+        };
+
+        $html = '<ul class="pagination justify-content-center">';
+
+        $window = pager_window($current, $total, $radius);
+
+        // First / Last are only worth their space while the window hides
+        // something. On a short list every page is already on screen, and the
+        // two extra controls just crowd out the numbers.
+        $windowed = count(array_filter($window, 'is_int')) < $total;
+
+        if ($current > 1) {
+            if ($windowed) {
+                $html .= $item($page_url(1), '&laquo; First', ' p411-pager__end',
+                    ' aria-label="First page"');
+            }
+            $html .= $item($page_url($current - 1), '&lsaquo; Prev', '', ' rel="prev"');
+        }
+
+        foreach ($window as $i => $entry) {
+            if ($entry === 'gap') {
+                // The middle of the range this gap stands for, read off its
+                // two neighbours — both are always real page numbers.
+                $before = isset($window[$i - 1]) && is_int($window[$i - 1]) ? $window[$i - 1] : 1;
+                $after  = isset($window[$i + 1]) && is_int($window[$i + 1]) ? $window[$i + 1] : $total;
+                $mid    = (int) floor(($before + $after) / 2);
+                $mid    = min(max($before + 1, $mid), $after - 1);
+
+                $html .= $item($page_url($mid), '&hellip;', ' p411-pager__gap',
+                    ' aria-label="Jump to page ' . $mid . '" title="Jump to page ' . $mid . '"');
+                continue;
+            }
+
+            if ((int) $entry === $current) {
+                $html .= '<li class="page-item active"><span class="page-link" aria-current="page">'
+                    . (int) $entry . '</span></li>';
+            } else {
+                $html .= $item($page_url((int) $entry), (int) $entry);
+            }
+        }
+
+        if ($current < $total) {
+            $html .= $item($page_url($current + 1), 'Next &rsaquo;', '', ' rel="next"');
+            if ($windowed) {
+                $html .= $item($page_url($total), 'Last &raquo;', ' p411-pager__end',
+                    ' aria-label="Last page"');
+            }
+        }
+
+        return $html . '</ul>';
+    }
+}
+
+if (!function_exists('pager_jump_form')) {
+    /**
+     * The "Go to page [ ] of N" control that sits under a pager.
+     *
+     * A plain GET form on purpose: it works with JavaScript switched off, and
+     * it is the one control that turns "seventeen presses to reach page 20"
+     * into one. Every page that renders it reads the page from `?page=`.
+     *
+     * @param  string $action URL the form submits to.
+     * @param  int    $total  Total pages (the input's max, and the label).
+     * @param  int    $current
+     * @param  array  $hidden Extra query values to carry through, e.g. sort.
+     * @return string
+     */
+    function pager_jump_form($action, $total, $current = 1, array $hidden = array())
+    {
+        $total = (int) $total;
+        if ($total < 2 || $action === '') {
+            return '';
+        }
+
+        $html = '<form class="p411-pager__jump" method="get" action="' . e_attr($action) . '">';
+
+        foreach ($hidden as $name => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
+            $html .= '<input type="hidden" name="' . e_attr($name) . '" value="' . e_attr($value) . '">';
+        }
+
+        $id = 'pagerJump' . substr(md5($action), 0, 6);
+        $html .= '<label for="' . $id . '">Go to page</label>'
+            . '<input type="number" id="' . $id . '" name="page" inputmode="numeric"'
+            . ' min="1" max="' . $total . '" step="1" value="' . (int) $current . '"'
+            . ' aria-label="Page number, 1 to ' . $total . '">'
+            . '<span class="p411-pager__of">of ' . number_format($total) . '</span>'
+            . '<button type="submit" class="p411-btn p411-btn--sm">Go</button>'
+            . '</form>';
+
+        return $html;
+    }
+}

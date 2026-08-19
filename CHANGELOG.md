@@ -6,6 +6,110 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-19 — Fourth tracker round: the pager you can't get across, and a burger that opens nothing
+
+Three rows, 164–166 on the manager's error tracker, all of them "Assigned" and
+all of them about chrome rather than content. Two are the same bug seen twice.
+
+### Fixed
+
+- **Reaching page 20 of a long directory took seventeen presses** (row 164,
+  `/all_listing/20`). The pager showed a window of five pages with `1` and the
+  last page at either end and a `&hellip;` for everything in between — and that
+  ellipsis was a `<span>`, so there was nothing to press. The only way across
+  the middle was Next, once per page: *"you couldn't press the pages found in
+  between but only the ones showing … I don't want it to take me 17 clicks to
+  find page 20 then I have to scroll through each one."*
+
+  Three changes, in one place so every list gets them:
+
+  - **The ellipsis is a link**, to the middle of the range it stands for. On a
+    20-page list every page is now at most **three** presses from page 1;
+    before, page 20 was seventeen. It also stops standing in for a single page
+    — `1 … 3` printed a gap to hide page 2, which is now just printed.
+  - **First and Last controls**, shown only while the window actually hides
+    something. On a list short enough to print in full they were clutter.
+  - **"Go to page [ ] of N"**, a plain `<form method="get">` — no JavaScript,
+    one action to reach any page. `/all-listing` keeps its positional
+    `/all_listing/<offset>` URLs and redirects `?page=` onto them, so a jump
+    does not leave the site with two URLs for one page.
+
+  New `pager_links()` / `pager_window()` / `pager_jump_form()` in
+  `application/helpers/view_helper.php` and `views/partials/pager.php`; the
+  forty lines of string building in `User::all_listing()` are gone.
+  `/event`, `/news`, `/videos`, `/classifieds` and `/all-blog` render the same
+  partial, so all six public lists gained the jump and the "Page X of N" line.
+
+- **`/all-blog` printed one link per page, all of them.** Thirty posts meant
+  thirty numbered pills across the foot of the page, and the loop escaped
+  nothing it put in the `href`. It uses the shared windowed pager now, and
+  clamps a page number past the end the way `/event` and `/news` already did.
+
+- **The burger menu on `/login` did nothing on a phone** (row 165). Two rules
+  disagreed about which widths have a mobile menu: `style.css` shows
+  `.mob-me-ic` from **992px** down, while an inline block in `header.php` hid
+  `.mob-me-all` — the panel that burger opens — from **767px** down. Between
+  768 and 992 it worked; below 768, on every actual phone, the button was
+  visible and pressing it did nothing. That gap is the reported *"doesn't work
+  sometimes"*. The rule is gone.
+
+  Underneath it, two handlers were fighting: `custom.js` added
+  `.mobmenu-show` and never removed it, while an inline script in `header.php`
+  toggled an inline `display` on `.ud-lhs-s2`, the list *inside* the panel, and
+  set it to `none` on every page load. So the first press opened the panel and
+  showed the list and the second left a full-screen white panel with its
+  contents hidden. One implementation now, `assets/js/mobile-menu.js`: a real
+  toggle, Escape, the close button, closing when you follow a link, keyboard
+  support on a control that is a `<div role="button">`, and a scroll lock.
+
+- **The panel showed a signed-out visitor an empty `<img>` and a member's
+  dashboard** (row 166). `$header_profile_img`, `$header_user_name` and
+  `$header_join_date` were resolved *inside* the signed-in branch, but the
+  off-canvas panel sits outside it and echoed all three — so on `/login`, where
+  by definition nobody is signed in, it rendered `<img src="" alt="">`. An
+  empty `src` resolves to the page URL and draws a broken-image icon, and
+  `onerror` does not fire for it. That is the reported *"broken image when
+  pressing the burger menu"*. They are resolved once, above the branch, and
+  never empty.
+
+  The panel's contents were wrong as well as broken: below 992px `style.css`
+  hides `.bl` — Add business / Sign In / Create an account — so this panel is
+  the only route to any of them on a phone, and it offered "My Dashboard",
+  "Lead enquiry" and "Log Out" instead, with no way to sign in at all. A
+  signed-out visitor gets an account block, the site sections (the same list
+  and the same `/admin/setting` switches as the navy strip) and the top
+  categories; a member keeps the dashboard menu, with the sections underneath.
+
+- **…and the second half of that row: widening the window left the panel
+  stuck.** Above 992px the burger is hidden, but the panel is `position: fixed`
+  and nothing closed it, so it stayed over the page with no control to dismiss
+  it — *"then widening the view"*. `mobile-menu.js` closes it on the
+  breakpoint crossing, on resize and on a bfcache restore.
+
+- **Found while testing the above: the header's own script threw on every page
+  of the site.** `views/header.php` calls `$(document).ready(...)` inline, and
+  jQuery is loaded by `views/footer.php`, below it — so it was
+  `Uncaught ReferenceError: $ is not defined`, and none of the header search
+  handlers had ever been bound. It waits for `DOMContentLoaded` instead.
+
+- **`custom.js` had no cache-busting.** It is stamped with its mtime now, in
+  both `footer.php` and the homepage, for the reason recorded on 2026-08-05
+  under "The header fix that never reached anyone's browser".
+
+### Key files
+
+`application/helpers/view_helper.php` (new `pager_window()`, `pager_links()`,
+`pager_jump_form()`), `application/views/partials/pager.php` (new),
+`application/controllers/User.php` (new `queryStringPager()`; `all_listing`,
+`all_blog`, `news`, `event`, `videos`, `classifieds`),
+`application/views/{all-listing,events,news,videos,blog-posts,classifieds}.php`,
+`application/views/header.php`, `application/views/footer.php`,
+`application/views/index.php`, `assets/js/mobile-menu.js` (new),
+`assets/css/mobile-menu.css` (new), `assets/js/custom.js`,
+`assets/css/directory.css`.
+
+No migrations.
+
 ## 2026-08-16 — Third tracker round: the fixes that only reached one of two code paths
 
 Eighteen rows arrived on a new copy of the manager's error tracker. Every

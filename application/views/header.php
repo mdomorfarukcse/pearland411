@@ -53,6 +53,9 @@
 	<!-- The footer (partials/site_footer.php, rendered by views/footer.php).
 	     Every selector is a .p411-foot descendant, so this is safe on any page. -->
 	<link rel="stylesheet" href="<?= asset_css('assets/css/site-footer.css') ?>">
+	<!-- The off-canvas mobile menu. Shared with the homepage, which renders the
+	     same .mob-me-all markup from its own <head>. -->
+	<link rel="stylesheet" href="<?= asset_css('assets/css/mobile-menu.css') ?>">
 
 	<?php
 	// Per-page stylesheets. A controller sets $data['page_css'] to one path or
@@ -78,10 +81,17 @@
 	<style>
 		/* phone */
 		@media (max-width: 767px) {
-			.mob-me-all {
-				display: none;
-			}
-
+			/*
+			 * `.mob-me-all { display: none }` used to live here. It is gone on
+			 * purpose: `.mob-me-ic` (the burger) is shown from 992px down
+			 * (style.css:26647) while this hid the panel it opens from 767px
+			 * down, so on every phone the burger was visible and pressing it
+			 * did nothing at all — the reported "switching to window view
+			 * creates a burger menu … doesn't work sometimes". It works at
+			 * tablet widths and is dead on a phone, which is exactly the
+			 * "sometimes". The panel it opens now carries a real menu for
+			 * signed-out visitors, which is presumably why it was hidden.
+			 */
 			.ud-lhs-s2 {
 				background-color: white;
 			}
@@ -236,10 +246,49 @@
 
 
 										<?php
+										/*
+										 * Who is signed in, resolved ONCE for the whole header.
+										 *
+										 * This block used to sit inside the signed-in branch
+										 * below, but the off-canvas mobile panel further down
+										 * is outside that branch and echoed the same three
+										 * variables. For a signed-out visitor they were simply
+										 * undefined, so the panel rendered
+										 * `<img src="" alt="">` — the reported "broken image
+										 * when pressing the burger menu then widening the
+										 * view", on /login of all pages, where nobody is
+										 * signed in by definition.
+										 */
+										$header_is_logged_in = FALSE;
+										$header_user_name    = 'User';
+										$header_join_date    = '';
+										// Never empty: `src=""` resolves to the page URL and
+										// draws a broken-image icon, and `onerror` does not
+										// fire for it in Chrome.
+										$header_profile_img  = base_url('assets/images/fallback_profile.svg');
 
+										$session_data = NULL;
+										if (isset($this) && method_exists($this, 'session')) {
+											$session_data = $this->session->userdata('logged_user');
+										} elseif (!empty($_SESSION['logged_user'])) {
+											$session_data = $_SESSION['logged_user'];
+										}
 
+										if (!empty($session_data)) {
+											$header_is_logged_in = TRUE;
 
-										if (!isset($_SESSION['logged_user']) && empty($_SESSION['logged_user'])) { ?>
+											if (!empty($session_data['name'])) {
+												$header_user_name = $session_data['name'];
+											}
+											if (!empty($session_data['profile_image'])) {
+												$header_profile_img = base_url($session_data['profile_image']);
+											}
+											if (!empty($session_data['user_created'])) {
+												$header_join_date = date('d, M Y', strtotime($session_data['user_created']));
+											}
+										}
+
+										if (!$header_is_logged_in) { ?>
 
 
 
@@ -274,42 +323,8 @@
 											<div class="al">
 
 												<div class="head-pro">
-													<?php
-													// Get user information for header
-													$header_user_name = 'User';
-													$header_profile_img = base_url('assets/images/fallback_profile.svg'); // fallback to logo
-													$header_join_date = '';
-
-													// Check if CI session exists and user is logged in
-													if (isset($this) && method_exists($this, 'session')) {
-														// Use CodeIgniter session
-														$session_data = $this->session->userdata('logged_user');
-													} elseif (isset($_SESSION['logged_user']) && !empty($_SESSION['logged_user'])) {
-														// Fallback to PHP session
-														$session_data = $_SESSION['logged_user'];
-													} else {
-														$session_data = null;
-													}
-
-													if ($session_data && !empty($session_data)) {
-														// Get user name
-														if (isset($session_data['name']) && !empty($session_data['name'])) {
-															$header_user_name = $session_data['name'];
-														}
-
-														// Get profile image with fallback to logo
-														if (isset($session_data['profile_image']) && !empty($session_data['profile_image'])) {
-															$header_profile_img = base_url($session_data['profile_image']);
-														}
-
-														// Get join date
-														if (isset($session_data['user_created']) && !empty($session_data['user_created'])) {
-															$header_join_date = date('d, M Y', strtotime($session_data['user_created']));
-														}
-													}
-													?>
-
-													<img src="<?= $header_profile_img ?>" alt="<?= htmlspecialchars($header_user_name) ?>" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?= base_url('assets/images/pearland-logo.png') ?>'">
+													<?php // $header_* are resolved once, above the branch. ?>
+													<img src="<?= e_attr($header_profile_img) ?>" alt="<?= e($header_user_name) ?>" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;" onerror="this.onerror=null;this.src='<?= base_url('assets/images/fallback_profile.svg') ?>'">
 													<b>Profile by</b>
 													<br>
 													<h4><?= htmlspecialchars($header_user_name) ?></h4>
@@ -382,8 +397,15 @@
 
 									}*/
 
-										// Header search functionality
-										$(document).ready(function() {
+										/*
+										 * jQuery is loaded by views/footer.php, which is below
+										 * this script — so `$(document).ready(...)` threw
+										 * "$ is not defined" here on every page of the site, and
+										 * none of these handlers were ever bound. Wait for
+										 * DOMContentLoaded instead: footer.php's <script src>
+										 * tags are parser-blocking, so jQuery has run by then.
+										 */
+										document.addEventListener('DOMContentLoaded', function() {
 											// Handle search form submission
 											$('#filter_form').on('submit', function(e) {
 												var searchValue = $('#top-select-search').val().trim();
@@ -428,118 +450,203 @@
 
 
 
-									<!--MOBILE MENU-->
+									<?php
+									/*
+									 * MOBILE MENU (off-canvas, driven by assets/js/mobile-menu.js)
+									 *
+									 * Below 992px style.css hides `.bl` — Add business / Sign In /
+									 * Create an account — and shows `.mob-me-ic` instead, so this
+									 * panel is the ONLY way a phone visitor reaches any of that.
+									 * It used to hold the member dashboard menu unconditionally:
+									 * a signed-out visitor on /login was offered "My Dashboard",
+									 * "Lead enquiry" and "Log Out" above an empty `<img src="">`,
+									 * and had no link to sign in at all. Two lists now, and the
+									 * site sections underneath either of them.
+									 */
+									$__mob_cats = array();
+									if (!empty($header_categories))     $__mob_cats = $header_categories;
+									elseif (!empty($allCategories))     $__mob_cats = $allCategories;
+									?>
 
 									<div class="mob-menu">
 
-										<div class="mob-me-ic"><i class="material-icons">menu</i>
+										<div class="mob-me-ic" role="button" tabindex="0"
+										     aria-controls="mobMenuPanel" aria-expanded="false" aria-label="Open menu"><i class="material-icons">menu</i>
 
 										</div>
 
-										<div class="mob-me-all">
+										<div class="mob-me-all" id="mobMenuPanel">
 
-											<div class="mob-me-clo"><i class="material-icons">close</i>
-
-											</div>
-
-											<div class="mv-pro ud-lhs-s1">
-												<img src="<?= $header_profile_img ?>" alt="<?= htmlspecialchars($header_user_name) ?>" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?= base_url('assets/images/pearland-logo.png') ?>'">
-
-												<h4><?= htmlspecialchars($header_user_name) ?></h4>
-
-												<?php if ($header_join_date): ?>
-													<b>Join on <?= $header_join_date ?></b>
-												<?php else: ?>
-													<b>Welcome!</b>
-												<?php endif; ?>
+											<div class="mob-me-clo" role="button" tabindex="0" aria-label="Close menu"><i class="material-icons">close</i>
 
 											</div>
 
-											<div class="mv-pro-menu ud-lhs-s2">
+											<?php if ($header_is_logged_in): ?>
+
+												<div class="mv-pro ud-lhs-s1">
+													<img src="<?= e_attr($header_profile_img) ?>" alt="<?= e($header_user_name) ?>" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;" onerror="this.onerror=null;this.src='<?= base_url('assets/images/fallback_profile.svg') ?>'">
+
+													<h4><?= e($header_user_name) ?></h4>
+
+													<?php if ($header_join_date): ?>
+														<b>Join on <?= e($header_join_date) ?></b>
+													<?php else: ?>
+														<b>Welcome!</b>
+													<?php endif; ?>
+
+												</div>
+
+												<div class="mv-pro-menu ud-lhs-s2">
+
+													<ul>
+
+														<li>
+
+															<a href="<?= base_url() ?>dashboard" class="">
+
+																<img src="<?= base_url() ?>assets/images/icon/dbl1.png" alt="" />My Dashboard</a>
+
+														</li>
+
+														<li>
+
+															<a href="<?= base_url() ?>user_listing" class="">
+
+																<img src="<?= base_url() ?>assets/images/icon/shop.png" alt="" />All Listings</a>
+
+														</li>
+
+														<li>
+
+															<a href="<?= base_url() ?>add_listing_start">
+
+																<img src="<?= base_url() ?>assets/images/icon/dbl3.png" alt="" />Add New Listing</a>
+
+														</li>
+
+														<li>
+															<a href="<?= base_url() ?>user_enquiry" class=""><img src="<?= base_url() ?>assets/images/icon/tick.png" alt="" />Lead enquiry</a>
+
+														</li>
+
+														<li>
+
+															<a href="<?= base_url() ?>user_products" class="">
+
+																<img src="<?= base_url() ?>assets/images/icon/cart.png" alt="" />All Products</a>
+
+														</li>
+
+														<li>
+
+															<a href="<?= base_url() ?>user_events" class="">
+
+																<img src="<?= base_url() ?>assets/images/icon/calendar.png" alt="" />Events</a>
+
+														</li>
+
+														<li>
+
+															<a href="<?= base_url() ?>user_blog_posts" class="">
+
+																<img src="<?= base_url() ?>assets/images/icon/blog1.png" alt="" />Blog posts</a>
+
+														</li>
+
+
+
+														<li>
+
+															<a href="<?= base_url() ?>my_profile" class="">
+
+																<img src="<?= base_url() ?>assets/images/icon/dbl6.png" alt="" />My Profile</a>
+
+														</li>
+
+
+
+														<li>
+
+															<a href="<?= base_url() ?>logout">
+
+																<img src="<?= base_url() ?>assets/images/icon/dbl12.png" alt="" />Log Out</a>
+
+														</li>
+
+													</ul>
+
+												</div>
+
+											<?php else: ?>
+
+												<div class="mv-bus">
+
+													<h4>Your account</h4>
+
+													<ul>
+														<li><a href="<?= base_url('login') ?>">Sign in</a></li>
+														<li><a href="<?= base_url('register') ?>">Create an account</a></li>
+														<li><a href="<?= base_url('pricing-plan') ?>">Add your business</a></li>
+													</ul>
+
+												</div>
+
+											<?php endif; ?>
+
+											<?php // Same sections, and the same on/off switches, as the
+											      // navy strip under the bar (partials/section_strip.php). ?>
+											<div class="mv-bus">
+
+												<h4>Browse</h4>
 
 												<ul>
-
-													<li>
-
-														<a href="<?= base_url() ?>dashboard" class="">
-
-															<img src="<?= base_url() ?>assets/images/icon/dbl1.png" alt="" />My Dashboard</a>
-
-													</li>
-
-													<li>
-
-														<a href="<?= base_url() ?>user_listing" class="">
-
-															<img src="<?= base_url() ?>assets/images/icon/shop.png" alt="" />All Listings</a>
-
-													</li>
-
-													<li>
-
-														<a href="<?= base_url() ?>add_listing_start">
-
-															<img src="<?= base_url() ?>assets/images/icon/dbl3.png" alt="" />Add New Listing</a>
-
-													</li>
-
-													<li>
-														<a href="<?= base_url() ?>user_enquiry" class=""><img src="<?= base_url() ?>assets/images/icon/tick.png" alt="" />Lead enquiry</a>
-
-													</li>
-
-													<li>
-
-														<a href="<?= base_url() ?>user_products" class="">
-
-															<img src="<?= base_url() ?>assets/images/icon/cart.png" alt="" />All Products</a>
-
-													</li>
-
-													<li>
-
-														<a href="<?= base_url() ?>user_events" class="">
-
-															<img src="<?= base_url() ?>assets/images/icon/calendar.png" alt="" />Events</a>
-
-													</li>
-
-													<li>
-
-														<a href="<?= base_url() ?>user_blog_posts" class="">
-
-															<img src="<?= base_url() ?>assets/images/icon/blog1.png" alt="" />Blog posts</a>
-
-													</li>
-
-
-
-													<li>
-
-														<a href="<?= base_url() ?>my_profile" class="">
-
-															<img src="<?= base_url() ?>assets/images/icon/dbl6.png" alt="" />My Profile</a>
-
-													</li>
-
-
-
-													<li>
-
-														<a href="<?= base_url() ?>logout">
-
-															<img src="<?= base_url() ?>assets/images/icon/dbl12.png" alt="" />Log Out</a>
-
-													</li>
-
+													<li><a href="<?= base_url() ?>">Home</a></li>
+													<li><a href="<?= base_url('all-listing') ?>">Directory</a></li>
+													<?php if (site_setting('service_events_enabled', '1') !== '0'): ?>
+														<li><a href="<?= base_url('event') ?>">Events</a></li>
+													<?php endif; ?>
+													<?php if (site_setting('service_news_enabled', '1') !== '0'): ?>
+														<li><a href="<?= base_url('news') ?>">News</a></li>
+													<?php endif; ?>
+													<?php if (site_setting('service_videos_enabled', '1') !== '0'): ?>
+														<li><a href="<?= base_url('videos') ?>">Videos</a></li>
+													<?php endif; ?>
+													<li><a href="<?= base_url('coupons') ?>">Deals &amp; coupons</a></li>
+													<?php if (site_setting('service_classifieds_enabled', '1') !== '0'): ?>
+														<li><a href="<?= base_url('classifieds') ?>">Classifieds</a></li>
+													<?php endif; ?>
+													<li><a href="<?= base_url('post-your-ads') ?>">Advertise with us</a></li>
+													<li><a href="<?= base_url('contact-us') ?>">Contact us</a></li>
 												</ul>
 
 											</div>
+
+											<?php if ($__mob_cats): ?>
+												<div class="mv-cate">
+
+													<h4>All Categories</h4>
+
+													<ul>
+														<?php foreach (array_slice($__mob_cats, 0, 12) as $__mob_cat):
+															// Shared slug rule, same as the Explore menu above —
+															// stored slug first, pearland_slug() otherwise, so a
+															// link from here resolves like a link from anywhere.
+															$__mob_slug = !empty($__mob_cat->category_slug)
+																? (string) $__mob_cat->category_slug
+																: pearland_slug($__mob_cat->category_name); ?>
+															<li><a href="<?= e_url(base_url('all_listing/' . rawurlencode($__mob_slug))) ?>"><?= e($__mob_cat->category_name) ?></a></li>
+														<?php endforeach; ?>
+														<li><a href="<?= base_url('all-category') ?>">View all categories</a></li>
+													</ul>
+
+												</div>
+											<?php endif; ?>
 
 										</div>
 
 									</div>
 
+									<?php unset($__mob_cats, $__mob_cat, $__mob_slug); ?>
 									<!--END MOBILE MENU-->
 
 								</div>
@@ -561,20 +668,18 @@
 	<!-- END -->
 	<?php include APPPATH . 'views/partials/section_strip.php'; ?>
 
-	<script>
-		// select the elements
-		const mobIcon = document.querySelector('.mob-me-ic');
-		const sidebar = document.querySelector('.ud-lhs-s2');
-
-		// by default sidebar hidden
-		sidebar.style.display = 'none';
-
-		// toggle on click
-		mobIcon.addEventListener('click', function() {
-			if (sidebar.style.display === 'none') {
-				sidebar.style.display = 'block';
-			} else {
-				sidebar.style.display = 'none';
-			}
-		});
-	</script>
+	<?php
+	/*
+	 * The burger used to be driven from here as well as from
+	 * assets/js/custom.js, and the two disagreed. custom.js opened the
+	 * off-canvas panel (`.mob-me-all.mobmenu-show`); this script toggled an
+	 * inline `display` on `.ud-lhs-s2`, the list *inside* that panel, and set
+	 * it to `none` on every page load. So the first press opened the panel and
+	 * showed the list, the second left the full-screen white panel on screen
+	 * with its contents hidden, and nothing ever closed the panel again when
+	 * the window was widened past the burger's breakpoint.
+	 *
+	 * One implementation now, in assets/js/mobile-menu.js, loaded by
+	 * views/footer.php next to custom.js.
+	 */
+	?>

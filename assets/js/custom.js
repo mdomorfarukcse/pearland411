@@ -39,12 +39,15 @@ $(document).ready(function () {
     $('.clo-list').on('click', function () {
         $('.list-qview').removeClass('qview-show');
     });
-    $('.mob-me-ic').on('click', function () {
-        $('.mob-me-all').addClass('mobmenu-show');
-    });
-    $('.mob-me-clo').on('click', function () {
-        $('.mob-me-all').removeClass('mobmenu-show');
-    });
+    /*
+     * The off-canvas mobile menu used to be opened here with a bare
+     * `addClass`, which meant a second press on the burger did nothing and
+     * nothing closed the panel when the window was widened past the burger's
+     * breakpoint. It lives in assets/js/mobile-menu.js now — one toggle, plus
+     * Escape, a backdrop, keyboard support and the resize close. Do not add a
+     * second handler here: two of them is what produced the reported
+     * "doesn't work sometimes".
+     */
     $('.ll-1').on('click', function () {
         $('.log-1').slideDown();
         $('.log-2, .log-3').slideUp();

@@ -141,7 +141,13 @@
 	<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
 	<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js" integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=" crossorigin="anonymous"></script>
 	<script src="<?= base_url('assets/js/select-opt.js') ?>"></script>
-	<script src="<?= base_url('assets/js/custom.js') ?>"></script>
+	<?php // Stamped with the file's mtime for the same reason the stylesheets
+	      // are (asset_css()): an un-versioned custom.js is what let an earlier
+	      // header fix sit in returning visitors' caches instead of reaching
+	      // their browsers. ?>
+	<script src="<?= base_url('assets/js/custom.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/custom.js') ?: 1 ?>"></script>
+	<?php // The off-canvas header menu. Was two competing handlers — see the file. ?>
+	<script src="<?= base_url('assets/js/mobile-menu.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/mobile-menu.js') ?: 1 ?>"></script>
 	<script src="<?= base_url() ?>assets/js/jquery.validate.min.js"></script>
 	<script src="<?= base_url() ?>assets/js/custom_validation.js"></script>
 	<script src="https://cdn.ckeditor.com/4.16.1/standard/ckeditor.js"></script>

@@ -60,7 +60,11 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   (the theme's `.hom-top` / `.news-top-menu` strip, **paint only** — the geometry stays the
   theme's, because `.news-top-menu` clears the fixed bar with a hard-coded `margin-top: 60px`).
   The footer and header sheets are loaded by `header.php` for every page, so those two blocks
-  can't drift; the homepage loads neither, painting the same markup itself.
+  can't drift; the homepage loads neither, painting the same markup itself. The fourth unscoped
+  file is `assets/css/mobile-menu.css` + `assets/js/mobile-menu.js`, the theme's off-canvas
+  `.mob-me-all` panel: **both** `header.php` and the homepage link them, because both render that
+  markup and there must be exactly one implementation — two competing handlers is what made the
+  burger "not work sometimes".
 - **Colour:** navy `#20245B` for header, headings, footer and structure; pear green `#79B82A` as an
   **accent** on buttons, icons, links and labels; burgundy `#6D263D` for promotional and secondary
   bands (Featured/paid flags, section rules, date blocks); cream `#F7F5F0` / light grey `#F2F3F5`
@@ -94,6 +98,18 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `pattern`, plus `data-match` for confirm fields). It binds in the **capture** phase, so a form
   that also posts over AJAX cannot send an invalid payload. The server validates independently —
   this is the courtesy layer, not the guard.
+- **Public paging:** every public list — `/all-listing`, `/event`, `/news`, `/videos`,
+  `/all-blog`, `/classifieds` — renders `views/partials/pager.php`, which draws the links, a
+  "Page X of N" line and the **Go to page** jump. Set `$pager_label`, `$pager_links`,
+  `$pager_current`, `$pager_total`, `$pager_jump_action`, `$pager_jump_hidden` before including
+  it. Links come from `pager_links($current, $total, fn(int $page): string)`
+  (`application/helpers/view_helper.php`) or, on the four pages still using CI3's pagination
+  class, from `create_links()`. The rule the helper exists to keep: **an ellipsis is a link**, to
+  the middle of the range it stands for. It used to be a `<span>`, so a 47-page list could only be
+  crossed one Next at a time — the reported "17 clicks to find page 20". Controllers whose page
+  lives in `?page=` get their URL builder and the jump's hidden fields from
+  `User::queryStringPager($path)`; `/all-listing` keeps its positional `/all_listing/<offset>`
+  URLs and redirects `?page=` onto them, so one page still has one URL.
 - **Advertising:** **28 public pages, 156 placements**; the full
   table, with sizes and prices, is **[`docs/AD_INVENTORY.md`](./AD_INVENTORY.md)**, generated
   from the source by `python3 scripts/ad_inventory.py` (re-run it after moving a zone). A page
@@ -123,7 +139,8 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   neither promo is sold or rotated, so neither is ever empty — `partials/sales_help.php` (phone,
   email and a callback form for people who would rather not check out online; posts to
   `/contact-submit` with `return_to` and `topic`, and offers the `enquiry_departments()` list) — plus
-  `partials/web_dev_cta.php`, `partials/seo_head.php`.
+  `partials/web_dev_cta.php`, `partials/seo_head.php`, `partials/pager.php` (the pager under every
+  public list — see **Public paging** above).
 - **Brand artwork** is generated, not hand-drawn: `python3 scripts/generate_brand_art.py` writes
   `assets/images/placeholders/*.svg` (one per kind of business, plus news — served by
   `category_placeholder()`), `assets/images/ads/house-ad-{,burgundy-,navy-,cream-}{strip,wide,box,tall}.svg`
