@@ -304,6 +304,44 @@ class User extends CI_Controller
 	}
 
 	/**
+	 * Page URLs for a list that carries its page in `?page=N`.
+	 *
+	 * Returns everything views/partials/pager.php and pager_links() need:
+	 *   'url'    callable(int $page): string
+	 *   'action' string — where the "Go to page" form posts
+	 *   'hidden' array  — the rest of the query string, as hidden fields
+	 *
+	 * The current query string is carried through minus `page` itself, which
+	 * is what CI3's `reuse_query_string` does for the pagers these sit beside;
+	 * without it a jump from a filtered list would drop the filter.
+	 *
+	 * @param  string $path Route, e.g. 'event'.
+	 * @return array
+	 */
+	private function queryStringPager($path)
+	{
+		$keep = array();
+		foreach ((array) $this->input->get() as $key => $value) {
+			if ($key === 'page' || !is_scalar($value) || (string) $value === '') {
+				continue;
+			}
+			$keep[$key] = (string) $value;
+		}
+
+		$base = base_url($path);
+
+		return array(
+			'url' => function ($page) use ($base, $keep) {
+				$query = $keep;
+				$query['page'] = max(1, (int) $page);
+				return $base . '?' . http_build_query($query);
+			},
+			'action' => $base,
+			'hidden' => $keep,
+		);
+	}
+
+	/**
 	 * Field-level listing capabilities for a listing owner, derived from
 	 * their active plan (freemium model). With no active plan — a claimed
 	 * listing on the free tier — every rich capability is off; only
@@ -914,6 +952,10 @@ class User extends CI_Controller
 		$data = array();
 		$data['all_news']         = $all_news;
 		$data['pagination_links'] = $this->pagination->create_links();
+		// "Go to page", rendered by views/partials/pager.php beside the links.
+		$news_pager = $this->queryStringPager('news');
+		$data['pager_jump_action'] = $news_pager['action'];
+		$data['pager_jump_hidden'] = $news_pager['hidden'];
 		$data['search_query']     = $search_query;
 		$data['total_news']       = $total_rows;
 		$data['per_page']         = $per_page;
@@ -2057,13 +2099,6 @@ class User extends CI_Controller
 		$total_listings = $this->usermodel->countListingsByCategory($cat_slug);
 		$total_pages    = (int) ceil($total_listings / $per_page);
 
-		// Clamp: a hand-typed offset past the end used to render an empty
-		// results list with no explanation. Snap back to the last real page.
-		if ($total_listings > 0 && $current_offset >= $total_listings) {
-			$current_offset = max(0, ($total_pages - 1) * $per_page);
-		}
-		$current_page = (int) floor($current_offset / $per_page) + 1;
-
 		$query_suffix = ($sort !== 'featured') ? '?sort=' . $sort : '';
 		$page_url = function ($offset) use ($cat_slug, $query_suffix) {
 			$path = 'all_listing';
@@ -2071,49 +2106,45 @@ class User extends CI_Controller
 			if ($offset > 0) $path .= '/' . (int) $offset;
 			return base_url($path) . $query_suffix;
 		};
+		// The helper and the partial think in page numbers; this page's URLs
+		// are positional offsets.
+		$page_link = function ($page) use ($page_url, $per_page) {
+			return $page_url((max(1, (int) $page) - 1) * $per_page);
+		};
 
-		$pagination_html = '';
-		if ($total_pages > 1) {
-			$pagination_html = '<ul class="pagination justify-content-center">';
-
-			if ($current_page > 1) {
-				$pagination_html .= '<li class="page-item"><a class="page-link" href="'
-					. html_escape($page_url(($current_page - 2) * $per_page)) . '" rel="prev">&laquo; Prev</a></li>';
-			}
-
-			$start_page = max(1, $current_page - 2);
-			$end_page   = min($total_pages, $current_page + 2);
-
-			if ($start_page > 1) {
-				$pagination_html .= '<li class="page-item"><a class="page-link" href="' . html_escape($page_url(0)) . '">1</a></li>';
-				if ($start_page > 2) $pagination_html .= '<li class="page-item"><span class="page-link">&hellip;</span></li>';
-			}
-
-			for ($i = $start_page; $i <= $end_page; $i++) {
-				if ($i == $current_page) {
-					$pagination_html .= '<li class="page-item active"><span class="page-link" aria-current="page">' . $i . '</span></li>';
-				} else {
-					$pagination_html .= '<li class="page-item"><a class="page-link" href="'
-						. html_escape($page_url(($i - 1) * $per_page)) . '">' . $i . '</a></li>';
-				}
-			}
-
-			if ($end_page < $total_pages) {
-				if ($end_page < $total_pages - 1) $pagination_html .= '<li class="page-item"><span class="page-link">&hellip;</span></li>';
-				$pagination_html .= '<li class="page-item"><a class="page-link" href="'
-					. html_escape($page_url(($total_pages - 1) * $per_page)) . '">' . $total_pages . '</a></li>';
-			}
-
-			if ($current_page < $total_pages) {
-				$pagination_html .= '<li class="page-item"><a class="page-link" href="'
-					. html_escape($page_url($current_page * $per_page)) . '" rel="next">Next &raquo;</a></li>';
-			}
-
-			$pagination_html .= '</ul>';
+		/*
+		 * "Go to page" (views/partials/pager.php) is a plain GET form, so all
+		 * it can produce is `?page=N` — this page's number lives in a URI
+		 * segment. Take the number and send the visitor to the canonical path,
+		 * so one page still has one URL. The target never carries `page=`, so
+		 * this cannot loop.
+		 */
+		$jump = $this->input->get('page');
+		if ($jump !== NULL && $jump !== '') {
+			$jump_page = min(max(1, (int) $jump), max(1, $total_pages));
+			redirect($page_link($jump_page));
+			return;
 		}
 
+		// Clamp: a hand-typed offset past the end used to render an empty
+		// results list with no explanation. Snap back to the last real page.
+		if ($total_listings > 0 && $current_offset >= $total_listings) {
+			$current_offset = max(0, ($total_pages - 1) * $per_page);
+		}
+		$current_page = (int) floor($current_offset / $per_page) + 1;
+
+		/*
+		 * The pager. This used to be forty lines of string building here, with
+		 * a `<span>&hellip;</span>` for the pages it skipped — unclickable, so
+		 * reaching page 20 of 47 meant pressing Next seventeen times, which is
+		 * what the tracker reported. pager_links() gives the same window a
+		 * First and a Last control and turns each ellipsis into a link to the
+		 * middle of the range it hides; the partial adds "Go to page".
+		 */
 		$data['allListings']    = $this->usermodel->getListingByCategory($cat_slug, $per_page, $current_offset, $sort);
-		$data['link']           = $pagination_html;
+		$data['link']           = pager_links($current_page, $total_pages, $page_link);
+		$data['pager_jump_action']  = base_url('all_listing' . ($cat_slug ? '/' . rawurlencode($cat_slug) : ''));
+		$data['pager_jump_hidden']  = ($sort !== 'featured') ? array('sort' => $sort) : array();
 		$data['total_pages']    = $total_pages;
 		$data['current_page']   = $current_page;
 		$data['total_listings'] = $total_listings;
@@ -2219,7 +2250,7 @@ class User extends CI_Controller
 		// Custom pagination logic (same as event_search)
 		$per_page = 12;
 		$page = ($this->input->get('page')) ? (int)$this->input->get('page') : 1;
-		$offset = ($page - 1) * $per_page;
+		if ($page < 1) $page = 1;
 
 		if (!empty($search_query)) {
 			$all_blogs = $this->usermodel->searchBlogs($search_query);
@@ -2231,25 +2262,31 @@ class User extends CI_Controller
 			$data['title'] = "Pearland | All Blog";
 		}
 
-		$data['AllBlog'] = array_slice($all_blogs, $offset, $per_page);
 		$total_blogs = count($all_blogs);
 
+		// Clamp, as /event and /news already do: a page number past the end
+		// used to render an empty list under a pager that said otherwise —
+		// and the new pager marks the last page current, which would have
+		// disagreed with the page it was standing on.
+		$page   = min($page, max(1, (int) ceil($total_blogs / $per_page)));
+		$offset = ($page - 1) * $per_page;
+
+		$data['AllBlog'] = array_slice($all_blogs, $offset, $per_page);
+
 		// Build custom pagination links (same as event)
-		$pagination_links = '';
-		$total_pages = ceil($total_blogs / $per_page);
-		if ($total_pages > 1) {
-			$pagination_links .= '<ul class="pagination">';
-			$base_url = base_url('all-blog');
-			$query = $_GET;
-			for ($i = 1; $i <= $total_pages; $i++) {
-				$query['page'] = $i;
-				$url = $base_url . '?' . http_build_query($query);
-				$active = ($i == $page) ? 'active' : '';
-				$pagination_links .= '<li class="page-item ' . $active . '"><a class="page-link" href="' . $url . '">' . $i . '</a></li>';
-			}
-			$pagination_links .= '</ul>';
-		}
-		$data['pagination_links'] = $pagination_links;
+		/*
+		 * This printed one link per page with no window at all — thirty
+		 * numbered pills across the foot of the page at thirty posts, and it
+		 * escaped nothing it put in the href. Same windowed pager as the rest
+		 * of the site now: First / Last, a window round the current page, and
+		 * an ellipsis you can press to cross the middle.
+		 */
+		$total_pages = (int) ceil($total_blogs / $per_page);
+		$blog_pager  = $this->queryStringPager('all-blog');
+
+		$data['pagination_links']  = pager_links($page, $total_pages, $blog_pager['url']);
+		$data['pager_jump_action'] = $blog_pager['action'];
+		$data['pager_jump_hidden'] = $blog_pager['hidden'];
 
 		// The page kit's shell wants the same counters the news and video
 		// indexes get, so the toolbar can say what it is showing.
@@ -2361,6 +2398,10 @@ class User extends CI_Controller
 		$data = array();
 		$data['Allevent']         = $all_events;
 		$data['pagination_links'] = $this->pagination->create_links();
+		// "Go to page", rendered by views/partials/pager.php beside the links.
+		$event_pager = $this->queryStringPager('event');
+		$data['pager_jump_action'] = $event_pager['action'];
+		$data['pager_jump_hidden'] = $event_pager['hidden'];
 		$data['search_query']     = $search_query;
 		$data['when']             = $when;
 		$data['when_counts']      = $counts;
@@ -2474,6 +2515,10 @@ class User extends CI_Controller
 		$data = array();
 		$data['all_videos']       = $all_videos;
 		$data['pagination_links'] = $this->pagination->create_links();
+		// "Go to page", rendered by views/partials/pager.php beside the links.
+		$video_pager = $this->queryStringPager('videos');
+		$data['pager_jump_action'] = $video_pager['action'];
+		$data['pager_jump_hidden'] = $video_pager['hidden'];
 		$data['search_query']     = $search_query;
 		$data['total_videos']     = $total_rows;
 		$data['per_page']         = $per_page;
@@ -2561,6 +2606,10 @@ class User extends CI_Controller
 
 		$data['all_classifieds'] = $all_classifieds;
 		$data['pagination_links'] = $pagination_links;
+		// "Go to page", rendered by views/partials/pager.php beside the links.
+		$classifieds_pager = $this->queryStringPager('classifieds');
+		$data['pager_jump_action'] = $classifieds_pager['action'];
+		$data['pager_jump_hidden'] = $classifieds_pager['hidden'];
 		$data['search_query'] = $search_query;
 
 		// What the toolbar and the pager label themselves with. The view used

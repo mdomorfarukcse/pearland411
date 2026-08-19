@@ -1,0 +1,67 @@
+/* ============================================================================
+ * assets/css/mobile-menu.css — the off-canvas header menu.
+ * ----------------------------------------------------------------------------
+ * Linked by views/header.php (every inner page) and views/index.php (the
+ * self-contained homepage), the same way assets/css/site-footer.css is shared,
+ * so the two headers cannot drift. Behaviour lives in
+ * assets/js/mobile-menu.js.
+ *
+ * Only what the theme does not already provide: the theme paints `.mob-me-all`,
+ * `.mob-me-ic` and the lists inside the panel (style.css:11547+). What was
+ * missing is a stacking order for the panel, the scroll lock, a visible focus
+ * ring on two controls that are <div role="button">, and any styling at all
+ * for the two lists a signed-out visitor now gets.
+ * ========================================================================= */
+
+/* The panel is `position: fixed` with no z-index of its own, so it stacked by
+   document order and the theme's own fixed chrome — the bottom quick-menu in
+   views/footer.php, the Help & Support slide-out — drew on top of it. */
+.mob-me-all { z-index: 1050; }
+
+/*
+ * Scroll lock. The class goes on <html> as well as <body> on purpose:
+ * site-header.css sets `html, body { overflow-x: clip }`, which makes <html>'s
+ * overflow non-visible, and once that is true the body's own overflow no
+ * longer propagates to the viewport. `body { overflow: hidden }` alone would
+ * not stop the page scrolling behind the panel.
+ */
+html.p411-menu-open,
+body.p411-menu-open { overflow: hidden; }
+
+/* `.mob-me-ic` and `.mob-me-clo` are <div role="button" tabindex="0">, so the
+   browser gives them no focus ring of their own. */
+.mob-me-ic:focus-visible,
+.mob-me-clo:focus-visible {
+	outline: 3px solid #79B82A;
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+.mob-me-ic { cursor: pointer; }
+
+/* Room for `.mob-me-clo`, which is pinned to the panel's top-right corner
+   (style.css: top 10px, 30px tall). The theme leaned on `.mob-me-all h4`'s
+   40px top margin for that clearance, which only worked while the first thing
+   in the panel was a heading. */
+.mob-me-all { padding-top: 46px; }
+.mob-me-all .mv-pro.ud-lhs-s1 { padding-top: 0; }
+
+/* The panel's own sections. `.mv-bus` — the signed-out account block and the
+   Browse list — had no styling at all, because the theme only ever rendered a
+   member's dashboard menu in here. */
+.mob-me-all .mv-bus,
+.mob-me-all .mv-cate { padding-top: 22px; }
+.mob-me-all .mv-bus h4,
+.mob-me-all .mv-cate h4 {
+	margin: 0 0 6px;
+	font-size: 13px;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: #20245B;
+}
+.mob-me-all .mv-bus ul,
+.mob-me-all .mv-cate ul { margin: 0; padding: 0; list-style: none; }
+.mob-me-all .mv-bus ul li,
+.mob-me-all .mv-cate ul li { list-style: none; }
+.mob-me-all .mv-bus ul li a:hover,
+.mob-me-all .mv-cate ul li a:hover { color: #4E7D18; }

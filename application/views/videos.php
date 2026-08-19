@@ -238,12 +238,15 @@ $showing_to   = $current_offset + count($all_videos);
 						<?php endforeach; ?>
 					</div>
 
-					<?php if (!empty($pagination_links)): ?>
-						<nav class="p411-pager" aria-label="Video pages">
-							<?= $pagination_links ?>
-							<p class="p411-pager__hint">Page <?= (int) $current_page ?> of <?= number_format($total_pages) ?></p>
-						</nav>
-					<?php endif; ?>
+					<?php
+					$pager_label       = 'Video pages';
+					$pager_links       = isset($pagination_links) ? $pagination_links : '';
+					$pager_current     = isset($current_page) ? $current_page : 1;
+					$pager_total       = isset($total_pages) ? $total_pages : 0;
+					$pager_jump_action = isset($pager_jump_action) ? $pager_jump_action : '';
+					$pager_jump_hidden = isset($pager_jump_hidden) ? $pager_jump_hidden : array();
+					include APPPATH . 'views/partials/pager.php';
+					?>
 
 				<?php else: ?>
 					<!-- ======================================= EMPTY STATE -->

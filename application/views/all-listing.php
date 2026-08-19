@@ -321,9 +321,15 @@ $showing_to   = $current_offset + count($allListings);
 						<?php endforeach; ?>
 					</div>
 
-					<?php if (!empty($link)): ?>
-						<nav class="p411-pager" aria-label="Directory pages"><?= $link ?></nav>
-					<?php endif; ?>
+					<?php
+					$pager_label       = 'Directory pages';
+					$pager_links       = isset($link) ? $link : '';
+					$pager_current     = isset($current_page) ? $current_page : 1;
+					$pager_total       = isset($total_pages) ? $total_pages : 0;
+					$pager_jump_action = isset($pager_jump_action) ? $pager_jump_action : '';
+					$pager_jump_hidden = isset($pager_jump_hidden) ? $pager_jump_hidden : array();
+					include APPPATH . 'views/partials/pager.php';
+					?>
 
 				<?php else: ?>
 					<!-- ======================================= EMPTY STATE -->
