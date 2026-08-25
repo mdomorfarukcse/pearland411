@@ -2057,6 +2057,24 @@ class User extends CI_Controller
 		$total_listings = $this->usermodel->countListingsByCategory($cat_slug);
 		$total_pages    = (int) ceil($total_listings / $per_page);
 
+		/*
+		 * `?page=N` is an alternative way in, and the one the "go to page" box
+		 * under the pager posts to. The pager offers the current page plus two
+		 * either side, then first and last — so from page 1 of 47 the only
+		 * numbers on screen are 1, 2, 3 and 47, and reaching page 20 meant
+		 * walking there two at a time. That is the reported "I don't want it to
+		 * take me 17 clicks to find page 20".
+		 *
+		 * The positional /all_listing/<category>/<offset> URLs are untouched:
+		 * every existing link, bookmark and indexed URL still resolves, and the
+		 * pager still emits them so nothing about the page's canonical shape
+		 * changes.
+		 */
+		$page_param = (int) $this->input->get('page');
+		if ($page_param > 0) {
+			$current_offset = ($page_param - 1) * $per_page;
+		}
+
 		// Clamp: a hand-typed offset past the end used to render an empty
 		// results list with no explanation. Snap back to the last real page.
 		if ($total_listings > 0 && $current_offset >= $total_listings) {
@@ -2114,6 +2132,9 @@ class User extends CI_Controller
 
 		$data['allListings']    = $this->usermodel->getListingByCategory($cat_slug, $per_page, $current_offset, $sort);
 		$data['link']           = $pagination_html;
+		// Where the "go to page" box posts: the category's own URL with no
+		// offset segment, so `?page=` is the only thing deciding the page.
+		$data['pager_action']   = base_url('all_listing' . ($cat_slug ? '/' . rawurlencode($cat_slug) : ''));
 		$data['total_pages']    = $total_pages;
 		$data['current_page']   = $current_page;
 		$data['total_listings'] = $total_listings;
@@ -8573,7 +8594,13 @@ class User extends CI_Controller
 		$data['page_css'] = $this->contentPageCss();
 		$this->loadHeaderCategories($data);
 		$data['title']            = $coupon->coupon_name . ' — Coupon — Pearland411';
-		$data['meta_description'] = 'Coupon code ' . $coupon->coupon_code . ' for ' . ($coupon->listing_name ?? $coupon->owner_name);
+		// The linked business, or the site — never `owner_name`, which is the
+		// staff account that keyed the coupon in. It was reaching the public
+		// page as "Posted by Mydynamic VA", and search engines were being told
+		// the same thing here.
+		$data['meta_description'] = 'Coupon code ' . $coupon->coupon_code . ' for '
+			. (!empty($coupon->listing_name) ? $coupon->listing_name : 'a Pearland business')
+			. ' on Pearland411.';
 		$data['canonical_url']    = base_url('coupons/' . (int) $coupon->coupon_id);
 
 		// Advertising. Six zones — three wide, three down the sidebar.

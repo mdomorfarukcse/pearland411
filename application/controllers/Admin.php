@@ -3293,7 +3293,11 @@ class Admin extends CI_Controller
 				'news_slug'			=> $news_slug
 			);
 
-			if ($_FILES && $_FILES['news_image']['name']) {
+			// isset(), not just a truthy $_FILES: a save with no picture attached
+			// left $_FILES non-empty but without this key, which is an
+			// "Undefined array key" warning on every text-only article.
+			$upload_note = '';
+			if (!empty($_FILES['news_image']['name'])) {
 				$img_info = [
 					'upload_path' => 'images/news',
 					'quality'     => '60%',
@@ -3302,10 +3306,21 @@ class Admin extends CI_Controller
 					'image_name'  => 'news_image'
 				];
 				$info['news_image'] = uploadAndResize($img_info);
+
+				// A rejected upload used to store NULL in silence, so the
+				// article saved without its picture and nothing said why.
+				if (empty($info['news_image'])) {
+					$upload_note = ' The picture was not saved: '
+						. (upload_last_error() ?: 'the file could not be read.')
+						. ' The article is saved — edit it to add the image again.';
+				}
 			}
 
 			if ($this->adminmodel->add('news', $info)) {
-				$this->session->set_flashdata('message', 'Successfully Added News!!');
+				$this->session->set_flashdata(
+					$upload_note === '' ? 'message' : 'error',
+					'Successfully Added News!!' . $upload_note
+				);
 				redirect('admin/news-list');
 			} else {
 				$this->session->set_flashdata('error', 'Could not save the news article. ' . $this->adminmodel->lastDbError());
@@ -3350,7 +3365,9 @@ class Admin extends CI_Controller
 				'featured_news'  => $this->input->post('featured_news')
 			);
 
-			if ($_FILES && $_FILES['news_image']['name']) {
+			$upload_note = '';
+
+			if (!empty($_FILES['news_image']['name'])) {
 				$img_info = [
 					'upload_path' => 'images/news',
 					'quality'     => '60%',
@@ -3359,25 +3376,39 @@ class Admin extends CI_Controller
 					'image_name'  => 'news_image'
 				];
 
-				$image_link = $old_image;
+				$new_image = uploadAndResize($img_info);
 
-				if ($image_link != null) {
-					if (file_exists('./' . $image_link)) {
-						unlink($image_link);
+				if (!empty($new_image)) {
+					// Delete the old file only now that a replacement exists.
+					// This used to unlink() BEFORE the upload ran, so a picture
+					// the upload then rejected — wrong type, too big, or the
+					// resize that used to fatal on a phone photo — took the
+					// existing one with it and the article was left with none.
+					if (!empty($old_image) && $old_image !== $new_image && file_exists(FCPATH . $old_image)) {
+						@unlink(FCPATH . $old_image);
 					}
+					$info['news_image'] = $new_image;
+				} else {
+					$info['news_image'] = $old_image;
+					$upload_note = ' The new picture was not saved: '
+						. (upload_last_error() ?: 'the file could not be read.')
+						. ' The article keeps the picture it had.';
 				}
-
-				$info['news_image'] = uploadAndResize($img_info);
 			} else {
 				$info['news_image'] = $old_image;
 			}
 
 			if ($this->adminmodel->update($slug, $info, 'news_slug', 'news')) {
-				$this->session->set_flashdata('message', 'Successfully Updated News!!');
+				$this->session->set_flashdata(
+					$upload_note === '' ? 'message' : 'error',
+					'Successfully Updated News!!' . $upload_note
+				);
 				redirect('admin/news-list', 'refresh');
 			} else {
-				$this->session->set_flashdata('message', 'Sorry, Update News Failed!!');
-				redirect('admin/edit-news' . $slug, 'refresh');
+				$this->session->set_flashdata('error', 'Sorry, Update News Failed!!');
+				// The slash was missing, so a failed save redirected to
+				// "admin/edit-news<slug>" — a 404 instead of the form.
+				redirect('admin/edit-news/' . $slug, 'refresh');
 			}
 		}
 	}
@@ -6469,6 +6500,71 @@ class Admin extends CI_Controller
 			$this->session->set_flashdata('error', 'Failed to activate subscription. Please try again.');
 			redirect('admin/pricing');
 		}
+	}
+
+	/**
+	 * /admin/users — a read-only review list of member accounts.
+	 *
+	 * There was no user screen anywhere in the admin: the only place an
+	 * account appeared was inside the owner dropdown on the listing form,
+	 * as a bare name. So "are these users all allowed to publish content?
+	 * Kindly review each user" could not be acted on by anybody — there was
+	 * nothing to review.
+	 *
+	 * Deliberately read-only. Deleting a member orphans every listing, event
+	 * and article they own, and that needs its own screen with its own
+	 * warnings rather than a Delete link on a list built to answer a question.
+	 */
+	public function users($page = 1)
+	{
+		$q = trim((string) $this->input->get('q', TRUE));
+
+		$per_page   = admin_per_page(20);
+		$total_rows = $this->adminmodel->countUserDirectory($q);
+
+		$config = array(
+			'base_url'           => base_url('admin/users'),
+			'total_rows'         => $total_rows,
+			'per_page'           => $per_page,
+			'uri_segment'        => 3,
+			'use_page_numbers'   => TRUE,
+			'reuse_query_string' => TRUE,
+			'first_link'         => 'First',
+			'last_link'          => 'Last',
+			'next_link'          => 'Next',
+			'prev_link'          => 'Prev',
+			'full_tag_open'      => '<nav><ul class="pagination">',
+			'full_tag_close'     => '</ul></nav>',
+			'first_tag_open'     => '<li class="page-item">',
+			'first_tag_close'    => '</li>',
+			'last_tag_open'      => '<li class="page-item">',
+			'last_tag_close'     => '</li>',
+			'next_tag_open'      => '<li class="page-item">',
+			'next_tag_close'     => '</li>',
+			'prev_tag_open'      => '<li class="page-item">',
+			'prev_tag_close'     => '</li>',
+			'num_tag_open'       => '<li class="page-item">',
+			'num_tag_close'      => '</li>',
+			'cur_tag_open'       => '<li class="page-item active"><a class="page-link">',
+			'cur_tag_close'      => '</a></li>',
+			'attributes'         => array('class' => 'page-link'),
+		);
+		$this->pagination->initialize($config);
+
+		$page   = ((int) $page < 1) ? 1 : (int) $page;
+		$offset = ($page - 1) * $per_page;
+
+		$data = array(
+			'members'      => $this->adminmodel->getUserDirectory($per_page, $offset, $q),
+			'start_number' => $offset + 1,
+			'search_query' => $q,
+			'total_rows'   => $total_rows,
+			'link'         => $this->pagination->create_links(),
+		);
+
+		$this->load->view('admin/header');
+		$this->load->view('admin/users', $data);
+		$this->load->view('admin/footer');
 	}
 
 	/*=====================================================================

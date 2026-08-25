@@ -58,7 +58,7 @@
 
 																?>
 
-																		<option value="<?= $value->user_id; ?>"><?= e($value->name) ?></option>
+																		<option value="<?= $value->user_id; ?>"><?= e(user_option_label($value)) ?></option>
 
 																<?php
 

@@ -236,10 +236,46 @@
 
 
 										<?php
+										/*
+										 * Who is looking at this page, worked out ONCE and before the
+										 * branch below.
+										 *
+										 * These three used to be assigned inside the logged-in half of
+										 * that branch, but the mobile menu further down this file — which
+										 * renders for everybody — reads all three. So for a signed-out
+										 * visitor $header_profile_img was undefined and the panel opened
+										 * with `<img src="">`, which the browser draws as a broken image
+										 * and which never fires the onerror fallback. That is the
+										 * reported "broken image when pressing the burger menu".
+										 */
+										$header_is_logged_in = !(!isset($_SESSION['logged_user']) && empty($_SESSION['logged_user']));
+										$header_user_name    = 'User';
+										$header_profile_img  = base_url('assets/images/fallback_profile.svg');
+										$header_join_date    = '';
 
+										if ($header_is_logged_in) {
+											if (isset($this) && method_exists($this, 'session')) {
+												$session_data = $this->session->userdata('logged_user');
+											} elseif (!empty($_SESSION['logged_user'])) {
+												$session_data = $_SESSION['logged_user'];
+											} else {
+												$session_data = null;
+											}
 
+											if (!empty($session_data)) {
+												if (!empty($session_data['name'])) {
+													$header_user_name = $session_data['name'];
+												}
+												if (!empty($session_data['profile_image'])) {
+													$header_profile_img = base_url($session_data['profile_image']);
+												}
+												if (!empty($session_data['user_created'])) {
+													$header_join_date = date('d, M Y', strtotime($session_data['user_created']));
+												}
+											}
+										}
 
-										if (!isset($_SESSION['logged_user']) && empty($_SESSION['logged_user'])) { ?>
+										if (!$header_is_logged_in) { ?>
 
 
 
@@ -274,42 +310,9 @@
 											<div class="al">
 
 												<div class="head-pro">
-													<?php
-													// Get user information for header
-													$header_user_name = 'User';
-													$header_profile_img = base_url('assets/images/fallback_profile.svg'); // fallback to logo
-													$header_join_date = '';
-
-													// Check if CI session exists and user is logged in
-													if (isset($this) && method_exists($this, 'session')) {
-														// Use CodeIgniter session
-														$session_data = $this->session->userdata('logged_user');
-													} elseif (isset($_SESSION['logged_user']) && !empty($_SESSION['logged_user'])) {
-														// Fallback to PHP session
-														$session_data = $_SESSION['logged_user'];
-													} else {
-														$session_data = null;
-													}
-
-													if ($session_data && !empty($session_data)) {
-														// Get user name
-														if (isset($session_data['name']) && !empty($session_data['name'])) {
-															$header_user_name = $session_data['name'];
-														}
-
-														// Get profile image with fallback to logo
-														if (isset($session_data['profile_image']) && !empty($session_data['profile_image'])) {
-															$header_profile_img = base_url($session_data['profile_image']);
-														}
-
-														// Get join date
-														if (isset($session_data['user_created']) && !empty($session_data['user_created'])) {
-															$header_join_date = date('d, M Y', strtotime($session_data['user_created']));
-														}
-													}
-													?>
-
-													<img src="<?= $header_profile_img ?>" alt="<?= htmlspecialchars($header_user_name) ?>" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?= base_url('assets/images/pearland-logo.png') ?>'">
+													<?php // $header_* are resolved above the branch — the mobile
+													      // menu needs them whether or not anyone is signed in. ?>
+													<img src="<?= e_url($header_profile_img) ?>" alt="<?= htmlspecialchars($header_user_name) ?>" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?= base_url('assets/images/pearland-logo.png') ?>'">
 													<b>Profile by</b>
 													<br>
 													<h4><?= htmlspecialchars($header_user_name) ?></h4>
@@ -442,8 +445,9 @@
 
 											</div>
 
+											<?php if ($header_is_logged_in): ?>
 											<div class="mv-pro ud-lhs-s1">
-												<img src="<?= $header_profile_img ?>" alt="<?= htmlspecialchars($header_user_name) ?>" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?= base_url('assets/images/pearland-logo.png') ?>'">
+												<img src="<?= e_url($header_profile_img) ?>" alt="<?= htmlspecialchars($header_user_name) ?>" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;" onerror="this.src='<?= base_url('assets/images/pearland-logo.png') ?>'">
 
 												<h4><?= htmlspecialchars($header_user_name) ?></h4>
 
@@ -535,6 +539,32 @@
 												</ul>
 
 											</div>
+
+											<?php else: ?>
+											<?php /*
+											 * Signed out. Below 993px `.bl` is hidden, so Add business /
+											 * Sign In / Create an account vanish from the bar — and this
+											 * panel, the only navigation left, offered a member dashboard
+											 * and a "Log Out" to somebody who had never logged in. From a
+											 * narrow window there was no way to reach sign-in at all.
+											 */ ?>
+											<div class="mv-pro ud-lhs-s1 mv-pro--guest">
+												<img src="<?= base_url('assets/images/pearland-logo.png') ?>" alt="Pearland411" class="mv-guest-mark">
+												<h4>Welcome to Pearland411</h4>
+												<b>Sign in to manage your business</b>
+											</div>
+
+											<div class="mv-pro-menu ud-lhs-s2">
+												<ul>
+													<li><a href="<?= base_url('login') ?>"><img src="<?= base_url() ?>assets/images/icon/dbl1.png" alt="" />Sign In</a></li>
+													<li><a href="<?= base_url('register') ?>"><img src="<?= base_url() ?>assets/images/icon/dbl11.png" alt="" />Create an account</a></li>
+													<li><a href="<?= base_url('pricing-plan') ?>"><img src="<?= base_url() ?>assets/images/icon/dbl7.png" alt="" />Add your business</a></li>
+													<li><a href="<?= base_url('all-listing') ?>"><img src="<?= base_url() ?>assets/images/icon/dbl4.png" alt="" />Business directory</a></li>
+													<li><a href="<?= base_url('all-category') ?>"><img src="<?= base_url() ?>assets/images/icon/dbl10.png" alt="" />All categories</a></li>
+													<li><a href="<?= base_url('contact-us') ?>"><img src="<?= base_url() ?>assets/images/icon/dbl12.png" alt="" />Contact us</a></li>
+												</ul>
+											</div>
+											<?php endif; ?>
 
 										</div>
 

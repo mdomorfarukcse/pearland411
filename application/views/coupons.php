@@ -34,7 +34,11 @@ $cp_days_left = function ($coupon) use ($today_ts) {
 // coupon count when one business posts five offers.
 $businesses = array();
 foreach ($coupons as $c) {
-	$key = !empty($c->listing_name) ? (string) $c->listing_name : (string) ($c->owner_name ?? '');
+	// listing_name only. `owner_name` is the account that keyed the coupon in —
+	// one staff login entering ten coupons would otherwise count as one
+	// "business", and the same name is what surfaced publicly as "Posted by
+	// Mydynamic VA". See the note in coupon_details.php.
+	$key = !empty($c->listing_name) ? (string) $c->listing_name : '';
 	if ($key !== '') $businesses[$key] = true;
 }
 
@@ -100,7 +104,7 @@ foreach ($coupons as $c) {
 							$url        = base_url('coupons/' . (int) $c->coupon_id);
 							$days_left  = $cp_days_left($c);
 							$ends_soon  = $days_left !== null && $days_left >= 0 && $days_left <= 7;
-							$biz_name   = !empty($c->listing_name) ? (string) $c->listing_name : (string) ($c->owner_name ?? '');
+							$biz_name   = !empty($c->listing_name) ? (string) $c->listing_name : '';
 							$biz_url    = !empty($c->listing_slug)
 								? base_url('listing-details/' . rawurlencode((string) $c->listing_slug))
 								: '';

@@ -162,6 +162,196 @@ function responsive_img($path, $alt = '', $attrs = array())
 }
 
 /**
+ * The longest edge, in pixels, that an uploaded image is stored at.
+ *
+ * This is a memory ceiling, not a style choice. GD decodes a JPEG to
+ * width x height x 4 bytes of raw pixels no matter how small the file is, so a
+ * 12-megapixel phone photo — a 4 MB file, well inside the 5 MB upload limit —
+ * needs ~48 MB to open and another ~48 MB for the resize target.
+ *
+ * Measured on a 4000x3000 upload: the old path took **92 MB of real memory**,
+ * of which PHP reported 2 MB. With bundled libgd the image buffers are
+ * malloc'd outside the Zend allocator, so `memory_get_usage()` never sees them
+ * and `memory_limit` does not stop them — what stops them is the process or
+ * container limit, and the request dies without ever reaching a PHP error
+ * handler. That is why the symptom was a blank HTTP 500 with nothing saved and
+ * nothing explained: the reported "uploading news breaks the webpage".
+ *
+ * Capped at 2400, the same file costs 33 MB.
+ *
+ * 2400 is comfortably above every size the site actually renders —
+ * image_guidance() recommends 1200x675 and 1600x1200 — so an image prepared to
+ * spec is never touched. Only the ones that would have crashed are shrunk.
+ */
+if (!defined('PEARLAND411_MAX_IMAGE_EDGE')) {
+    define('PEARLAND411_MAX_IMAGE_EDGE', 2400);
+}
+
+/**
+ * `memory_limit` in bytes. 0 means "no limit" (the ini value is -1 or unset).
+ */
+function pearland411_memory_limit_bytes()
+{
+    $raw = trim((string) ini_get('memory_limit'));
+    if ($raw === '' || $raw === '-1') {
+        return 0;
+    }
+
+    $value = (int) $raw;
+    switch (strtolower(substr($raw, -1))) {
+        case 'g': $value *= 1024;
+            // no break — g -> m -> k -> bytes
+        case 'm': $value *= 1024;
+            // no break
+        case 'k': $value *= 1024;
+    }
+
+    return $value;
+}
+
+/**
+ * Can we hold $frames uncompressed copies of a $w x $h image in what is left
+ * of memory_limit?
+ *
+ * Asked BEFORE calling imagecreatefrom*(), because a GD allocation that
+ * overruns cannot be caught afterwards — depending on the build it is either a
+ * PHP fatal or, where libgd allocates outside the Zend allocator, a process
+ * the kernel kills outright. Truecolour is 4 bytes a pixel; the extra quarter
+ * covers GD's row-pointer overhead and the decoder's scratch space.
+ *
+ * `memory_limit` is used as the BUDGET rather than as a measurement: on builds
+ * where GD is invisible to it, it is still the operator's statement of how much
+ * memory one request may reasonably use, and refusing to allocate more than
+ * that is the behaviour we want either way.
+ */
+function pearland411_image_fits_memory($w, $h, $frames = 2)
+{
+    $limit = pearland411_memory_limit_bytes();
+    if ($limit <= 0) {
+        return true;
+    }
+
+    $needed = (int) ($w * $h * 4 * $frames * 1.25);
+    $free   = $limit - memory_get_usage(true);
+
+    return $needed > 0 && $needed < $free;
+}
+
+/**
+ * Rewrite an image in place: shrink it to fit $max_edge on its longest side
+ * (never upscaling), and re-encode it.
+ *
+ * Replaces the CodeIgniter Image_lib call this used to make. That call passed
+ * no width or height — they had been commented out — and Image_lib's
+ * initialize() fills a missing width/height from the source, so it allocated
+ * the full original dimensions twice to produce a same-size copy. All of the
+ * memory cost, none of the resizing.
+ *
+ * Returns TRUE when the file is now correct on disk (including the case where
+ * it was already small enough and nothing needed doing), FALSE when it was
+ * left exactly as uploaded. FALSE is never fatal: an oversized original is a
+ * slow page, a fatal is a 500.
+ *
+ * @param string $abs_path  absolute path to the file, rewritten in place
+ * @param int    $max_edge  longest side to keep
+ * @param int    $quality   JPEG/WebP quality, 0-100
+ */
+function pearland411_downscale_image($abs_path, $max_edge = PEARLAND411_MAX_IMAGE_EDGE, $quality = 60)
+{
+    if (!function_exists('imagecreatetruecolor') || !is_file($abs_path)) {
+        return false;
+    }
+
+    $info = @getimagesize($abs_path);
+    if (!$info || empty($info['mime']) || $info[0] < 1 || $info[1] < 1) {
+        return false;
+    }
+
+    list($w, $h) = $info;
+    $mime  = $info['mime'];
+    $scale = min(1, $max_edge / max($w, $h));
+    $nw    = max(1, (int) round($w * $scale));
+    $nh    = max(1, (int) round($h * $scale));
+
+    // Already within the cap: leave the bytes exactly as uploaded. Re-encoding
+    // a correctly sized image only loses quality.
+    if ($scale >= 1) {
+        return true;
+    }
+
+    // Source plus destination have to coexist. If they will not fit, keep the
+    // original rather than taking the process down with it.
+    if (!pearland411_image_fits_memory($w, $h, 1)
+        || !pearland411_image_fits_memory($w, $h, 2)) {
+        log_message('error', 'Image too large to resize within memory_limit ('
+            . $w . 'x' . $h . ', limit ' . ini_get('memory_limit') . '): ' . $abs_path);
+        return false;
+    }
+
+    switch ($mime) {
+        case 'image/jpeg': $src = @imagecreatefromjpeg($abs_path); break;
+        case 'image/png':  $src = @imagecreatefrompng($abs_path);  break;
+        case 'image/gif':  $src = @imagecreatefromgif($abs_path);  break;
+        case 'image/webp':
+            $src = function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($abs_path) : false;
+            break;
+        default: return false;
+    }
+    if (!$src) {
+        return false;
+    }
+
+    $dst = @imagecreatetruecolor($nw, $nh);
+    if (!$dst) {
+        imagedestroy($src);
+        return false;
+    }
+
+    // A PNG or WebP logo that loses its transparency to a black box is a
+    // visible regression, so keep the alpha channel for those two.
+    if ($mime === 'image/png' || $mime === 'image/webp') {
+        imagealphablending($dst, false);
+        imagesavealpha($dst, true);
+        imagefilledrectangle($dst, 0, 0, $nw, $nh, imagecolorallocatealpha($dst, 0, 0, 0, 127));
+    }
+
+    imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $w, $h);
+    imagedestroy($src);
+
+    switch ($mime) {
+        case 'image/png':  $ok = @imagepng($dst, $abs_path, 6); break;
+        case 'image/gif':  $ok = @imagegif($dst, $abs_path); break;
+        case 'image/webp': $ok = function_exists('imagewebp') ? @imagewebp($dst, $abs_path, $quality) : false; break;
+        default:           $ok = @imagejpeg($dst, $abs_path, $quality);
+    }
+    imagedestroy($dst);
+
+    return (bool) $ok;
+}
+
+/**
+ * Why the last uploadAndResize() / uploadWithoutResize() call produced no
+ * image, in words an admin can act on.
+ *
+ * Those helpers return NULL on failure and always have, so every caller stores
+ * NULL and the screen says nothing at all — a listing or an article silently
+ * saves without its photograph. Passing a message through a module-level
+ * static rather than by changing the return value keeps every existing caller
+ * behaving exactly as before.
+ *
+ * @param string|null $set  internal — pass a message to record one
+ */
+function upload_last_error($set = null)
+{
+    static $last = '';
+    if ($set !== null) {
+        $last = trim(strip_tags((string) $set));
+    }
+
+    return $last;
+}
+
+/**
  * Internal: write `_thumb.jpg` and `_medium.jpg` variants next to
  * $dest_abs. Returns true on success, false on any failure (failure
  * is non-fatal — the original is still served).
@@ -169,6 +359,17 @@ function responsive_img($path, $alt = '', $attrs = array())
 function pearland411_generate_variants($dest_abs, $mime)
 {
     if (!function_exists('imagecreatefromjpeg')) return false;
+
+    // Same fatal as the one pearland411_downscale_image() guards against:
+    // decoding happens at full pixel size no matter how small the file is, and
+    // a GD allocation that overruns memory_limit kills the request outright.
+    // Two frames — the source, plus the largest variant being built.
+    $props = @getimagesize($dest_abs);
+    if ($props && !pearland411_image_fits_memory($props[0], $props[1], 2)) {
+        log_message('error', 'Skipped image variants, too large for memory_limit ('
+            . $props[0] . 'x' . $props[1] . '): ' . $dest_abs);
+        return false;
+    }
 
     switch ($mime) {
         case 'image/jpeg': $src = @imagecreatefromjpeg($dest_abs); break;
@@ -245,7 +446,15 @@ function uploadAndResize($data)
     $CI =& get_instance();
 
     $image_name = $data['image_name'];
-    $image = $_FILES[$image_name]['name'];
+
+    upload_last_error('');
+
+    // A field that is not in $_FILES at all is not an upload failure worth a
+    // message — but reading it unguarded is an "Undefined array key" warning
+    // on every save that carries no image.
+    if (empty($_FILES[$image_name]['name'])) {
+        return null;
+    }
 
     $config['upload_path']          = './assets/'.$data['upload_path'];
     $config['allowed_types']        = 'gif|jpg|jpeg|png|GIF|JPG|JPEG|PNG';
@@ -255,41 +464,50 @@ function uploadAndResize($data)
 
     $CI->upload->initialize($config);
 
-    if ($CI->upload->do_upload($image_name)) {
-
-        $avatar = $CI->upload->data();
-
-        $config['image_library'] = 'gd2';
-        $config['source_image']  = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
-        $config['create_thumb']  = FALSE;
-        $config['maintain_ratio']= FALSE;
-		// $config['height']        = $data['height'];
-		// $config['width']         = $data['width'];
-        $config['quality']		 = '60%';
-        $config['new_image']	 = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
-
-        // initialize(), not just load(). CI3's loader ignores a second
-        // load->library() for a class it already holds ("Second attempt
-        // ignored"), so on the 2nd..Nth image of a multi-file gallery upload
-        // image_lib still carried the FIRST image's source_image/new_image and
-        // re-processed that file instead of this one. `upload` above is rescued
-        // by its own initialize() call; image_lib had none.
-        $CI->load->library('image_lib',$config);
-        $CI->image_lib->initialize($config);
-        $CI->image_lib->resize();
-        $CI->image_lib->clear();
-
-        $avatar_name = 'assets/'.$data['upload_path'].'/'.$avatar['file_name']; 
-
-        return $avatar_name;
+    if ( ! $CI->upload->do_upload($image_name)) {
+        // The reason is thrown away today, so a rejected upload saves the row
+        // with no image and tells nobody why. Hand it to the caller.
+        upload_last_error($CI->upload->display_errors('', ''));
+        log_message('error', 'Upload rejected for ' . $image_name . ': ' . upload_last_error());
+        return null;
     }
+
+    $avatar   = $CI->upload->data();
+    $abs_path = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
+
+    /*
+     * This used to hand the file to CI's Image_lib with `maintain_ratio` off
+     * and NO width or height — those two lines had been commented out. Image_lib
+     * fills a missing width/height from the source, so it allocated the full
+     * original dimensions twice over to write a same-size copy: all of the
+     * memory cost of a resize and none of the resizing. Measured at 4000x3000
+     * that is 92 MB of real memory for one upload — and only 2 MB of it
+     * visible to PHP, so `memory_limit` never intervened and the request was
+     * killed from outside. The upload came back as a blank HTTP 500 with
+     * nothing saved: the reported "uploading news breaks the webpage".
+     *
+     * pearland411_downscale_image() asks whether the allocation fits BEFORE
+     * making it, caps the longest edge, and leaves an already-small image
+     * untouched. A FALSE here means the file stayed exactly as uploaded, which
+     * is a heavy page but a working one — so it is logged, not surfaced.
+     */
+    if ( ! pearland411_downscale_image($abs_path, PEARLAND411_MAX_IMAGE_EDGE, 60)) {
+        log_message('debug', 'Stored image at its original size: ' . $abs_path);
+    }
+
+    return 'assets/'.$data['upload_path'].'/'.$avatar['file_name'];
 }
 function uploadWithoutResize($data)
 {
     $CI =& get_instance();
 
     $image_name = $data['image_name'];
-    $image = $_FILES[$image_name]['name'];
+
+    upload_last_error('');
+
+    if (empty($_FILES[$image_name]['name'])) {
+        return null;
+    }
 
     $config['upload_path']          = './assets/'.$data['upload_path'];
     $config['allowed_types']        = 'gif|jpg|jpeg|png|GIF|JPG|JPEG|PNG';
@@ -299,32 +517,27 @@ function uploadWithoutResize($data)
 
     $CI->upload->initialize($config);
 
-    if ($CI->upload->do_upload($image_name)) {
-
-        $avatar = $CI->upload->data();
-
-        $config['image_library'] = 'gd2';
-        $config['source_image']  = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
-        $config['create_thumb']  = FALSE;
-        $config['maintain_ratio']= FALSE;
-        $config['quality']       = '60%';
-        $config['new_image']     = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
-
-        // initialize(), not just load(). CI3's loader ignores a second
-        // load->library() for a class it already holds ("Second attempt
-        // ignored"), so on the 2nd..Nth image of a multi-file gallery upload
-        // image_lib still carried the FIRST image's source_image/new_image and
-        // re-processed that file instead of this one. `upload` above is rescued
-        // by its own initialize() call; image_lib had none.
-        $CI->load->library('image_lib',$config);
-        $CI->image_lib->initialize($config);
-        $CI->image_lib->resize();
-        $CI->image_lib->clear();
-
-        $avatar_name = 'assets/'.$data['upload_path'].'/'.$avatar['file_name']; 
-
-        return $avatar_name;
+    if ( ! $CI->upload->do_upload($image_name)) {
+        upload_last_error($CI->upload->display_errors('', ''));
+        log_message('error', 'Upload rejected for ' . $image_name . ': ' . upload_last_error());
+        return null;
     }
+
+    $avatar   = $CI->upload->data();
+    $abs_path = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
+
+    /*
+     * Despite the name this ran the same Image_lib pass as uploadAndResize()
+     * — no width, no height, so a same-size copy at full memory cost — and
+     * carried the same fatal on a large photograph. Only the memory ceiling is
+     * enforced here: an image inside PEARLAND411_MAX_IMAGE_EDGE keeps its own
+     * bytes untouched, which is what "without resize" should always have meant.
+     */
+    if ( ! pearland411_downscale_image($abs_path, PEARLAND411_MAX_IMAGE_EDGE, 60)) {
+        log_message('debug', 'Stored image at its original size: ' . $abs_path);
+    }
+
+    return 'assets/'.$data['upload_path'].'/'.$avatar['file_name'];
 }
 
     function uploadMultipleAndResize($data,$limit = null)

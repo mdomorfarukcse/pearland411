@@ -6,6 +6,169 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-25 — Tracker rows 164–169
+
+Six rows off the manager's error tracker, this time with the screenshots
+attached — which mattered: two of them are only explicable from the picture.
+
+### Fixed
+
+- **`/admin/add-news` returned HTTP 500 on upload (row 169).** `uploadAndResize()`
+  handed the file to CodeIgniter's `Image_lib` with `maintain_ratio` off and
+  **no width or height** — those two lines had been commented out, and
+  `Image_lib::initialize()` fills a missing width/height in from the source. So
+  it allocated the original dimensions *twice* to write a same-size copy: the
+  full memory cost of a resize, and none of the resizing.
+
+  Measured on a 4000×3000 upload — a 4 MB file, well inside the 5 MB limit —
+  that is **92 MB of real memory, of which PHP reports 2 MB**. With bundled
+  libgd the image buffers are `malloc`'d outside the Zend allocator, so
+  `memory_limit` never sees them and never intervenes; what stops the request is
+  the process or container limit, from outside PHP, which is exactly why the
+  symptom was a blank 500 rather than an error message. Capped at 2400px the
+  same file costs 33 MB.
+
+  New `pearland411_downscale_image()` asks whether the allocation fits *before*
+  making it, caps the longest edge at 2400 (above both sizes `image_guidance()`
+  recommends, so an image prepared to spec is left byte-identical), preserves
+  PNG/WebP alpha, and returns FALSE rather than attempting work it cannot
+  finish. `pearland411_generate_variants()` gained the same guard —
+  `safe_upload_image()` could take the process down the same way.
+- **A rejected upload used to save the row and say nothing.** `uploadAndResize()`
+  threw the reason away and returned NULL, so an article or listing saved
+  without its picture and no screen mentioned it. New `upload_last_error()`
+  carries the reason to the caller — passed through a module-level static
+  rather than by changing the return value, so all ~40 existing call sites
+  behave exactly as before — and `add_news` / `edit_news` now say what happened.
+- **Editing a news article could destroy its picture.** `edit_news()` called
+  `unlink()` on the existing image *before* running the upload, so a replacement
+  the upload then rejected — wrong type, too large, or the resize that used to
+  fatal — took the old one with it and left the article with none. The old file
+  is deleted only once a new one exists. Its failure branch also redirected to
+  `admin/edit-news<slug>`, missing a slash, which is a 404 rather than the form.
+- **The burger menu offered a signed-out visitor a member dashboard (row 165).**
+  Below 993px `.bl` is hidden, so Add business / Sign In / Create an account
+  leave the bar; the only navigation left was a panel listing My Dashboard, My
+  Profile and **Log Out** — to somebody who had never logged in. From a narrow
+  window there was no way to reach sign-in at all. Signed-out visitors now get
+  Sign In, Create an account, Add your business, the directory, categories and
+  Contact us.
+- **The section strip was cropped and unreachable between 769 and 992px
+  (row 165).** The bar switches to its narrow layout at 992px but the strip only
+  became scrollable at 768px, and `html, body { overflow-x: clip }` *crops*
+  rather than scrolls — so in that 224px band the right-hand items (the pinned
+  categories, "All categories") ran past the edge with no scrollbar and no way
+  to get to them. That is the screenshot: a burger, and a strip ending
+  mid-word. The strip now scrolls from the same width the bar collapses at.
+  The burger also had `cursor: pointer` only below 767px, so for 225px of that
+  range it did not look clickable — part of "doesn't work sometimes".
+- **The burger menu's profile picture was broken for signed-out visitors
+  (row 166).** `$header_profile_img`, `$header_user_name` and
+  `$header_join_date` were assigned inside the **logged-in half** of the header's
+  branch, but the mobile menu that reads all three renders for everyone. Signed
+  out, the panel opened with `<img src="">` — which browsers draw as a broken
+  image and which never fires the `onerror` fallback. All three are resolved
+  once, above the branch.
+- **…and the panel stayed open when the window widened (row 166).** Nothing
+  cleared `.mobmenu-show` on resize, so a full-screen panel stayed pinned over
+  the desktop layout with no way to shut it: its close button is inside the
+  panel, and `.mob-me-ic` is `display:none` at that width, so the state could
+  not be undone without a reload. That is the reported trigger — *press the
+  burger, then widen the view*. It closes on resize past 992px, and on Escape.
+- **The dark band behind that profile picture was a tiled photograph.**
+  `.ud-lhs-s1:before` tiled `assets/images/face.jpg` — a 400×200 file — at
+  `background-size: 101px` under `brightness(0.3)`, so across a full-width band
+  it repeated as a row of dark chopped-up rectangles. It reads as a broken
+  image, and worst of all at desktop width, which is where the reporter saw it.
+  Brand navy now, with nothing to tile.
+- **Reaching page 20 of the directory took 17 clicks (row 164).** The pager
+  shows the current page plus two either side, then first and last — so from
+  page 1 of 47 the only numbers on offer are 1, 2, 3 and 47. `/all_listing` now
+  also accepts `?page=N`, and a **"Go to page"** box under the pager posts to
+  it. A plain GET form, so it works with JavaScript off, and it carries the
+  sort so jumping does not silently reset it. The positional
+  `/all_listing/<category>/<offset>` URLs are untouched — every existing link,
+  bookmark and indexed URL still resolves.
+- **A coupon page showed a code and gave you nothing to do with it (row 167).**
+  "Redeem this offer" only rendered when a redemption link happened to be set;
+  without one the page was a code and a full stop, which is the reported "I
+  don't see any use for this, how do users claim a coupon?". The code now has a
+  **Copy code** button (revealed by script only where the browser can actually
+  copy, so it is never inert), a linked business gets a **Where to use it**
+  button, and the instructions say what is actually possible instead of
+  promising an online checkout on every deal.
+- **"Posted by Mydynamic VA" (row 167).** `owner_name` is the account that
+  *typed the coupon in* — for anything entered by the team, a staff or agency
+  login. Used as a fallback it put the data-entry user on a customer-facing page
+  as the merchant, and had the copy read "Mydynamic VA is offering this deal to
+  Pearland411 readers". A coupon is attributed to the business it is linked to,
+  or to Pearland411 when there is none. The same fallback is gone from the
+  coupons index (where it also inflated the "businesses represented" count: ten
+  coupons keyed in by one staff login counted as one business) and from the page's
+  meta description, which was telling search engines the same thing.
+- **The admin owner dropdown was unreadable (row 168).** It printed `user.name`
+  and nothing else, and accounts are named after businesses rather than people,
+  so the Edit Listing picker read "10 dollars Galveston shuttle", "ACT
+  Electrical", "Angel Coliflores- Test" with no way to tell a customer from a
+  leftover. New `user_option_label()` adds the email and the number of listings
+  the account owns — the count is what actually separates a live customer from a
+  test row. Applied to all seven user dropdowns.
+
+### Added
+
+- **`/admin/users` — Members**, a read-only review list: account, email, phone,
+  businesses owned, whether the email is verified, and when they joined, most
+  listings first, searchable by name, email **or business name**. Row 168 asks
+  to "review each user and provide context if those are final", and that could
+  not be done by anyone: there was no user screen in the admin at all — the only
+  place an account appeared was inside a dropdown. Read-only on purpose;
+  deleting a member orphans every listing, event and article they own, and that
+  needs its own screen with its own warnings.
+
+### Verified
+
+41 assertions, all green, against the real function source rather than a
+re-implementation, plus 8 SQL statements parsed as MySQL with matching bind
+counts.
+
+The image tests run real files through the real helper: a 4000×3000 JPEG capped
+to 2400 with its aspect ratio kept, an 800×600 left **byte-identical** (not
+re-encoded), a transparent PNG that stays a PNG with its alpha intact, garbage
+and missing files refused. The memory behaviour is measured in subprocesses at
+fixed limits: the old path's 92 MB against 2 MB visible to PHP, the new path
+declining inside a 96 MB budget and exiting cleanly, doing the work when given
+512 MB, and the same image costing 33 MB once capped.
+
+### Not changed — flagged
+
+- **`user_header.php` still says "Rn53 Themes"** in its mobile menu, with the
+  theme's demo photograph and "Join on 26, Mar 2021". No controller loads that
+  file — it is one of the unreferenced views already flagged — so it renders
+  nowhere and was left alone rather than fixed in place.
+- **~40 other upload call sites** still use the `if ($_FILES && $_FILES['x']['name'])`
+  idiom, which is an "Undefined array key" warning whenever a form is saved
+  without that image. Harmless, pre-existing, and the helper now guards itself,
+  so rewriting all of them belongs in its own pass.
+- **The 500 could not be reproduced against the live server** from here. The
+  memory fault above is real, measured, and in the reported code path, but if
+  uploading news still fails after this, the new error reporting and the log
+  line will name the cause instead of showing a blank page.
+
+### Key files
+
+`application/helpers/image_helper.php` (`pearland411_downscale_image`,
+`pearland411_image_fits_memory`, `pearland411_memory_limit_bytes`,
+`upload_last_error`), `application/helpers/view_helper.php`
+(`user_option_label`), `application/controllers/Admin.php` (`add_news`,
+`edit_news`, `users`), `application/controllers/User.php` (`all_listing`,
+`coupon_details`), `application/models/Adminmodel.php`,
+`application/views/header.php`, `application/views/admin/users.php` (new),
+`application/views/coupon_details.php`, `coupons.php`, `all-listing.php`,
+seven admin dropdown views, `assets/js/custom.js`,
+`assets/css/{site-header,directory,content}.css`. No migration.
+
+---
+
 ## 2026-08-25 — Staff can bill a customer: card on file, this month's payment, next month's date
 
 Central Barbecue is the first paying customer, and the request was to put their

@@ -2251,16 +2251,95 @@
 		public function getActiveUsersForDropdown()
 		{
 			try {
+				// listing_count comes back with the row so user_option_label()
+				// can say which of these accounts actually own anything — the
+				// one signal that separates a live customer from a leftover
+				// test row in a list of business-shaped account names.
 				return $this->db
-					->select('user_id, name, email_id')
-					->from('user')
-					->where("(name IS NOT NULL AND name != '')", null, false)
-					->order_by('name', 'ASC')
+					->select('u.user_id, u.name, u.email_id,
+						(SELECT COUNT(*) FROM `listings` l
+						  WHERE l.user_id = u.user_id AND l.is_deleted = 0) AS listing_count', false)
+					->from('user u')
+					->where("(u.name IS NOT NULL AND u.name != '')", null, false)
+					->order_by('u.name', 'ASC')
 					->get()->result();
 			} catch (Exception $e) {
 				log_message('error', 'getActiveUsersForDropdown failed: ' . $e->getMessage());
 				return array();
 			}
+		}
+
+		/**
+		 * Every member account, for the read-only review list at /admin/users.
+		 *
+		 * There was no user screen in the admin at all, so "kindly review each
+		 * user and provide context if those are final" could not be done by
+		 * anyone: the only place accounts appeared was inside a dropdown on
+		 * the listing form. Read-only on purpose — deleting a user orphans
+		 * their listings, and that decision needs its own screen.
+		 */
+		public function getUserDirectory($limit, $offset, $q = '')
+		{
+			$bind  = array();
+			$where = '1=1';
+
+			$q = trim((string) $q);
+			if ($q !== '') {
+				$parts = array();
+				foreach (preg_split('/\s+/', $q, -1, PREG_SPLIT_NO_EMPTY) as $term) {
+					$like    = '%' . $term . '%';
+					$parts[] = "(u.name LIKE ? OR u.email_id LIKE ?
+						OR EXISTS (SELECT 1 FROM `listings` l2
+						            WHERE l2.user_id = u.user_id
+						              AND l2.is_deleted = 0
+						              AND l2.listing_name LIKE ?))";
+					$bind[] = $like; $bind[] = $like; $bind[] = $like;
+				}
+				$where = '(' . implode(' AND ', $parts) . ')';
+			}
+
+			$verified = $this->db->field_exists('email_verified', 'user')
+				? 'u.email_verified' : 'NULL';
+
+			$sql = "SELECT u.user_id, u.name, u.email_id, u.mobile_number, u.user_created,
+					{$verified} AS email_verified,
+					(SELECT COUNT(*) FROM `listings` l
+					  WHERE l.user_id = u.user_id AND l.is_deleted = 0) AS listing_count,
+					(SELECT GROUP_CONCAT(l.listing_name ORDER BY l.listing_id SEPARATOR ', ')
+					   FROM `listings` l
+					  WHERE l.user_id = u.user_id AND l.is_deleted = 0) AS businesses
+				FROM `user` u
+				WHERE {$where}
+				ORDER BY listing_count DESC, u.name ASC
+				LIMIT " . (int) $offset . ", " . (int) $limit;
+
+			return $this->db->query($sql, $bind)->result();
+		}
+
+		/** Row count for getUserDirectory(), for the pager. */
+		public function countUserDirectory($q = '')
+		{
+			$bind  = array();
+			$where = '1=1';
+
+			$q = trim((string) $q);
+			if ($q !== '') {
+				$parts = array();
+				foreach (preg_split('/\s+/', $q, -1, PREG_SPLIT_NO_EMPTY) as $term) {
+					$like    = '%' . $term . '%';
+					$parts[] = "(u.name LIKE ? OR u.email_id LIKE ?
+						OR EXISTS (SELECT 1 FROM `listings` l2
+						            WHERE l2.user_id = u.user_id
+						              AND l2.is_deleted = 0
+						              AND l2.listing_name LIKE ?))";
+					$bind[] = $like; $bind[] = $like; $bind[] = $like;
+				}
+				$where = '(' . implode(' AND ', $parts) . ')';
+			}
+
+			$row = $this->db->query("SELECT COUNT(*) AS c FROM `user` u WHERE {$where}", $bind)->row();
+
+			return $row ? (int) $row->c : 0;
 		}
 
 		/**

@@ -1055,3 +1055,47 @@ if (!function_exists('ad_zone_preview')) {
         return $dir . 'zone-generic.svg';
     }
 }
+
+if (!function_exists('user_option_label')) {
+    /**
+     * How one member account reads in an admin "choose a user" dropdown.
+     *
+     * The dropdowns used to print `user.name` alone. Accounts get named after
+     * the business rather than the person, and test rows never get cleaned up,
+     * so the Edit Listing owner picker was a list like "10 dollars Galveston
+     * shuttle", "ACT Electrical", "Angel Coliflores- Test" with no way to tell
+     * a real customer from a leftover — which is the reported "are these users
+     * all allowed to publish content? Kindly review each user".
+     *
+     * The email identifies the account, and the listing count is what actually
+     * separates a live customer from a test row. Both come from
+     * Adminmodel::getActiveUsersForDropdown(); either may be absent, and the
+     * label degrades to the bare name.
+     *
+     * Returns PLAIN text — callers escape it, like every other label.
+     *
+     * @param  object $row
+     * @return string
+     */
+    function user_option_label($row)
+    {
+        $name = trim((string) (isset($row->name) ? $row->name : ''));
+        if ($name === '') {
+            $name = 'Unnamed account';
+        }
+
+        $label = $name;
+
+        $email = trim((string) (isset($row->email_id) ? $row->email_id : ''));
+        if ($email !== '' && strcasecmp($email, $name) !== 0) {
+            $label .= ' — ' . $email;
+        }
+
+        if (isset($row->listing_count)) {
+            $n = (int) $row->listing_count;
+            $label .= ' · ' . ($n === 0 ? 'no listings' : $n . ' listing' . ($n === 1 ? '' : 's'));
+        }
+
+        return $label;
+    }
+}

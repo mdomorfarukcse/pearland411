@@ -45,6 +45,30 @@ $(document).ready(function () {
     $('.mob-me-clo').on('click', function () {
         $('.mob-me-all').removeClass('mobmenu-show');
     });
+    /*
+     * Close the off-canvas menu when the window grows past the width that
+     * shows the burger (992px, see assets/css/site-header.css).
+     *
+     * Opening it and then widening the window used to leave a full-screen
+     * panel pinned over the desktop layout with nothing to shut it: its own
+     * close button is inside the panel, but `.mob-me-ic` — the only thing that
+     * reopens it — is display:none at that width, so the state could never be
+     * undone without a reload. That is the reported "press the burger menu
+     * then widen the view".
+     */
+    var mobMenuBreakpoint = 992;
+    $(window).on('resize orientationchange', function () {
+        if (window.innerWidth > mobMenuBreakpoint) {
+            $('.mob-me-all').removeClass('mobmenu-show');
+        }
+    });
+    // Escape closes it too — it covers the whole screen, so being stuck in it
+    // with only a small × to find is worse on a phone than anywhere else.
+    $(document).on('keydown', function (e) {
+        if (e.key === 'Escape' || e.keyCode === 27) {
+            $('.mob-me-all').removeClass('mobmenu-show');
+        }
+    });
     $('.ll-1').on('click', function () {
         $('.log-1').slideDown();
         $('.log-2, .log-3').slideUp();
