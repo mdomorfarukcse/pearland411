@@ -3341,4 +3341,494 @@
 
 			return array('sent' => $sent, 'failed' => $failed, 'remaining' => $remaining);
 		}
+
+		/*=====================================================================
+			Customer billing — /admin/billing
+			Card on file, one-off payments, and the recurring schedule that
+			Cli::renew_subscriptions charges. Columns added by
+			database/migrations/0028_admin_billing.sql.
+		======================================================================*/
+
+		/**
+		 * The FROM clause shared by the billing list, its count and the
+		 * per-customer page: every user, joined to the ONE subscription that
+		 * matters — the active one, or failing that the most recent — and to
+		 * that subscription's plan.
+		 */
+		private function billingFromSql()
+		{
+			return "FROM `user` u
+				LEFT JOIN `subscriptions` s
+				       ON s.id = (SELECT s2.id
+				                    FROM `subscriptions` s2
+				                   WHERE s2.user_id = u.user_id
+				                ORDER BY (s2.status = 'active') DESC, s2.id DESC
+				                   LIMIT 1)
+				LEFT JOIN `plans` p ON p.id = s.plan_id";
+		}
+
+		/**
+		 * WHERE fragment + bindings shared by the list and the count.
+		 *
+		 * With no search the list is deliberately limited to customers who
+		 * have a billing relationship — a subscription, a stored card or a
+		 * payment. Every registered member would otherwise bury the handful
+		 * who actually pay us.
+		 *
+		 * A search runs across ALL users, because the common case is putting a
+		 * card on file for a business that has never been billed yet. Terms
+		 * are matched word by word, and each term may match the account name,
+		 * the email, or the name of a business the account owns — staff know
+		 * customers as "Central Barbecue", not by whoever registered it.
+		 */
+		private function billingScopeWhere($q)
+		{
+			$q = trim((string) $q);
+
+			if ($q === '') {
+				return array(
+					'sql' => "(s.id IS NOT NULL
+						OR EXISTS (SELECT 1 FROM `payment_cards` pc2 WHERE pc2.user_id = u.user_id)
+						OR EXISTS (SELECT 1 FROM `transactions` t2 WHERE t2.user_id = u.user_id))",
+					'bind' => array(),
+				);
+			}
+
+			$terms = preg_split('/\s+/', $q, -1, PREG_SPLIT_NO_EMPTY);
+			$parts = array();
+			$bind  = array();
+
+			foreach ($terms as $term) {
+				$like    = '%' . $term . '%';
+				$parts[] = "(u.name LIKE ? OR u.email_id LIKE ?
+					OR EXISTS (SELECT 1 FROM `listings` l2
+					            WHERE l2.user_id = u.user_id
+					              AND l2.is_deleted = 0
+					              AND l2.listing_name LIKE ?))";
+				$bind[] = $like;
+				$bind[] = $like;
+				$bind[] = $like;
+			}
+
+			return array('sql' => '(' . implode(' AND ', $parts) . ')', 'bind' => $bind);
+		}
+
+		/** One page of the billing list. */
+		public function getBillingCustomers($limit, $offset, $q = '')
+		{
+			$w = $this->billingScopeWhere($q);
+
+			$sql = "SELECT u.user_id, u.name, u.email_id,
+					(SELECT GROUP_CONCAT(l.listing_name ORDER BY l.listing_id SEPARATOR ', ')
+					   FROM `listings` l
+					  WHERE l.user_id = u.user_id AND l.is_deleted = 0) AS businesses,
+					s.id                 AS subscription_id,
+					s.status             AS sub_status,
+					s.end_date           AS end_date,
+					s.next_billing_date  AS next_billing_date,
+					s.auto_renew         AS auto_renew,
+					s.currency           AS currency,
+					s.renewal_attempts   AS renewal_attempts,
+					s.last_renewal_error AS last_renewal_error,
+					p.name               AS plan_name,
+					(SELECT COUNT(*) FROM `payment_cards` pc
+					  WHERE pc.user_id = u.user_id
+					    AND pc.helcim_card_token IS NOT NULL) AS card_count
+				" . $this->billingFromSql() . "
+				WHERE " . $w['sql'] . "
+				ORDER BY (s.status = 'active') DESC, u.name ASC
+				LIMIT " . (int) $offset . ", " . (int) $limit;
+
+			return $this->db->query($sql, $w['bind'])->result();
+		}
+
+		/** Row count for the same scope, for the pager. */
+		public function countBillingCustomers($q = '')
+		{
+			$w   = $this->billingScopeWhere($q);
+			$sql = "SELECT COUNT(*) AS c " . $this->billingFromSql() . " WHERE " . $w['sql'];
+			$row = $this->db->query($sql, $w['bind'])->row();
+
+			return $row ? (int) $row->c : 0;
+		}
+
+		/**
+		 * One customer for the billing detail page.
+		 *
+		 * Subscription columns are aliased one by one rather than selected as
+		 * `s.*`: a customer with no subscription at all yields NULLs for every
+		 * `s` column, and `s.user_id` coming after `u.user_id` in a `*` would
+		 * blank out the id of the very customer being looked at.
+		 */
+		public function getBillingCustomer($user_id)
+		{
+			$sql = "SELECT u.user_id, u.name, u.email_id, u.mobile_number,
+					(SELECT GROUP_CONCAT(l.listing_name ORDER BY l.listing_id SEPARATOR ', ')
+					   FROM `listings` l
+					  WHERE l.user_id = u.user_id AND l.is_deleted = 0) AS businesses,
+					s.id                 AS subscription_id,
+					s.plan_id            AS plan_id,
+					s.pending_plan_id    AS pending_plan_id,
+					s.duration_id        AS duration_id,
+					s.duration_days      AS duration_days,
+					s.status             AS sub_status,
+					s.start_date         AS start_date,
+					s.end_date           AS end_date,
+					s.next_billing_date  AS next_billing_date,
+					s.auto_renew         AS auto_renew,
+					s.total_amount       AS total_amount,
+					s.currency           AS currency,
+					s.billing_cycle      AS billing_cycle,
+					s.payment_status     AS payment_status,
+					s.renewal_attempts   AS renewal_attempts,
+					s.last_renewal_error AS last_renewal_error,
+					s.grace_until        AS grace_until,
+					p.name               AS plan_name,
+					p.price              AS plan_price
+				" . $this->billingFromSql() . "
+				WHERE u.user_id = ?
+				LIMIT 1";
+
+			return $this->db->query($sql, array((int) $user_id))->row();
+		}
+
+		/**
+		 * Every active plan term, in one query, so the billing screen can swap
+		 * the term dropdown when staff pick a different plan without a round
+		 * trip per plan.
+		 */
+		public function getAllPlanDurations()
+		{
+			if (!$this->db->table_exists('plan_durations')) {
+				return array();
+			}
+
+			return $this->db->from('plan_durations')
+				->where('is_active', 1)
+				->order_by('plan_id', 'ASC')
+				->order_by('duration_months', 'ASC')
+				->get()->result();
+		}
+
+		/** Vaulted cards for a customer, default first. */
+		public function getCustomerCards($user_id)
+		{
+			if (!$this->db->table_exists('payment_cards')) {
+				return array();
+			}
+
+			return $this->db->from('payment_cards')
+				->where('user_id', (int) $user_id)
+				->order_by('is_default', 'DESC')
+				->order_by('id', 'DESC')
+				->get()->result();
+		}
+
+		/** Recent payments for a customer, newest first. */
+		public function getCustomerTransactions($user_id, $limit = 25)
+		{
+			if (!$this->db->table_exists('transactions')) {
+				return array();
+			}
+
+			return $this->db->from('transactions')
+				->where('user_id', (int) $user_id)
+				->order_by('id', 'DESC')
+				->limit((int) $limit)
+				->get()->result();
+		}
+
+		/**
+		 * Put a Helcim card token on file for a customer and make it the one
+		 * the renewal job will charge.
+		 *
+		 * Re-vaulting the same token updates the existing row instead of
+		 * adding a duplicate — HelcimPay.js returns the same token for the
+		 * same card, so staff re-entering a card the customer already has on
+		 * file should not leave two rows behind.
+		 *
+		 * Columns from 0028 are written only when present, so the screen still
+		 * works on a database where that migration has not been run yet.
+		 */
+		public function vaultCustomerCard($user_id, $args)
+		{
+			$user_id = (int) $user_id;
+			$token   = isset($args['helcim_card_token']) ? trim((string) $args['helcim_card_token']) : '';
+			if (!$user_id || $token === '') {
+				return false;
+			}
+
+			$now = date('Y-m-d H:i:s');
+
+			// Only the last four digits are ever stored; the PAN is tokenized
+			// in the browser and never reaches this server.
+			$row = array(
+				'card_holder_name' => isset($args['card_holder_name']) && $args['card_holder_name'] !== ''
+					? substr((string) $args['card_holder_name'], 0, 100) : 'Card on file',
+				'card_last4'  => isset($args['card_last4']) && $args['card_last4'] !== '' ? (string) $args['card_last4'] : '0000',
+				'exp_month'   => !empty($args['exp_month']) ? (int) $args['exp_month'] : 1,
+				'exp_year'    => !empty($args['exp_year']) ? (int) $args['exp_year'] : 2099,
+				'is_default'  => 1,
+				'updated_at'  => $now,
+				'helcim_card_token' => $token,
+			);
+			if (!empty($args['helcim_customer_code'])) {
+				$row['helcim_customer_code'] = (string) $args['helcim_customer_code'];
+			}
+
+			$optional = array(
+				'card_brand'        => isset($args['card_brand']) ? substr((string) $args['card_brand'], 0, 30) : null,
+				'card_source'       => isset($args['card_source']) ? (string) $args['card_source'] : 'admin',
+				'added_by_admin_id' => !empty($args['added_by_admin_id']) ? (int) $args['added_by_admin_id'] : null,
+			);
+			foreach ($optional as $col => $val) {
+				if ($val !== null && $this->db->field_exists($col, 'payment_cards')) {
+					$row[$col] = $val;
+				}
+			}
+
+			$this->db->trans_start();
+
+			// Only one card can be the renewal target.
+			$this->db->where('user_id', $user_id)->update('payment_cards', array('is_default' => 0));
+
+			$existing = $this->db->from('payment_cards')
+				->where('user_id', $user_id)
+				->where('helcim_card_token', $token)
+				->limit(1)->get()->row();
+
+			if ($existing) {
+				$this->db->where('id', (int) $existing->id)->update('payment_cards', $row);
+			} else {
+				$row['user_id']    = $user_id;
+				$row['created_at'] = $now;
+				$this->db->insert('payment_cards', $row);
+			}
+
+			$this->db->trans_complete();
+
+			return $this->db->trans_status();
+		}
+
+		/**
+		 * Remove a stored card. Scoped by user so a hand-edited id cannot
+		 * delete somebody else's card. Promotes the newest remaining card to
+		 * default, or the renewal job would find no card to charge even though
+		 * one is still on file.
+		 */
+		public function deleteCustomerCard($card_id, $user_id)
+		{
+			$card_id = (int) $card_id;
+			$user_id = (int) $user_id;
+			if (!$card_id || !$user_id) {
+				return false;
+			}
+
+			$this->db->trans_start();
+			$this->db->where('id', $card_id)->where('user_id', $user_id)->delete('payment_cards');
+
+			$remaining = $this->db->from('payment_cards')
+				->where('user_id', $user_id)
+				->where('helcim_card_token IS NOT NULL', null, false)
+				->order_by('id', 'DESC')->limit(1)->get()->row();
+
+			if ($remaining) {
+				$this->db->where('id', (int) $remaining->id)
+					->update('payment_cards', array('is_default' => 1, 'updated_at' => date('Y-m-d H:i:s')));
+			}
+			$this->db->trans_complete();
+
+			return $this->db->trans_status();
+		}
+
+		/**
+		 * Record a payment staff took by hand — the August invoice, a
+		 * catch-up charge, anything outside the self-serve checkout.
+		 *
+		 * The money has already moved at Helcim by the time this is called, so
+		 * it never fails the caller for a column a migration has not added:
+		 * unknown columns are dropped, exactly as recordCartPurchase() does.
+		 * Returns the transaction id, or FALSE.
+		 */
+		public function recordManualCharge($args)
+		{
+			$now = date('Y-m-d H:i:s');
+
+			$row = array(
+				'user_id'    => (int) $args['user_id'],
+				'amount'     => round((float) $args['amount'], 2),
+				'currency'   => !empty($args['currency']) ? $args['currency'] : 'USD',
+				'method'     => 'card',
+				'status'     => 'success',
+				'created_at' => $now,
+				'updated_at' => $now,
+				'txn_ref'    => 'ADM-' . (int) $args['user_id'] . '-' . substr(md5($now . uniqid('', true)), 0, 8),
+				'plan_id'         => !empty($args['plan_id']) ? (int) $args['plan_id'] : null,
+				'subscription_id' => !empty($args['subscription_id']) ? (int) $args['subscription_id'] : null,
+				'helcim_transaction_id' => !empty($args['helcim_transaction_id']) ? $args['helcim_transaction_id'] : null,
+				'helcim_approval_code'  => !empty($args['helcim_approval_code']) ? $args['helcim_approval_code'] : null,
+				'helcim_card_token'     => !empty($args['helcim_card_token']) ? $args['helcim_card_token'] : null,
+				'created_by_admin_id'   => !empty($args['created_by_admin_id']) ? (int) $args['created_by_admin_id'] : null,
+				'note'                  => !empty($args['note']) ? substr((string) $args['note'], 0, 255) : null,
+			);
+
+			foreach (array('created_by_admin_id', 'note', 'helcim_card_token', 'subscription_id', 'plan_id') as $col) {
+				if (!$this->db->field_exists($col, 'transactions')) {
+					unset($row[$col]);
+				}
+			}
+
+			if (!$this->db->insert('transactions', $row)) {
+				return false;
+			}
+
+			return (int) $this->db->insert_id();
+		}
+
+		/**
+		 * Turn recurring billing on or off and set the date the next charge
+		 * goes out.
+		 *
+		 * Rescheduling clears the dunning state (`renewal_attempts`,
+		 * `last_renewal_error`, `grace_until`). Those counters describe failed
+		 * attempts against the OLD schedule — leaving them would mean a
+		 * customer whose card had failed twice gets one attempt on the new
+		 * date and is then expired.
+		 */
+		public function updateRecurringBilling($subscription_id, $auto_renew, $next_billing_date)
+		{
+			$subscription_id = (int) $subscription_id;
+			if (!$subscription_id) {
+				return false;
+			}
+
+			$data = array(
+				'auto_renew'         => $auto_renew ? 1 : 0,
+				'next_billing_date'  => $auto_renew ? $next_billing_date : null,
+				'renewal_attempts'   => 0,
+				'last_renewal_error' => null,
+				'grace_until'        => null,
+				'updated_at'         => date('Y-m-d H:i:s'),
+			);
+
+			// A term that ends before the next charge would expire the
+			// subscription between the two dates, and getRenewableSubscriptions()
+			// only looks at active rows — so the renewal would never run.
+			if ($auto_renew && $next_billing_date) {
+				$sub = $this->db->select('end_date')->from('subscriptions')
+					->where('id', $subscription_id)->get()->row();
+				if ($sub && (empty($sub->end_date) || strtotime($sub->end_date) < strtotime($next_billing_date))) {
+					$data['end_date'] = $next_billing_date;
+				}
+			}
+
+			return $this->db->where('id', $subscription_id)->update('subscriptions', $data);
+		}
+
+		/**
+		 * Start a subscription on a customer's behalf, for a payment taken
+		 * outside the self-serve checkout.
+		 *
+		 * Deliberately NOT Usermodel::activateHelcimSubscription(): that method
+		 * writes its own `transactions` row, and a staff-taken payment has
+		 * already been recorded by recordManualCharge(). Calling it here would
+		 * book the same money twice.
+		 *
+		 * Any currently-active subscription is expired first, matching the
+		 * self-serve path — a customer holds one plan at a time.
+		 *
+		 * Returns the new subscription id, or FALSE.
+		 */
+		public function startSubscriptionForCustomer($args)
+		{
+			$user_id = (int) $args['user_id'];
+			$plan_id = (int) $args['plan_id'];
+			if (!$user_id || !$plan_id) {
+				return false;
+			}
+
+			$now         = date('Y-m-d H:i:s');
+			$start       = !empty($args['start_date']) ? $args['start_date'] : $now;
+			$auto_renew  = !empty($args['auto_renew']) ? 1 : 0;
+			$next_billing = !empty($args['next_billing_date']) ? $args['next_billing_date'] : null;
+			$currency    = !empty($args['currency']) ? $args['currency'] : 'USD';
+			$duration_id = !empty($args['duration_id']) ? (int) $args['duration_id'] : null;
+
+			// `duration_days` is the RECURRING cadence, taken from the plan or
+			// the chosen term — never from the length of this first term.
+			// recordRenewalSuccess() extends by exactly this many days on each
+			// renewal, so deriving it from the gap between today and the next
+			// billing date would be a lasting mistake: a customer set up on the
+			// 25th to resume on the 1st would be billed every SEVEN days from
+			// then on, for as long as the subscription lived.
+			$duration_days   = !empty($args['duration_days']) ? (int) $args['duration_days'] : 30;
+			$duration_months = max(1, (int) round($duration_days / 30));
+
+			// The first term, by contrast, may legitimately be short: it runs
+			// to whatever date staff said the next charge goes out, so the two
+			// can never disagree.
+			$end = $next_billing
+				? $next_billing
+				: date('Y-m-d H:i:s', strtotime($start . ' +' . $duration_days . ' days'));
+
+			$this->db->trans_start();
+
+			$this->db->where('user_id', $user_id)
+				->where('status', 'active')
+				->update('subscriptions', array('status' => 'expired', 'updated_at' => $now));
+
+			$this->db->insert('subscriptions', array(
+				'user_id'           => $user_id,
+				'plan_id'           => $plan_id,
+				'status'            => 'active',
+				'start_date'        => $start,
+				'end_date'          => $end,
+				'next_billing_date' => $auto_renew ? $next_billing : null,
+				'created_at'        => $now,
+				'updated_at'        => $now,
+				'duration_id'       => $duration_id,
+				'duration_days'     => $duration_days,
+				'duration_months'   => $duration_months,
+				'payment_status'    => 'paid',
+				'total_amount'      => round((float) $args['amount'], 2),
+				'currency'          => $currency,
+				'billing_cycle'     => $duration_months >= 12 ? 'yearly' : 'monthly',
+				'auto_renew'        => $auto_renew,
+			));
+			$subscription_id = (int) $this->db->insert_id();
+
+			// A fresh usage window, so plan limits are counted from today
+			// rather than inheriting whatever the previous plan had used.
+			if ($subscription_id && $this->db->table_exists('user_usage_tracking')) {
+				$this->db->insert('user_usage_tracking', array(
+					'user_id'         => $user_id,
+					'subscription_id' => $subscription_id,
+					'reset_date'      => date('Y-m-d', strtotime($end)),
+					'created_at'      => $now,
+					'updated_at'      => $now,
+				));
+			}
+
+			$this->db->trans_complete();
+
+			return $this->db->trans_status() ? $subscription_id : false;
+		}
+
+		/** Attach a recorded payment to a subscription after the fact. */
+		public function linkTransactionToSubscription($transaction_id, $subscription_id)
+		{
+			$transaction_id  = (int) $transaction_id;
+			$subscription_id = (int) $subscription_id;
+			if (!$transaction_id || !$subscription_id) {
+				return false;
+			}
+
+			if ($this->db->field_exists('subscription_id', 'transactions')) {
+				$this->db->where('id', $transaction_id)
+					->update('transactions', array('subscription_id' => $subscription_id));
+			}
+
+			return $this->db->where('id', $subscription_id)
+				->update('subscriptions', array('last_transaction_id' => $transaction_id));
+		}
 	}

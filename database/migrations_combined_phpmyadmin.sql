@@ -1132,4 +1132,82 @@ SET @s := IF(@t = 1 AND @c = 0,
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
+-- ============================================================
+-- 0028_admin_billing.sql
+-- ============================================================
+-- Backs /admin/billing — the screen where staff put a customer's card on
+-- file, take a one-off payment, and schedule recurring billing. Until it
+-- existed a card could only be vaulted by the CUSTOMER, during their own
+-- checkout, and only if they ticked auto-renew: staff signing a business up
+-- over the phone had no path at all, and Cli::renew_subscriptions had nothing
+-- to charge. See database/migrations/0028_admin_billing.sql for the full
+-- reasoning; this is the same migration in the inline prepared-statement
+-- style this bundle uses, because phpMyAdmin's importer cannot parse the
+-- procedure form.
+--
+-- All five columns are nullable or defaulted, so every existing row stays
+-- valid and nothing is back-filled. Nothing here can hold a PAN, expiry or
+-- CVV beyond the last four digits — card data is tokenized by HelcimPay.js in
+-- the browser and never reaches the server, as 0012 established.
+--
+-- `payment_cards` and `transactions` both predate this repo's migrations, so
+-- each step is guarded on its table (@t) as well as on the column (@c).
+
+-- payment_cards.card_brand
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'payment_cards');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'payment_cards'
+             AND COLUMN_NAME  = 'card_brand');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `payment_cards` ADD COLUMN `card_brand` VARCHAR(30) NULL DEFAULT NULL COMMENT ''Card brand for display (Visa, Mastercard, ...)''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- payment_cards.card_source
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'payment_cards'
+             AND COLUMN_NAME  = 'card_source');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `payment_cards` ADD COLUMN `card_source` VARCHAR(20) NOT NULL DEFAULT ''customer'' COMMENT ''customer = self-serve checkout, admin = keyed in by staff''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- payment_cards.added_by_admin_id
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'payment_cards'
+             AND COLUMN_NAME  = 'added_by_admin_id');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `payment_cards` ADD COLUMN `added_by_admin_id` INT(11) NULL DEFAULT NULL COMMENT ''admin.admin_id who put this card on file, when staff did''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- transactions.created_by_admin_id
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'transactions');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'transactions'
+             AND COLUMN_NAME  = 'created_by_admin_id');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `transactions` ADD COLUMN `created_by_admin_id` INT(11) NULL DEFAULT NULL COMMENT ''admin.admin_id who took this payment manually''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- transactions.note
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'transactions'
+             AND COLUMN_NAME  = 'note');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `transactions` ADD COLUMN `note` VARCHAR(255) NULL DEFAULT NULL COMMENT ''What this charge was for, e.g. "August 2026 bill"''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
 SET FOREIGN_KEY_CHECKS = 1;

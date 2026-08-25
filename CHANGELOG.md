@@ -6,6 +6,160 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-25 — Staff can bill a customer: card on file, this month's payment, next month's date
+
+Central Barbecue is the first paying customer, and the request was to put their
+card on the August bill and restart recurring billing in September — plus "is
+there somewhere in the admin to do this?"
+
+There was not. **A card could only ever be vaulted by the customer**, inside
+`User::process_checkout()`, and only if they ticked auto-renew during their own
+checkout: `Usermodel::activateHelcimSubscription()` is the only writer of
+`payment_cards`. `/admin/all_subscriptions` could list, cancel and delete a
+subscription and nothing else — no card, no payment, no schedule. So a business
+signed up over the phone had no card on file, `Cli::renew_subscriptions` found
+no token, and the row was skipped every night with "no vaulted card".
+
+### Added
+
+- **`/admin/billing` — Customer Billing**, under Pricing Plans in the admin
+  menu, super-admin only like the rest of the billing screens. The list shows
+  plan, status, card-on-file, auto-renew and next charge date per customer.
+  `?q=` searches **every** customer in SQL, word by word, across the account
+  name, the email **and the names of businesses they own** — staff know a
+  customer as "Central Barbecue", not as whoever registered the account. With
+  no search it lists only customers who have a subscription, a card or a
+  payment, so the handful who pay are not buried under every registered
+  member. The table carries `data-server-search` so the table enhancer does
+  not add a second box that only filters the current page.
+- **`/admin/billing-customer/<user_id>`**, which does the three things that
+  were missing:
+  - **Card on file.** Opens the same HelcimPay.js iframe the storefront uses,
+    in `verify` mode — a zero-dollar check that confirms the card and returns
+    a token, charging nothing. The card number is typed into Helcim's window
+    and goes straight to Helcim; this server never sees it. If an account does
+    not allow zero-dollar verification the error says so and points at the
+    payment flow, which returns a token too.
+  - **Take a payment.** Either charge the card already on file (server-side,
+    no browser round trip) or enter a card and charge it, optionally keeping
+    it for renewals. Recorded with a note, so "August 2026 bill" is
+    distinguishable from an automatic renewal in the history.
+  - **Recurring billing.** Auto-renew on/off and the date of the next charge.
+    An **active** subscription is rescheduled in place; anything else — expired,
+    cancelled, or none at all — starts a new term on the chosen plan, because
+    `getRenewableSubscriptions()` only ever charges `status = 'active'` rows.
+    Switching auto-renew on for an expired subscription would have looked like
+    it worked and then silently charged nothing, which is the worst available
+    outcome for a billing screen.
+- **`Helcim_lib::initialize_card_verification()`** — a `verify` session for
+  vaulting a card without moving money.
+- **`Usermodel::renewalAmountFor()`** — the renewal price (the chosen
+  `plan_durations` term, else the plan) lifted out of
+  `Cli::renew_subscriptions` so the screen and the cron cannot disagree.
+  Nothing displayed the figure anywhere before this; the only way to know what
+  a customer would be charged was to read the job.
+- **`billing_manual_charge_max`** at `/admin/setting` → Billing, default
+  **25000**. The amount on the billing screen is the only figure in the system
+  a human types freehand — everything else is priced server-side from a plan —
+  so it gets a ceiling. `0` removes it.
+
+### Changed
+
+- **Rescheduling clears the dunning state.** `renewal_attempts`,
+  `last_renewal_error` and `grace_until` describe failures against the *old*
+  schedule. Left in place, a customer whose card had already failed twice would
+  get one attempt on the new date and then be expired by the 3-strike rule.
+- **A next billing date later than the term end now moves the term end with
+  it.** The subscription would otherwise expire in the gap between the two
+  dates, and the renewal job — which only looks at active rows — would never
+  run for it.
+- **Expiry "01/2099" renders as "Not recorded".** That is the placeholder the
+  self-serve checkout writes when the gateway returned no expiry date; printing
+  it as a date would tell staff the card is good for another seventy years.
+
+### Security / PCI
+
+- Card data is tokenized in the browser by HelcimPay.js and never posted to
+  Pearland411, on the admin path exactly as on the storefront. The response is
+  trusted only after `validate_transaction()` recomputes its SHA-256 against
+  the `secretToken` held server-side, and the payload is **never logged** —
+  only the checkout token is, because the payload carries card details.
+- The pending checkout is consumed from the session **before** the payment is
+  recorded, so a replayed post cannot book the same money twice.
+- Every new route is in `Admin::__construct()`'s `$super_admin_only` list.
+  Card removal is scoped by `user_id` as well as card id, so a hand-edited
+  form cannot delete someone else's card.
+- Migration 0028 adds **no** column that could hold a PAN, expiry or CVV beyond
+  the last four digits.
+- If a charge succeeds and the bookkeeping insert then fails, the message names
+  the Helcim transaction id and says **do not charge again** rather than
+  offering a retry.
+
+### Migrations
+
+`database/migrations/0028_admin_billing.sql` — `payment_cards.card_brand`,
+`card_source` (`customer` / `admin`), `added_by_admin_id`;
+`transactions.created_by_admin_id`, `note`. All nullable or defaulted, so no
+existing row changes and nothing is back-filled; every step guarded on its
+table as well as its column. Idempotent. Mirrored into
+`database/migrations_combined_phpmyadmin.sql` in that bundle's inline-PREPARE
+style and added to `database/README.md`. The screen degrades rather than
+breaking if it has not been run: the audit and display columns are written only
+when `field_exists()` finds them.
+
+### Verified
+
+62 assertions, all green, run against the **real source** of the methods lifted
+out of `Admin.php` and `Adminmodel.php` rather than a re-implementation.
+
+The subscription-creation cases caught the one bug worth naming here: the first
+term is deliberately short (set up on the 25th, first renewal on the 1st), and
+`duration_days` was being derived from that gap — but `recordRenewalSuccess()`
+extends by `duration_days` on **every** renewal, so a customer set up that way
+would have been billed every seven days for the life of the subscription.
+`duration_days` now always carries the plan's cadence; only `end_date` is short.
+
+The four staff-input helpers cover `"$1,234.50"` and `"1,234.50"` parsing,
+rejection of zero / negative / non-numeric / injection-shaped input, the
+default and operator-set ceilings, `0` meaning no limit, date parsing from both
+`<input type=date>` and typed US dates, card-detail extraction from masked PANs
+and from responses that carry none of the optional fields, and description
+truncation that cuts on a character rather than through a multi-byte one.
+
+The schedule cases cover a monthly and a yearly cadence, no date given, a term
+end pulled forward to meet an earlier charge date, one already past it being
+left alone, auto-renew off clearing the date without touching the term, and the
+dunning counters being reset on every reschedule.
+
+All five generated billing queries parse as MySQL and their `?` counts match
+their bindings, including the multi-term search; so do all ten `ALTER`
+statements across the standalone migration and the phpMyAdmin bundle.
+
+### Not done — flagged
+
+- **A customer still cannot replace their own card.** The dunning email says
+  "make sure your card on file is valid from your account", and no page lets
+  them: the only vaulting path is a fresh checkout. Staff can now do it for
+  them, which unblocks today's problem, but the self-serve half is still
+  missing.
+- **The renewal amount cannot be overridden per customer.** It comes from the
+  plan or its term, so a founding-member rate lock would break the first time
+  the plan's price changes. That needs the Rate Lock Policy that is still open
+  on the tracker, not a code change on its own.
+
+### Key files
+
+`application/controllers/Admin.php` (the billing screens + `billing_manual_charge_max`),
+`application/models/Adminmodel.php` (the billing queries and writes),
+`application/models/Usermodel.php` (`renewalAmountFor`),
+`application/controllers/Cli.php`, `application/libraries/Helcim_lib.php`,
+`application/views/admin/billing.php` (new),
+`application/views/admin/billing_customer.php` (new),
+`application/views/admin/header.php`, `application/views/admin/admin_setting.php`,
+`database/migrations/0028_admin_billing.sql`.
+
+---
+
 ## 2026-08-16 — Third tracker round: the fixes that only reached one of two code paths
 
 Eighteen rows arrived on a new copy of the manager's error tracker. Every

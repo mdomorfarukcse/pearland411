@@ -258,6 +258,24 @@ $s = isset($settings) ? $settings : array();
 			</div>
 		</section>
 
+		<!-- Billing ------------------------------------------------------- -->
+		<section class="setting-card">
+			<h2>Billing</h2>
+			<p class="hint">
+				The amount staff type into <a href="<?= base_url('admin/billing') ?>">Customer Billing</a>
+				is the only figure in the whole system a person enters freehand &mdash; every other
+				charge is priced server-side from a plan. This is the ceiling on it, so a stray
+				keystroke on a $39 invoice cannot become a $3,900 charge on somebody's card without
+				a deliberate change here.
+			</p>
+			<div class="setting-row">
+				<label for="billing_manual_charge_max">Largest manual charge<small>Default 25000. Use 0 for no limit.</small></label>
+				<input type="number" id="billing_manual_charge_max" name="billing_manual_charge_max"
+					   min="0" step="1"
+					   value="<?= e_attr(($s['billing_manual_charge_max'] ?? '') !== '' ? $s['billing_manual_charge_max'] : '25000') ?>">
+			</div>
+		</section>
+
 		<!-- Top menu ------------------------------------------------------ -->
 		<section class="setting-card">
 			<h2>Top menu categories</h2>

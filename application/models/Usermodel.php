@@ -5743,6 +5743,46 @@ class Usermodel extends CI_Model
 	}
 
 	/**
+	 * What the next auto-renew charge will be for a subscription, in the
+	 * subscription's own currency.
+	 *
+	 * The chosen `plan_durations` price wins (someone on a 12-month term pays
+	 * the 12-month price, not twelve times the monthly one); the plan's own
+	 * price is the fallback. A scheduled downgrade (`pending_plan_id`) is
+	 * priced at the plan it is moving TO, because that is the plan the renewal
+	 * will land the customer on.
+	 *
+	 * Lives here rather than inline in Cli::renew_subscriptions() so that
+	 * /admin/billing can show staff the exact figure the cron will take —
+	 * previously nothing displayed it anywhere and the only way to know was to
+	 * read the job. Returns 0.0 when neither a duration nor an active plan
+	 * prices it, which the caller must treat as "do not charge".
+	 */
+	public function renewalAmountFor($subscription)
+	{
+		$amount = 0.0;
+
+		if (!empty($subscription->duration_id)) {
+			$d = $this->getDurationById((int) $subscription->duration_id);
+			if ($d) {
+				$amount = (float) $d->price;
+			}
+		}
+
+		if ($amount <= 0) {
+			$plan_id = !empty($subscription->pending_plan_id)
+				? (int) $subscription->pending_plan_id
+				: (int) $subscription->plan_id;
+			$plan = $this->getPlanByIdForPricing($plan_id);
+			if ($plan) {
+				$amount = (float) $plan->price;
+			}
+		}
+
+		return $amount;
+	}
+
+	/**
 	 * Subscriptions due for an auto-renew charge (or a scheduled plan switch).
 	 * auto_renew on, active, and past their next_billing_date.
 	 */

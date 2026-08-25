@@ -117,16 +117,10 @@ class Cli extends CI_Controller
         $ok = 0; $retry = 0; $expired = 0; $skipped = 0;
 
         foreach ($subs as $sub) {
-            $plan_id = !empty($sub->pending_plan_id) ? (int) $sub->pending_plan_id : (int) $sub->plan_id;
-            $plan    = $this->usermodel->getPlanByIdForPricing($plan_id);
-
             // Amount: prefer the chosen duration's price, else the plan price.
-            $amount = 0.0;
-            if (!empty($sub->duration_id)) {
-                $d = $this->usermodel->getDurationById((int) $sub->duration_id);
-                if ($d) $amount = (float) $d->price;
-            }
-            if ($amount <= 0 && $plan) $amount = (float) $plan->price;
+            // Shared with /admin/billing so the figure staff are shown is the
+            // figure this job will actually take.
+            $amount = $this->usermodel->renewalAmountFor($sub);
 
             $token    = $this->usermodel->getVaultedCardToken((int) $sub->user_id);
             $currency = $sub->currency ?: $this->helcim_lib->currency();
