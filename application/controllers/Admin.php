@@ -6789,6 +6789,38 @@ class Admin extends CI_Controller
 	 */
 	public function billing_customer($listing_id = 0)
 	{
+		/*
+		 * ENVIRONMENT is 'production', so display_errors is off and any fatal
+		 * here reaches the browser as a bare "HTTP ERROR 500" with nothing in
+		 * it. On a screen that touches eight tables — several with columns no
+		 * migration ever created — that turns every schema gap into a guessing
+		 * game played one deploy at a time.
+		 *
+		 * PHP 7+ Errors implement Throwable, so a "call to a member function
+		 * row() on bool" (what a failed query becomes when db_debug is off) is
+		 * caught here like anything else. Staff see what broke; the log keeps
+		 * the file and line. This is a super-admin-only route, so the message
+		 * is not exposed to anybody who should not see it.
+		 */
+		try {
+			$this->billing_customer_page((int) $listing_id);
+		} catch (Throwable $e) {
+			log_message('error', 'Billing screen failed for listing ' . (int) $listing_id
+				. ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+
+			$this->load->view('admin/header');
+			$this->load->view('admin/billing_error', array(
+				'listing_id' => (int) $listing_id,
+				'message'    => $e->getMessage(),
+				'where'      => basename($e->getFile()) . ' line ' . $e->getLine(),
+			));
+			$this->load->view('admin/footer');
+		}
+	}
+
+	/** The real body of billing_customer(), so the wrapper above can catch it. */
+	private function billing_customer_page($listing_id = 0)
+	{
 		$customer = $this->adminmodel->getBillingCustomer((int) $listing_id);
 		if (!$customer) {
 			$this->session->set_flashdata('error', 'That business no longer exists.');
@@ -6806,12 +6838,7 @@ class Admin extends CI_Controller
 
 		$this->load->library('helcim_lib');
 
-		$plans = array();
-		foreach ($this->usermodel->getAllPlans() as $plan) {
-			if (!isset($plan->is_active) || (int) $plan->is_active === 1) {
-				$plans[] = $plan;
-			}
-		}
+		$plans = $this->adminmodel->getPlansForBilling();
 
 		// What the renewal job would take on the next run, by the same rule the
 		// job itself uses — so the figure on screen is the figure charged.

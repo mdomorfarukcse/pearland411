@@ -3625,6 +3625,40 @@
 			return $row;
 		}
 
+		/**
+		 * The packages the billing screen can put a business on.
+		 *
+		 * Not Usermodel::getAllPlans(), which orders by `plans.sort_order`
+		 * unconditionally — and which the billing screen was the only caller of
+		 * anywhere in the codebase, so nothing had ever proved that column
+		 * exists here. Ordering is applied only when the column is really
+		 * there; a plan list in the wrong order is a cosmetic problem, a
+		 * missing column is a 500.
+		 */
+		public function getPlansForBilling()
+		{
+			if (!$this->db->table_exists('plans')) {
+				return array();
+			}
+
+			$this->db->from('plans');
+			if ($this->db->field_exists('sort_order', 'plans')) {
+				$this->db->order_by('sort_order', 'ASC');
+			}
+			$this->db->order_by('name', 'ASC');
+
+			$out = array();
+			foreach ($this->db->get()->result() as $plan) {
+				// `is_active` predates this repo's migrations; treat a table
+				// without it as "every plan is sellable".
+				if (!property_exists($plan, 'is_active') || (int) $plan->is_active === 1) {
+					$out[] = $plan;
+				}
+			}
+
+			return $out;
+		}
+
 		/** Vaulted cards for a customer, default first. */
 		public function getCustomerCards($user_id)
 		{
