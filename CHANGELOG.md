@@ -6,6 +6,52 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-25 — The billing 500 was mine
+
+The diagnostic screen added an hour earlier did its job on the first load:
+
+> **Call to undefined method Adminmodel::getAllPlanDurations()** — Admin.php line 6854
+
+Not a schema gap. Not a missing migration. A method I deleted myself.
+
+Rewriting the billing model block for 0029 replaced a span of `Adminmodel`
+running from the `billingFromSql()` docblock to the `getCustomerCards()`
+docblock — and `getAllPlanDurations()` sat inside it. The controller still
+called it. Nothing caught this: every suite here exercises models directly,
+and not one of them walks a controller's calls.
+
+Both of my earlier theories about this 500 — the missing `duration_*` columns
+and `plans.sort_order` — were wrong about *this* failure. The hardening they
+produced is worth keeping on its own merits (the schema really is missing those
+columns, and the self-serve checkout really is broken because of it), but
+neither was the cause, and I should have made the page report before guessing
+twice.
+
+### Fixed
+
+- **`Adminmodel::getAllPlanDurations()` restored.** `/admin/billing-customer/<id>`
+  loads again.
+
+### Added
+
+- **A resolver check across all three controllers.** It walks every
+  `$this->adminmodel->x()` and `$this->usermodel->x()` call — 707 of them — and
+  asserts the model really defines it. Case-insensitive, because PHP method
+  names are: `allclassifiedsCategory()` genuinely does reach
+  `allClassifiedsCategory()`, and a case-sensitive check reported two false
+  positives before I matched PHP's own semantics.
+
+  This is the check that was missing. It costs a second to run and would have
+  caught the deletion the moment it happened, instead of in production two
+  deploys later.
+
+### Verified
+
+177 assertions across ten suites. The resolver check passes across all 707
+calls, including the restored method.
+
+---
+
 ## 2026-08-25 — Stop guessing at the billing 500
 
 The billing detail page was still returning a bare HTTP 500 after two fixes

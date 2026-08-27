@@ -3626,6 +3626,24 @@
 		}
 
 		/**
+		 * Every active plan term, in one query, so the billing screen can swap
+		 * the term dropdown when staff pick a different plan without a round
+		 * trip per plan.
+		 */
+		public function getAllPlanDurations()
+		{
+			if (!$this->db->table_exists('plan_durations')) {
+				return array();
+			}
+
+			return $this->db->from('plan_durations')
+				->where('is_active', 1)
+				->order_by('plan_id', 'ASC')
+				->order_by('duration_months', 'ASC')
+				->get()->result();
+		}
+
+		/**
 		 * The packages the billing screen can put a business on.
 		 *
 		 * Not Usermodel::getAllPlans(), which orders by `plans.sort_order`
