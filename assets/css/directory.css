@@ -1384,3 +1384,44 @@
 @media (prefers-reduced-motion: reduce) {
 	.p411-dir *, .p411-ld *, .p411-ct * { transition: none !important; animation: none !important; }
 }
+
+/* ---- go to page ------------------------------------------------------- */
+/*
+ * Sits under the numbered pager on /all-listing. The numbers only ever show
+ * the current page plus two either side, so on a 47-page directory reaching
+ * page 20 was a walk; this is one step. Deliberately quiet — it is a fallback
+ * route, not the primary control.
+ */
+.p411-pager-jump {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 12px 0 6px;
+	font-size: 13.5px;
+	color: var(--p411-ink-3);
+}
+.p411-pager-jump label { margin: 0; font-weight: 600; color: var(--p411-ink-2); }
+.p411-pager-jump input[type="number"] {
+	width: 78px;
+	padding: 7px 10px;
+	border: 1px solid var(--p411-line);
+	border-radius: var(--p411-r-s);
+	background: #fff;
+	color: var(--p411-ink);
+	font-size: 14px;
+	font-weight: 600;
+	text-align: center;
+}
+.p411-pager-jump button {
+	padding: 7px 16px;
+	border: 1px solid var(--p411-line);
+	border-radius: var(--p411-r-s);
+	background: #fff;
+	color: var(--p411-ink-2);
+	font-size: 13.5px;
+	font-weight: 600;
+	cursor: pointer;
+}
+.p411-pager-jump button:hover { background: var(--p411-bg); }

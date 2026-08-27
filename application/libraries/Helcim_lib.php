@@ -142,6 +142,30 @@ class Helcim_lib
     }
 
     /**
+     * Initialize a HelcimPay.js session whose only purpose is to put a card on
+     * file. No money moves: `verify` runs the card for a zero-dollar
+     * authorization and hands back a `cardToken` we can charge later.
+     *
+     * This is what /admin/billing uses when staff take a card over the phone
+     * for a customer who is not paying anything today, and what a customer
+     * replacing an expiring card needs. Charging is a separate step — see
+     * charge_vaulted_card().
+     *
+     * If the Helcim account does not have zero-dollar verification enabled the
+     * initialize call fails, and the caller should fall back to taking the
+     * payment with `initialize_checkout()` (a purchase returns a cardToken
+     * too). The billing screen surfaces the error and offers exactly that.
+     *
+     * @param array $opts optional: description
+     * @return array ['success'=>bool, 'checkoutToken'=>?, 'secretToken'=>?, 'error'=>?]
+     */
+    public function initialize_card_verification($opts = array())
+    {
+        $opts['paymentType'] = 'verify';
+        return $this->initialize_checkout(0, null, $opts);
+    }
+
+    /**
      * Step 3 — validate the transaction payload the browser posts back.
      *
      * HelcimPay.js returns the transaction data plus a `hash`. The hash is

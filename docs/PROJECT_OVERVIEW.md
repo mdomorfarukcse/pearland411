@@ -173,13 +173,17 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
    gates every "add" with an "upgrade your plan" prompt.
 4. **Recurring subscriptions via Helcim:** checkout → `subscriptions`; auto-renew vaults the card;
    `Cli::renew_subscriptions` renews with dunning; upgrade/downgrade/cancel on the account page.
+5. **Staff-operated billing:** `/admin/billing` does the same three things for a customer who is
+   being signed up by hand — put a card on file, take a one-off payment, set when recurring
+   billing runs. Card data still goes only to Helcim (the screen opens the same HelcimPay.js
+   iframe); what is stored is the token, the last four digits and the brand.
 
 ## Feature → where it lives
 | Area | Route(s) | Controller / model | Notes |
 |---|---|---|---|
 | Home | `/` | `User::index` → `index.php` | Self-contained (own header; footer via `partials/site_footer.php`). Hotspot → Business of the Week → Featured → Explore are filled in that order and de-duplicated by id **and** name; Featured and Explore only take listings with a real description (`Usermodel::getHomepageFeatured` / `getHomepageListings`). 7 ad zones, 4 of which render nothing when unsold. |
 | About | `/about-us` | `User::about_us` → `about.php` | Shared kit; the figures in "Pearland411 today" are counted live and each links to its page |
-| Directory / listing | `/all-listing`, `/all_listing/<cat>[/<offset>]`, `/listing-details/<slug>` | `User::all_listing`, `listing_details` | Homepage layout + 6 ad zones each; `?sort=featured\|newest\|name\|rating` |
+| Directory / listing | `/all-listing`, `/all_listing/<cat>[/<offset>]`, `/listing-details/<slug>` | `User::all_listing`, `listing_details` | Homepage layout + 6 ad zones each; `?sort=featured\|newest\|name\|rating`. `?page=N` is an alternative to the positional offset and is what the "Go to page" box under the pager posts to — the numbered pager only shows ±2 pages, so page 20 of 47 was otherwise a long walk |
 | Claim a listing | `/claim-listing/<slug>` | `User::claim_listing`; admin `Admin::claim_approve` | transfers `listings.user_id` |
 | Edit own listing | `/user/edit-listing/<slug>` | `User::edit_listing` | ownership + capability gated |
 | Packages (customer) | `/pricing-plan` | `User::pricing_plan` → `pricing_plan.php` | lists all active `plans`; carries `partials/sales_help.php` (`#talk-to-us`) so a caller can buy by phone |
@@ -193,7 +197,9 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Custom quote | `/request-quote[?service=<slug>]` (GET form), `/request-service[/<slug>]` (POST) | `User::request_quote`, `request_service` | One POST handler for both forms — rate-limited 5/IP/hour, saved to `service_requests`, emailed to `site_setting('service_quote_email')` with the sender as Reply-To |
 | Checkout | `/checkout?plan_id=X` | `User::checkout` / `helcim_init` / `process_checkout` | HelcimPay.js |
 | Manage plan | `/user/my_account` | upgrade/downgrade/cancel | prorated upgrade |
-| Renewal cron | — | `Cli::renew_subscriptions` | daily |
+| Renewal cron | — | `Cli::renew_subscriptions` | daily. Prices each charge with `Usermodel::renewalAmountFor()` — the chosen `plan_durations` price, else the plan's — which `/admin/billing` shows staff so the figure on screen is the figure taken |
+| Members (admin) | `/admin/users[/<page>][?q=]` | `Admin::users` → `Adminmodel::getUserDirectory` | Read-only review list: businesses owned, email verified, joined. `?q=` matches name, email **or business name**. There is deliberately no delete — removing a member orphans everything they own |
+| Customer billing (admin) | `/admin/billing[/<page>][?q=]`, `/admin/billing-customer/<user_id>` | `Admin::billing`, `billing_customer`, `billing_card_init`, `billing_card_save`, `billing_charge`, `billing_card_delete`, `billing_recurring_save` | Super-admin only. Card on file (HelcimPay.js `verify`, charges nothing), one-off payment (vaulted card server-side, or a new card via HelcimPay.js `purchase`), and the recurring schedule. `?q=` searches every customer by account name, email **or business name**; with no search the list is only customers who have a subscription, card or payment. An *active* subscription is rescheduled in place; anything else starts a new term, because `getRenewableSubscriptions()` only charges active rows. The freehand amount is capped by `site_setting('billing_manual_charge_max', 25000)` |
 | Admin | `/admin` | `Admin::*` | |
 | Site settings / services | `/admin/setting` | `Admin::admin_setting` | feature flags. `service_*_enabled` default **on**; `feature_duplicate_listing_enabled` defaults **off** (see `duplicate_listing_enabled()`) |
 | Add a listing (admin) | `/admin/add_new_listings` | `Admin::add_new_listings` | with duplication off it redirects straight to `add_listing_scratch`; the chooser page only appears when the flag is on |

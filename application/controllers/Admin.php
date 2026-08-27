@@ -347,6 +347,8 @@ class Admin extends CI_Controller
 			'pricing', 'pricing_plan', 'add_pricing_plan', 'edit_pricing_plan',
 			'delete_pricing_plan', 'all_subscriptions', 'subscription_view',
 			'cancel_subscription', 'delete_subscription', 'purchase_subscription',
+			'billing', 'billing_customer', 'billing_card_init', 'billing_card_save',
+			'billing_charge', 'billing_card_delete', 'billing_recurring_save',
 			'current_ads', 'create_ads', 'ads_edit', 'ads_delete',
 			'ads_price', 'create_ads_price', 'ads_price_edit',
 			'ads_request', 'ads_history', 'ads_history_delete', 'approveAdStatus',
@@ -659,6 +661,11 @@ class Admin extends CI_Controller
 			// which reads as "nobody advertises here". 0 = never show one;
 			// -1 = no cap, the old behaviour.
 			'ads_house_max_per_page',
+			// Ceiling on the freehand amount staff can charge at
+			// /admin/billing. Every other charge in the system is priced
+			// server-side from a plan; this one is typed, so it gets a limit.
+			// Defaults to 25000 — see Admin::billingAmount(). 0 = no limit.
+			'billing_manual_charge_max',
 		);
 
 		if ($this->input->method() === 'post') {
@@ -3286,7 +3293,11 @@ class Admin extends CI_Controller
 				'news_slug'			=> $news_slug
 			);
 
-			if ($_FILES && $_FILES['news_image']['name']) {
+			// isset(), not just a truthy $_FILES: a save with no picture attached
+			// left $_FILES non-empty but without this key, which is an
+			// "Undefined array key" warning on every text-only article.
+			$upload_note = '';
+			if (!empty($_FILES['news_image']['name'])) {
 				$img_info = [
 					'upload_path' => 'images/news',
 					'quality'     => '60%',
@@ -3295,10 +3306,21 @@ class Admin extends CI_Controller
 					'image_name'  => 'news_image'
 				];
 				$info['news_image'] = uploadAndResize($img_info);
+
+				// A rejected upload used to store NULL in silence, so the
+				// article saved without its picture and nothing said why.
+				if (empty($info['news_image'])) {
+					$upload_note = ' The picture was not saved: '
+						. (upload_last_error() ?: 'the file could not be read.')
+						. ' The article is saved — edit it to add the image again.';
+				}
 			}
 
 			if ($this->adminmodel->add('news', $info)) {
-				$this->session->set_flashdata('message', 'Successfully Added News!!');
+				$this->session->set_flashdata(
+					$upload_note === '' ? 'message' : 'error',
+					'Successfully Added News!!' . $upload_note
+				);
 				redirect('admin/news-list');
 			} else {
 				$this->session->set_flashdata('error', 'Could not save the news article. ' . $this->adminmodel->lastDbError());
@@ -3343,7 +3365,9 @@ class Admin extends CI_Controller
 				'featured_news'  => $this->input->post('featured_news')
 			);
 
-			if ($_FILES && $_FILES['news_image']['name']) {
+			$upload_note = '';
+
+			if (!empty($_FILES['news_image']['name'])) {
 				$img_info = [
 					'upload_path' => 'images/news',
 					'quality'     => '60%',
@@ -3352,25 +3376,39 @@ class Admin extends CI_Controller
 					'image_name'  => 'news_image'
 				];
 
-				$image_link = $old_image;
+				$new_image = uploadAndResize($img_info);
 
-				if ($image_link != null) {
-					if (file_exists('./' . $image_link)) {
-						unlink($image_link);
+				if (!empty($new_image)) {
+					// Delete the old file only now that a replacement exists.
+					// This used to unlink() BEFORE the upload ran, so a picture
+					// the upload then rejected — wrong type, too big, or the
+					// resize that used to fatal on a phone photo — took the
+					// existing one with it and the article was left with none.
+					if (!empty($old_image) && $old_image !== $new_image && file_exists(FCPATH . $old_image)) {
+						@unlink(FCPATH . $old_image);
 					}
+					$info['news_image'] = $new_image;
+				} else {
+					$info['news_image'] = $old_image;
+					$upload_note = ' The new picture was not saved: '
+						. (upload_last_error() ?: 'the file could not be read.')
+						. ' The article keeps the picture it had.';
 				}
-
-				$info['news_image'] = uploadAndResize($img_info);
 			} else {
 				$info['news_image'] = $old_image;
 			}
 
 			if ($this->adminmodel->update($slug, $info, 'news_slug', 'news')) {
-				$this->session->set_flashdata('message', 'Successfully Updated News!!');
+				$this->session->set_flashdata(
+					$upload_note === '' ? 'message' : 'error',
+					'Successfully Updated News!!' . $upload_note
+				);
 				redirect('admin/news-list', 'refresh');
 			} else {
-				$this->session->set_flashdata('message', 'Sorry, Update News Failed!!');
-				redirect('admin/edit-news' . $slug, 'refresh');
+				$this->session->set_flashdata('error', 'Sorry, Update News Failed!!');
+				// The slash was missing, so a failed save redirected to
+				// "admin/edit-news<slug>" — a 404 instead of the form.
+				redirect('admin/edit-news/' . $slug, 'refresh');
 			}
 		}
 	}
@@ -6462,6 +6500,725 @@ class Admin extends CI_Controller
 			$this->session->set_flashdata('error', 'Failed to activate subscription. Please try again.');
 			redirect('admin/pricing');
 		}
+	}
+
+	/**
+	 * /admin/users — a read-only review list of member accounts.
+	 *
+	 * There was no user screen anywhere in the admin: the only place an
+	 * account appeared was inside the owner dropdown on the listing form,
+	 * as a bare name. So "are these users all allowed to publish content?
+	 * Kindly review each user" could not be acted on by anybody — there was
+	 * nothing to review.
+	 *
+	 * Deliberately read-only. Deleting a member orphans every listing, event
+	 * and article they own, and that needs its own screen with its own
+	 * warnings rather than a Delete link on a list built to answer a question.
+	 */
+	public function users($page = 1)
+	{
+		$q = trim((string) $this->input->get('q', TRUE));
+
+		$per_page   = admin_per_page(20);
+		$total_rows = $this->adminmodel->countUserDirectory($q);
+
+		$config = array(
+			'base_url'           => base_url('admin/users'),
+			'total_rows'         => $total_rows,
+			'per_page'           => $per_page,
+			'uri_segment'        => 3,
+			'use_page_numbers'   => TRUE,
+			'reuse_query_string' => TRUE,
+			'first_link'         => 'First',
+			'last_link'          => 'Last',
+			'next_link'          => 'Next',
+			'prev_link'          => 'Prev',
+			'full_tag_open'      => '<nav><ul class="pagination">',
+			'full_tag_close'     => '</ul></nav>',
+			'first_tag_open'     => '<li class="page-item">',
+			'first_tag_close'    => '</li>',
+			'last_tag_open'      => '<li class="page-item">',
+			'last_tag_close'     => '</li>',
+			'next_tag_open'      => '<li class="page-item">',
+			'next_tag_close'     => '</li>',
+			'prev_tag_open'      => '<li class="page-item">',
+			'prev_tag_close'     => '</li>',
+			'num_tag_open'       => '<li class="page-item">',
+			'num_tag_close'      => '</li>',
+			'cur_tag_open'       => '<li class="page-item active"><a class="page-link">',
+			'cur_tag_close'      => '</a></li>',
+			'attributes'         => array('class' => 'page-link'),
+		);
+		$this->pagination->initialize($config);
+
+		$page   = ((int) $page < 1) ? 1 : (int) $page;
+		$offset = ($page - 1) * $per_page;
+
+		$data = array(
+			'members'      => $this->adminmodel->getUserDirectory($per_page, $offset, $q),
+			'start_number' => $offset + 1,
+			'search_query' => $q,
+			'total_rows'   => $total_rows,
+			'link'         => $this->pagination->create_links(),
+		);
+
+		$this->load->view('admin/header');
+		$this->load->view('admin/users', $data);
+		$this->load->view('admin/footer');
+	}
+
+	/*=====================================================================
+		Customer billing — /admin/billing
+
+		Until this screen existed a card could only be vaulted by the CUSTOMER,
+		during their own checkout, and only if they ticked auto-renew. Staff
+		signing up a business over the phone had no way to put a card on file,
+		take that month's payment, or say when billing should resume — and
+		Cli::renew_subscriptions therefore had nothing to charge.
+
+		Card data never reaches this server. "Add a card" opens the same
+		HelcimPay.js iframe the storefront uses; the browser sends the PAN
+		straight to Helcim and hands us back a token. What we store is that
+		token, the last four digits, and the brand.
+	======================================================================*/
+
+	/** The admin acting on the current request, for the audit columns. */
+	private function billingAdminId()
+	{
+		$admin = $this->session->userdata('logged_admin');
+
+		return (int) (isset($admin['logged_id']) ? $admin['logged_id'] : 0);
+	}
+
+	/**
+	 * Validate a staff-typed money amount.
+	 *
+	 * Accepts what somebody copying a figure off an invoice actually types —
+	 * "$1,234.50" — and rejects anything non-numeric, zero, negative, or above
+	 * the ceiling. The ceiling exists because this is the one amount in the
+	 * system a human types freehand: everything else is priced server-side
+	 * from a plan. An extra keystroke on a $39 invoice should not become a
+	 * $3,900 charge on a customer's card without someone raising the limit
+	 * deliberately (site setting `billing_manual_charge_max`, at /admin/setting).
+	 *
+	 * @return float|false
+	 */
+	private function billingAmount($raw)
+	{
+		$raw = str_replace(array('$', ',', ' '), '', trim((string) $raw));
+		if ($raw === '' || !is_numeric($raw)) {
+			return false;
+		}
+
+		$amount = round((float) $raw, 2);
+		$max    = (float) site_setting('billing_manual_charge_max', 25000);
+
+		if ($amount <= 0 || ($max > 0 && $amount > $max)) {
+			return false;
+		}
+
+		return $amount;
+	}
+
+	/** Normalise a staff-typed date to a DATETIME, or NULL if unreadable. */
+	private function billingDate($raw)
+	{
+		$raw = trim((string) $raw);
+		if ($raw === '') {
+			return null;
+		}
+
+		$ts = strtotime($raw);
+
+		return $ts === false ? null : date('Y-m-d H:i:s', $ts);
+	}
+
+	/** A short, human-readable label for the Helcim dashboard. */
+	private function billingDescription($customer, $note = '')
+	{
+		$who = '';
+		if ($customer) {
+			$who = !empty($customer->businesses) ? $customer->businesses : $customer->name;
+		}
+
+		// Built by joining what we have rather than by appending separators, so
+		// a customer with no business name does not produce a dangling dash.
+		$parts = array('Pearland411');
+		if (trim((string) $who) !== '') {
+			$parts[] = trim((string) $who);
+		}
+		if ($note !== '') {
+			$parts[] = $note;
+		}
+		$label = implode(' — ', $parts);
+
+		// Truncate by CHARACTER, not byte: a business name with an accent or a
+		// curly apostrophe would otherwise be cut through the middle of one and
+		// reach the Helcim dashboard as a replacement glyph.
+		return function_exists('mb_substr') ? mb_substr($label, 0, 120, 'UTF-8') : substr($label, 0, 120);
+	}
+
+	/**
+	 * Pull the displayable card details out of a validated HelcimPay.js
+	 * response. Everything is optional — different card types and account
+	 * settings return different fields — so each lookup falls back rather than
+	 * failing, and only the last four digits are ever kept.
+	 */
+	private function billingCardDetails(array $txn)
+	{
+		$out = array('card_last4' => '', 'card_brand' => '', 'card_holder_name' => '');
+
+		foreach (array('cardNumber', 'cardLast4', 'maskedNumber', 'cardMasked') as $key) {
+			// is_scalar: Helcim has been known to nest card data, and casting an
+			// array to string is a PHP warning, not a card number.
+			if (!empty($txn[$key]) && is_scalar($txn[$key])) {
+				$digits = preg_replace('/\D+/', '', (string) $txn[$key]);
+				if (strlen($digits) >= 4) {
+					$out['card_last4'] = substr($digits, -4);
+					break;
+				}
+			}
+		}
+
+		foreach (array('cardType', 'cardBrand', 'brand') as $key) {
+			if (!empty($txn[$key]) && is_string($txn[$key])) {
+				$out['card_brand'] = substr($txn[$key], 0, 30);
+				break;
+			}
+		}
+
+		foreach (array('cardHolderName', 'cardholderName', 'customerName') as $key) {
+			if (!empty($txn[$key]) && is_string($txn[$key])) {
+				$out['card_holder_name'] = substr($txn[$key], 0, 100);
+				break;
+			}
+		}
+
+		return $out;
+	}
+
+	/** JSON helper — these endpoints are all called from the billing page. */
+	private function billingJson($payload)
+	{
+		$this->output->set_content_type('application/json');
+
+		return $this->output->set_output(json_encode($payload));
+	}
+
+	/**
+	 * The billing list. `?q=` searches every customer by account name, email,
+	 * or the name of a business they own; with no search the list shows only
+	 * customers who have a subscription, a card or a payment.
+	 */
+	public function billing($page = 1)
+	{
+		$q = trim((string) $this->input->get('q', TRUE));
+
+		$per_page   = admin_per_page(20);
+		$total_rows = $this->adminmodel->countBillingCustomers($q);
+
+		$config = array(
+			'base_url'           => base_url('admin/billing'),
+			'total_rows'         => $total_rows,
+			'per_page'           => $per_page,
+			'uri_segment'        => 3,
+			'use_page_numbers'   => TRUE,
+			'reuse_query_string' => TRUE,
+			'first_link'         => 'First',
+			'last_link'          => 'Last',
+			'next_link'          => 'Next',
+			'prev_link'          => 'Prev',
+			'full_tag_open'      => '<nav><ul class="pagination">',
+			'full_tag_close'     => '</ul></nav>',
+			'first_tag_open'     => '<li class="page-item">',
+			'first_tag_close'    => '</li>',
+			'last_tag_open'      => '<li class="page-item">',
+			'last_tag_close'     => '</li>',
+			'next_tag_open'      => '<li class="page-item">',
+			'next_tag_close'     => '</li>',
+			'prev_tag_open'      => '<li class="page-item">',
+			'prev_tag_close'     => '</li>',
+			'num_tag_open'       => '<li class="page-item">',
+			'num_tag_close'      => '</li>',
+			'cur_tag_open'       => '<li class="page-item active"><a class="page-link">',
+			'cur_tag_close'      => '</a></li>',
+			'attributes'         => array('class' => 'page-link'),
+		);
+		$this->pagination->initialize($config);
+
+		$page   = ((int) $page < 1) ? 1 : (int) $page;
+		$offset = ($page - 1) * $per_page;
+
+		$this->load->library('helcim_lib');
+
+		$data = array(
+			'customers'         => $this->adminmodel->getBillingCustomers($per_page, $offset, $q),
+			'start_number'      => $offset + 1,
+			'search_query'      => $q,
+			'total_rows'        => $total_rows,
+			'helcim_configured' => $this->helcim_lib->is_configured(),
+			'link'              => $this->pagination->create_links(),
+		);
+
+		$this->load->view('admin/header');
+		$this->load->view('admin/billing', $data);
+		$this->load->view('admin/footer');
+	}
+
+	/** One customer: card on file, take a payment, recurring schedule. */
+	public function billing_customer($user_id = 0)
+	{
+		$customer = $this->adminmodel->getBillingCustomer((int) $user_id);
+		if (!$customer) {
+			$this->session->set_flashdata('error', 'That customer no longer exists.');
+			redirect('admin/billing');
+			return;
+		}
+
+		$this->load->library('helcim_lib');
+
+		$plans = array();
+		foreach ($this->usermodel->getAllPlans() as $plan) {
+			if (!isset($plan->is_active) || (int) $plan->is_active === 1) {
+				$plans[] = $plan;
+			}
+		}
+
+		// What the renewal job would take on the next run, by the same rule the
+		// job itself uses — so the figure on screen is the figure charged.
+		$renewal_amount = !empty($customer->subscription_id)
+			? $this->usermodel->renewalAmountFor($customer)
+			: 0.0;
+
+		$data = array(
+			'customer'          => $customer,
+			'cards'             => $this->adminmodel->getCustomerCards((int) $user_id),
+			'transactions'      => $this->adminmodel->getCustomerTransactions((int) $user_id, 25),
+			'plans'             => $plans,
+			'all_durations'     => $this->adminmodel->getAllPlanDurations(),
+			'renewal_amount'    => $renewal_amount,
+			'has_card'          => (bool) $this->usermodel->getVaultedCardToken((int) $user_id),
+			'helcim_configured' => $this->helcim_lib->is_configured(),
+			'helcimpay_js_url'  => $this->helcim_lib->helcimpay_js_url(),
+			'currency'          => !empty($customer->currency) ? $customer->currency : $this->helcim_lib->currency(),
+		);
+
+		$this->load->view('admin/header');
+		$this->load->view('admin/billing_customer', $data);
+		$this->load->view('admin/footer');
+	}
+
+	/**
+	 * AJAX — open a HelcimPay.js session for this customer.
+	 *
+	 * mode=verify   put a card on file, charging nothing.
+	 * mode=charge   take a payment on a card typed in now, optionally keeping
+	 *               the token for future renewals.
+	 *
+	 * The secretToken stays server-side; billing_card_save() uses it to prove
+	 * the response the browser posts back really came from Helcim.
+	 * URL: /admin/billing-card-init (POST)
+	 */
+	public function billing_card_init()
+	{
+		if ($this->input->method() !== 'post') {
+			return $this->billingJson(array('success' => false, 'error' => 'Not allowed.'));
+		}
+
+		$user_id  = (int) $this->input->post('user_id');
+		$customer = $this->adminmodel->getBillingCustomer($user_id);
+		if (!$customer) {
+			return $this->billingJson(array('success' => false, 'error' => 'Customer not found.'));
+		}
+
+		$this->load->library('helcim_lib');
+		if (!$this->helcim_lib->is_configured()) {
+			return $this->billingJson(array(
+				'success' => false,
+				'error'   => 'Helcim is not configured — add HELCIM_API_TOKEN to .env, then check it at Admin > SEO & Setting.',
+			));
+		}
+
+		$mode = $this->input->post('mode') === 'charge' ? 'charge' : 'verify';
+		$note = trim((string) $this->input->post('note', TRUE));
+		$save = $this->input->post('save_card') === '1' ? 1 : 0;
+
+		$amount = 0.0;
+		if ($mode === 'charge') {
+			$amount = $this->billingAmount($this->input->post('amount'));
+			if ($amount === false) {
+				return $this->billingJson(array('success' => false, 'error' => 'Enter a payment amount greater than zero.'));
+			}
+			$init = $this->helcim_lib->initialize_checkout($amount, null, array(
+				'description' => $this->billingDescription($customer, $note),
+			));
+		} else {
+			// Vaulting only — no money moves.
+			$init = $this->helcim_lib->initialize_card_verification(array(
+				'description' => $this->billingDescription($customer, 'card on file'),
+			));
+		}
+
+		if (empty($init['success'])) {
+			// Staff-only screen: show what Helcim actually said, or nobody can
+			// tell a missing scope from a declined card.
+			log_message('error', 'Admin billing init failed: ' . $init['error']);
+			$error = 'Helcim could not start this: ' . $init['error'];
+			if ($mode === 'verify') {
+				$error .= ' If your account does not allow zero-dollar card verification, take the payment instead — saving the card is part of that.';
+			}
+
+			return $this->billingJson(array('success' => false, 'error' => $error));
+		}
+
+		$this->session->set_userdata('helcim_admin_pending', array(
+			'checkoutToken' => $init['checkoutToken'],
+			'secretToken'   => $init['secretToken'],
+			'user_id'       => $user_id,
+			'mode'          => $mode,
+			'amount'        => $amount,
+			'currency'      => $this->helcim_lib->currency(),
+			'note'          => $note,
+			'save_card'     => $save,
+			'admin_id'      => $this->billingAdminId(),
+		));
+
+		return $this->billingJson(array('success' => true, 'checkoutToken' => $init['checkoutToken']));
+	}
+
+	/**
+	 * AJAX — finalize what billing_card_init() started: verify the hash, vault
+	 * the card, and record the payment if there was one.
+	 * URL: /admin/billing-card-save (POST)
+	 */
+	public function billing_card_save()
+	{
+		if ($this->input->method() !== 'post') {
+			return $this->billingJson(array('success' => false, 'error' => 'Not allowed.'));
+		}
+
+		$pending = $this->session->userdata('helcim_admin_pending');
+		if (!$pending || empty($pending['secretToken'])) {
+			return $this->billingJson(array('success' => false, 'error' => 'This session expired. Please start again.'));
+		}
+
+		$checkout_token   = (string) $this->input->post('checkoutToken');
+		$transaction_json = (string) $this->input->post('transaction_json');
+		$hash             = (string) $this->input->post('hash');
+
+		if ($checkout_token === '' || $checkout_token !== $pending['checkoutToken']) {
+			return $this->billingJson(array('success' => false, 'error' => 'Payment token mismatch.'));
+		}
+
+		$this->load->library('helcim_lib');
+		if (!$this->helcim_lib->validate_transaction($transaction_json, $hash, $pending['secretToken'])) {
+			// Never log the payload itself — it carries card details.
+			log_message('error', 'Admin billing hash validation failed for checkoutToken ' . $checkout_token);
+
+			return $this->billingJson(array(
+				'success' => false,
+				'error'   => 'We could not verify that response from Helcim. Check the Helcim dashboard before trying again.',
+			));
+		}
+
+		$txn = json_decode($transaction_json, true);
+		$txn = is_array($txn) ? $txn : array();
+
+		$helcim_txn_id = isset($txn['transactionId']) ? $txn['transactionId'] : (isset($txn['id']) ? $txn['id'] : null);
+		$approval_code = isset($txn['approvalCode']) ? $txn['approvalCode'] : null;
+		$card_token    = isset($txn['cardToken']) ? $txn['cardToken'] : null;
+		$details       = $this->billingCardDetails($txn);
+
+		$user_id  = (int) $pending['user_id'];
+		$customer = $this->adminmodel->getBillingCustomer($user_id);
+		$saved    = false;
+		$charged  = false;
+
+		// One-time consume: clear it before doing the work so a replayed post
+		// cannot record the same payment twice.
+		$this->session->unset_userdata('helcim_admin_pending');
+
+		if ($pending['mode'] === 'charge') {
+			$txn_id = $this->adminmodel->recordManualCharge(array(
+				'user_id'               => $user_id,
+				'amount'                => (float) $pending['amount'],
+				'currency'              => $pending['currency'],
+				'plan_id'               => $customer && !empty($customer->plan_id) ? (int) $customer->plan_id : null,
+				'subscription_id'       => $customer && !empty($customer->subscription_id) ? (int) $customer->subscription_id : null,
+				'helcim_transaction_id' => $helcim_txn_id,
+				'helcim_approval_code'  => $approval_code,
+				'helcim_card_token'     => $card_token,
+				'created_by_admin_id'   => (int) $pending['admin_id'],
+				'note'                  => $pending['note'],
+			));
+			$charged = (bool) $txn_id;
+
+			if (!$charged) {
+				// The card WAS charged; only our bookkeeping failed. Say so
+				// plainly rather than inviting a second attempt.
+				log_message('error', 'Admin billing: charge succeeded but recording failed for user ' . $user_id
+					. ' (Helcim txn ' . $helcim_txn_id . ')');
+
+				return $this->billingJson(array(
+					'success' => false,
+					'error'   => 'The card was charged (Helcim transaction ' . $helcim_txn_id
+						. ') but we could not record it here. Do NOT charge again — note that transaction id and contact support.',
+				));
+			}
+		}
+
+		$wanted_save = ($pending['mode'] === 'verify' || !empty($pending['save_card']));
+
+		if ($card_token && $wanted_save) {
+			$saved = (bool) $this->adminmodel->vaultCustomerCard($user_id, array(
+				'helcim_card_token' => $card_token,
+				'card_last4'        => $details['card_last4'],
+				'card_brand'        => $details['card_brand'],
+				'card_holder_name'  => $details['card_holder_name'],
+				'card_source'       => 'admin',
+				'added_by_admin_id' => (int) $pending['admin_id'],
+			));
+		}
+
+		$message = array();
+		if ($charged) {
+			$message[] = 'Charged ' . $pending['currency'] . ' ' . number_format((float) $pending['amount'], 2) . '.';
+		}
+		// Three different outcomes hide behind "not saved", and telling staff
+		// the wrong one sends them down the wrong path: a missing token means
+		// use the other flow, a failed write means the card is genuinely not
+		// on file yet.
+		if ($wanted_save) {
+			if ($saved) {
+				$message[] = 'Card saved for recurring billing.';
+			} elseif (!$card_token) {
+				$message[] = ($pending['mode'] === 'verify')
+					? 'Helcim approved the card but returned no token to store, so nothing was saved. Take the payment with "Enter a card & charge" instead — that always returns one.'
+					: 'Helcim returned no card token, so nothing was saved for future renewals.';
+			} else {
+				$message[] = 'The card was accepted by Helcim but could not be saved here, so recurring billing still has no card. Has migration 0028 been run?';
+			}
+		}
+
+		$this->session->set_flashdata(($charged || $saved) ? 'message' : 'error', implode(' ', $message));
+
+		return $this->billingJson(array(
+			'success'  => true,
+			'redirect' => base_url('admin/billing-customer/' . $user_id),
+		));
+	}
+
+	/**
+	 * Charge the card already on file — no card entry, no browser involved.
+	 * This is the one-click path for "run this month's bill".
+	 * URL: /admin/billing-charge (POST)
+	 */
+	public function billing_charge()
+	{
+		$user_id = (int) $this->input->post('user_id');
+		$back    = 'admin/billing-customer/' . $user_id;
+
+		if ($this->input->method() !== 'post') {
+			redirect($back);
+			return;
+		}
+
+		$customer = $this->adminmodel->getBillingCustomer($user_id);
+		if (!$customer) {
+			$this->session->set_flashdata('error', 'That customer no longer exists.');
+			redirect('admin/billing');
+			return;
+		}
+
+		$amount = $this->billingAmount($this->input->post('amount'));
+		if ($amount === false) {
+			$this->session->set_flashdata('error', 'Enter a payment amount greater than zero.');
+			redirect($back);
+			return;
+		}
+
+		$token = $this->usermodel->getVaultedCardToken($user_id);
+		if (!$token) {
+			$this->session->set_flashdata('error', 'There is no card on file for this customer yet — add one first.');
+			redirect($back);
+			return;
+		}
+
+		$this->load->library('helcim_lib');
+		$note     = trim((string) $this->input->post('note', TRUE));
+		$currency = !empty($customer->currency) ? $customer->currency : $this->helcim_lib->currency();
+
+		$res = $this->helcim_lib->charge_vaulted_card($token, $amount, array(
+			'currency'    => $currency,
+			'description' => $this->billingDescription($customer, $note),
+		));
+
+		if (empty($res['success'])) {
+			$this->session->set_flashdata('error', 'The card was declined or the charge failed: ' . $res['error']);
+			redirect($back);
+			return;
+		}
+
+		$txn_id = $this->adminmodel->recordManualCharge(array(
+			'user_id'               => $user_id,
+			'amount'                => $amount,
+			'currency'              => $currency,
+			'plan_id'               => !empty($customer->plan_id) ? (int) $customer->plan_id : null,
+			'subscription_id'       => !empty($customer->subscription_id) ? (int) $customer->subscription_id : null,
+			'helcim_transaction_id' => $res['transactionId'],
+			'helcim_approval_code'  => $res['approvalCode'],
+			'helcim_card_token'     => $token,
+			'created_by_admin_id'   => $this->billingAdminId(),
+			'note'                  => $note,
+		));
+
+		if (!$txn_id) {
+			log_message('error', 'Admin billing: vaulted charge succeeded but recording failed for user ' . $user_id
+				. ' (Helcim txn ' . $res['transactionId'] . ')');
+			$this->session->set_flashdata('error', 'The card was charged (Helcim transaction ' . $res['transactionId']
+				. ') but we could not record it here. Do NOT charge again — note that transaction id and contact support.');
+		} else {
+			$this->session->set_flashdata('message', 'Charged ' . $currency . ' ' . number_format($amount, 2)
+				. ' to the card on file. Helcim transaction ' . $res['transactionId'] . '.');
+		}
+
+		redirect($back);
+	}
+
+	/** Remove a stored card. URL: /admin/billing-card-delete (POST) */
+	public function billing_card_delete()
+	{
+		$user_id = (int) $this->input->post('user_id');
+		$card_id = (int) $this->input->post('card_id');
+		$back    = 'admin/billing-customer/' . $user_id;
+
+		if ($this->input->method() !== 'post' || !$user_id || !$card_id) {
+			redirect($back);
+			return;
+		}
+
+		if ($this->adminmodel->deleteCustomerCard($card_id, $user_id)) {
+			$this->session->set_flashdata('message', 'Card removed. Recurring charges will fail until another card is on file.');
+		} else {
+			$this->session->set_flashdata('error', 'That card could not be removed.');
+		}
+
+		redirect($back);
+	}
+
+	/**
+	 * Save the recurring schedule.
+	 *
+	 * An ACTIVE subscription is rescheduled in place. Anything else — expired,
+	 * cancelled, or no subscription at all — starts a new term on the chosen
+	 * plan, because Cli::renew_subscriptions only ever looks at active rows:
+	 * switching auto-renew on for an expired subscription would look like it
+	 * worked and then never charge anything.
+	 * URL: /admin/billing-recurring-save (POST)
+	 */
+	public function billing_recurring_save()
+	{
+		$user_id = (int) $this->input->post('user_id');
+		$back    = 'admin/billing-customer/' . $user_id;
+
+		if ($this->input->method() !== 'post') {
+			redirect($back);
+			return;
+		}
+
+		$customer = $this->adminmodel->getBillingCustomer($user_id);
+		if (!$customer) {
+			$this->session->set_flashdata('error', 'That customer no longer exists.');
+			redirect('admin/billing');
+			return;
+		}
+
+		$auto_renew = $this->input->post('auto_renew') ? 1 : 0;
+		$next_date  = $this->billingDate($this->input->post('next_billing_date'));
+
+		if ($auto_renew && !$next_date) {
+			$this->session->set_flashdata('error', 'Pick the date the next charge should go out.');
+			redirect($back);
+			return;
+		}
+
+		$is_active = !empty($customer->subscription_id) && $customer->sub_status === 'active';
+
+		if ($is_active) {
+			$ok = $this->adminmodel->updateRecurringBilling((int) $customer->subscription_id, $auto_renew, $next_date);
+			$what = $auto_renew
+				? 'Recurring billing is on. The next charge goes out on ' . date('M j, Y', strtotime($next_date)) . '.'
+				: 'Recurring billing is off. Nothing further will be charged automatically.';
+		} else {
+			$plan_id = (int) $this->input->post('plan_id');
+			$plan    = $plan_id ? $this->usermodel->getPlanByIdForPricing($plan_id) : null;
+			if (!$plan) {
+				$this->session->set_flashdata('error', 'Choose the plan this customer is on.');
+				redirect($back);
+				return;
+			}
+
+			// The term price, not a typed one: the renewal job prices every
+			// charge from the plan or its chosen duration, so storing anything
+			// else here would promise an amount that never gets taken.
+			$duration_id   = (int) $this->input->post('duration_id');
+			$duration      = $duration_id ? $this->usermodel->getDurationById($duration_id) : null;
+			$duration      = ($duration && (int) $duration->plan_id === $plan_id) ? $duration : null;
+			$amount        = $duration ? (float) $duration->price : (float) $plan->price;
+			$duration_days = $duration
+				? ((int) $duration->duration_days ?: ((int) $duration->duration_months * 30))
+				: ((int) $plan->duration_days ?: 30);
+
+			$new_id = $this->adminmodel->startSubscriptionForCustomer(array(
+				'user_id'           => $user_id,
+				'plan_id'           => $plan_id,
+				'duration_id'       => $duration ? (int) $duration->id : null,
+				'duration_days'     => $duration_days,
+				'auto_renew'        => $auto_renew,
+				'next_billing_date' => $next_date,
+				'amount'            => $amount,
+				'currency'          => !empty($customer->currency) ? $customer->currency : 'USD',
+			));
+			$ok = (bool) $new_id;
+
+			// Tie the payment staff just took to the term it paid for, so the
+			// subscription's last_transaction_id is not left pointing at
+			// nothing. Only a payment from the last hour counts: the intended
+			// case is "took the money, now start the plan", and a customer's
+			// unrelated purchase from three months ago must not be re-attached
+			// to a term it did not buy.
+			if ($ok) {
+				$recent = $this->adminmodel->getCustomerTransactions($user_id, 1);
+				if (!empty($recent)
+					&& empty($recent[0]->subscription_id)
+					&& !empty($recent[0]->created_at)
+					&& strtotime($recent[0]->created_at) >= (time() - 3600)) {
+					$this->adminmodel->linkTransactionToSubscription((int) $recent[0]->id, (int) $new_id);
+				}
+			}
+
+			$what = $auto_renew
+				? 'Started ' . $plan->name . '. The next charge goes out on ' . date('M j, Y', strtotime($next_date)) . '.'
+				: 'Started ' . $plan->name . ' with recurring billing off.';
+		}
+
+		if (!$ok) {
+			$this->session->set_flashdata('error', 'Those billing settings could not be saved.');
+			redirect($back);
+			return;
+		}
+
+		// A date already past is legitimate (a catch-up charge), but staff
+		// should know it goes out tonight rather than on the day they picked.
+		if ($auto_renew && strtotime($next_date) <= time()) {
+			$what .= ' That date has already passed, so the charge will be taken on the next nightly run.';
+		}
+		if ($auto_renew && !$this->usermodel->getVaultedCardToken($user_id)) {
+			$what .= ' There is still no card on file — add one, or the renewal will fail.';
+		}
+
+		$this->session->set_flashdata('message', $what);
+		redirect($back);
 	}
 
 	/*=========================

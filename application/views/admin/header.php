@@ -414,6 +414,16 @@
             <li class="ic-pay">
               <a href="<?= base_url('/admin/all-subscriptions'); ?>">All Subscriptions</a>
             </li>
+            <?php // Card on file, one-off payments, and the recurring schedule
+                  // the nightly renewal job charges. Super-admins only. ?>
+            <li class="ic-pay">
+              <a href="<?= base_url('/admin/billing'); ?>">Customer Billing</a>
+            </li>
+            <?php // Read-only review list of member accounts — who owns what,
+                  // and which accounts are leftovers from testing. ?>
+            <li class="ic-pay">
+              <a href="<?= base_url('/admin/users'); ?>">Members</a>
+            </li>
             <li class="ic-pay">
               <a href="<?= base_url('/admin/newsletter-subscribers'); ?>">Newsletter Subscribers</a>
             </li>

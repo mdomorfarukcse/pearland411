@@ -293,3 +293,66 @@ html { max-width: 100%; }
 	   (style.css:29590), which left a 5px seam between 981 and 992px. */
 	.news-top-menu { margin-top: 55px; }
 }
+
+/* ---- narrow widths: one navigation, and all of it reachable ------------ */
+/*
+ * Three rules that all come from the same seam: the bar switches to its
+ * narrow layout at 992px, but the section strip only became scrollable at
+ * 768px (style.css:29572) and the burger only got a pointer cursor at 767px
+ * (new-styles.css:2442). Between 769 and 992px that left a strip whose
+ * right-hand items — the pinned categories and "All categories" — ran past
+ * the viewport with no scrollbar and no way to reach them, because
+ * `html, body { overflow-x: clip }` above crops rather than scrolls. Which is
+ * the reported "switching to window view creates a burger menu ... might be
+ * difficult for users": two navigations at once, one of them truncated.
+ */
+@media (max-width: 992px) {
+	/* The strip scrolls from the same width the bar collapses at, so no item
+	   is ever cropped out of reach. Momentum scrolling on touch; on a mouse
+	   the row simply drags. */
+	.news-menu ul {
+		display: block;
+		white-space: nowrap;
+		overflow-x: auto;
+		overflow-y: hidden;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: thin;
+	}
+	.news-menu ul li { float: none; display: inline-block; }
+
+	/* It is a button. It looked like text between 768 and 992px. */
+	.mob-me-ic { cursor: pointer; }
+}
+
+/*
+ * The off-canvas panel is parked one full screen to the right when closed.
+ * `right: -100%` moves it out of sight but leaves it in the tab order and
+ * clickable, so a keyboard user tabbing through the header fell into a menu
+ * nobody could see. Hidden until it is actually open; the transition still
+ * runs because visibility is animatable in step with the position.
+ */
+.mob-me-all { visibility: hidden; transition: right .5s ease, visibility .5s ease; }
+.mob-me-all.mobmenu-show { visibility: visible; }
+
+/*
+ * The profile band at the top of that panel tiled assets/images/face.jpg at
+ * `background-size: 101px` behind a `brightness(0.3)` filter. The file is a
+ * 400x200 photograph, so across a full-width band it repeated as a row of
+ * dark, chopped-up rectangles — which reads as a broken image, and reads
+ * worst after the panel is left open and the window widened, where it stretches
+ * the full page. That is the reported "broken image when pressing the burger
+ * menu then widening the view". Brand navy instead, no tiling to go wrong.
+ */
+.mob-me-all .ud-lhs-s1:before {
+	background: linear-gradient(135deg, #171A45 0%, #23306B 100%);
+	filter: none;
+}
+.mob-me-all .mv-pro--guest .mv-guest-mark {
+	width: auto;
+	max-width: 150px;
+	height: 44px;
+	object-fit: contain;
+	border-radius: 0;
+	margin-top: 28px;
+	position: relative;
+}

@@ -323,6 +323,30 @@ $showing_to   = $current_offset + count($allListings);
 
 					<?php if (!empty($link)): ?>
 						<nav class="p411-pager" aria-label="Directory pages"><?= $link ?></nav>
+
+						<?php /*
+						 * The numbered pager shows the current page plus two either
+						 * side, then first and last — so from page 1 of 47 the only
+						 * numbers on offer are 1, 2, 3 and 47, and page 20 is two
+						 * clicks at a time away. This is the direct route. It is a
+						 * plain GET form, so it works with JavaScript off, and it
+						 * carries the sort so jumping does not silently reset it.
+						 */ ?>
+						<?php if (!empty($total_pages) && (int) $total_pages > 5): ?>
+							<form class="p411-pager-jump" method="get"
+							      action="<?= e_url(isset($pager_action) ? $pager_action : base_url('all_listing')) ?>">
+								<?php if (!empty($sort) && $sort !== 'featured'): ?>
+									<input type="hidden" name="sort" value="<?= e_attr($sort) ?>">
+								<?php endif; ?>
+								<label for="p411-jump">Go to page</label>
+								<input type="number" id="p411-jump" name="page"
+								       min="1" max="<?= (int) $total_pages ?>"
+								       value="<?= (int) $current_page ?>"
+								       aria-describedby="p411-jump-of">
+								<span id="p411-jump-of">of <?= (int) $total_pages ?></span>
+								<button type="submit">Go</button>
+							</form>
+						<?php endif; ?>
 					<?php endif; ?>
 
 				<?php else: ?>

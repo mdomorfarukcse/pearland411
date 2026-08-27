@@ -1157,3 +1157,37 @@
 	.p411-code--lg b { font-size: 20px; }
 	.p411-svcgrid { grid-template-columns: 1fr; }
 }
+
+/* ---- coupon: copy the code, and somewhere to go ----------------------- */
+/*
+ * /coupons/{id} printed a code and, unless a redemption link happened to be
+ * set, offered nothing to do with it — the reported "I don't see any use for
+ * this, how do users claim a coupon?". The button is revealed by the page's
+ * own script only when the browser can actually copy, so it never sits there
+ * inert.
+ */
+.p411-code__copy {
+	flex: none;
+	padding: 7px 14px;
+	border: 1px solid var(--p411-green);
+	border-radius: var(--p411-r-s);
+	background: #fff;
+	color: var(--p411-green-d);
+	font-size: 13px;
+	font-weight: 700;
+	line-height: 1.2;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background .15s ease, color .15s ease;
+}
+.p411-code__copy:hover { background: var(--p411-green); color: #fff; }
+.p411-code__copy.is-copied { background: var(--p411-green); color: #fff; border-color: var(--p411-green); }
+
+.p411-coupon-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+@media (max-width: 640px) {
+	/* The code, its label and the button stack; keep the button full width so
+	   it stays a comfortable tap target rather than shrinking to its text. */
+	.p411-code__copy { width: 100%; margin-top: 6px; }
+	.p411-coupon-actions .p411-btn { width: 100%; }
+}

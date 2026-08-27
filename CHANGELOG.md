@@ -6,6 +6,323 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-25 — Tracker rows 164–169
+
+Six rows off the manager's error tracker, this time with the screenshots
+attached — which mattered: two of them are only explicable from the picture.
+
+### Fixed
+
+- **`/admin/add-news` returned HTTP 500 on upload (row 169).** `uploadAndResize()`
+  handed the file to CodeIgniter's `Image_lib` with `maintain_ratio` off and
+  **no width or height** — those two lines had been commented out, and
+  `Image_lib::initialize()` fills a missing width/height in from the source. So
+  it allocated the original dimensions *twice* to write a same-size copy: the
+  full memory cost of a resize, and none of the resizing.
+
+  Measured on a 4000×3000 upload — a 4 MB file, well inside the 5 MB limit —
+  that is **92 MB of real memory, of which PHP reports 2 MB**. With bundled
+  libgd the image buffers are `malloc`'d outside the Zend allocator, so
+  `memory_limit` never sees them and never intervenes; what stops the request is
+  the process or container limit, from outside PHP, which is exactly why the
+  symptom was a blank 500 rather than an error message. Capped at 2400px the
+  same file costs 33 MB.
+
+  New `pearland411_downscale_image()` asks whether the allocation fits *before*
+  making it, caps the longest edge at 2400 (above both sizes `image_guidance()`
+  recommends, so an image prepared to spec is left byte-identical), preserves
+  PNG/WebP alpha, and returns FALSE rather than attempting work it cannot
+  finish. `pearland411_generate_variants()` gained the same guard —
+  `safe_upload_image()` could take the process down the same way.
+- **A rejected upload used to save the row and say nothing.** `uploadAndResize()`
+  threw the reason away and returned NULL, so an article or listing saved
+  without its picture and no screen mentioned it. New `upload_last_error()`
+  carries the reason to the caller — passed through a module-level static
+  rather than by changing the return value, so all ~40 existing call sites
+  behave exactly as before — and `add_news` / `edit_news` now say what happened.
+- **Editing a news article could destroy its picture.** `edit_news()` called
+  `unlink()` on the existing image *before* running the upload, so a replacement
+  the upload then rejected — wrong type, too large, or the resize that used to
+  fatal — took the old one with it and left the article with none. The old file
+  is deleted only once a new one exists. Its failure branch also redirected to
+  `admin/edit-news<slug>`, missing a slash, which is a 404 rather than the form.
+- **The burger menu offered a signed-out visitor a member dashboard (row 165).**
+  Below 993px `.bl` is hidden, so Add business / Sign In / Create an account
+  leave the bar; the only navigation left was a panel listing My Dashboard, My
+  Profile and **Log Out** — to somebody who had never logged in. From a narrow
+  window there was no way to reach sign-in at all. Signed-out visitors now get
+  Sign In, Create an account, Add your business, the directory, categories and
+  Contact us.
+- **The section strip was cropped and unreachable between 769 and 992px
+  (row 165).** The bar switches to its narrow layout at 992px but the strip only
+  became scrollable at 768px, and `html, body { overflow-x: clip }` *crops*
+  rather than scrolls — so in that 224px band the right-hand items (the pinned
+  categories, "All categories") ran past the edge with no scrollbar and no way
+  to get to them. That is the screenshot: a burger, and a strip ending
+  mid-word. The strip now scrolls from the same width the bar collapses at.
+  The burger also had `cursor: pointer` only below 767px, so for 225px of that
+  range it did not look clickable — part of "doesn't work sometimes".
+- **The burger menu's profile picture was broken for signed-out visitors
+  (row 166).** `$header_profile_img`, `$header_user_name` and
+  `$header_join_date` were assigned inside the **logged-in half** of the header's
+  branch, but the mobile menu that reads all three renders for everyone. Signed
+  out, the panel opened with `<img src="">` — which browsers draw as a broken
+  image and which never fires the `onerror` fallback. All three are resolved
+  once, above the branch.
+- **…and the panel stayed open when the window widened (row 166).** Nothing
+  cleared `.mobmenu-show` on resize, so a full-screen panel stayed pinned over
+  the desktop layout with no way to shut it: its close button is inside the
+  panel, and `.mob-me-ic` is `display:none` at that width, so the state could
+  not be undone without a reload. That is the reported trigger — *press the
+  burger, then widen the view*. It closes on resize past 992px, and on Escape.
+- **The dark band behind that profile picture was a tiled photograph.**
+  `.ud-lhs-s1:before` tiled `assets/images/face.jpg` — a 400×200 file — at
+  `background-size: 101px` under `brightness(0.3)`, so across a full-width band
+  it repeated as a row of dark chopped-up rectangles. It reads as a broken
+  image, and worst of all at desktop width, which is where the reporter saw it.
+  Brand navy now, with nothing to tile.
+- **Reaching page 20 of the directory took 17 clicks (row 164).** The pager
+  shows the current page plus two either side, then first and last — so from
+  page 1 of 47 the only numbers on offer are 1, 2, 3 and 47. `/all_listing` now
+  also accepts `?page=N`, and a **"Go to page"** box under the pager posts to
+  it. A plain GET form, so it works with JavaScript off, and it carries the
+  sort so jumping does not silently reset it. The positional
+  `/all_listing/<category>/<offset>` URLs are untouched — every existing link,
+  bookmark and indexed URL still resolves.
+- **A coupon page showed a code and gave you nothing to do with it (row 167).**
+  "Redeem this offer" only rendered when a redemption link happened to be set;
+  without one the page was a code and a full stop, which is the reported "I
+  don't see any use for this, how do users claim a coupon?". The code now has a
+  **Copy code** button (revealed by script only where the browser can actually
+  copy, so it is never inert), a linked business gets a **Where to use it**
+  button, and the instructions say what is actually possible instead of
+  promising an online checkout on every deal.
+- **"Posted by Mydynamic VA" (row 167).** `owner_name` is the account that
+  *typed the coupon in* — for anything entered by the team, a staff or agency
+  login. Used as a fallback it put the data-entry user on a customer-facing page
+  as the merchant, and had the copy read "Mydynamic VA is offering this deal to
+  Pearland411 readers". A coupon is attributed to the business it is linked to,
+  or to Pearland411 when there is none. The same fallback is gone from the
+  coupons index (where it also inflated the "businesses represented" count: ten
+  coupons keyed in by one staff login counted as one business) and from the page's
+  meta description, which was telling search engines the same thing.
+- **The admin owner dropdown was unreadable (row 168).** It printed `user.name`
+  and nothing else, and accounts are named after businesses rather than people,
+  so the Edit Listing picker read "10 dollars Galveston shuttle", "ACT
+  Electrical", "Angel Coliflores- Test" with no way to tell a customer from a
+  leftover. New `user_option_label()` adds the email and the number of listings
+  the account owns — the count is what actually separates a live customer from a
+  test row. Applied to all seven user dropdowns.
+
+### Added
+
+- **`/admin/users` — Members**, a read-only review list: account, email, phone,
+  businesses owned, whether the email is verified, and when they joined, most
+  listings first, searchable by name, email **or business name**. Row 168 asks
+  to "review each user and provide context if those are final", and that could
+  not be done by anyone: there was no user screen in the admin at all — the only
+  place an account appeared was inside a dropdown. Read-only on purpose;
+  deleting a member orphans every listing, event and article they own, and that
+  needs its own screen with its own warnings.
+
+### Verified
+
+41 assertions, all green, against the real function source rather than a
+re-implementation, plus 8 SQL statements parsed as MySQL with matching bind
+counts.
+
+The image tests run real files through the real helper: a 4000×3000 JPEG capped
+to 2400 with its aspect ratio kept, an 800×600 left **byte-identical** (not
+re-encoded), a transparent PNG that stays a PNG with its alpha intact, garbage
+and missing files refused. The memory behaviour is measured in subprocesses at
+fixed limits: the old path's 92 MB against 2 MB visible to PHP, the new path
+declining inside a 96 MB budget and exiting cleanly, doing the work when given
+512 MB, and the same image costing 33 MB once capped.
+
+### Not changed — flagged
+
+- **`user_header.php` still says "Rn53 Themes"** in its mobile menu, with the
+  theme's demo photograph and "Join on 26, Mar 2021". No controller loads that
+  file — it is one of the unreferenced views already flagged — so it renders
+  nowhere and was left alone rather than fixed in place.
+- **~40 other upload call sites** still use the `if ($_FILES && $_FILES['x']['name'])`
+  idiom, which is an "Undefined array key" warning whenever a form is saved
+  without that image. Harmless, pre-existing, and the helper now guards itself,
+  so rewriting all of them belongs in its own pass.
+- **The 500 could not be reproduced against the live server** from here. The
+  memory fault above is real, measured, and in the reported code path, but if
+  uploading news still fails after this, the new error reporting and the log
+  line will name the cause instead of showing a blank page.
+
+### Key files
+
+`application/helpers/image_helper.php` (`pearland411_downscale_image`,
+`pearland411_image_fits_memory`, `pearland411_memory_limit_bytes`,
+`upload_last_error`), `application/helpers/view_helper.php`
+(`user_option_label`), `application/controllers/Admin.php` (`add_news`,
+`edit_news`, `users`), `application/controllers/User.php` (`all_listing`,
+`coupon_details`), `application/models/Adminmodel.php`,
+`application/views/header.php`, `application/views/admin/users.php` (new),
+`application/views/coupon_details.php`, `coupons.php`, `all-listing.php`,
+seven admin dropdown views, `assets/js/custom.js`,
+`assets/css/{site-header,directory,content}.css`. No migration.
+
+---
+
+## 2026-08-25 — Staff can bill a customer: card on file, this month's payment, next month's date
+
+Central Barbecue is the first paying customer, and the request was to put their
+card on the August bill and restart recurring billing in September — plus "is
+there somewhere in the admin to do this?"
+
+There was not. **A card could only ever be vaulted by the customer**, inside
+`User::process_checkout()`, and only if they ticked auto-renew during their own
+checkout: `Usermodel::activateHelcimSubscription()` is the only writer of
+`payment_cards`. `/admin/all_subscriptions` could list, cancel and delete a
+subscription and nothing else — no card, no payment, no schedule. So a business
+signed up over the phone had no card on file, `Cli::renew_subscriptions` found
+no token, and the row was skipped every night with "no vaulted card".
+
+### Added
+
+- **`/admin/billing` — Customer Billing**, under Pricing Plans in the admin
+  menu, super-admin only like the rest of the billing screens. The list shows
+  plan, status, card-on-file, auto-renew and next charge date per customer.
+  `?q=` searches **every** customer in SQL, word by word, across the account
+  name, the email **and the names of businesses they own** — staff know a
+  customer as "Central Barbecue", not as whoever registered the account. With
+  no search it lists only customers who have a subscription, a card or a
+  payment, so the handful who pay are not buried under every registered
+  member. The table carries `data-server-search` so the table enhancer does
+  not add a second box that only filters the current page.
+- **`/admin/billing-customer/<user_id>`**, which does the three things that
+  were missing:
+  - **Card on file.** Opens the same HelcimPay.js iframe the storefront uses,
+    in `verify` mode — a zero-dollar check that confirms the card and returns
+    a token, charging nothing. The card number is typed into Helcim's window
+    and goes straight to Helcim; this server never sees it. If an account does
+    not allow zero-dollar verification the error says so and points at the
+    payment flow, which returns a token too.
+  - **Take a payment.** Either charge the card already on file (server-side,
+    no browser round trip) or enter a card and charge it, optionally keeping
+    it for renewals. Recorded with a note, so "August 2026 bill" is
+    distinguishable from an automatic renewal in the history.
+  - **Recurring billing.** Auto-renew on/off and the date of the next charge.
+    An **active** subscription is rescheduled in place; anything else — expired,
+    cancelled, or none at all — starts a new term on the chosen plan, because
+    `getRenewableSubscriptions()` only ever charges `status = 'active'` rows.
+    Switching auto-renew on for an expired subscription would have looked like
+    it worked and then silently charged nothing, which is the worst available
+    outcome for a billing screen.
+- **`Helcim_lib::initialize_card_verification()`** — a `verify` session for
+  vaulting a card without moving money.
+- **`Usermodel::renewalAmountFor()`** — the renewal price (the chosen
+  `plan_durations` term, else the plan) lifted out of
+  `Cli::renew_subscriptions` so the screen and the cron cannot disagree.
+  Nothing displayed the figure anywhere before this; the only way to know what
+  a customer would be charged was to read the job.
+- **`billing_manual_charge_max`** at `/admin/setting` → Billing, default
+  **25000**. The amount on the billing screen is the only figure in the system
+  a human types freehand — everything else is priced server-side from a plan —
+  so it gets a ceiling. `0` removes it.
+
+### Changed
+
+- **Rescheduling clears the dunning state.** `renewal_attempts`,
+  `last_renewal_error` and `grace_until` describe failures against the *old*
+  schedule. Left in place, a customer whose card had already failed twice would
+  get one attempt on the new date and then be expired by the 3-strike rule.
+- **A next billing date later than the term end now moves the term end with
+  it.** The subscription would otherwise expire in the gap between the two
+  dates, and the renewal job — which only looks at active rows — would never
+  run for it.
+- **Expiry "01/2099" renders as "Not recorded".** That is the placeholder the
+  self-serve checkout writes when the gateway returned no expiry date; printing
+  it as a date would tell staff the card is good for another seventy years.
+
+### Security / PCI
+
+- Card data is tokenized in the browser by HelcimPay.js and never posted to
+  Pearland411, on the admin path exactly as on the storefront. The response is
+  trusted only after `validate_transaction()` recomputes its SHA-256 against
+  the `secretToken` held server-side, and the payload is **never logged** —
+  only the checkout token is, because the payload carries card details.
+- The pending checkout is consumed from the session **before** the payment is
+  recorded, so a replayed post cannot book the same money twice.
+- Every new route is in `Admin::__construct()`'s `$super_admin_only` list.
+  Card removal is scoped by `user_id` as well as card id, so a hand-edited
+  form cannot delete someone else's card.
+- Migration 0028 adds **no** column that could hold a PAN, expiry or CVV beyond
+  the last four digits.
+- If a charge succeeds and the bookkeeping insert then fails, the message names
+  the Helcim transaction id and says **do not charge again** rather than
+  offering a retry.
+
+### Migrations
+
+`database/migrations/0028_admin_billing.sql` — `payment_cards.card_brand`,
+`card_source` (`customer` / `admin`), `added_by_admin_id`;
+`transactions.created_by_admin_id`, `note`. All nullable or defaulted, so no
+existing row changes and nothing is back-filled; every step guarded on its
+table as well as its column. Idempotent. Mirrored into
+`database/migrations_combined_phpmyadmin.sql` in that bundle's inline-PREPARE
+style and added to `database/README.md`. The screen degrades rather than
+breaking if it has not been run: the audit and display columns are written only
+when `field_exists()` finds them.
+
+### Verified
+
+62 assertions, all green, run against the **real source** of the methods lifted
+out of `Admin.php` and `Adminmodel.php` rather than a re-implementation.
+
+The subscription-creation cases caught the one bug worth naming here: the first
+term is deliberately short (set up on the 25th, first renewal on the 1st), and
+`duration_days` was being derived from that gap — but `recordRenewalSuccess()`
+extends by `duration_days` on **every** renewal, so a customer set up that way
+would have been billed every seven days for the life of the subscription.
+`duration_days` now always carries the plan's cadence; only `end_date` is short.
+
+The four staff-input helpers cover `"$1,234.50"` and `"1,234.50"` parsing,
+rejection of zero / negative / non-numeric / injection-shaped input, the
+default and operator-set ceilings, `0` meaning no limit, date parsing from both
+`<input type=date>` and typed US dates, card-detail extraction from masked PANs
+and from responses that carry none of the optional fields, and description
+truncation that cuts on a character rather than through a multi-byte one.
+
+The schedule cases cover a monthly and a yearly cadence, no date given, a term
+end pulled forward to meet an earlier charge date, one already past it being
+left alone, auto-renew off clearing the date without touching the term, and the
+dunning counters being reset on every reschedule.
+
+All five generated billing queries parse as MySQL and their `?` counts match
+their bindings, including the multi-term search; so do all ten `ALTER`
+statements across the standalone migration and the phpMyAdmin bundle.
+
+### Not done — flagged
+
+- **A customer still cannot replace their own card.** The dunning email says
+  "make sure your card on file is valid from your account", and no page lets
+  them: the only vaulting path is a fresh checkout. Staff can now do it for
+  them, which unblocks today's problem, but the self-serve half is still
+  missing.
+- **The renewal amount cannot be overridden per customer.** It comes from the
+  plan or its term, so a founding-member rate lock would break the first time
+  the plan's price changes. That needs the Rate Lock Policy that is still open
+  on the tracker, not a code change on its own.
+
+### Key files
+
+`application/controllers/Admin.php` (the billing screens + `billing_manual_charge_max`),
+`application/models/Adminmodel.php` (the billing queries and writes),
+`application/models/Usermodel.php` (`renewalAmountFor`),
+`application/controllers/Cli.php`, `application/libraries/Helcim_lib.php`,
+`application/views/admin/billing.php` (new),
+`application/views/admin/billing_customer.php` (new),
+`application/views/admin/header.php`, `application/views/admin/admin_setting.php`,
+`database/migrations/0028_admin_billing.sql`.
+
+---
+
 ## 2026-08-16 — Third tracker round: the fixes that only reached one of two code paths
 
 Eighteen rows arrived on a new copy of the manager's error tracker. Every
