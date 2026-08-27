@@ -6762,6 +6762,12 @@ class Admin extends CI_Controller
 			'total_rows'        => $total_rows,
 			'helcim_configured' => $this->helcim_lib->is_configured(),
 			'link'              => $this->pagination->create_links(),
+			// Stamped by Cli::renew_subscriptions on every run. Without this
+			// there is no way to tell a cron that has never been installed from
+			// one that ran and found nothing due — and the first sign of the
+			// difference is a customer who was never charged.
+			'cron_last_run'     => site_setting('billing_cron_last_run', ''),
+			'cron_last_summary' => site_setting('billing_cron_last_summary', ''),
 		);
 
 		$this->load->view('admin/header');
