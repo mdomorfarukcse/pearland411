@@ -3543,42 +3543,86 @@
 		 * owns it (and therefore holds the card), and the subscription attached
 		 * to this business.
 		 *
-		 * Subscription columns are aliased one by one rather than selected as
-		 * `s.*`: a business with no subscription yields NULLs for every `s`
-		 * column, and `s.user_id` coming after `u.user_id` in a `*` would blank
-		 * out the owner of the very business being looked at.
+		 * Deliberately two queries with `SELECT *` on the subscription, rather
+		 * than one join naming every column.
+		 *
+		 * Naming them is what took this page down with a 500: it asked for
+		 * `s.duration_id` and `s.duration_days`, and **no migration has ever
+		 * created those columns** — they are written only by
+		 * activateHelcimSubscription(), so on a database where no self-serve
+		 * checkout has ever completed they simply do not exist, and MySQL answers
+		 * a missing column with error 1054 rather than a NULL. A billing screen
+		 * must not fall over because of a column the customer's history never
+		 * happened to create; `SELECT *` plus `??` degrades to "not recorded"
+		 * instead.
+		 *
+		 * The two rows are flattened onto one object with the names the view
+		 * expects, which also sidesteps the collision that made the single join
+		 * fragile: `s.user_id` overwriting `u.user_id` and blanking the owner of
+		 * the very business being looked at.
 		 */
 		public function getBillingCustomer($listing_id)
 		{
-			$sql = "SELECT b.listing_id, b.listing_name, b.listing_slug,
-					b.listing_email, b.listing_mobile,
-					u.user_id, u.name, u.email_id, u.mobile_number,
-					b.listing_name       AS businesses,
-					s.id                 AS subscription_id,
-					s.plan_id            AS plan_id,
-					s.pending_plan_id    AS pending_plan_id,
-					s.duration_id        AS duration_id,
-					s.duration_days      AS duration_days,
-					s.custom_amount      AS custom_amount,
-					s.status             AS sub_status,
-					s.start_date         AS start_date,
-					s.end_date           AS end_date,
-					s.next_billing_date  AS next_billing_date,
-					s.auto_renew         AS auto_renew,
-					s.total_amount       AS total_amount,
-					s.currency           AS currency,
-					s.billing_cycle      AS billing_cycle,
-					s.payment_status     AS payment_status,
-					s.renewal_attempts   AS renewal_attempts,
-					s.last_renewal_error AS last_renewal_error,
-					s.grace_until        AS grace_until,
-					p.name               AS plan_name,
-					p.price              AS plan_price
-				" . $this->billingFromSql() . "
-				WHERE b.listing_id = ? AND b.is_deleted = 0
-				LIMIT 1";
+			$listing_id = (int) $listing_id;
 
-			return $this->db->query($sql, array((int) $listing_id))->row();
+			$row = $this->db->query(
+				"SELECT b.listing_id, b.listing_name, b.listing_slug, b.user_id,
+					u.name, u.email_id, u.mobile_number,
+					b.listing_name AS businesses
+				FROM `listings` b
+				LEFT JOIN `user` u ON u.user_id = b.user_id
+				WHERE b.listing_id = ? AND b.is_deleted = 0
+				LIMIT 1",
+				array($listing_id)
+			)->row();
+
+			if (!$row) {
+				return null;
+			}
+
+			$sub = null;
+			if ($this->db->table_exists('subscriptions')
+				&& $this->db->field_exists('listing_id', 'subscriptions')) {
+				$sub = $this->db->from('subscriptions')
+					->where('listing_id', $listing_id)
+					->order_by("(status = 'active')", 'DESC', false)
+					->order_by('id', 'DESC')
+					->limit(1)->get()->row();
+			}
+
+			// Every one of these is optional. A column this schema never created
+			// reads as NULL and the screen says "not recorded", which is the truth.
+			$row->subscription_id    = $sub ? (int) $sub->id : null;
+			$row->plan_id            = $sub->plan_id            ?? null;
+			$row->pending_plan_id    = $sub->pending_plan_id    ?? null;
+			$row->duration_id        = $sub->duration_id        ?? null;
+			$row->duration_days      = $sub->duration_days      ?? null;
+			$row->custom_amount      = $sub->custom_amount      ?? null;
+			$row->sub_status         = $sub->status             ?? null;
+			$row->start_date         = $sub->start_date         ?? null;
+			$row->end_date           = $sub->end_date           ?? null;
+			$row->next_billing_date  = $sub->next_billing_date  ?? null;
+			$row->auto_renew         = $sub->auto_renew         ?? null;
+			$row->total_amount       = $sub->total_amount       ?? null;
+			$row->currency           = $sub->currency           ?? null;
+			$row->billing_cycle      = $sub->billing_cycle      ?? null;
+			$row->payment_status     = $sub->payment_status     ?? null;
+			$row->renewal_attempts   = $sub->renewal_attempts   ?? null;
+			$row->last_renewal_error = $sub->last_renewal_error ?? null;
+			$row->grace_until        = $sub->grace_until        ?? null;
+
+			$row->plan_name  = null;
+			$row->plan_price = null;
+			if (!empty($row->plan_id)) {
+				$plan = $this->db->select('name, price')->from('plans')
+					->where('id', (int) $row->plan_id)->limit(1)->get()->row();
+				if ($plan) {
+					$row->plan_name  = $plan->name;
+					$row->plan_price = $plan->price;
+				}
+			}
+
+			return $row;
 		}
 
 		/** Vaulted cards for a customer, default first. */
@@ -3766,8 +3810,12 @@
 				'note'                  => !empty($args['note']) ? substr((string) $args['note'], 0, 255) : null,
 			);
 
-			foreach (array('created_by_admin_id', 'note', 'helcim_card_token', 'subscription_id', 'plan_id', 'listing_id') as $col) {
+			// Every column, not a hand-picked list: the money has already moved
+			// at Helcim by the time this runs, so a schema gap must cost us a
+			// field, never the record of the payment.
+			foreach (array_keys($row) as $col) {
 				if (!$this->db->field_exists($col, 'transactions')) {
+					log_message('debug', 'transactions has no column ' . $col . '; skipped on insert.');
 					unset($row[$col]);
 				}
 			}
@@ -3821,6 +3869,12 @@
 					->where('id', $subscription_id)->get()->row();
 				if ($sub && (empty($sub->end_date) || strtotime($sub->end_date) < strtotime($next_billing_date))) {
 					$data['end_date'] = $next_billing_date;
+				}
+			}
+
+			foreach (array_keys($data) as $col) {
+				if (!$this->db->field_exists($col, 'subscriptions')) {
+					unset($data[$col]);
 				}
 			}
 
@@ -3918,6 +3972,24 @@
 			if ($this->db->field_exists('custom_amount', 'subscriptions')) {
 				$row['custom_amount'] = (isset($args['custom_amount']) && $args['custom_amount'] !== null && $args['custom_amount'] !== '')
 					? round((float) $args['custom_amount'], 2) : null;
+			}
+
+			/*
+			 * Drop anything this schema does not have.
+			 *
+			 * `duration_id`, `duration_days` and `duration_months` are written
+			 * by activateHelcimSubscription() but created by NO migration, so
+			 * on a database where no self-serve checkout has ever completed
+			 * they do not exist — and an INSERT naming a missing column is
+			 * MySQL error 1054, which would have turned "Save recurring
+			 * billing" into a 500. The subscription is worth more than the
+			 * metadata: write what the table can hold.
+			 */
+			foreach (array_keys($row) as $col) {
+				if (!$this->db->field_exists($col, 'subscriptions')) {
+					log_message('debug', 'subscriptions has no column ' . $col . '; skipped on insert.');
+					unset($row[$col]);
+				}
 			}
 
 			$this->db->insert('subscriptions', $row);

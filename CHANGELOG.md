@@ -6,6 +6,66 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-25 — The billing page's 500, and the checkout bug behind it
+
+`/admin/billing-customer/5951` returned HTTP 500 on every business. The list
+worked; the detail page did not.
+
+The detail query named `subscriptions.duration_id` and
+`subscriptions.duration_days`. **No migration in this repo has ever created
+those columns.** They are written only by
+`Usermodel::activateHelcimSubscription()` — the self-serve checkout — so on a
+database where no customer has ever completed one, they do not exist. MySQL
+answers a missing column with error 1054 rather than a NULL, and the request
+died. The list page survived because it happens not to select them.
+
+Which surfaces a bigger thing: **the self-serve checkout has been broken here
+the whole time, in the same way and for the same reason.** Its INSERT names
+`duration_id`, `duration_days`, `duration_months`, `total_amount`,
+`billing_cycle`, `payment_status`, `start_date` and `last_transaction_id` —
+none of which any migration creates. Nobody noticed because nobody had bought
+anything yet. Central Barbecue would have been the first to find out.
+
+### Fixed
+
+- **`getBillingCustomer()` no longer depends on columns that may not exist.**
+  It reads the listing and its owner in one query and the subscription in
+  another with `SELECT *`, then flattens the two onto one object with `??`, so
+  a column this schema never created reads as "not recorded" rather than
+  taking the page down. The split also removes the collision that made the
+  single join fragile — `s.user_id` overwriting `u.user_id` and blanking the
+  owner of the business being looked at.
+- **Every billing write drops unknown columns before inserting.**
+  `startSubscriptionForCustomer()` would have thrown the same 1054 the moment
+  anyone pressed *Save recurring billing*; `recordManualCharge()` now filters
+  its whole row rather than a hand-picked few, because by the time it runs the
+  money has already moved at Helcim and a schema gap must cost a field, never
+  the record of the payment.
+
+### Migrations
+
+`database/migrations/0030_subscription_term_columns.sql` — guard-adds the nine
+`subscriptions` columns the code writes and no migration ever created. Each is
+added only when missing, so a database where a checkout did once succeed is
+untouched.
+
+The application no longer *depends* on it — that is what the two fixes above
+buy — but it should still be run: without `duration_days` a renewal cannot
+know its own term length, and `recordRenewalSuccess()` would silently extend
+every subscription by the 30-day fallback regardless of what was sold.
+
+### Verified
+
+24 new assertions, run against the real methods with a stub whose
+`subscriptions` table is missing exactly the columns production is missing: the
+page builds for a business with no subscription and for one with a
+subscription, every field the view reads is present, the absent columns read
+as NULL without warning, and starting a subscription still writes the business,
+the agreed price, auto-renew and the charge date while quietly dropping the
+columns the table cannot hold. 166 assertions across eight suites in total.
+
+---
+
 ## 2026-08-25 — Billing follows the business, not the login
 
 Searching the new billing screen for "central bbq" returned exactly one row:

@@ -1285,4 +1285,104 @@ SET @s := IF(@t = 1,
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
+-- ============================================================
+-- 0030_subscription_term_columns.sql
+-- ============================================================
+-- Creates the `subscriptions` columns the code has always written but no
+-- migration ever added. Found by /admin/billing-customer/<id> returning HTTP
+-- 500: it asked for `duration_id` / `duration_days`, and MySQL answers a
+-- missing column with error 1054 rather than a NULL. Those are written only by
+-- the self-serve checkout, which has never completed on this database -- so
+-- they were never created, and the checkout has been broken here the whole
+-- time in exactly the same way. See
+-- database/migrations/0030_subscription_term_columns.sql for the full note.
+--
+-- Every column is added ONLY when missing, so on a database where a checkout
+-- did once succeed this block changes nothing.
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions');
+
+-- subscriptions.duration_id
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'
+             AND COLUMN_NAME = 'duration_id');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `subscriptions` ADD COLUMN `duration_id` INT(11) NULL DEFAULT NULL COMMENT ''plan_durations row bought, when a term was chosen''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- subscriptions.duration_days
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'
+             AND COLUMN_NAME = 'duration_days');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `subscriptions` ADD COLUMN `duration_days` INT(11) NOT NULL DEFAULT 30 COMMENT ''Recurring cadence in days. Each renewal extends by this''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- subscriptions.duration_months
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'
+             AND COLUMN_NAME = 'duration_months');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `subscriptions` ADD COLUMN `duration_months` INT(11) NOT NULL DEFAULT 1 COMMENT ''The same span in months, for display''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- subscriptions.total_amount
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'
+             AND COLUMN_NAME = 'total_amount');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `subscriptions` ADD COLUMN `total_amount` DECIMAL(10,2) NULL DEFAULT NULL COMMENT ''What was paid for the current term''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- subscriptions.currency
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'
+             AND COLUMN_NAME = 'currency');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `subscriptions` ADD COLUMN `currency` VARCHAR(10) NOT NULL DEFAULT ''USD'' COMMENT ''ISO currency of total_amount''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- subscriptions.billing_cycle
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'
+             AND COLUMN_NAME = 'billing_cycle');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `subscriptions` ADD COLUMN `billing_cycle` VARCHAR(20) NOT NULL DEFAULT ''monthly'' COMMENT ''monthly / yearly, for display''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- subscriptions.payment_status
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'
+             AND COLUMN_NAME = 'payment_status');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `subscriptions` ADD COLUMN `payment_status` VARCHAR(20) NOT NULL DEFAULT ''pending'' COMMENT ''paid / pending''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- subscriptions.start_date
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'
+             AND COLUMN_NAME = 'start_date');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `subscriptions` ADD COLUMN `start_date` DATETIME NULL DEFAULT NULL COMMENT ''When the current term began''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- subscriptions.last_transaction_id
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'
+             AND COLUMN_NAME = 'last_transaction_id');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `subscriptions` ADD COLUMN `last_transaction_id` INT(11) NULL DEFAULT NULL COMMENT ''The payment that bought the current term''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
 SET FOREIGN_KEY_CHECKS = 1;
