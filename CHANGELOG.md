@@ -6,6 +6,52 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-25 — Stop guessing at the billing 500
+
+The billing detail page was still returning a bare HTTP 500 after two fixes
+aimed at it. `ENVIRONMENT` is `production`, so `display_errors` is off and a
+fatal reaches the browser with nothing in it — and on a screen that touches
+eight tables, several carrying columns no migration in this repo ever created,
+that turns every schema gap into a guessing game played one deploy at a time.
+
+So this round stops guessing and makes the page report.
+
+### Added
+
+- **A diagnostic screen instead of a blank 500.** `Admin::billing_customer()`
+  is now a thin wrapper around `billing_customer_page()` that catches
+  `Throwable` — PHP 7+ `Error`s included, so "call to a member function row()
+  on bool", which is what a failed query becomes when `db_debug` is off, is
+  caught like any exception. Staff get the message, the file and the line, a
+  pointer at the migrations, and the reassurance that nothing was charged; the
+  log keeps the full trace. Super-admin-only route, so nothing leaks.
+
+### Fixed
+
+- **`Usermodel::getAllPlans()` is no longer on this path.** It orders by
+  `plans.sort_order` unconditionally, and the billing screen was its **only
+  caller anywhere in the codebase** — so nothing had ever proved that column
+  exists on this database. New `Adminmodel::getPlansForBilling()` applies the
+  ordering only when the column is really there, and treats a `plans` table
+  without `is_active` as "every plan is sellable". A plan list in the wrong
+  order is cosmetic; a missing column is a 500.
+
+### Verified
+
+10 new assertions on the wrapper, lifted from the real source: the happy path
+renders the real page and logs nothing; a failed query renders the error screen
+inside the admin chrome and logs once, naming the business; and an
+unknown-column message reaches the view verbatim with its file, line and
+listing id. 176 assertions across nine suites.
+
+### Note
+
+If the page still fails after this, it will say why on screen. That message is
+the thing to send back — it names the table and column, which no amount of
+reading the code from outside can.
+
+---
+
 ## 2026-08-25 — The billing page's 500, and the checkout bug behind it
 
 `/admin/billing-customer/5951` returned HTTP 500 on every business. The list
