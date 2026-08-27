@@ -666,6 +666,10 @@ class Admin extends CI_Controller
 			// server-side from a plan; this one is typed, so it gets a limit.
 			// Defaults to 25000 — see Admin::billingAmount(). 0 = no limit.
 			'billing_manual_charge_max',
+			// Who is copied on billing activity — a card going on file, a
+			// payment taken, a recurring schedule changed, a renewal that
+			// failed. One address per line, ON TOP OF every active admin.
+			'billing_notify_emails',
 		);
 
 		if ($this->input->method() === 'post') {
@@ -6752,7 +6756,7 @@ class Admin extends CI_Controller
 		$this->load->library('helcim_lib');
 
 		$data = array(
-			'customers'         => $this->adminmodel->getBillingCustomers($per_page, $offset, $q),
+			'businesses'        => $this->adminmodel->getBillingCustomers($per_page, $offset, $q),
 			'start_number'      => $offset + 1,
 			'search_query'      => $q,
 			'total_rows'        => $total_rows,
@@ -6765,15 +6769,34 @@ class Admin extends CI_Controller
 		$this->load->view('admin/footer');
 	}
 
-	/** One customer: card on file, take a payment, recurring schedule. */
-	public function billing_customer($user_id = 0)
+	/**
+	 * One BUSINESS: card on file, take a payment, recurring schedule.
+	 *
+	 * The URL segment is a `listings.listing_id`. It was a `user_id` when this
+	 * screen was first built, which is the wrong unit here — the listings were
+	 * bulk-loaded under a few data-entry logins, so one account owns dozens of
+	 * unrelated businesses and billing the account would bill all of them.
+	 *
+	 * The card still belongs to the owning ACCOUNT, because that is where
+	 * Helcim vaults it and one owner paying for three of their businesses uses
+	 * one card. The page says so rather than hiding it.
+	 */
+	public function billing_customer($listing_id = 0)
 	{
-		$customer = $this->adminmodel->getBillingCustomer((int) $user_id);
+		$customer = $this->adminmodel->getBillingCustomer((int) $listing_id);
 		if (!$customer) {
-			$this->session->set_flashdata('error', 'That customer no longer exists.');
+			$this->session->set_flashdata('error', 'That business no longer exists.');
 			redirect('admin/billing');
 			return;
 		}
+		if (empty($customer->user_id)) {
+			$this->session->set_flashdata('error',
+				'"' . $customer->listing_name . '" has no owner account, so there is nobody to bill. '
+				. 'Set an owner on the listing first.');
+			redirect('admin/billing');
+			return;
+		}
+		$user_id = (int) $customer->user_id;
 
 		$this->load->library('helcim_lib');
 
@@ -6792,12 +6815,12 @@ class Admin extends CI_Controller
 
 		$data = array(
 			'customer'          => $customer,
-			'cards'             => $this->adminmodel->getCustomerCards((int) $user_id),
-			'transactions'      => $this->adminmodel->getCustomerTransactions((int) $user_id, 25),
+			'cards'             => $this->adminmodel->getCustomerCards($user_id),
+			'transactions'      => $this->adminmodel->getListingTransactions((int) $listing_id, $user_id, 25),
 			'plans'             => $plans,
 			'all_durations'     => $this->adminmodel->getAllPlanDurations(),
 			'renewal_amount'    => $renewal_amount,
-			'has_card'          => (bool) $this->usermodel->getVaultedCardToken((int) $user_id),
+			'has_card'          => (bool) $this->usermodel->getVaultedCardToken($user_id),
 			'helcim_configured' => $this->helcim_lib->is_configured(),
 			'helcimpay_js_url'  => $this->helcim_lib->helcimpay_js_url(),
 			'currency'          => !empty($customer->currency) ? $customer->currency : $this->helcim_lib->currency(),
@@ -6825,11 +6848,12 @@ class Admin extends CI_Controller
 			return $this->billingJson(array('success' => false, 'error' => 'Not allowed.'));
 		}
 
-		$user_id  = (int) $this->input->post('user_id');
-		$customer = $this->adminmodel->getBillingCustomer($user_id);
-		if (!$customer) {
-			return $this->billingJson(array('success' => false, 'error' => 'Customer not found.'));
+		$listing_id = (int) $this->input->post('listing_id');
+		$customer   = $this->adminmodel->getBillingCustomer($listing_id);
+		if (!$customer || empty($customer->user_id)) {
+			return $this->billingJson(array('success' => false, 'error' => 'That business was not found, or has no owner account to bill.'));
 		}
+		$user_id = (int) $customer->user_id;
 
 		$this->load->library('helcim_lib');
 		if (!$this->helcim_lib->is_configured()) {
@@ -6875,6 +6899,7 @@ class Admin extends CI_Controller
 			'checkoutToken' => $init['checkoutToken'],
 			'secretToken'   => $init['secretToken'],
 			'user_id'       => $user_id,
+			'listing_id'    => $listing_id,
 			'mode'          => $mode,
 			'amount'        => $amount,
 			'currency'      => $this->helcim_lib->currency(),
@@ -6929,8 +6954,9 @@ class Admin extends CI_Controller
 		$card_token    = isset($txn['cardToken']) ? $txn['cardToken'] : null;
 		$details       = $this->billingCardDetails($txn);
 
-		$user_id  = (int) $pending['user_id'];
-		$customer = $this->adminmodel->getBillingCustomer($user_id);
+		$user_id    = (int) $pending['user_id'];
+		$listing_id = isset($pending['listing_id']) ? (int) $pending['listing_id'] : 0;
+		$customer   = $this->adminmodel->getBillingCustomer($listing_id);
 		$saved    = false;
 		$charged  = false;
 
@@ -6945,6 +6971,7 @@ class Admin extends CI_Controller
 				'currency'              => $pending['currency'],
 				'plan_id'               => $customer && !empty($customer->plan_id) ? (int) $customer->plan_id : null,
 				'subscription_id'       => $customer && !empty($customer->subscription_id) ? (int) $customer->subscription_id : null,
+				'listing_id'            => $listing_id ?: null,
 				'helcim_transaction_id' => $helcim_txn_id,
 				'helcim_approval_code'  => $approval_code,
 				'helcim_card_token'     => $card_token,
@@ -7002,9 +7029,20 @@ class Admin extends CI_Controller
 
 		$this->session->set_flashdata(($charged || $saved) ? 'message' : 'error', implode(' ', $message));
 
+		// Tell the team. Never blocks the response: the money has already moved.
+		$this->billingNotify($customer, array(
+			'charged'   => $charged ? (float) $pending['amount'] : null,
+			'currency'  => $pending['currency'],
+			'note'      => $pending['note'],
+			'card_saved' => $saved,
+			'card_last4' => $details['card_last4'],
+			'card_brand' => $details['card_brand'],
+			'txn'       => $helcim_txn_id,
+		));
+
 		return $this->billingJson(array(
 			'success'  => true,
-			'redirect' => base_url('admin/billing-customer/' . $user_id),
+			'redirect' => base_url('admin/billing-customer/' . $listing_id),
 		));
 	}
 
@@ -7015,20 +7053,21 @@ class Admin extends CI_Controller
 	 */
 	public function billing_charge()
 	{
-		$user_id = (int) $this->input->post('user_id');
-		$back    = 'admin/billing-customer/' . $user_id;
+		$listing_id = (int) $this->input->post('listing_id');
+		$back       = 'admin/billing-customer/' . $listing_id;
 
 		if ($this->input->method() !== 'post') {
 			redirect($back);
 			return;
 		}
 
-		$customer = $this->adminmodel->getBillingCustomer($user_id);
-		if (!$customer) {
-			$this->session->set_flashdata('error', 'That customer no longer exists.');
+		$customer = $this->adminmodel->getBillingCustomer($listing_id);
+		if (!$customer || empty($customer->user_id)) {
+			$this->session->set_flashdata('error', 'That business no longer exists, or has no owner account to bill.');
 			redirect('admin/billing');
 			return;
 		}
+		$user_id = (int) $customer->user_id;
 
 		$amount = $this->billingAmount($this->input->post('amount'));
 		if ($amount === false) {
@@ -7065,6 +7104,7 @@ class Admin extends CI_Controller
 			'currency'              => $currency,
 			'plan_id'               => !empty($customer->plan_id) ? (int) $customer->plan_id : null,
 			'subscription_id'       => !empty($customer->subscription_id) ? (int) $customer->subscription_id : null,
+			'listing_id'            => $listing_id ?: null,
 			'helcim_transaction_id' => $res['transactionId'],
 			'helcim_approval_code'  => $res['approvalCode'],
 			'helcim_card_token'     => $token,
@@ -7082,15 +7122,25 @@ class Admin extends CI_Controller
 				. ' to the card on file. Helcim transaction ' . $res['transactionId'] . '.');
 		}
 
+		$this->billingNotify($customer, array(
+			'charged'  => $amount,
+			'currency' => $currency,
+			'note'     => $note,
+			'txn'      => $res['transactionId'],
+		));
+
 		redirect($back);
 	}
 
 	/** Remove a stored card. URL: /admin/billing-card-delete (POST) */
 	public function billing_card_delete()
 	{
-		$user_id = (int) $this->input->post('user_id');
-		$card_id = (int) $this->input->post('card_id');
-		$back    = 'admin/billing-customer/' . $user_id;
+		$listing_id = (int) $this->input->post('listing_id');
+		$card_id    = (int) $this->input->post('card_id');
+		$back       = 'admin/billing-customer/' . $listing_id;
+
+		$customer = $listing_id ? $this->adminmodel->getBillingCustomer($listing_id) : null;
+		$user_id  = ($customer && !empty($customer->user_id)) ? (int) $customer->user_id : 0;
 
 		if ($this->input->method() !== 'post' || !$user_id || !$card_id) {
 			redirect($back);
@@ -7118,20 +7168,21 @@ class Admin extends CI_Controller
 	 */
 	public function billing_recurring_save()
 	{
-		$user_id = (int) $this->input->post('user_id');
-		$back    = 'admin/billing-customer/' . $user_id;
+		$listing_id = (int) $this->input->post('listing_id');
+		$back       = 'admin/billing-customer/' . $listing_id;
 
 		if ($this->input->method() !== 'post') {
 			redirect($back);
 			return;
 		}
 
-		$customer = $this->adminmodel->getBillingCustomer($user_id);
-		if (!$customer) {
-			$this->session->set_flashdata('error', 'That customer no longer exists.');
+		$customer = $this->adminmodel->getBillingCustomer($listing_id);
+		if (!$customer || empty($customer->user_id)) {
+			$this->session->set_flashdata('error', 'That business no longer exists, or has no owner account to bill.');
 			redirect('admin/billing');
 			return;
 		}
+		$user_id = (int) $customer->user_id;
 
 		$auto_renew = $this->input->post('auto_renew') ? 1 : 0;
 		$next_date  = $this->billingDate($this->input->post('next_billing_date'));
@@ -7142,53 +7193,73 @@ class Admin extends CI_Controller
 			return;
 		}
 
+		/*
+		 * The agreed price. Blank means "charge whatever the package costs";
+		 * a figure here overrides it on every renewal, which is what makes a
+		 * founding-member rate survive a later price rise on the plan.
+		 */
+		$custom_raw    = trim((string) $this->input->post('custom_amount'));
+		$custom_amount = null;
+		if ($custom_raw !== '') {
+			$custom_amount = $this->billingAmount($custom_raw);
+			if ($custom_amount === false) {
+				$this->session->set_flashdata('error', 'That custom amount is not a valid price. Leave it blank to charge the package price.');
+				redirect($back);
+				return;
+			}
+		}
+
 		$is_active = !empty($customer->subscription_id) && $customer->sub_status === 'active';
+		$plan_name = !empty($customer->plan_name) ? $customer->plan_name : 'the current package';
 
 		if ($is_active) {
-			$ok = $this->adminmodel->updateRecurringBilling((int) $customer->subscription_id, $auto_renew, $next_date);
+			$ok = $this->adminmodel->updateRecurringBilling(
+				(int) $customer->subscription_id, $auto_renew, $next_date, $custom_amount
+			);
 			$what = $auto_renew
-				? 'Recurring billing is on. The next charge goes out on ' . date('M j, Y', strtotime($next_date)) . '.'
-				: 'Recurring billing is off. Nothing further will be charged automatically.';
+				? 'Recurring billing is on for ' . $customer->listing_name
+					. '. The next charge goes out on ' . date('M j, Y', strtotime($next_date)) . '.'
+				: 'Recurring billing is off for ' . $customer->listing_name . '. Nothing further will be charged automatically.';
 		} else {
 			$plan_id = (int) $this->input->post('plan_id');
 			$plan    = $plan_id ? $this->usermodel->getPlanByIdForPricing($plan_id) : null;
 			if (!$plan) {
-				$this->session->set_flashdata('error', 'Choose the plan this customer is on.');
+				$this->session->set_flashdata('error', 'Choose the package this business is on.');
 				redirect($back);
 				return;
 			}
 
-			// The term price, not a typed one: the renewal job prices every
-			// charge from the plan or its chosen duration, so storing anything
-			// else here would promise an amount that never gets taken.
+			// The package sets the entitlements and the fallback price; the
+			// custom amount, when given, sets what is actually charged.
 			$duration_id   = (int) $this->input->post('duration_id');
 			$duration      = $duration_id ? $this->usermodel->getDurationById($duration_id) : null;
 			$duration      = ($duration && (int) $duration->plan_id === $plan_id) ? $duration : null;
-			$amount        = $duration ? (float) $duration->price : (float) $plan->price;
+			$plan_amount   = $duration ? (float) $duration->price : (float) $plan->price;
 			$duration_days = $duration
 				? ((int) $duration->duration_days ?: ((int) $duration->duration_months * 30))
 				: ((int) $plan->duration_days ?: 30);
 
 			$new_id = $this->adminmodel->startSubscriptionForCustomer(array(
 				'user_id'           => $user_id,
+				'listing_id'        => $listing_id,
 				'plan_id'           => $plan_id,
 				'duration_id'       => $duration ? (int) $duration->id : null,
 				'duration_days'     => $duration_days,
 				'auto_renew'        => $auto_renew,
 				'next_billing_date' => $next_date,
-				'amount'            => $amount,
+				'amount'            => $custom_amount !== null ? $custom_amount : $plan_amount,
+				'custom_amount'     => $custom_amount,
 				'currency'          => !empty($customer->currency) ? $customer->currency : 'USD',
 			));
 			$ok = (bool) $new_id;
+			$plan_name = $plan->name;
 
-			// Tie the payment staff just took to the term it paid for, so the
-			// subscription's last_transaction_id is not left pointing at
-			// nothing. Only a payment from the last hour counts: the intended
-			// case is "took the money, now start the plan", and a customer's
-			// unrelated purchase from three months ago must not be re-attached
-			// to a term it did not buy.
+			// Tie the payment staff just took to the term it paid for. Only a
+			// payment from the last hour counts: the intended case is "took the
+			// money, now start the plan", and a customer's unrelated purchase from
+			// three months ago must not be re-attached to a term it did not buy.
 			if ($ok) {
-				$recent = $this->adminmodel->getCustomerTransactions($user_id, 1);
+				$recent = $this->adminmodel->getListingTransactions($listing_id, $user_id, 1);
 				if (!empty($recent)
 					&& empty($recent[0]->subscription_id)
 					&& !empty($recent[0]->created_at)
@@ -7198,8 +7269,9 @@ class Admin extends CI_Controller
 			}
 
 			$what = $auto_renew
-				? 'Started ' . $plan->name . '. The next charge goes out on ' . date('M j, Y', strtotime($next_date)) . '.'
-				: 'Started ' . $plan->name . ' with recurring billing off.';
+				? 'Started ' . $plan->name . ' for ' . $customer->listing_name
+					. '. The next charge goes out on ' . date('M j, Y', strtotime($next_date)) . '.'
+				: 'Started ' . $plan->name . ' for ' . $customer->listing_name . ' with recurring billing off.';
 		}
 
 		if (!$ok) {
@@ -7208,6 +7280,10 @@ class Admin extends CI_Controller
 			return;
 		}
 
+		if ($custom_amount !== null) {
+			$what .= ' Each renewal charges the agreed ' . number_format($custom_amount, 2)
+				. ' rather than the package price.';
+		}
 		// A date already past is legitimate (a catch-up charge), but staff
 		// should know it goes out tonight rather than on the day they picked.
 		if ($auto_renew && strtotime($next_date) <= time()) {
@@ -7217,8 +7293,118 @@ class Admin extends CI_Controller
 			$what .= ' There is still no card on file — add one, or the renewal will fail.';
 		}
 
+		$this->billingNotify($customer, array(
+			'schedule'   => $what,
+			'plan'       => $plan_name,
+			'auto_renew' => $auto_renew,
+			'next_date'  => $auto_renew ? $next_date : null,
+			'custom'     => $custom_amount,
+			'currency'   => !empty($customer->currency) ? $customer->currency : 'USD',
+		));
+
 		$this->session->set_flashdata('message', $what);
 		redirect($back);
+	}
+
+	/**
+	 * Email the team whenever money or a billing arrangement moves.
+	 *
+	 * Recipients are every active admin plus `billing_notify_emails` at
+	 * /admin/setting — Mailer::billing_recipients() owns that list. Wrapped so a
+	 * mail failure can never turn a successful charge into an error: the card has
+	 * already been charged by the time this runs.
+	 */
+	private function billingNotify($customer, array $facts)
+	{
+		try {
+			$this->load->library('mailer');
+
+			$business = $customer && !empty($customer->listing_name) ? $customer->listing_name : 'a customer';
+			$currency = !empty($facts['currency']) ? $facts['currency'] : 'USD';
+			$rows     = array();
+
+			$rows[] = array('Business', $business);
+			if ($customer && !empty($customer->name)) {
+				$rows[] = array('Account', $customer->name . ' (' . $customer->email_id . ')');
+			}
+
+			$subject = 'Pearland411 billing — ' . $business;
+			$heading = 'Billing updated';
+			$intro   = '';
+
+			if (isset($facts['charged']) && $facts['charged'] !== null) {
+				$heading = 'Payment received';
+				$subject = 'Pearland411 payment — ' . $currency . ' '
+					. number_format((float) $facts['charged'], 2) . ' — ' . $business;
+				$intro   = 'A payment was taken by staff in the admin.';
+				$rows[]  = array('Amount', $currency . ' ' . number_format((float) $facts['charged'], 2));
+				if (!empty($facts['note'])) {
+					$rows[] = array('For', $facts['note']);
+				}
+				if (!empty($facts['txn'])) {
+					$rows[] = array('Helcim transaction', $facts['txn']);
+				}
+			}
+
+			if (!empty($facts['card_saved'])) {
+				$card = trim(($facts['card_brand'] ?? '') . ' ••••' . ($facts['card_last4'] ?? ''));
+				$rows[] = array('Card on file', $card !== '••••' ? $card : 'saved');
+				if (!isset($facts['charged']) || $facts['charged'] === null) {
+					$heading = 'Card added';
+					$subject = 'Pearland411 card on file — ' . $business;
+					$intro   = 'A card was put on file for recurring billing.';
+				}
+			}
+
+			if (!empty($facts['schedule'])) {
+				$heading = 'Recurring billing updated';
+				$subject = 'Pearland411 recurring billing — ' . $business;
+				$intro   = $facts['schedule'];
+				$rows[]  = array('Package', !empty($facts['plan']) ? $facts['plan'] : '—');
+				$rows[]  = array('Auto-renew', !empty($facts['auto_renew']) ? 'On' : 'Off');
+				if (!empty($facts['next_date'])) {
+					$rows[] = array('Next charge', date('M j, Y', strtotime($facts['next_date'])));
+				}
+				if (isset($facts['custom']) && $facts['custom'] !== null) {
+					$rows[] = array('Agreed price', $currency . ' ' . number_format((float) $facts['custom'], 2));
+				}
+			}
+
+			$admin = $this->session->userdata('logged_admin');
+			if (!empty($admin['name'])) {
+				$rows[] = array('Done by', $admin['name']);
+			}
+
+			$body = $this->billingFactsTable($rows);
+			if ($customer && !empty($customer->listing_id)) {
+				$body .= '<p style="margin:18px 0 0;"><a href="'
+					. base_url('admin/billing-customer/' . (int) $customer->listing_id)
+					. '" style="color:#79B82A; font-weight:600;">Open this business in admin billing &rarr;</a></p>';
+			}
+
+			$this->mailer->notify_billing($subject, $heading, $body, array(
+				'intro'     => $intro,
+				'preheader' => $business . ' — ' . strtolower($heading),
+			));
+		} catch (Exception $e) {
+			log_message('error', 'Billing notification failed: ' . $e->getMessage());
+		}
+	}
+
+	/** Label/value rows as an email-safe table. */
+	private function billingFactsTable(array $rows)
+	{
+		$html = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">';
+		foreach ($rows as $row) {
+			$html .= '<tr>'
+				. '<td style="padding:7px 12px 7px 0; color:#5A6472; font-size:14px; white-space:nowrap; vertical-align:top;">'
+				. e($row[0]) . '</td>'
+				. '<td style="padding:7px 0; color:#1F2430; font-size:14px; font-weight:600;">'
+				. e($row[1]) . '</td>'
+				. '</tr>';
+		}
+
+		return $html . '</table>';
 	}
 
 	/*=========================

@@ -87,4 +87,100 @@ class Mailer
         log_message('error', 'Mailer: send failed: ' . $this->CI->email->print_debugger(array('headers')));
         return false;
     }
+
+    /**
+     * Wrap body markup in the standard Pearland411 email shell
+     * (application/views/emails/layout.php) and return the full HTML.
+     *
+     * Everything the site sends should go through here. Before this the
+     * templates were built by string concatenation at each call site, so a
+     * subscription email, a renewal warning and an enquiry alert were three
+     * different-looking messages from the same company — and a customer being
+     * asked to check their card had no reason to believe the mail was ours.
+     *
+     *   $html = $this->mailer->render('Payment received', $body, [
+     *       'intro'     => 'Thanks — your August invoice is settled.',
+     *       'preheader' => 'Receipt for USD 39.00',
+     *   ]);
+     *
+     * @param string $heading  the <h1>; also a sensible default subject
+     * @param string $body     trusted HTML for the body (escape your own data)
+     * @param array  $opts     intro, preheader, footnote
+     */
+    public function render($heading, $body, array $opts = array())
+    {
+        return $this->CI->load->view('emails/layout', array(
+            'heading'   => $heading,
+            'body'      => $body,
+            'intro'     => isset($opts['intro']) ? $opts['intro'] : '',
+            'preheader' => isset($opts['preheader']) ? $opts['preheader'] : '',
+            'footnote'  => isset($opts['footnote']) ? $opts['footnote'] : '',
+        ), true);
+    }
+
+    /**
+     * Everyone who should hear about money moving: every active admin, plus
+     * whatever `billing_notify_emails` lists at /admin/setting (one per line).
+     *
+     * Deduplicated case-insensitively, because an admin whose login address is
+     * also in the extra list should not get the message twice.
+     *
+     * @return string[]
+     */
+    public function billing_recipients()
+    {
+        $out = array();
+
+        $this->CI->load->model('adminmodel');
+        if (method_exists($this->CI->adminmodel, 'getActiveAdminsForDropdown')) {
+            foreach ($this->CI->adminmodel->getActiveAdminsForDropdown() as $admin) {
+                if (!empty($admin->admin_email)) {
+                    $out[] = trim($admin->admin_email);
+                }
+            }
+        }
+
+        foreach (preg_split('/[\r\n,;]+/', (string) site_setting('billing_notify_emails', '')) as $extra) {
+            $extra = trim($extra);
+            if ($extra !== '') {
+                $out[] = $extra;
+            }
+        }
+
+        $seen = array();
+        $keep = array();
+        foreach ($out as $address) {
+            $key = strtolower($address);
+            if (isset($seen[$key]) || !filter_var($address, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+            $seen[$key] = true;
+            $keep[]     = $address;
+        }
+
+        return $keep;
+    }
+
+    /**
+     * Tell the team something happened. Never throws and never blocks the
+     * caller: a payment that went through must not be reported as failed
+     * because the mail server was down.
+     *
+     * @return bool TRUE if it was handed to the mailer.
+     */
+    public function notify_billing($subject, $heading, $body, array $opts = array())
+    {
+        try {
+            $to = $this->billing_recipients();
+            if (empty($to)) {
+                log_message('error', 'Mailer: no billing notification recipients configured.');
+                return false;
+            }
+
+            return $this->send($to, $subject, $this->render($heading, $body, $opts));
+        } catch (Exception $e) {
+            log_message('error', 'Mailer: billing notification failed: ' . $e->getMessage());
+            return false;
+        }
+    }
 }

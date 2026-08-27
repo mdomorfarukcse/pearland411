@@ -1,9 +1,14 @@
 <?php
 /**
- * /admin/billing-customer/<user_id>
+ * /admin/billing-customer/<listing_id>
  *
  * Card on file, one-off payments, and the recurring schedule that
- * Cli::renew_subscriptions charges.
+ * Cli::renew_subscriptions charges — all for ONE business.
+ *
+ * The segment is a listing id, not a user id: the imported listings share a
+ * handful of data-entry logins, so one account owns dozens of unrelated
+ * businesses and billing the account would bill all of them at once. The card
+ * still lives on the owning account, because that is where Helcim vaults it.
  *
  * Card details are typed into Helcim's own iframe (HelcimPay.js) and go
  * straight to Helcim. Nothing on this page ever posts a card number to
@@ -53,18 +58,23 @@ $amount_default = ($renewal_amount > 0)
                 <div class="ud-cen-s2">
                     <div class="bcx-head">
                         <div>
-                            <h2><?= e($customer->name) ?></h2>
+                            <h2><?= e($customer->listing_name) ?></h2>
                             <p class="bcx-meta">
-                                <?= e($customer->email_id) ?>
+                                <?php // The account is who holds the card and who the charge is
+                                      // attributed to — worth naming, because the imported
+                                      // listings share a handful of data-entry logins. ?>
+                                Billed through <strong><?= e($customer->name) ?></strong>
+                                (<?= e($customer->email_id) ?>)
                                 <?php if (!empty($customer->mobile_number)) { ?>
                                     &middot; <?= e($customer->mobile_number) ?>
                                 <?php } ?>
-                                <?php if (!empty($customer->businesses)) { ?>
-                                    <br><strong><?= e($customer->businesses) ?></strong>
+                                <?php if (!empty($customer->listing_slug)) { ?>
+                                    <br><a href="<?= e_url(base_url('listing-details/' . rawurlencode($customer->listing_slug))) ?>"
+                                           target="_blank" rel="noopener">View the business page &rarr;</a>
                                 <?php } ?>
                             </p>
                         </div>
-                        <a href="<?= base_url('admin/billing') ?>" class="btn btn-secondary">&larr; All customers</a>
+                        <a href="<?= base_url('admin/billing') ?>" class="btn btn-secondary">&larr; All businesses</a>
                     </div>
 
                     <hr>
@@ -92,6 +102,8 @@ $amount_default = ($renewal_amount > 0)
                             This is the card <strong>recurring billing charges</strong>. Card numbers are typed into
                             Helcim's own secure window &mdash; they never reach Pearland411, and we only ever store
                             the last four digits and a token.
+                            <br>The card belongs to the account <strong><?= e($customer->name) ?></strong>, so it is
+                            shared by every business that account owns.
                         </p>
 
                         <?php if (!empty($cards)) { ?>
@@ -144,7 +156,7 @@ $amount_default = ($renewal_amount > 0)
                                                 <form method="post" action="<?= base_url('admin/billing-card-delete') ?>"
                                                       onsubmit="return confirm('Remove this card? Recurring charges will fail until another card is on file.');"
                                                       style="margin:0;">
-                                                    <input type="hidden" name="user_id" value="<?= (int) $customer->user_id ?>">
+                                                    <input type="hidden" name="listing_id" value="<?= (int) $customer->listing_id ?>">
                                                     <input type="hidden" name="card_id" value="<?= (int) $card->id ?>">
                                                     <button type="submit" class="db-list-edit" style="border:0;background:none;padding:0;cursor:pointer;">Remove</button>
                                                 </form>
@@ -180,7 +192,7 @@ $amount_default = ($renewal_amount > 0)
                         </p>
 
                         <form method="post" action="<?= base_url('admin/billing-charge') ?>" id="bcx-pay-form">
-                            <input type="hidden" name="user_id" value="<?= (int) $customer->user_id ?>">
+                            <input type="hidden" name="listing_id" value="<?= (int) $customer->listing_id ?>">
 
                             <div class="bcx-row">
                                 <div>
@@ -229,9 +241,15 @@ $amount_default = ($renewal_amount > 0)
                                 term ends <?= !empty($customer->end_date) ? e(us_date($customer->end_date)) : '&mdash;' ?>.
                                 <?php if ($renewal_amount > 0) { ?>
                                     Each renewal charges
-                                    <strong class="bcx-num"><?= e($sub_currency) ?> <?= number_format((float) $renewal_amount, 2) ?></strong>,
-                                    taken from the plan's price &mdash; change it under
-                                    <a href="<?= base_url('admin/pricing-plan') ?>">Pricing Plans</a>.
+                                    <strong class="bcx-num"><?= e($sub_currency) ?> <?= number_format((float) $renewal_amount, 2) ?></strong>
+                                    <?php if (!empty($customer->custom_amount)) { ?>
+                                        &mdash; the agreed price for this business. Clear the field below
+                                        to go back to the package price.
+                                    <?php } else { ?>
+                                        &mdash; the package price. Set an agreed price below to override it,
+                                        or edit the package under
+                                        <a href="<?= base_url('admin/pricing-plan') ?>">Pricing Plans</a>.
+                                    <?php } ?>
                                 <?php } else { ?>
                                     <span class="bcx-pill bcx-bad">This plan has no price</span>
                                     &mdash; the renewal would be skipped. Set a price under
@@ -261,14 +279,14 @@ $amount_default = ($renewal_amount > 0)
                         <?php } ?>
 
                         <form method="post" action="<?= base_url('admin/billing-recurring-save') ?>">
-                            <input type="hidden" name="user_id" value="<?= (int) $customer->user_id ?>">
+                            <input type="hidden" name="listing_id" value="<?= (int) $customer->listing_id ?>">
 
                             <?php if (!$sub_active) { ?>
                                 <div class="bcx-row">
                                     <div>
-                                        <label for="bcx-plan">Plan</label>
+                                        <label for="bcx-plan">Package</label>
                                         <select name="plan_id" id="bcx-plan" class="form-control no-select2" required>
-                                            <option value="">Choose a plan&hellip;</option>
+                                            <option value="">Choose a package&hellip;</option>
                                             <?php foreach ($plans as $plan) { ?>
                                                 <option value="<?= (int) $plan->id ?>"
                                                     <?= (!empty($customer->plan_id) && (int) $customer->plan_id === (int) $plan->id) ? 'selected' : '' ?>>
@@ -288,6 +306,19 @@ $amount_default = ($renewal_amount > 0)
                             <?php } ?>
 
                             <div class="bcx-row" style="margin-top:14px;">
+                                <div>
+                                    <?php /*
+                                     * A package sets what the business gets; this sets what it
+                                     * pays. Blank charges the package price, so nothing changes
+                                     * for anyone who does not need a negotiated rate — and a
+                                     * founding-member price entered here survives a later rise
+                                     * in the plan's list price, which is the whole point.
+                                     */ ?>
+                                    <label for="bcx-custom">Agreed price (<?= e($sub_currency) ?>)<small style="display:block;font-weight:400;color:#666;">Leave blank to charge the package price.</small></label>
+                                    <input type="text" class="form-control" id="bcx-custom" name="custom_amount"
+                                           inputmode="decimal" placeholder="Package price"
+                                           value="<?= e_attr(!empty($customer->custom_amount) ? number_format((float) $customer->custom_amount, 2, '.', '') : '') ?>">
+                                </div>
                                 <div>
                                     <label for="bcx-next">Next charge on<?php if (!$sub_active) { ?><small style="display:block;font-weight:400;color:#666;">With automatic charging off, this is simply when the term ends.</small><?php } ?></label>
                                     <input type="date" class="form-control" id="bcx-next" name="next_billing_date"
@@ -374,7 +405,7 @@ $amount_default = ($renewal_amount > 0)
     'use strict';
 
     var base   = '<?= base_url() ?>';
-    var userId = '<?= (int) $customer->user_id ?>';
+    var listingId = '<?= (int) $customer->listing_id ?>';
     var errBox = document.getElementById('bcx-js-err');
 
     function showErr(msg) {
@@ -498,7 +529,7 @@ $amount_default = ($renewal_amount > 0)
     var addBtn = document.getElementById('bcx-add-card');
     if (addBtn) {
         addBtn.addEventListener('click', function () {
-            runHelcim(addBtn, { user_id: userId, mode: 'verify' }, 'Opening…');
+            runHelcim(addBtn, { listing_id: listingId, mode: 'verify' }, 'Opening…');
         });
     }
 
@@ -515,7 +546,7 @@ $amount_default = ($renewal_amount > 0)
             }
 
             runHelcim(payNewBtn, {
-                user_id: userId,
+                listing_id: listingId,
                 mode: 'charge',
                 amount: amount,
                 note: note,

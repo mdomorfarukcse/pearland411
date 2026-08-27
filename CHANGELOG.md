@@ -6,6 +6,112 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-08-25 — Billing follows the business, not the login
+
+Searching the new billing screen for "central bbq" returned exactly one row:
+the import account **"10 dollars Galveston shuttle"**, with a hundred unrelated
+business names strung after it. That is not a search bug — it is the screen
+being keyed on the wrong thing.
+
+0028 built `/admin/billing` around `user`, because `subscriptions` and
+`payment_cards` are keyed on `user`. On this site the listings were bulk-loaded
+under a handful of data-entry logins, so **one account owns dozens of unrelated
+businesses**. Billing that row would have billed all of them at once, and
+"expire the account's active subscription before starting a new one" would have
+cancelled twenty businesses as a side effect of signing up the twenty-first.
+What staff sell, invoice and cancel is one business.
+
+### Changed
+
+- **`/admin/billing` lists businesses.** One row per listing: business, owner
+  account, package or agreed price, status, card, auto-renew, next charge.
+  Search matches the business name, or the owner's name or email. The default
+  view is businesses with billing activity; a search reaches every listing, so
+  a business that has never been billed is one search away.
+- **`/admin/billing-customer/<id>` takes a listing id**, not a user id, and is
+  scoped to that business throughout — the subscription it reads and writes,
+  and the payment history it shows. The **card still belongs to the owning
+  account**, because that is where Helcim vaults it and one owner paying for
+  three of their businesses uses one card. The page says so rather than
+  pretending otherwise.
+- **Starting a subscription expires only that business's** previous one. This
+  is the change most worth the test that covers it.
+- **Payment history is per business**, falling back to the account's own
+  unattached payments so nothing recorded before this migration disappears.
+
+### Added
+
+- **An agreed price per business** (`subscriptions.custom_amount`). A package
+  still sets what the business *gets*; this sets what it *pays*, on every
+  renewal. Blank charges the package price, so nothing changes for anyone who
+  does not need a negotiated rate. It also closes the gap flagged last round:
+  a founding-member rate survives a later rise in the plan's list price,
+  instead of silently re-pricing every customer on that plan.
+- **A standard email layout** — `application/views/emails/layout.php`, rendered
+  by `Mailer::render()`. Every message the site sends should go through it.
+  Before this each template was built by string concatenation at its call site,
+  so a subscription email, a renewal warning and an enquiry alert were three
+  different-looking messages from the same company — and a customer being asked
+  to check their card had no reason to believe the mail was ours. Table-based
+  with inline styles and no external images, because Outlook renders with
+  Word's engine and images are blocked by default.
+- **Billing notifications.** Every active admin plus whatever
+  `billing_notify_emails` lists at `/admin/setting` — seeded with
+  **joshua@spacecentersystems.com** — is emailed when a card goes on file, a
+  payment is taken, a recurring schedule changes, and when the nightly renewal
+  charges, retries or expires. Recurring billing is the one thing here that
+  moves money with nobody watching; a silent 2am failure that surfaces as a
+  customer complaint is the failure mode worth designing against.
+  `Mailer::notify_billing()` never throws and never blocks its caller: a mail
+  server outage must not turn a successful charge into a reported failure.
+
+### Migrations
+
+`database/migrations/0029_billing_per_business.sql` — `subscriptions.listing_id`
+(+ index), `subscriptions.custom_amount`, `transactions.listing_id` (+ index),
+and seeds `billing_notify_emails`. All nullable with no default, nothing
+back-filled: **NULL means account-level**, which is every row that exists today
+and everything the self-serve checkout creates, so those keep working exactly
+as they do now. Idempotent, each step guarded on its table. Mirrored into
+`database/migrations_combined_phpmyadmin.sql` and `database/README.md`.
+
+Note for the bundle: the column comment deliberately contains no semicolon.
+phpMyAdmin's importer splits on `;`, and one inside a quoted `COMMENT` string
+is exactly the kind of thing that breaks it.
+
+### Verified
+
+135 assertions across six suites, all green, against the real function source.
+
+The new ones cover what this change risks. Per-business scoping: a new term is
+attached to the business, only that business's previous subscription is
+expired, and the `WHERE` carries the listing id rather than the shared account
+— while an account-level subscription still scopes by account **and** by
+`listing_id IS NULL`, so the old behaviour is untouched. The agreed price:
+stored on create, settable and clearable on reschedule, beating both the plan
+price and the term price, with blank and zero correctly *not* treated as an
+override and a missing property safe on a pre-0029 row. The email layout is
+rendered and parsed: heading, body, preheader and contact details present, a
+hostile heading escaped rather than executed, no flexbox, no external images,
+and no fatal HTML errors.
+
+All five billing queries still parse as MySQL with matching bind counts, as do
+the migration's five statements in both the standalone file and the bundle.
+
+### Key files
+
+`application/controllers/Admin.php` (billing rekeyed to listings,
+`billingNotify`), `application/controllers/Cli.php` (renewal notifications),
+`application/models/Adminmodel.php` (listing-centric queries, agreed price,
+per-business expiry), `application/models/Usermodel.php` (`renewalAmountFor`
+honours the agreed price), `application/libraries/Mailer.php` (`render`,
+`billing_recipients`, `notify_billing`),
+`application/views/emails/layout.php` (new),
+`application/views/admin/billing.php`, `billing_customer.php`,
+`admin_setting.php`, `database/migrations/0029_billing_per_business.sql`.
+
+---
+
 ## 2026-08-25 — Tracker rows 164–169
 
 Six rows off the manager's error tracker, this time with the screenshots
