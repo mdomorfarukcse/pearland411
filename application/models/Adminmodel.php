@@ -3430,17 +3430,29 @@
 
 		/**
 		 * The FROM clause shared by the billing list, its count and the
-		 * per-customer page: every user, joined to the ONE subscription that
-		 * matters — the active one, or failing that the most recent — and to
-		 * that subscription's plan.
+		 * per-business page.
+		 *
+		 * Keyed on the LISTING, not the account. 0028 built this around `user`,
+		 * because that is what `subscriptions` and `payment_cards` are keyed on —
+		 * but the listings here were bulk-loaded under a handful of data-entry
+		 * logins, so one account owns dozens of unrelated businesses. Searching
+		 * "central bbq" returned the import account "10 dollars Galveston shuttle"
+		 * with a hundred business names strung after it, and billing that row
+		 * would have billed all of them at once.
+		 *
+		 * A subscription belongs to this business when `listing_id` matches. The
+		 * card and the account stay on `user`, because that is where Helcim
+		 * vaults them and one owner paying for three of their businesses uses one
+		 * card.
 		 */
 		private function billingFromSql()
 		{
-			return "FROM `user` u
+			return "FROM `listings` b
+				LEFT JOIN `user` u ON u.user_id = b.user_id
 				LEFT JOIN `subscriptions` s
 				       ON s.id = (SELECT s2.id
 				                    FROM `subscriptions` s2
-				                   WHERE s2.user_id = u.user_id
+				                   WHERE s2.listing_id = b.listing_id
 				                ORDER BY (s2.status = 'active') DESC, s2.id DESC
 				                   LIMIT 1)
 				LEFT JOIN `plans` p ON p.id = s.plan_id";
@@ -3449,26 +3461,25 @@
 		/**
 		 * WHERE fragment + bindings shared by the list and the count.
 		 *
-		 * With no search the list is deliberately limited to customers who
-		 * have a billing relationship — a subscription, a stored card or a
-		 * payment. Every registered member would otherwise bury the handful
-		 * who actually pay us.
+		 * With no search the list is limited to businesses that have a billing
+		 * relationship — a subscription or a payment. Two thousand imported
+		 * listings would otherwise bury the handful who actually pay us.
 		 *
-		 * A search runs across ALL users, because the common case is putting a
-		 * card on file for a business that has never been billed yet. Terms
-		 * are matched word by word, and each term may match the account name,
-		 * the email, or the name of a business the account owns — staff know
-		 * customers as "Central Barbecue", not by whoever registered it.
+		 * A search runs across EVERY listing, because the common case is setting
+		 * up a business that has never been billed. Terms match word by word
+		 * against the business name, and against the owning account's name and
+		 * email so an owner can still be found by who they are.
 		 */
 		private function billingScopeWhere($q)
 		{
 			$q = trim((string) $q);
 
+			$base = 'b.is_deleted = 0';
+
 			if ($q === '') {
 				return array(
-					'sql' => "(s.id IS NOT NULL
-						OR EXISTS (SELECT 1 FROM `payment_cards` pc2 WHERE pc2.user_id = u.user_id)
-						OR EXISTS (SELECT 1 FROM `transactions` t2 WHERE t2.user_id = u.user_id))",
+					'sql' => "({$base} AND (s.id IS NOT NULL
+						OR EXISTS (SELECT 1 FROM `transactions` t2 WHERE t2.listing_id = b.listing_id)))",
 					'bind' => array(),
 				);
 			}
@@ -3479,43 +3490,39 @@
 
 			foreach ($terms as $term) {
 				$like    = '%' . $term . '%';
-				$parts[] = "(u.name LIKE ? OR u.email_id LIKE ?
-					OR EXISTS (SELECT 1 FROM `listings` l2
-					            WHERE l2.user_id = u.user_id
-					              AND l2.is_deleted = 0
-					              AND l2.listing_name LIKE ?))";
+				$parts[] = "(b.listing_name LIKE ? OR u.name LIKE ? OR u.email_id LIKE ?)";
 				$bind[] = $like;
 				$bind[] = $like;
 				$bind[] = $like;
 			}
 
-			return array('sql' => '(' . implode(' AND ', $parts) . ')', 'bind' => $bind);
+			return array('sql' => '(' . $base . ' AND ' . implode(' AND ', $parts) . ')', 'bind' => $bind);
 		}
 
-		/** One page of the billing list. */
+		/** One page of the billing list — one row per business. */
 		public function getBillingCustomers($limit, $offset, $q = '')
 		{
 			$w = $this->billingScopeWhere($q);
 
-			$sql = "SELECT u.user_id, u.name, u.email_id,
-					(SELECT GROUP_CONCAT(l.listing_name ORDER BY l.listing_id SEPARATOR ', ')
-					   FROM `listings` l
-					  WHERE l.user_id = u.user_id AND l.is_deleted = 0) AS businesses,
+			$sql = "SELECT b.listing_id, b.listing_name, b.listing_slug,
+					u.user_id, u.name AS owner_name, u.email_id AS owner_email,
 					s.id                 AS subscription_id,
 					s.status             AS sub_status,
 					s.end_date           AS end_date,
 					s.next_billing_date  AS next_billing_date,
 					s.auto_renew         AS auto_renew,
 					s.currency           AS currency,
+					s.custom_amount      AS custom_amount,
 					s.renewal_attempts   AS renewal_attempts,
 					s.last_renewal_error AS last_renewal_error,
 					p.name               AS plan_name,
+					p.price              AS plan_price,
 					(SELECT COUNT(*) FROM `payment_cards` pc
-					  WHERE pc.user_id = u.user_id
+					  WHERE pc.user_id = b.user_id
 					    AND pc.helcim_card_token IS NOT NULL) AS card_count
 				" . $this->billingFromSql() . "
 				WHERE " . $w['sql'] . "
-				ORDER BY (s.status = 'active') DESC, u.name ASC
+				ORDER BY (s.status = 'active') DESC, b.listing_name ASC
 				LIMIT " . (int) $offset . ", " . (int) $limit;
 
 			return $this->db->query($sql, $w['bind'])->result();
@@ -3532,24 +3539,27 @@
 		}
 
 		/**
-		 * One customer for the billing detail page.
+		 * One business for the billing detail page: the listing, the account that
+		 * owns it (and therefore holds the card), and the subscription attached
+		 * to this business.
 		 *
 		 * Subscription columns are aliased one by one rather than selected as
-		 * `s.*`: a customer with no subscription at all yields NULLs for every
-		 * `s` column, and `s.user_id` coming after `u.user_id` in a `*` would
-		 * blank out the id of the very customer being looked at.
+		 * `s.*`: a business with no subscription yields NULLs for every `s`
+		 * column, and `s.user_id` coming after `u.user_id` in a `*` would blank
+		 * out the owner of the very business being looked at.
 		 */
-		public function getBillingCustomer($user_id)
+		public function getBillingCustomer($listing_id)
 		{
-			$sql = "SELECT u.user_id, u.name, u.email_id, u.mobile_number,
-					(SELECT GROUP_CONCAT(l.listing_name ORDER BY l.listing_id SEPARATOR ', ')
-					   FROM `listings` l
-					  WHERE l.user_id = u.user_id AND l.is_deleted = 0) AS businesses,
+			$sql = "SELECT b.listing_id, b.listing_name, b.listing_slug,
+					b.listing_email, b.listing_mobile,
+					u.user_id, u.name, u.email_id, u.mobile_number,
+					b.listing_name       AS businesses,
 					s.id                 AS subscription_id,
 					s.plan_id            AS plan_id,
 					s.pending_plan_id    AS pending_plan_id,
 					s.duration_id        AS duration_id,
 					s.duration_days      AS duration_days,
+					s.custom_amount      AS custom_amount,
 					s.status             AS sub_status,
 					s.start_date         AS start_date,
 					s.end_date           AS end_date,
@@ -3565,28 +3575,10 @@
 					p.name               AS plan_name,
 					p.price              AS plan_price
 				" . $this->billingFromSql() . "
-				WHERE u.user_id = ?
+				WHERE b.listing_id = ? AND b.is_deleted = 0
 				LIMIT 1";
 
-			return $this->db->query($sql, array((int) $user_id))->row();
-		}
-
-		/**
-		 * Every active plan term, in one query, so the billing screen can swap
-		 * the term dropdown when staff pick a different plan without a round
-		 * trip per plan.
-		 */
-		public function getAllPlanDurations()
-		{
-			if (!$this->db->table_exists('plan_durations')) {
-				return array();
-			}
-
-			return $this->db->from('plan_durations')
-				->where('is_active', 1)
-				->order_by('plan_id', 'ASC')
-				->order_by('duration_months', 'ASC')
-				->get()->result();
+			return $this->db->query($sql, array((int) $listing_id))->row();
 		}
 
 		/** Vaulted cards for a customer, default first. */
@@ -3603,15 +3595,37 @@
 				->get()->result();
 		}
 
-		/** Recent payments for a customer, newest first. */
-		public function getCustomerTransactions($user_id, $limit = 25)
+		/**
+		 * Recent payments for one business, newest first.
+		 *
+		 * Scoped by listing rather than by account: the import logins own
+		 * dozens of businesses, so an account-wide history would pool every
+		 * unrelated business's payments into each one's page.
+		 *
+		 * Payments taken before 0029 have no listing_id, so they are included
+		 * for the owning account when nothing is attached to this business
+		 * yet — losing a customer's payment history to a schema change would
+		 * be worse than showing a little too much.
+		 */
+		public function getListingTransactions($listing_id, $user_id, $limit = 25)
 		{
 			if (!$this->db->table_exists('transactions')) {
 				return array();
 			}
 
+			if ($this->db->field_exists('listing_id', 'transactions')) {
+				$this->db->group_start()
+					->where('listing_id', (int) $listing_id)
+					->or_group_start()
+						->where('listing_id IS NULL', null, false)
+						->where('user_id', (int) $user_id)
+					->group_end()
+				->group_end();
+			} else {
+				$this->db->where('user_id', (int) $user_id);
+			}
+
 			return $this->db->from('transactions')
-				->where('user_id', (int) $user_id)
 				->order_by('id', 'DESC')
 				->limit((int) $limit)
 				->get()->result();
@@ -3744,6 +3758,7 @@
 				'txn_ref'    => 'ADM-' . (int) $args['user_id'] . '-' . substr(md5($now . uniqid('', true)), 0, 8),
 				'plan_id'         => !empty($args['plan_id']) ? (int) $args['plan_id'] : null,
 				'subscription_id' => !empty($args['subscription_id']) ? (int) $args['subscription_id'] : null,
+				'listing_id'      => !empty($args['listing_id']) ? (int) $args['listing_id'] : null,
 				'helcim_transaction_id' => !empty($args['helcim_transaction_id']) ? $args['helcim_transaction_id'] : null,
 				'helcim_approval_code'  => !empty($args['helcim_approval_code']) ? $args['helcim_approval_code'] : null,
 				'helcim_card_token'     => !empty($args['helcim_card_token']) ? $args['helcim_card_token'] : null,
@@ -3751,7 +3766,7 @@
 				'note'                  => !empty($args['note']) ? substr((string) $args['note'], 0, 255) : null,
 			);
 
-			foreach (array('created_by_admin_id', 'note', 'helcim_card_token', 'subscription_id', 'plan_id') as $col) {
+			foreach (array('created_by_admin_id', 'note', 'helcim_card_token', 'subscription_id', 'plan_id', 'listing_id') as $col) {
 				if (!$this->db->field_exists($col, 'transactions')) {
 					unset($row[$col]);
 				}
@@ -3774,7 +3789,7 @@
 		 * customer whose card had failed twice gets one attempt on the new
 		 * date and is then expired.
 		 */
-		public function updateRecurringBilling($subscription_id, $auto_renew, $next_billing_date)
+		public function updateRecurringBilling($subscription_id, $auto_renew, $next_billing_date, $custom_amount = null)
 		{
 			$subscription_id = (int) $subscription_id;
 			if (!$subscription_id) {
@@ -3789,6 +3804,14 @@
 				'grace_until'        => null,
 				'updated_at'         => date('Y-m-d H:i:s'),
 			);
+
+			// The agreed price. NULL puts the subscription back on the plan's
+			// own price; only written when the column exists, so the screen
+			// still works before 0029 has been run.
+			if ($this->db->field_exists('custom_amount', 'subscriptions')) {
+				$data['custom_amount'] = ($custom_amount === null || $custom_amount === '')
+					? null : round((float) $custom_amount, 2);
+			}
 
 			// A term that ends before the next charge would expire the
 			// subscription between the two dates, and getRenewableSubscriptions()
@@ -3852,11 +3875,22 @@
 
 			$this->db->trans_start();
 
-			$this->db->where('user_id', $user_id)
-				->where('status', 'active')
-				->update('subscriptions', array('status' => 'expired', 'updated_at' => $now));
+			// Replace the active subscription for THIS BUSINESS only. Expiring
+			// every active row on the account would cancel the other twenty
+			// businesses an import login happens to own.
+			$has_listing_col = $this->db->field_exists('listing_id', 'subscriptions');
+			$this->db->where('status', 'active');
+			if (!empty($args['listing_id']) && $has_listing_col) {
+				$this->db->where('listing_id', (int) $args['listing_id']);
+			} else {
+				$this->db->where('user_id', $user_id);
+				if ($has_listing_col) {
+					$this->db->where('listing_id IS NULL', null, false);
+				}
+			}
+			$this->db->update('subscriptions', array('status' => 'expired', 'updated_at' => $now));
 
-			$this->db->insert('subscriptions', array(
+			$row = array(
 				'user_id'           => $user_id,
 				'plan_id'           => $plan_id,
 				'status'            => 'active',
@@ -3873,7 +3907,20 @@
 				'currency'          => $currency,
 				'billing_cycle'     => $duration_months >= 12 ? 'yearly' : 'monthly',
 				'auto_renew'        => $auto_renew,
-			));
+			);
+
+			// Which business this bills for, and the agreed price if staff set
+			// one. Both are 0029 columns, written only when present so the
+			// screen degrades rather than erroring on an un-migrated database.
+			if (!empty($args['listing_id']) && $this->db->field_exists('listing_id', 'subscriptions')) {
+				$row['listing_id'] = (int) $args['listing_id'];
+			}
+			if ($this->db->field_exists('custom_amount', 'subscriptions')) {
+				$row['custom_amount'] = (isset($args['custom_amount']) && $args['custom_amount'] !== null && $args['custom_amount'] !== '')
+					? round((float) $args['custom_amount'], 2) : null;
+			}
+
+			$this->db->insert('subscriptions', $row);
 			$subscription_id = (int) $this->db->insert_id();
 
 			// A fresh usage window, so plan limits are counted from today

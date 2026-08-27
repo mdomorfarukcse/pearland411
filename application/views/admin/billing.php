@@ -21,9 +21,10 @@
                     <h2>Customer billing</h2>
 
                     <p class="bill-note">
-                        Put a card on file, take a payment, and set when recurring billing runs.
-                        This list shows customers who already have a subscription, a saved card or a payment
-                        &mdash; <strong>search to find anyone else</strong>, including a business you have never billed.
+                        Put a card on file, take a payment, and set a package or an agreed price for
+                        <strong>one business</strong>. This list shows businesses that already have a
+                        subscription or a payment &mdash; <strong>search to find any other business</strong>,
+                        including one you have never billed.
                     </p>
 
                     <?php if (empty($helcim_configured)) { ?>
@@ -44,7 +45,7 @@
 
                     <form method="get" action="<?= base_url('admin/billing') ?>" class="bill-search">
                         <input type="search" name="q" class="form-control"
-                               placeholder="Search by customer name, email or business name&hellip;"
+                               placeholder="Search by business name, or the owner's name or email&hellip;"
                                value="<?= e_attr($search_query) ?>">
                         <button type="submit" class="btn btn-primary">Search</button>
                         <?php if ($search_query !== '') { ?>
@@ -53,7 +54,7 @@
                     </form>
 
                     <p class="bill-note">
-                        <?= (int) $total_rows ?> <?= ((int) $total_rows === 1) ? 'customer' : 'customers' ?>
+                        <?= (int) $total_rows ?> <?= ((int) $total_rows === 1) ? 'business' : 'businesses' ?>
                         <?= ($search_query !== '') ? 'matching &ldquo;' . e($search_query) . '&rdquo;' : 'with billing activity' ?>.
                     </p>
 
@@ -63,8 +64,9 @@
                         <thead>
                             <tr>
                                 <th>No</th>
-                                <th>Customer</th>
-                                <th>Plan</th>
+                                <th>Business</th>
+                                <th>Owner account</th>
+                                <th>Package / price</th>
                                 <th>Status</th>
                                 <th>Card on file</th>
                                 <th>Auto-renew</th>
@@ -73,19 +75,34 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (!empty($customers)) {
+                            <?php if (!empty($businesses)) {
                                 $i = $start_number;
-                                foreach ($customers as $c) { ?>
+                                foreach ($businesses as $c) { ?>
                                     <tr>
                                         <td><?= $i ?></td>
+                                        <td><strong><?= e($c->listing_name) ?></strong></td>
                                         <td>
-                                            <?= e($c->name) ?>
-                                            <span class="bill-biz"><?= e($c->email_id) ?></span>
-                                            <?php if (!empty($c->businesses)) { ?>
-                                                <span class="bill-biz"><?= e($c->businesses) ?></span>
+                                            <?php if (!empty($c->user_id)) { ?>
+                                                <?= e($c->owner_name) ?>
+                                                <span class="bill-biz"><?= e($c->owner_email) ?></span>
+                                            <?php } else { ?>
+                                                <span class="bill-pill bill-bad">No owner account</span>
                                             <?php } ?>
                                         </td>
-                                        <td><?= !empty($c->plan_name) ? e($c->plan_name) : '<span class="bill-biz">No plan</span>' ?></td>
+                                        <td>
+                                            <?php if (!empty($c->custom_amount)) { ?>
+                                                <?= e(!empty($c->currency) ? $c->currency : 'USD') ?>
+                                                <?= number_format((float) $c->custom_amount, 2) ?>
+                                                <span class="bill-biz">agreed price<?= !empty($c->plan_name) ? ' &middot; ' . e($c->plan_name) : '' ?></span>
+                                            <?php } elseif (!empty($c->plan_name)) { ?>
+                                                <?= e($c->plan_name) ?>
+                                                <?php if (isset($c->plan_price)) { ?>
+                                                    <span class="bill-biz"><?= e(!empty($c->currency) ? $c->currency : 'USD') ?> <?= number_format((float) $c->plan_price, 2) ?></span>
+                                                <?php } ?>
+                                            <?php } else { ?>
+                                                <span class="bill-biz">No package</span>
+                                            <?php } ?>
+                                        </td>
                                         <td>
                                             <?php if (empty($c->sub_status)) { ?>
                                                 <span class="bill-pill bill-no">None</span>
@@ -119,18 +136,18 @@
                                         </td>
                                         <td>
                                             <a class="db-list-edit"
-                                               href="<?= base_url('admin/billing-customer/' . (int) $c->user_id) ?>">Manage billing</a>
+                                               href="<?= base_url('admin/billing-customer/' . (int) $c->listing_id) ?>">Manage billing</a>
                                         </td>
                                     </tr>
                                 <?php $i++;
                                 }
                             } else { ?>
                                 <tr>
-                                    <td colspan="8">
+                                    <td colspan="9">
                                         <?php if ($search_query !== '') { ?>
-                                            No customer matches &ldquo;<?= e($search_query) ?>&rdquo;.
+                                            No business matches &ldquo;<?= e($search_query) ?>&rdquo;.
                                         <?php } else { ?>
-                                            Nobody has been billed yet. Search above for the business you want to set up.
+                                            Nothing has been billed yet. Search above for the business you want to set up.
                                         <?php } ?>
                                     </td>
                                 </tr>

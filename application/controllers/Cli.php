@@ -139,17 +139,107 @@ class Cli extends CI_Controller
 
             if (!empty($res['success'])) {
                 $this->usermodel->recordRenewalSuccess($sub, $amount, $currency, $res['transactionId'], $res['approvalCode']);
+                $this->notify_admins_renewal($sub, 'renewed', array(
+                    'amount'   => $amount,
+                    'currency' => $currency,
+                    'txn'      => $res['transactionId'],
+                ));
                 echo "  renewed sub {$sub->id}\n";
                 $ok++;
             } else {
                 $outcome = $this->usermodel->recordRenewalFailure($sub, isset($res['error']) ? $res['error'] : 'Charge failed');
                 $this->notify_renewal_failure((int) $sub->user_id, $outcome);
+                $this->notify_admins_renewal($sub, $outcome, array(
+                    'amount'   => $amount,
+                    'currency' => $currency,
+                    'error'    => isset($res['error']) ? $res['error'] : 'Charge failed',
+                ));
                 echo "  failed sub {$sub->id}: " . (isset($res['error']) ? $res['error'] : '') . " ({$outcome})\n";
                 if ($outcome === 'expired') $expired++; else $retry++;
             }
         }
 
         echo "\nrenewed: $ok  retry: $retry  expired: $expired  skipped: $skipped\n";
+    }
+
+    /**
+     * Tell the team what the nightly run did to one subscription.
+     *
+     * Recurring billing is the one thing on this site that moves money with
+     * nobody watching, so every outcome — charged, retrying, expired — is
+     * reported to the same people who are told when staff take a payment by
+     * hand (Mailer::billing_recipients()). A silent failure at 2am that nobody
+     * sees until the customer complains is the failure mode worth designing
+     * against.
+     *
+     * Never aborts the cron: the charge has already happened either way.
+     */
+    private function notify_admins_renewal($sub, $outcome, array $facts)
+    {
+        try {
+            $this->load->library('mailer');
+
+            $business = '';
+            if (!empty($sub->listing_id)) {
+                $row = $this->db->select('listing_name')->from('listings')
+                    ->where('listing_id', (int) $sub->listing_id)->get()->row();
+                if ($row) $business = $row->listing_name;
+            }
+            $user = $this->db->select('name, email_id')->from('user')
+                ->where('user_id', (int) $sub->user_id)->get()->row();
+
+            $who      = $business !== '' ? $business : ($user ? $user->name : 'a customer');
+            $currency = !empty($facts['currency']) ? $facts['currency'] : 'USD';
+            $money    = $currency . ' ' . number_format((float) $facts['amount'], 2);
+
+            if ($outcome === 'renewed') {
+                $heading = 'Automatic renewal charged';
+                $subject = 'Pearland411 renewal — ' . $money . ' — ' . $who;
+                $intro   = 'The nightly renewal charged the card on file.';
+            } elseif ($outcome === 'expired') {
+                $heading = 'Subscription expired after failed renewals';
+                $subject = 'Pearland411 renewal FAILED (expired) — ' . $who;
+                $intro   = 'The card was declined too many times, so the subscription has expired.';
+            } else {
+                $heading = 'Automatic renewal failed — will retry';
+                $subject = 'Pearland411 renewal failed — ' . $who;
+                $intro   = 'The card was declined. It will be retried; access continues meanwhile.';
+            }
+
+            $rows = array(array('Business', $who));
+            if ($user) {
+                $rows[] = array('Account', $user->name . ' (' . $user->email_id . ')');
+            }
+            $rows[] = array('Amount', $money);
+            if (!empty($facts['txn'])) {
+                $rows[] = array('Helcim transaction', $facts['txn']);
+            }
+            if (!empty($facts['error'])) {
+                $rows[] = array('Gateway said', $facts['error']);
+            }
+
+            $html = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">';
+            foreach ($rows as $row) {
+                $html .= '<tr><td style="padding:7px 12px 7px 0; color:#5A6472; font-size:14px; white-space:nowrap; vertical-align:top;">'
+                    . htmlspecialchars((string) $row[0], ENT_QUOTES, 'UTF-8') . '</td>'
+                    . '<td style="padding:7px 0; color:#1F2430; font-size:14px; font-weight:600;">'
+                    . htmlspecialchars((string) $row[1], ENT_QUOTES, 'UTF-8') . '</td></tr>';
+            }
+            $html .= '</table>';
+
+            if (!empty($sub->listing_id)) {
+                $html .= '<p style="margin:18px 0 0;"><a href="'
+                    . base_url('admin/billing-customer/' . (int) $sub->listing_id)
+                    . '" style="color:#79B82A; font-weight:600;">Open this business in admin billing &rarr;</a></p>';
+            }
+
+            $this->mailer->notify_billing($subject, $heading, $html, array(
+                'intro'     => $intro,
+                'preheader' => $who . ' — ' . strtolower($heading),
+            ));
+        } catch (Exception $e) {
+            log_message('error', 'Renewal admin notification failed: ' . $e->getMessage());
+        }
     }
 
     /** Best-effort dunning / expiry email. Never aborts the cron. */

@@ -1210,4 +1210,79 @@ SET @s := IF(@t = 1 AND @c = 0,
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
+-- ============================================================
+-- 0029_billing_per_business.sql
+-- ============================================================
+-- Bills a BUSINESS, not an account, and lets staff agree a price. 0028 built
+-- /admin/billing around `user`, because that is what `subscriptions` and
+-- `payment_cards` are keyed on — but the listings here were bulk-loaded under a
+-- handful of data-entry logins, so one account owns dozens of unrelated
+-- businesses. Searching "central bbq" returned the import account "10 dollars
+-- Galveston shuttle" with a hundred business names strung after it, and billing
+-- that row would have billed all of them at once. See
+-- database/migrations/0029_billing_per_business.sql for the full reasoning.
+--
+-- All three columns are nullable with no default, so every existing row stays
+-- valid and nothing is back-filled: an existing subscription keeps billing the
+-- account exactly as it does today until somebody attaches it to a business.
+
+-- subscriptions.listing_id
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'
+             AND COLUMN_NAME = 'listing_id');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `subscriptions` ADD COLUMN `listing_id` INT(11) NULL DEFAULT NULL COMMENT ''Business this bills for. NULL means account-level''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- subscriptions index on listing_id
+SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'
+             AND INDEX_NAME = 'idx_subscriptions_listing');
+SET @s := IF(@t = 1 AND @i = 0,
+    'ALTER TABLE `subscriptions` ADD INDEX `idx_subscriptions_listing` (`listing_id`)',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- subscriptions.custom_amount
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions'
+             AND COLUMN_NAME = 'custom_amount');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `subscriptions` ADD COLUMN `custom_amount` DECIMAL(10,2) NULL DEFAULT NULL COMMENT ''Agreed price that overrides the plan price on renewal''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- transactions.listing_id
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions'
+             AND COLUMN_NAME = 'listing_id');
+SET @s := IF(@t = 1 AND @c = 0,
+    'ALTER TABLE `transactions` ADD COLUMN `listing_id` INT(11) NULL DEFAULT NULL COMMENT ''Business this payment was for''',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- transactions index on listing_id
+SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions'
+             AND INDEX_NAME = 'idx_transactions_listing');
+SET @s := IF(@t = 1 AND @i = 0,
+    'ALTER TABLE `transactions` ADD INDEX `idx_transactions_listing` (`listing_id`)',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Who is copied on billing activity, on top of every active admin.
+-- INSERT IGNORE so re-running never overwrites an edited list.
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'site_settings');
+SET @s := IF(@t = 1,
+    'INSERT IGNORE INTO `site_settings` (`setting_key`, `setting_value`, `updated_at`) VALUES (''billing_notify_emails'', ''joshua@spacecentersystems.com'', NOW())',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
 SET FOREIGN_KEY_CHECKS = 1;

@@ -274,6 +274,15 @@ $s = isset($settings) ? $settings : array();
 					   min="0" step="1"
 					   value="<?= e_attr(($s['billing_manual_charge_max'] ?? '') !== '' ? $s['billing_manual_charge_max'] : '25000') ?>">
 			</div>
+			<div class="setting-row">
+				<label for="billing_notify_emails">Copy billing alerts to<small>One address per line. Every active admin is always included &mdash; these are extra.</small></label>
+				<textarea id="billing_notify_emails" name="billing_notify_emails" rows="3"
+						  placeholder="joshua@spacecentersystems.com"><?= e($s['billing_notify_emails'] ?? '') ?></textarea>
+			</div>
+			<p class="hint">
+				Sent when a card goes on file, a payment is taken, a recurring schedule changes,
+				and when an automatic renewal succeeds or fails.
+			</p>
 		</section>
 
 		<!-- Top menu ------------------------------------------------------ -->

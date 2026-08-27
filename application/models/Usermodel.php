@@ -5762,6 +5762,20 @@ class Usermodel extends CI_Model
 	{
 		$amount = 0.0;
 
+		/*
+		 * An agreed price wins over everything (migration 0029). A founding
+		 * member quoted $19 stays on $19 when the plan's list price is edited
+		 * later — without this, the first price rise would silently re-price
+		 * every customer on that plan, which is the whole risk the Rate Lock
+		 * Policy exists to prevent.
+		 */
+		if (isset($subscription->custom_amount)
+			&& $subscription->custom_amount !== null
+			&& $subscription->custom_amount !== ''
+			&& (float) $subscription->custom_amount > 0) {
+			return round((float) $subscription->custom_amount, 2);
+		}
+
 		if (!empty($subscription->duration_id)) {
 			$d = $this->getDurationById((int) $subscription->duration_id);
 			if ($d) {
