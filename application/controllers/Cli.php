@@ -108,6 +108,10 @@ class Cli extends CI_Controller
         $this->load->library('mailer');
 
         if (!$this->helcim_lib->is_configured()) {
+            // Heartbeat first: "the cron ran but Helcim is not set up" and "the
+            // cron never ran at all" are different problems with the same
+            // symptom — nothing charged — and staff need to tell them apart.
+            $this->recordCronRun('Helcim is not configured, so nothing was charged.');
             echo "Helcim not configured; aborting.\n";
             return;
         }
@@ -159,7 +163,36 @@ class Cli extends CI_Controller
             }
         }
 
+        $this->recordCronRun(sprintf(
+            '%d due — %d renewed, %d retrying, %d expired, %d skipped.',
+            count($subs), $ok, $retry, $expired, $skipped
+        ));
+
         echo "\nrenewed: $ok  retry: $retry  expired: $expired  skipped: $skipped\n";
+    }
+
+    /**
+     * Stamp when this job last ran and what it did, so /admin/billing can say
+     * so on screen.
+     *
+     * Recurring billing only works if a cron actually calls this every night,
+     * and there was no way to find that out short of SSH — a cron that was
+     * never installed, or installed with a placeholder path still in it, looks
+     * from the admin exactly like a cron that ran and found nothing due. The
+     * first anyone would know is a customer whose card was never charged.
+     *
+     * Best effort: a failed write must never take the job down with it.
+     */
+    private function recordCronRun($summary)
+    {
+        try {
+            if (function_exists('site_setting_save')) {
+                site_setting_save('billing_cron_last_run', date('Y-m-d H:i:s'));
+                site_setting_save('billing_cron_last_summary', (string) $summary);
+            }
+        } catch (Exception $e) {
+            log_message('error', 'Could not record the renewal cron heartbeat: ' . $e->getMessage());
+        }
     }
 
     /**

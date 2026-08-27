@@ -65,6 +65,22 @@ What staff sell, invoice and cancel is one business.
   `Mailer::notify_billing()` never throws and never blocks its caller: a mail
   server outage must not turn a successful charge into a reported failure.
 
+### Added — the cron can now be checked from the admin
+
+`/admin/billing` shows when the nightly job last ran and what it did, stamped
+by `Cli::renew_subscriptions` into `billing_cron_last_run` /
+`billing_cron_last_summary` on every run — including the early return when
+Helcim is not configured, so "ran but not set up" and "never ran" stay
+distinguishable.
+
+This exists because the first cron installed on the live server still had the
+example's `USERNAME` placeholder in its path. From the admin that is
+indistinguishable from a quiet night with nothing due, and the first sign of
+the difference would have been a customer whose card was never charged. Never
+run is a loud warning, over 48 hours is a warning, otherwise a quiet line with
+the last summary. Neither key is in the settings whitelist — they are written
+by the job, not edited.
+
 ### Migrations
 
 `database/migrations/0029_billing_per_business.sql` — `subscriptions.listing_id`
@@ -81,7 +97,7 @@ is exactly the kind of thing that breaks it.
 
 ### Verified
 
-135 assertions across six suites, all green, against the real function source.
+142 assertions across seven suites, all green, against the real function source — including the heartbeat banner's never-run / 47h / 49h / week-old boundaries.
 
 The new ones cover what this change risks. Per-business scoping: a new term is
 attached to the business, only that business's previous subscription is

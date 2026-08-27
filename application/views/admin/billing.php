@@ -9,6 +9,10 @@
     .bill-yes { background: #e3f5e8; color: #1c6b34; }
     .bill-no { background: #f1f1f1; color: #767676; }
     .bill-bad { background: #fdecea; color: #96271c; }
+    .bill-cron { border-radius: 4px; padding: 10px 14px; margin: 0 0 16px; font-size: 13.5px; line-height: 1.6; }
+    .bill-cron.is-ok { background: #f2f7f3; border: 1px solid #cfe3d5; color: #33523c; }
+    .bill-cron.is-stale { background: #fff4e5; border: 1px solid #f0c37a; color: #6b4a12; }
+    .bill-cron .bill-biz { color: inherit; opacity: .8; }
 </style>
 <section>
     <div class="ad-com">
@@ -35,6 +39,33 @@
                             <a href="<?= base_url('admin/setting') ?>">SEO &amp; Setting</a>.
                         </div>
                     <?php } ?>
+
+                    <?php
+                    /*
+                     * Is the nightly job actually running? Nothing recurs without
+                     * it, and a cron that was never installed — or installed with
+                     * the example's placeholder path still in it — looks from here
+                     * exactly like a quiet night with nothing due.
+                     */
+                    $cron_ts   = $cron_last_run !== '' ? strtotime($cron_last_run) : false;
+                    $cron_age  = $cron_ts ? (time() - $cron_ts) : null;
+                    $cron_stale = ($cron_age === null) || ($cron_age > 172800); // 48h
+                    ?>
+                    <div class="bill-cron <?= $cron_stale ? 'is-stale' : 'is-ok' ?>">
+                        <?php if (!$cron_ts) { ?>
+                            <strong>The nightly billing job has never run.</strong>
+                            Recurring charges are set up here but nothing takes them until
+                            <code>php index.php cli renew_subscriptions</code> runs on a daily cron.
+                            Check the cron command for a placeholder path that was never replaced.
+                        <?php } elseif ($cron_stale) { ?>
+                            <strong>The nightly billing job last ran <?= e(us_date($cron_last_run, 'M j, Y, g:ia')) ?></strong>
+                            &mdash; more than two days ago. It should run daily; check the cron job.
+                            <span class="bill-biz"><?= e($cron_last_summary) ?></span>
+                        <?php } else { ?>
+                            Nightly billing job ran <?= e(us_date($cron_last_run, 'M j, Y, g:ia')) ?>.
+                            <span class="bill-biz"><?= e($cron_last_summary) ?></span>
+                        <?php } ?>
+                    </div>
 
                     <?php if ($this->session->flashdata('message')) { ?>
                         <div class="log-suc"><p><?= e($this->session->flashdata('message')) ?></p></div>
