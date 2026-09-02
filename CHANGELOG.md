@@ -6,6 +6,40 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-09-02 — The renewal cron, written down where it can be found
+
+A customer set to renew on the 1st was not charged. Nothing in the code was
+wrong: `Cli::renew_subscriptions` was never installed as a cron on the live
+server, and the only record of how to install it was one four-line bullet in
+the README. The screen at `/admin/billing-customer/<id>` says the charge is
+coming; without the cron it never comes, and the first person to notice is the
+customer.
+
+### Added
+
+- **README ▸ “The renewal cron (recurring billing)”** — the crontab line ready
+  to paste, `which php` / `echo $HOME` to fill in the two paths it needs, why
+  the placeholder `USERNAME` must not survive (the first cron on the live
+  server shipped with it, which fails exactly like a quiet night), and the
+  five conditions a subscription must meet to be charged at all.
+- **What to do about charges missed while the cron was off.** The job selects
+  `next_billing_date <= NOW()`, so the first run takes the backlog on its own.
+  Taking a missed charge by hand instead is the trap worth documenting:
+  **Take a payment** is deliberately recorded without moving the schedule, so
+  a date left in the past is charged again by the next nightly run.
+- **How to tell it is running** — the `/admin/billing` heartbeat
+  (`billing_cron_last_run`), and the advice to run the command by hand once
+  after installing the cron rather than waiting a night to learn it failed.
+
+Documentation only. No code, schema or migration changes; behaviour of
+`Cli::renew_subscriptions` is unchanged.
+
+### Key files
+
+`README.md`.
+
+---
+
 ## 2026-08-25 — The billing 500 was mine
 
 The diagnostic screen added an hour earlier did its job on the first load:

@@ -215,12 +215,80 @@ or replace them at `/admin/services` to match the real catalog.
   **auto-renew** (the card token is vaulted). Upgrades on the account
   page charge a prorated difference immediately; downgrades apply at the
   next renewal; cancel turns off auto-renew and runs to term end.
-- **Renewal cron** — schedule daily:
-  ```
-  php index.php cli renew_subscriptions
-  ```
-  It charges due vaulted cards, extends the term on success, and applies
-  a 3-retry / 2-day-grace dunning policy (with email) before expiring.
+- **Renewal cron** — recurring billing only happens if a daily cron runs
+  `php index.php cli renew_subscriptions`. It charges due vaulted cards,
+  extends the term on success, and applies a 3-retry / 2-day-grace dunning
+  policy (with email) before expiring. Setup and checks below.
+
+## The renewal cron (recurring billing)
+
+**The website never charges a recurring payment by itself.** Every schedule
+staff set under *Recurring billing* on `/admin/billing-customer/<id>` is taken
+by one nightly job:
+
+```
+php index.php cli renew_subscriptions
+```
+
+If that cron is not installed, nothing is charged — the admin screen goes on
+showing the next charge date and the day simply passes.
+
+### Install it
+
+cPanel ▸ Advanced ▸ **Cron Jobs** ▸ *Once Per Day*, or paste into `crontab -e`
+as the account that owns `public_html` (not root):
+
+```cron
+5 2 * * * /usr/local/bin/php /home/USERNAME/public_html/index.php cli renew_subscriptions >> /home/USERNAME/renew_subscriptions.log 2>&1
+```
+
+Replace **both** `USERNAME`s and check the PHP path. Do not leave the
+placeholder in: the first cron installed on the live server still had
+`USERNAME` in its path, and a cron that cannot find `index.php` looks from
+`/admin/billing` exactly like a quiet night with nothing due. Over SSH (or
+cPanel ▸ Terminal):
+
+```bash
+which php    # PHP binary, e.g. /usr/local/bin/php or /opt/cpanel/ea-php81/root/usr/bin/php
+echo $HOME   # account home, e.g. /home/pearla12
+```
+
+- Use the *same* PHP the site runs on — an older CLI PHP aborts on a missing
+  extension before it charges anything.
+- The job `chdir`s to the repo root itself, so an absolute path is enough; no
+  `cd` needed.
+- Daily is enough, and re-running is safe: a subscription is only picked up
+  once its next charge date has arrived, and that date moves forward as soon
+  as the charge succeeds.
+- Keep the log outside `public_html` so it is not web-readable.
+- It refuses to run over HTTP (`Cli` 404s on any web request), so the URL
+  cannot be used as a cron target.
+
+### Check that it is working
+
+`/admin/billing` shows a heartbeat line at the top — *“Nightly billing job ran
+Sep 2, 2026, 2:05am — 3 due, 3 renewed…”*. Never run, or older than 48 hours,
+shows as a warning. It is stamped on every run, including the early return
+when Helcim is not configured, so *“ran but not set up”* and *“never ran”* stay
+distinguishable. After installing the cron, run the command by hand once and
+read its output rather than waiting a night to find out.
+
+A subscription is only charged when **all** of these hold: auto-renew is on
+(*“Charge this card automatically…”*), the subscription is `active`, the next
+charge date has arrived, a card is vaulted for the owner, and
+`HELCIM_API_TOKEN` is set. Rows missing a card or an amount are skipped and
+logged, not silently ignored.
+
+### Payments missed while the cron was off
+
+Nothing is lost. The job takes every schedule whose date has **passed**, not
+only today's, so the first successful run charges the backlog — one charge per
+subscription, then the term rolls forward.
+
+If instead you take a missed charge by hand with **Take a payment**, move
+*Next charge on* forward to the following term date and save. A staff payment
+is deliberately recorded without touching the schedule, so leaving the date in
+the past means the nightly job charges that customer a second time.
 
 ## Known follow-ups
 
