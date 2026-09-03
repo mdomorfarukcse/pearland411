@@ -283,6 +283,13 @@ when Helcim is not configured, so *“ran but not set up”* and *“never ran�
 distinguishable. After installing the cron, run the command by hand once and
 read its output rather than waiting a night to find out.
 
+**A failed run is on a clock.** Each failure raises `renewal_attempts` and
+pushes the retry to tomorrow; the third consecutive failure sets the
+subscription to `expired`, which drops the customer's package. So a run that
+prints `failed sub N` is worth reading the same day, not next week — the
+message after the colon is Helcim's own, and it is also in
+`application/logs/`.
+
 A subscription is only charged when **all** of these hold: auto-renew is on
 (*“Charge this card automatically…”*), the subscription is `active`, the next
 charge date has arrived, a card is vaulted for the owner, and

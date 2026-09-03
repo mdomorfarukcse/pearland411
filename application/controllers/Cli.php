@@ -139,6 +139,12 @@ class Cli extends CI_Controller
             $res = $this->helcim_lib->charge_vaulted_card($token, $amount, array(
                 'currency'    => $currency,
                 'description' => 'Pearland411 renewal — subscription ' . $sub->id,
+                // Keyed on the subscription and the date it fell due, so a
+                // second run the same night — a duplicate cron, or a hand-run
+                // alongside the scheduled one — cannot take the money twice.
+                // A retry tomorrow moves next_billing_date, so it keys anew
+                // and does charge.
+                'idempotency_key' => 'renew:' . $sub->id . ':' . $sub->next_billing_date,
             ));
 
             if (!empty($res['success'])) {
