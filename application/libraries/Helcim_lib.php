@@ -190,11 +190,27 @@ class Helcim_lib
     }
 
     /**
-     * Charge a previously vaulted card token (used by recurring renewals).
+     * Charge a previously vaulted card token — the nightly renewal and the
+     * admin "charge the card on file" button both come through here.
+     *
+     * The Payment API demands two things the HelcimPay endpoints do not, and
+     * missing either is answered with a bare HTTP 400, so no card is charged
+     * and nothing says why:
+     *
+     *   - an `idempotency-key` header, a unique 25-character alphanumeric
+     *     string that Helcim remembers for five minutes. A repeat inside that
+     *     window returns the original transaction rather than charging again.
+     *   - `ipAddress` in the body, which Helcim scores for fraud. A cron has
+     *     no client, so the server's own address stands in.
+     *
+     * Pass `idempotency_key` for a charge that must not happen twice — a
+     * renewal keys on its subscription and due date, so two runs on the same
+     * night collapse into one charge. Omit it and a fresh random key is
+     * generated, which is what a deliberate one-off staff charge wants.
      *
      * @param string $card_token
      * @param float  $amount
-     * @param array  $opts  optional: currency, ipAddress, description
+     * @param array  $opts  optional: currency, ipAddress, description, idempotency_key
      * @return array ['success'=>bool, 'transactionId'=>?, 'approvalCode'=>?, 'raw'=>?, 'error'=>?]
      */
     public function charge_vaulted_card($card_token, $amount, $opts = array())
@@ -207,12 +223,14 @@ class Helcim_lib
             'paymentType' => 'purchase',
             'currency'    => isset($opts['currency']) ? $opts['currency'] : $this->currency(),
             'amount'      => round((float) $amount, 2),
+            'ipAddress'   => !empty($opts['ipAddress']) ? $opts['ipAddress'] : $this->default_ip(),
             'cardData'    => array('cardToken' => $card_token),
         );
-        if (!empty($opts['ipAddress']))   { $payload['ipAddress'] = $opts['ipAddress']; }
         if (!empty($opts['description'])) { $payload['description'] = $opts['description']; }
 
-        $res = $this->request('POST', '/payment/purchase', $payload);
+        $key = $this->idempotency_key(isset($opts['idempotency_key']) ? $opts['idempotency_key'] : null);
+
+        $res = $this->request('POST', '/payment/purchase', $payload, $key);
         if (!$res['success']) {
             return array('success' => false, 'error' => $res['error'], 'raw' => $res['body']);
         }
@@ -248,8 +266,11 @@ class Helcim_lib
     /**
      * Low-level JSON request to the Helcim API. Returns
      * ['success'=>bool, 'body'=>array, 'status'=>int, 'error'=>?string].
+     *
+     * `$idempotency_key` is sent only when given: the Payment API requires it,
+     * the HelcimPay initialize endpoint does not accept it.
      */
-    private function request($method, $path, $payload = null)
+    private function request($method, $path, $payload = null, $idempotency_key = null)
     {
         $url = rtrim($this->cfg['api_base'], '/') . $path;
 
@@ -259,6 +280,9 @@ class Helcim_lib
             'Content-Type: application/json',
             'Accept: application/json',
         );
+        if ($idempotency_key !== null && $idempotency_key !== '') {
+            $headers[] = 'idempotency-key: ' . $idempotency_key;
+        }
 
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -288,12 +312,65 @@ class Helcim_lib
         }
 
         if ($status < 200 || $status >= 300) {
-            $msg = isset($body['errors']) ? json_encode($body['errors'])
-                 : (isset($body['message']) ? $body['message'] : ('HTTP ' . $status));
-            log_message('error', 'Helcim API ' . $status . ': ' . $msg);
+            $msg = $this->error_message($body, $raw, $status);
+            log_message('error', 'Helcim API ' . $status . ' on ' . $path . ': ' . $msg);
             return array('success' => false, 'body' => $body, 'status' => $status, 'error' => $msg);
         }
 
         return array('success' => true, 'body' => $body, 'status' => $status, 'error' => null);
+    }
+
+    /**
+     * Turn a rejection into something the person reading a cron log can act on.
+     *
+     * Helcim documents errors as an `errors` object keyed by the offending
+     * field, but not every rejection arrives in that shape. A purchase sent
+     * without an idempotency key came back in none of the known shapes, and
+     * this reported it as the literal string "HTTP 400" — which is what the
+     * nightly job printed, night after night, while a customer went unbilled.
+     * Anything unrecognised now carries a trimmed copy of the body.
+     */
+    private function error_message($body, $raw, $status)
+    {
+        foreach (array('errors', 'message', 'error') as $key) {
+            if (isset($body[$key]) && $body[$key] !== '') {
+                return is_string($body[$key]) ? $body[$key] : json_encode($body[$key]);
+            }
+        }
+
+        $snippet = trim(preg_replace('/\s+/', ' ', (string) $raw));
+        return 'HTTP ' . $status . ($snippet !== '' ? ': ' . substr($snippet, 0, 300) : '');
+    }
+
+    /**
+     * A 25-character alphanumeric idempotency key, the shape the Payment API
+     * requires.
+     *
+     * Seeded, it is deterministic: the same seed always yields the same key,
+     * so a charge attempted twice inside Helcim's five-minute memory is
+     * collapsed into one. Unseeded it is simply unique. This is a collision
+     * guard, not a secret, so `uniqid()` entropy is sufficient and keeps the
+     * call working on the PHP 5.x this project still declares support for.
+     */
+    private function idempotency_key($seed = null)
+    {
+        if ($seed !== null && $seed !== '') {
+            return substr(sha1($seed), 0, 25);
+        }
+        return substr(sha1(uniqid('helcim', true) . mt_rand()), 0, 25);
+    }
+
+    /**
+     * The address to hand Helcim for fraud scoring. `SERVER_ADDR` covers web
+     * requests; the renewal cron has no client and no such variable, so the
+     * host's own resolved address stands in for it.
+     */
+    private function default_ip()
+    {
+        if (!empty($_SERVER['SERVER_ADDR'])) {
+            return $_SERVER['SERVER_ADDR'];
+        }
+        $resolved = gethostbyname(php_uname('n'));
+        return filter_var($resolved, FILTER_VALIDATE_IP) ? $resolved : '127.0.0.1';
     }
 }

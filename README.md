@@ -215,12 +215,97 @@ or replace them at `/admin/services` to match the real catalog.
   **auto-renew** (the card token is vaulted). Upgrades on the account
   page charge a prorated difference immediately; downgrades apply at the
   next renewal; cancel turns off auto-renew and runs to term end.
-- **Renewal cron** — schedule daily:
-  ```
-  php index.php cli renew_subscriptions
-  ```
-  It charges due vaulted cards, extends the term on success, and applies
-  a 3-retry / 2-day-grace dunning policy (with email) before expiring.
+- **Renewal cron** — recurring billing only happens if a daily cron runs
+  `php index.php cli renew_subscriptions`. It charges due vaulted cards,
+  extends the term on success, and applies a 3-retry / 2-day-grace dunning
+  policy (with email) before expiring. Setup and checks below.
+
+## The renewal cron (recurring billing)
+
+**The website never charges a recurring payment by itself.** Every schedule
+staff set under *Recurring billing* on `/admin/billing-customer/<id>` is taken
+by one nightly job:
+
+```
+php index.php cli renew_subscriptions
+```
+
+If that cron is not installed, nothing is charged — the admin screen goes on
+showing the next charge date and the day simply passes.
+
+### Install it
+
+cPanel ▸ Advanced ▸ **Cron Jobs** ▸ *Add New Cron Job*, filling the five
+schedule boxes by hand — Minute `5`, Hour `2`, Day `*`, Month `*`, Weekday `*`
+— and this as the **Command**, on one line:
+
+```cron
+/usr/local/bin/php /home/pearlan/public_html/index.php cli renew_subscriptions >> /home/pearlan/renew_subscriptions.log 2>&1
+```
+
+That is the live account (home `/home/pearlan`, repo root
+`/home/pearlan/public_html`), so it can be pasted as it stands. The equivalent
+for `crontab -e`, run as the account that owns `public_html` and never root:
+
+```cron
+5 2 * * * /usr/local/bin/php /home/pearlan/public_html/index.php cli renew_subscriptions >> /home/pearlan/renew_subscriptions.log 2>&1
+```
+
+On any other account, substitute the real home — and substitute it
+*everywhere*. The first cron installed on the live server still had the
+example's `USERNAME` in its path, and a cron that cannot find `index.php`
+looks from `/admin/billing` exactly like a quiet night with nothing due. Over
+SSH or cPanel ▸ Terminal, `echo $HOME` and `which php` print the two values
+the line needs.
+
+- **Check the PHP version first.** `/usr/local/bin/php` is the server default,
+  which is frequently older than the PHP the domain actually runs. cPanel ▸
+  **MultiPHP Manager** shows the version assigned to the domain; if it is not
+  the default, use that binary instead — `/usr/local/bin/ea-php81
+  /home/pearlan/public_html/index.php cli renew_subscriptions …`. A CLI PHP
+  older than the site's aborts on a missing extension before it charges
+  anything.
+- The job `chdir`s to the repo root itself, so an absolute path is enough; no
+  `cd` needed.
+- Daily is enough, and re-running is safe: a subscription is only picked up
+  once its next charge date has arrived, and that date moves forward as soon
+  as the charge succeeds.
+- Keep the log outside `public_html` so it is not web-readable.
+- It refuses to run over HTTP (`Cli` 404s on any web request), so the URL
+  cannot be used as a cron target.
+
+### Check that it is working
+
+`/admin/billing` shows a heartbeat line at the top — *“Nightly billing job ran
+Sep 2, 2026, 2:05am — 3 due, 3 renewed…”*. Never run, or older than 48 hours,
+shows as a warning. It is stamped on every run, including the early return
+when Helcim is not configured, so *“ran but not set up”* and *“never ran”* stay
+distinguishable. After installing the cron, run the command by hand once and
+read its output rather than waiting a night to find out.
+
+**A failed run is on a clock.** Each failure raises `renewal_attempts` and
+pushes the retry to tomorrow; the third consecutive failure sets the
+subscription to `expired`, which drops the customer's package. So a run that
+prints `failed sub N` is worth reading the same day, not next week — the
+message after the colon is Helcim's own, and it is also in
+`application/logs/`.
+
+A subscription is only charged when **all** of these hold: auto-renew is on
+(*“Charge this card automatically…”*), the subscription is `active`, the next
+charge date has arrived, a card is vaulted for the owner, and
+`HELCIM_API_TOKEN` is set. Rows missing a card or an amount are skipped and
+logged, not silently ignored.
+
+### Payments missed while the cron was off
+
+Nothing is lost. The job takes every schedule whose date has **passed**, not
+only today's, so the first successful run charges the backlog — one charge per
+subscription, then the term rolls forward.
+
+If instead you take a missed charge by hand with **Take a payment**, move
+*Next charge on* forward to the following term date and save. A staff payment
+is deliberately recorded without touching the schedule, so leaving the date in
+the past means the nightly job charges that customer a second time.
 
 ## Known follow-ups
 

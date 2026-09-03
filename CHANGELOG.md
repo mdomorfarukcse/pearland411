@@ -6,6 +6,99 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-09-03 — No vaulted card had ever been charged
+
+The cron installed yesterday ran, found the one due subscription, and printed:
+
+> `failed sub 16: HTTP 400 (retry)`
+
+Not a decline. Helcim's Payment API requires an `idempotency-key` header — a
+unique 25-character alphanumeric string it remembers for five minutes — and
+answers a request without one with a bare 400. `Helcim_lib::request()` sent
+`api-token`, `Content-Type` and `Accept`, and nothing else, so **every**
+`/payment/purchase` call this project has ever made was rejected before a card
+was touched.
+
+That means the failure was never about the cron. `Cli::renew_subscriptions`
+and the admin's **Charge the card on file** button are the only two callers of
+`charge_vaulted_card()`, and both have been broken since the Helcim migration
+landed. It stayed invisible because the paths that *do* work — self-serve
+checkout and staff's **Enter a card & charge** — go through
+`/helcim-pay/initialize`, which requires no such header. The Aug 27 payment on
+the account that prompted this was taken that way. Recurring billing has never
+once collected.
+
+### Fixed
+
+- **`idempotency-key` on Payment API calls.** Generated per attempt, or
+  derived from a caller-supplied seed. `/helcim-pay/initialize` does not take
+  the header and does not get it.
+- **`ipAddress` in the purchase payload.** Helcim scores it for fraud and
+  documents it as required; it was sent only when a caller happened to pass
+  one, and neither caller did. A cron has no client, so `SERVER_ADDR` — or the
+  host's resolved address under CLI — stands in.
+- **Errors that name the problem.** `Helcim_lib::error_message()` reads
+  `errors`, `message` and `error`, and falls back to a trimmed copy of the
+  response body instead of the literal string `HTTP 400`. The old summary is
+  the reason this cost a day: the job dutifully reported a number that
+  described nothing, every night, while a customer went unbilled. The log line
+  now carries the endpoint too.
+
+### Changed
+
+- **Renewals key their idempotency on the subscription and its due date**
+  (`Cli::renew_subscriptions`), so a duplicate cron — or a hand-run alongside
+  the scheduled one — collapses into a single charge instead of billing twice.
+  A retry the next day moves `next_billing_date`, so it keys anew and does
+  charge. Staff one-off charges keep a fresh random key: charging the same
+  amount twice on purpose is a thing they are allowed to do.
+
+### Key files
+
+`application/libraries/Helcim_lib.php`, `application/controllers/Cli.php`,
+`README.md`. No schema change, no migration.
+
+---
+
+## 2026-09-02 — The renewal cron, written down where it can be found
+
+A customer set to renew on the 1st was not charged. Nothing in the code was
+wrong: `Cli::renew_subscriptions` was never installed as a cron on the live
+server, and the only record of how to install it was one four-line bullet in
+the README. The screen at `/admin/billing-customer/<id>` says the charge is
+coming; without the cron it never comes, and the first person to notice is the
+customer.
+
+### Added
+
+- **README ▸ “The renewal cron (recurring billing)”** — the cron line for the
+  live account written out in full (`/home/pearlan/public_html`), field by
+  field for cPanel's *Add New Cron Job* form as well as for `crontab -e`, so
+  there is nothing left to substitute and no placeholder to leave behind. The
+  first cron on the live server shipped with the example's `USERNAME` still in
+  its path, which fails exactly like a quiet night with nothing due; `echo
+  $HOME` / `which php` are there for any other account. Also the MultiPHP
+  trap — `/usr/local/bin/php` is the *server* default and often older than the
+  PHP the domain runs, so the version in MultiPHP Manager is the one to use —
+  and the five conditions a subscription must meet to be charged at all.
+- **What to do about charges missed while the cron was off.** The job selects
+  `next_billing_date <= NOW()`, so the first run takes the backlog on its own.
+  Taking a missed charge by hand instead is the trap worth documenting:
+  **Take a payment** is deliberately recorded without moving the schedule, so
+  a date left in the past is charged again by the next nightly run.
+- **How to tell it is running** — the `/admin/billing` heartbeat
+  (`billing_cron_last_run`), and the advice to run the command by hand once
+  after installing the cron rather than waiting a night to learn it failed.
+
+Documentation only. No code, schema or migration changes; behaviour of
+`Cli::renew_subscriptions` is unchanged.
+
+### Key files
+
+`README.md`.
+
+---
+
 ## 2026-08-25 — The billing 500 was mine
 
 The diagnostic screen added an hour earlier did its job on the first load:
