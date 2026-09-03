@@ -235,26 +235,36 @@ showing the next charge date and the day simply passes.
 
 ### Install it
 
-cPanel ▸ Advanced ▸ **Cron Jobs** ▸ *Once Per Day*, or paste into `crontab -e`
-as the account that owns `public_html` (not root):
+cPanel ▸ Advanced ▸ **Cron Jobs** ▸ *Add New Cron Job*, filling the five
+schedule boxes by hand — Minute `5`, Hour `2`, Day `*`, Month `*`, Weekday `*`
+— and this as the **Command**, on one line:
 
 ```cron
-5 2 * * * /usr/local/bin/php /home/USERNAME/public_html/index.php cli renew_subscriptions >> /home/USERNAME/renew_subscriptions.log 2>&1
+/usr/local/bin/php /home/pearlan/public_html/index.php cli renew_subscriptions >> /home/pearlan/renew_subscriptions.log 2>&1
 ```
 
-Replace **both** `USERNAME`s and check the PHP path. Do not leave the
-placeholder in: the first cron installed on the live server still had
-`USERNAME` in its path, and a cron that cannot find `index.php` looks from
-`/admin/billing` exactly like a quiet night with nothing due. Over SSH (or
-cPanel ▸ Terminal):
+That is the live account (home `/home/pearlan`, repo root
+`/home/pearlan/public_html`), so it can be pasted as it stands. The equivalent
+for `crontab -e`, run as the account that owns `public_html` and never root:
 
-```bash
-which php    # PHP binary, e.g. /usr/local/bin/php or /opt/cpanel/ea-php81/root/usr/bin/php
-echo $HOME   # account home, e.g. /home/pearla12
+```cron
+5 2 * * * /usr/local/bin/php /home/pearlan/public_html/index.php cli renew_subscriptions >> /home/pearlan/renew_subscriptions.log 2>&1
 ```
 
-- Use the *same* PHP the site runs on — an older CLI PHP aborts on a missing
-  extension before it charges anything.
+On any other account, substitute the real home — and substitute it
+*everywhere*. The first cron installed on the live server still had the
+example's `USERNAME` in its path, and a cron that cannot find `index.php`
+looks from `/admin/billing` exactly like a quiet night with nothing due. Over
+SSH or cPanel ▸ Terminal, `echo $HOME` and `which php` print the two values
+the line needs.
+
+- **Check the PHP version first.** `/usr/local/bin/php` is the server default,
+  which is frequently older than the PHP the domain actually runs. cPanel ▸
+  **MultiPHP Manager** shows the version assigned to the domain; if it is not
+  the default, use that binary instead — `/usr/local/bin/ea-php81
+  /home/pearlan/public_html/index.php cli renew_subscriptions …`. A CLI PHP
+  older than the site's aborts on a missing extension before it charges
+  anything.
 - The job `chdir`s to the repo root itself, so an absolute path is enough; no
   `cd` needed.
 - Daily is enough, and re-running is safe: a subscription is only picked up

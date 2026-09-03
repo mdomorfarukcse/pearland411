@@ -17,11 +17,16 @@ customer.
 
 ### Added
 
-- **README ▸ “The renewal cron (recurring billing)”** — the crontab line ready
-  to paste, `which php` / `echo $HOME` to fill in the two paths it needs, why
-  the placeholder `USERNAME` must not survive (the first cron on the live
-  server shipped with it, which fails exactly like a quiet night), and the
-  five conditions a subscription must meet to be charged at all.
+- **README ▸ “The renewal cron (recurring billing)”** — the cron line for the
+  live account written out in full (`/home/pearlan/public_html`), field by
+  field for cPanel's *Add New Cron Job* form as well as for `crontab -e`, so
+  there is nothing left to substitute and no placeholder to leave behind. The
+  first cron on the live server shipped with the example's `USERNAME` still in
+  its path, which fails exactly like a quiet night with nothing due; `echo
+  $HOME` / `which php` are there for any other account. Also the MultiPHP
+  trap — `/usr/local/bin/php` is the *server* default and often older than the
+  PHP the domain runs, so the version in MultiPHP Manager is the one to use —
+  and the five conditions a subscription must meet to be charged at all.
 - **What to do about charges missed while the cron was off.** The job selects
   `next_billing_date <= NOW()`, so the first run takes the backlog on its own.
   Taking a missed charge by hand instead is the trap worth documenting:
