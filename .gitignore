@@ -14,9 +14,13 @@ nbproject/
 *-backup.*
 *.orig
 
-# Logs (keep the directory + index.html, ignore log contents)
+# Logs (keep the directory + its guards, ignore log contents).
+# The directory itself has to exist in the repo: CI's Log class disables
+# itself when log_path is missing, which is how a run of failed emails in
+# September 2026 went unrecorded on the live site.
 application/logs/*
 !application/logs/index.html
+!application/logs/.htaccess
 
 # CodeIgniter cache (keep the directory + index.html)
 application/cache/*

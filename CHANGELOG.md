@@ -6,6 +6,124 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-09-24 — Nobody could sign up, and nothing said why
+
+Reported from the live site: new accounts are created successfully, the
+verification email never arrives — Inbox or Spam — and because login is blocked
+until the address is confirmed, the account cannot be used. Forgot Password had
+the same symptom.
+
+The mail code was not obviously wrong, which is the interesting part. What was
+wrong is that **every way of finding out had been closed off**:
+
+- `registerUser()` and `requestPasswordReset()` both called
+  `$this->mailer->send(...)` and **discarded the return value**. A signup showed
+  "You're all set. Sign in and you can add your business straight away" whether
+  or not the message left the building — and that sentence was never true
+  anyway, since `Usermodel::login()` refuses an unverified account.
+- The only report of a failure was `log_message('error', ...)`, and
+  **`application/logs/` is not in the repository**. CI's logger disables itself
+  when its directory is missing, so on any fresh deploy every mailer error went
+  nowhere. `.gitignore` had an exception for `application/logs/index.html`, but
+  the file it was protecting had never been committed.
+- Nothing recorded an attempt anywhere else, so there was no way to tell a
+  refused send from a delivered-and-discarded one.
+- A user whose message was lost had **no way back in**: nothing on the site
+  could issue a second verification link.
+
+So the outage is fixed by making it visible and recoverable, and by removing the
+two configurations most likely to have caused it.
+
+### Added
+
+- **`/admin/email-diagnostics`** (super-admin). The effective mail settings, the
+  combinations known to break delivery, a test send that reports the mail
+  server's own error rather than a boolean, and the last seven days of attempts.
+  Also warns when CI's log directory is unwritable, since that is what hid the
+  original failures.
+- **`php index.php cli mail_test <address>`** — the same checks from the shell,
+  for when nobody can sign in to reach the admin page. Exits non-zero on failure.
+- **`email_log` table** (migration `0031_email_log.sql`): recipient, subject,
+  type, transport, status and truncated error for every message the site tries
+  to send. Sending works without it — `Mailer::record()` checks `table_exists`
+  first — you just can't see what happened afterwards.
+- **`/resend-verification`**, rate-limited 5/hour/IP, linked from `/login` (and
+  pre-filled with the address that was just refused), from the signup
+  confirmation, from `/forgot-password` and from a failed `/verify-email`. It
+  re-issues the token as well as the mail, and answers identically whether or
+  not the address is registered, so it can't be used to enumerate accounts.
+- **`Mailer::config_status()`** — the check that names the likeliest cause of
+  "accepted but never delivered": a From address on a domain the SMTP account
+  is not authorised to send for. A relay accepts such a message; the recipient
+  fails SPF/DMARC and discards it with no Spam copy and no bounce, which is
+  exactly the reported symptom and is invisible from the sending side.
+- **`application/logs/`** now exists in the repo, with an `index.html` and an
+  `.htaccess` that denies access (log files carry SMTP transcripts and query
+  text).
+
+### Fixed
+
+- **Verification and password-reset mail now goes through `Mailer::render()`**
+  like everything else. Both were bare `<p>` fragments handed straight to
+  `send()`: no document, no branding, no plain-text part. The two messages a
+  customer must act on were the two worst-formed things the site sent, and
+  HTML-only fragments score badly with filters.
+- **Every message now carries a plain-text alternative**, derived from the HTML
+  with link URLs preserved. (The obvious `text <url>` substitution is eaten by
+  `strip_tags` — `<https://…>` looks like a tag — so links are extracted before
+  the strip and restored after. Caught by testing the actual output rather than
+  the regex.)
+- **`send_subscription_email()` was sending as `noreply@yoursite.com` ("Your
+  Site Name")** — the placeholder that shipped with the theme. A domain the site
+  does not own fails SPF everywhere, so payment receipts were being discarded or
+  spam-foldered, and any that landed looked like a phishing attempt for a
+  payment the customer had just made. Now routed through the Mailer like the
+  rest.
+- **The transport no longer forces SMTP at empty credentials.** With
+  `SMTP_USER` / `SMTP_PASS` blank the old config still set `protocol => 'smtp'`,
+  which fails 100% of the time; it now falls back to the host's own MTA.
+  `MAIL_PROTOCOL` overrides either way.
+- **`SMTP_TIMEOUT`, default 30s.** CI's default is 5, which a shared host
+  opening TLS to a public relay routinely overshoots — and the resulting failure
+  is indistinguishable from a wrong password.
+- **The signup confirmation no longer tells people to sign in.** It says to
+  confirm the email, names the address it went to, and offers a resend; when the
+  send failed it says so and offers the resend and a contact link instead.
+- **`config_status()` also catches the port/crypto mismatches** (465 with `tls`,
+  587 with `ssl`) that produce an unexplained connection failure.
+
+### Changed
+
+- `/forgot-password`, `/reset-password` and `/verify-email` rebuilt on the
+  shared page kit, so the reset flow stops looking like three different sites.
+  Their controller methods never set `$page_css`, so the kit wasn't loaded on
+  them at all. The failed-verification page now offers a way forward rather than
+  a button back to a login form that will refuse the account.
+- `Mailer::send()` takes a `log_type` option and returns a meaningful bool;
+  `last_error()` exposes the (entity-decoded, readable) SMTP transcript for
+  admin eyes only.
+
+### Operator note
+
+The code change cannot fix a From domain the SMTP account may not send for —
+that is DNS, not PHP. If `/admin/email-diagnostics` shows the mismatch warning,
+follow **Email troubleshooting** in `README.md`: relay through a provider where
+`pearland411.com` is verified, publish SPF, turn on DKIM. Until then, setting
+`MAIL_FROM_ADDRESS` to the SMTP account's own address makes the domains match
+and is the honest short-term fix.
+
+### Key files
+
+`application/libraries/Mailer.php`, `application/models/Usermodel.php`,
+`application/controllers/User.php`, `application/controllers/Admin.php`,
+`application/controllers/Cli.php`, `application/config/routes.php`,
+`application/views/{login,register,forgot_password,reset_password,verify_email,resend_verification}.php`,
+`application/views/admin/{email_diagnostics,header}.php`,
+`database/migrations/0031_email_log.sql`, `.env.example`, `README.md`,
+`database/README.md`.
+
+---
+
 ## 2026-09-03 — No vaulted card had ever been charged
 
 The cron installed yesterday ran, found the one due subscription, and printed:

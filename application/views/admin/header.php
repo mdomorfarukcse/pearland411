@@ -439,6 +439,9 @@
               $__sidebar_role  = is_array($__sidebar_admin) ? ($__sidebar_admin['role'] ?? 'editor') : 'editor';
             ?>
             <?php if ($__sidebar_role === 'super_admin'): ?>
+              <li class="ic-set">
+                <a href="<?= base_url('admin/email-diagnostics') ?>">Email Diagnostics</a>
+              </li>
               <li class="ic-sub">
                 <a href="<?= base_url('admin/sub-admins') ?>">Sub-Admins</a>
               </li>

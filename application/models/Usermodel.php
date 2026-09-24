@@ -171,17 +171,18 @@ class Usermodel extends CI_Model
 				return array('status' => FALSE, 'referror' => '', 'message' => 'Something Wrong please try again!');
 			}
 
-			// Fire off the verification email (best-effort — failures
-			// are logged but do not block account creation).
-			$this->load->library('mailer');
-			$verify_url = base_url('verify-email/' . $verification_token);
-			$body = '<p>Welcome to Pearland411.</p>'
-				. '<p>Please confirm your email by clicking the link below:</p>'
-				. '<p><a href="' . $verify_url . '">' . $verify_url . '</a></p>'
-				. '<p>If you did not create this account you can safely ignore this message.</p>';
-			$this->mailer->send($this->input->post('email_id'), 'Confirm your Pearland411 account', $body);
+			// Fire off the verification email. Account creation still
+			// succeeds if it fails — but the caller is TOLD, because login is
+			// blocked until the link is clicked and "account created, now sign
+			// in" in front of a mail that never left is how a signup becomes a
+			// support ticket instead of a customer.
+			$sent = $this->sendVerificationEmail(
+				$this->input->post('email_id'),
+				$this->input->post('name'),
+				$verification_token
+			);
 
-			return array('status' => TRUE);
+			return array('status' => TRUE, 'email_sent' => $sent);
 		}
 
 		return array('status' => FALSE, 'referror' => '');
@@ -190,6 +191,105 @@ class Usermodel extends CI_Model
 	/*=========================
 		Email verification + password reset
 		==========================*/
+
+	/**
+	 * Build and send the "confirm your email" message.
+	 *
+	 * Goes through Mailer::render() like everything else the site sends. It
+	 * used to be a bare string of <p> tags handed straight to send(): no
+	 * document, no branding, no plain-text part. That is both the least
+	 * trustworthy-looking message a new customer receives and one of the
+	 * easiest shapes for a spam filter to score down — on the one email they
+	 * must act on before they can use the account at all.
+	 *
+	 * @return bool whether the mailer accepted it for delivery
+	 */
+	public function sendVerificationEmail($email, $name, $token)
+	{
+		$this->load->library('mailer');
+
+		$verify_url = base_url('verify-email/' . $token);
+		$greeting   = trim((string) $name) !== ''
+			? 'Welcome to Pearland411, ' . html_escape(trim($name)) . '.'
+			: 'Welcome to Pearland411.';
+
+		$body = '<p>' . $greeting . '</p>'
+			. '<p>Confirm this address to activate your account. You will not be able to '
+			. 'sign in until you do.</p>'
+			. '<p style="margin:24px 0;">'
+			. '<a href="' . html_escape($verify_url) . '" '
+			. 'style="display:inline-block; background:#79B82A; color:#ffffff; font-weight:700; '
+			. 'text-decoration:none; padding:12px 24px; border-radius:6px;">Confirm my email</a>'
+			. '</p>'
+			. '<p style="font-size:13px; color:#5A6472;">If the button does not work, paste this '
+			. 'into your browser:<br><a href="' . html_escape($verify_url) . '">'
+			. html_escape($verify_url) . '</a></p>'
+			. '<p style="font-size:13px; color:#5A6472;">If you did not create this account you '
+			. 'can safely ignore this message.</p>';
+
+		return $this->mailer->send(
+			$email,
+			'Confirm your Pearland411 account',
+			$this->mailer->render('Confirm your email', $body, array(
+				'preheader' => 'One click activates your Pearland411 account.',
+			)),
+			null,
+			array('log_type' => 'verification')
+		);
+	}
+
+	/**
+	 * Re-send the verification link for an address that has not been confirmed.
+	 *
+	 * Always reports the same shape, for the same reason requestPasswordReset()
+	 * does: the form must not tell a stranger whether an address is registered.
+	 * A user whose first mail was lost previously had no way back in at all —
+	 * the account existed, login refused it, and nothing on the site could
+	 * issue a new link.
+	 *
+	 * Re-issues the token as well as the mail, so a link from an older message
+	 * stops working once a new one is asked for.
+	 *
+	 * @return bool TRUE when a message was handed to the mailer.
+	 */
+	public function resendVerification($email)
+	{
+		$email = trim((string) $email);
+		if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+			return false;
+		}
+
+		$user = $this->db
+			->where('email_id', $email)
+			->limit(1)
+			->get('user')
+			->row();
+
+		// No such account, already confirmed, or banned: nothing to send, and
+		// the caller shows the same neutral message either way.
+		if (!$user || (int) $user->banned === 1) {
+			return false;
+		}
+		if (property_exists($user, 'email_verified') && (int) $user->email_verified === 1) {
+			return false;
+		}
+
+		// Same defensive check login() makes: on a database where migration
+		// 0001 has not been run there is nowhere to store a token, and an
+		// unguarded UPDATE would be a fatal on a public form.
+		if (!$this->db->field_exists('email_verification_token', 'user')) {
+			log_message('error', 'resendVerification: user.email_verification_token is missing — run migration 0001_auth_flows.sql.');
+			return false;
+		}
+
+		$token = bin2hex(random_bytes(32));
+		$this->db->where('user_id', $user->user_id)->update('user', array(
+			'email_verification_token'   => $token,
+			'email_verification_sent_at' => date('Y-m-d H:i:s'),
+		));
+
+		return $this->sendVerificationEmail($user->email_id, $user->name, $token);
+	}
 
 	/**
 	 * Look up a user by their email-verification token and, if found,
@@ -248,9 +348,26 @@ class Usermodel extends CI_Model
 		$this->load->library('mailer');
 		$reset_url = base_url('reset-password/' . $token);
 		$body = '<p>We received a request to reset the password on your Pearland411 account.</p>'
-			. '<p><a href="' . $reset_url . '">Click here to choose a new password</a></p>'
-			. '<p>This link expires in 1 hour. If you did not request a reset you can ignore this email — your password will not change.</p>';
-		$this->mailer->send($user->email_id, 'Reset your Pearland411 password', $body);
+			. '<p style="margin:24px 0;">'
+			. '<a href="' . html_escape($reset_url) . '" '
+			. 'style="display:inline-block; background:#79B82A; color:#ffffff; font-weight:700; '
+			. 'text-decoration:none; padding:12px 24px; border-radius:6px;">Choose a new password</a>'
+			. '</p>'
+			. '<p style="font-size:13px; color:#5A6472;">If the button does not work, paste this '
+			. 'into your browser:<br><a href="' . html_escape($reset_url) . '">'
+			. html_escape($reset_url) . '</a></p>'
+			. '<p style="font-size:13px; color:#5A6472;">This link expires in 1 hour. If you did '
+			. 'not request a reset you can ignore this email — your password will not change.</p>';
+
+		$this->mailer->send(
+			$user->email_id,
+			'Reset your Pearland411 password',
+			$this->mailer->render('Reset your password', $body, array(
+				'preheader' => 'Your Pearland411 password reset link (valid for 1 hour).',
+			)),
+			null,
+			array('log_type' => 'password_reset')
+		);
 
 		return true;
 	}
@@ -354,8 +471,18 @@ class Usermodel extends CI_Model
 		// Block login until the email is verified. The email_verified
 		// column is added by migration 0001 and back-filled to 1 for
 		// existing rows, so this only affects NEW signups.
+		// The `code` is what lets /login offer a "send it again" link instead
+		// of a dead end. Until this existed, a user whose verification mail
+		// never arrived — which, for a stretch of 2026, was all of them — was
+		// told to check an inbox that had nothing in it, on every attempt,
+		// with no other path offered anywhere on the site.
 		if (property_exists($user, 'email_verified') && (int) $user->email_verified === 0) {
-			return array('status' => FALSE, 'message' => 'Please confirm your email before signing in. Check your inbox for the verification link.', 'url' => 'login');
+			return array(
+				'status'  => FALSE,
+				'code'    => 'email_unverified',
+				'message' => 'Please confirm your email before signing in. Check your inbox for the verification link.',
+				'url'     => 'login',
+			);
 		}
 
 		$this->session->set_userdata('logged_user', array(
@@ -873,22 +1000,20 @@ class Usermodel extends CI_Model
 	/*==========================
 		Email Functions
 	===========================*/
+	/**
+	 * Subscription lifecycle mail.
+	 *
+	 * Goes through the Mailer library like everything else. It used to
+	 * configure CI's email class itself and send `From: noreply@yoursite.com
+	 * ("Your Site Name")` — the placeholder that shipped with the theme. A
+	 * domain the site does not own fails SPF at every recipient, so these
+	 * receipts were being discarded or spam-foldered on arrival, and the ones
+	 * that did land looked like a phishing attempt for a payment the customer
+	 * had just made.
+	 */
 	public function send_subscription_email($subscription_data, $type = 'created')
 	{
-		$this->load->library('email');
-
-		$email_config = array(
-			'protocol'    => 'smtp',
-			'smtp_host'   => env('SMTP_HOST', 'smtp.gmail.com'),
-			'smtp_port'   => (int) env('SMTP_PORT', 587),
-			'smtp_user'   => env('SMTP_USER', ''),
-			'smtp_pass'   => env('SMTP_PASS', ''),
-			'smtp_crypto' => env('SMTP_CRYPTO', 'tls'),
-			'mailtype'    => 'html',
-			'charset'     => 'utf-8',
-		);
-
-		$this->email->initialize($email_config);
+		$this->load->library('mailer');
 
 		$billing_info = $subscription_data['billing_info'];
 		$plan_name = isset($subscription_data['plan_name']) ? $subscription_data['plan_name'] : 'Selected Plan';
@@ -911,18 +1036,17 @@ class Usermodel extends CI_Model
 				break;
 		}
 
-		$this->email->from('noreply@yoursite.com', 'Your Site Name');
-		$this->email->to($billing_info['email']);
-		$this->email->subject($subject);
-		$this->email->message($message);
-
-		if ($this->email->send()) {
-			error_log('Subscription email sent successfully to: ' . $billing_info['email']);
-			return true;
-		} else {
-			error_log('Failed to send subscription email: ' . $this->email->print_debugger());
+		if ($subject === '' || empty($billing_info['email'])) {
 			return false;
 		}
+
+		return $this->mailer->send(
+			$billing_info['email'],
+			$subject,
+			$message,
+			null,
+			array('log_type' => 'subscription_' . $type)
+		);
 	}
 
 	private function build_subscription_created_email($data)

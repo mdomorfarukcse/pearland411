@@ -8,6 +8,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  *   php index.php cli images_backfill
  *   php index.php cli images_backfill uploads
  *   php index.php cli images_backfill assets/images/listings
+ *   php index.php cli mail_test you@example.com
  */
 class Cli extends CI_Controller
 {
@@ -18,6 +19,56 @@ class Cli extends CI_Controller
             show_404();
         }
         $this->load->helper('image');
+    }
+
+    /**
+     * Prove — or disprove — that the site can send email.
+     *
+     *   php index.php cli mail_test you@example.com
+     *
+     * Prints the effective configuration, every known-bad setting, and the
+     * result of a real send with the mail server's own error text. The same
+     * ground /admin/email-diagnostics covers, for when the problem is that
+     * nobody can sign in to reach it — which was the case in September 2026,
+     * when signup verification mail stopped being delivered site-wide.
+     */
+    public function mail_test($address = null)
+    {
+        $this->load->library('mailer');
+
+        echo "Configuration\n-------------\n";
+        foreach ($this->mailer->config_summary() as $key => $value) {
+            printf("  %-14s %s\n", $key, ($value === '' || $value === null) ? '(not set)' : $value);
+        }
+
+        $issues = $this->mailer->config_status();
+        echo "\nChecks\n------\n";
+        if (empty($issues)) {
+            echo "  No configuration problems found.\n";
+        }
+        foreach ($issues as $issue) {
+            printf("  [%s] %s\n         %s\n", strtoupper($issue['level']), $issue['title'], $issue['detail']);
+        }
+
+        if ($address === null) {
+            echo "\nPass an address to send a test message:\n";
+            echo "  php index.php cli mail_test you@example.com\n";
+            return;
+        }
+
+        echo "\nSending to {$address} ...\n";
+        $result = $this->mailer->test_send($address);
+
+        if (!empty($result['success'])) {
+            echo "  OK — the mail server accepted the message.\n";
+            echo "  If it does not arrive, the message is being discarded by the RECIPIENT,\n";
+            echo "  not refused by the sender. Check SPF/DKIM/DMARC on the From domain.\n";
+            return;
+        }
+
+        echo "  FAILED — " . $result['error'] . "\n";
+        // Non-zero so a cron or deploy script can tell.
+        exit(1);
     }
 
     /**
