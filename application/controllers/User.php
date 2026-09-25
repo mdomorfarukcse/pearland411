@@ -2760,7 +2760,8 @@ class User extends CI_Controller
 	{
 		$data = array();
 		$this->loadHeaderCategories($data);
-		$data['title'] = 'Pearland | Forgot Password';
+		$data['title']    = 'Pearland | Forgot Password';
+		$data['page_css'] = $this->contentPageCss();
 
 		if ($this->input->method() === 'post') {
 			// 5 reset requests per IP per hour. Each one emails a real
@@ -2804,8 +2805,9 @@ class User extends CI_Controller
 
 		$data = array();
 		$this->loadHeaderCategories($data);
-		$data['title'] = 'Pearland | Reset Password';
-		$data['token'] = $token;
+		$data['title']    = 'Pearland | Reset Password';
+		$data['page_css'] = $this->contentPageCss();
+		$data['token']    = $token;
 
 		if (!$reset) {
 			$data['expired'] = true;
@@ -2838,6 +2840,56 @@ class User extends CI_Controller
 	}
 
 	/**
+	 * GET  /resend-verification -> render the form.
+	 * POST same URL             -> re-issue and re-send the confirmation link.
+	 *
+	 * The missing half of the signup flow. An account whose verification email
+	 * never arrived could not sign in (the model blocks it) and could not ask
+	 * for another copy, because nothing on the site issued one — so the only
+	 * route back in was a support request and a hand-edited row.
+	 *
+	 * Answers identically whether or not the address is registered, matching
+	 * forgot_password(): this form must not become an account-enumeration
+	 * oracle, especially as the negative cases include "exists and is already
+	 * confirmed".
+	 */
+	public function resend_verification()
+	{
+		$data = array();
+		$this->loadHeaderCategories($data);
+		$data['title']    = 'Pearland | Resend Verification Email';
+		$data['page_css'] = $this->contentPageCss();
+
+		if ($this->input->method() === 'post') {
+			// Same budget as forgot_password: each request emails a real
+			// person, so the form cannot be used as a free relay.
+			if (!$this->rate_limit->check_ip('resend_verification', 5, 3600)) {
+				$this->rate_limit->reject(3600);
+				return;
+			}
+
+			$this->form_validation->set_rules('email_id', 'Email', 'trim|required|valid_email');
+
+			if ($this->form_validation->run()) {
+				$this->usermodel->resendVerification($this->input->post('email_id'));
+				$this->session->set_flashdata(
+					'resend_message',
+					'If that address has an unconfirmed Pearland411 account, we have just sent ' .
+					'it a new confirmation link. It can take a few minutes to arrive — check ' .
+					'your spam folder too.'
+				);
+				redirect('resend-verification');
+				return;
+			}
+			$data['error'] = 'Please enter a valid email address.';
+		}
+
+		$this->load->view('header', $data);
+		$this->load->view('resend_verification', $data);
+		$this->load->view('footer');
+	}
+
+	/**
 	 * GET /verify-email/<token> -> mark the user verified.
 	 */
 	public function verify_email($token = '')
@@ -2847,6 +2899,7 @@ class User extends CI_Controller
 		$data = array();
 		$this->loadHeaderCategories($data);
 		$data['title']    = 'Pearland | Email Verification';
+		$data['page_css'] = $this->contentPageCss();
 		$data['verified'] = $ok;
 
 		$this->load->view('header', $data);

@@ -1797,6 +1797,23 @@ DELETE k FROM `p411_dup_key` k
 DROP TABLE IF EXISTS `p411_dup_loser`;
 DROP TABLE IF EXISTS `p411_dup_winner`;
 DROP TABLE IF EXISTS `p411_dup_key`;
+-- ---------------------------------------------------------------------------
+-- 0031_email_log.sql — delivery log for every message the site sends
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `email_log` (
+    `id`         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `to_email`   VARCHAR(255) NOT NULL,
+    `subject`    VARCHAR(255) NOT NULL,
+    `mail_type`  VARCHAR(40)  NOT NULL DEFAULT 'general',
+    `protocol`   VARCHAR(20)  NOT NULL DEFAULT 'smtp',
+    `status`     VARCHAR(10)  NOT NULL DEFAULT 'sent',
+    `error`      TEXT NULL DEFAULT NULL,
+    `created_at` DATETIME NOT NULL,
+    PRIMARY KEY (`id`),
+    KEY `email_log_created_idx` (`created_at`),
+    KEY `email_log_status_idx`  (`status`),
+    KEY `email_log_to_idx`      (`to_email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 SET FOREIGN_KEY_CHECKS = 1;
