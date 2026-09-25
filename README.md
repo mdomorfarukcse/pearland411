@@ -90,7 +90,9 @@ above-webroot file wins and the repo-root one only fills in missing keys.
 | `ENCRYPTION_KEY` | 32-byte random key. Generate with `php -r 'echo bin2hex(random_bytes(16)), "\n";'` |
 | `DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME` | MySQL credentials. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_CRYPTO` | Outgoing email. For Gmail use an App Password, not the account password. |
-| `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | "From" header on transactional + newsletter email. |
+| `SMTP_TIMEOUT` | Seconds to wait on the SMTP conversation. Default 30; CodeIgniter's own default of 5 is short enough that a slow TLS handshake looks like a bad password. |
+| `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | "From" header on transactional + newsletter email. **Must be an address the SMTP account may send as** — see [Email troubleshooting](#email-troubleshooting). |
+| `MAIL_PROTOCOL` | `smtp` / `mail` / `sendmail`. Blank = SMTP when host+user+pass are set, otherwise the host's own MTA. |
 | `HELCIM_API_TOKEN` | Helcim API token (Settings ▸ Integrations ▸ API). While empty, `/checkout` shows a "being set up" notice instead of the pay button — this is the live-payments gate, so no separate feature flag is needed. |
 | `HELCIM_WEBHOOK_VERIFIER_TOKEN` | Verifier token for signing inbound Helcim webhooks (`/helcim-webhook`). |
 
@@ -103,6 +105,48 @@ in the dump). After running migrations:
 2. Visit `/admin/change-password` and rotate it.
 3. Visit `/admin/sub-admins` to create per-person editor accounts
    for staff instead of sharing the super-admin login.
+
+## Email troubleshooting
+
+Signup verification and password reset both depend on outgoing mail, and login
+is blocked until a new account's address is confirmed — so when mail stops, new
+users cannot sign in at all. Two tools answer "is email working?":
+
+- **`/admin/email-diagnostics`** (super-admin). Shows the effective settings,
+  flags the combinations known to break delivery, sends a test message that
+  reports the mail server's own error, and lists the last week of attempts from
+  the `email_log` table (migration `0031_email_log.sql`).
+- **`php index.php cli mail_test you@example.com`** — the same checks from the
+  shell, for when nobody can sign in to reach the admin page. Exits non-zero on
+  a failed send.
+
+Read the result like this:
+
+| Symptom | Meaning |
+|---|---|
+| Test send **fails** with an SMTP error | The site can't hand the message over: wrong credentials, wrong port/crypto pairing, or outbound SMTP blocked by the host. The error names which. |
+| Test send **succeeds** but nothing arrives | The relay accepted it and the *recipient* discarded it. This is an authentication problem on the sending domain, not a setting in `.env`. |
+| Delivery log is empty during a real signup | The code path never ran — check the CI log, and that `application/logs/` exists and is writable by the web server. |
+
+**The usual cause of "accepted but never delivered"** is a From address the SMTP
+account isn't authorised to use: sending as `no-reply@pearland411.com` through a
+Gmail or shared-hosting account on some other domain. The receiving server fails
+SPF/DMARC and drops the message silently — it appears in neither Inbox nor Spam,
+and no bounce comes back, which is precisely why it looks like the site never
+sent anything. Fix it at the domain, not in the code:
+
+1. Relay through a provider that has verified `pearland411.com` (Google
+   Workspace, Amazon SES, Postmark, Mailgun — or the domain's own cPanel
+   mailbox), and set `SMTP_USER` to a mailbox on that domain.
+2. Publish an **SPF** record authorising that relay, e.g.
+   `v=spf1 include:_spf.google.com ~all`.
+3. Turn on **DKIM** in the provider's console and add the DNS record it gives you.
+4. Only then add a **DMARC** record (`p=none` first, to collect reports).
+
+Until steps 1–3 are done, the honest short-term fix is to set
+`MAIL_FROM_ADDRESS` to the SMTP account's own address, so the From domain and
+the authenticated domain match. `/admin/email-diagnostics` flags the mismatch
+explicitly.
 
 ## What ships in this branch
 

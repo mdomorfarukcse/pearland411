@@ -22,6 +22,15 @@ $registrationSucess = (isset($registrationSucess) && is_array($registrationSuces
 $reset = !empty($reset);
 $done  = !empty($registrationSucess['status']);
 
+// registerUser() reports whether the verification mail was actually accepted
+// by the mailer. The screen used to say "You're all set, sign in" regardless —
+// which is wrong twice over: login is blocked until the link is clicked, so it
+// was never true, and when the send failed it sent the user to a form that
+// would refuse them with no way to recover.
+$mail_sent = !array_key_exists('email_sent', $registrationSucess)
+	|| !empty($registrationSucess['email_sent']);
+$signup_email = $done ? trim((string) $this->input->post('email_id')) : '';
+
 /** Repopulate a field unless we've just wiped the form after a success. */
 $rv = function ($field) use ($reset) { return $reset ? '' : set_value($field); };
 
@@ -50,12 +59,30 @@ $reps      = function_exists('enquiry_departments') ? enquiry_departments() : ar
 								<path d="M20 6 9 17l-5-5"/>
 							</svg>
 						</div>
-						<h3>Account created</h3>
-						<p>You're all set. Sign in and you can add your business straight away.</p>
-						<div class="p411-empty__actions">
-							<a class="p411-btn" href="<?= base_url('login') ?>">Sign in</a>
-							<a class="p411-btn p411-btn--ghost" href="<?= base_url('pricing-plan') ?>">See the packages</a>
-						</div>
+						<h3>Account created &mdash; now confirm your email</h3>
+						<?php if ($mail_sent): ?>
+							<p>
+								We&rsquo;ve sent a confirmation link<?= $signup_email !== '' ? ' to <strong>' . e($signup_email) . '</strong>' : '' ?>.
+								Click it and you can sign in. <strong>You can&rsquo;t sign in until you do</strong> &mdash;
+								so if it isn&rsquo;t in your inbox within a few minutes, check your spam folder or
+								ask for it again.
+							</p>
+							<div class="p411-empty__actions">
+								<a class="p411-btn" href="<?= base_url('login') ?>">Sign in</a>
+								<a class="p411-btn p411-btn--ghost" href="<?= base_url('resend-verification') ?>">Send the link again</a>
+							</div>
+						<?php else: ?>
+							<p>
+								Your account exists, but we couldn&rsquo;t send the confirmation email just now,
+								and you can&rsquo;t sign in until it&rsquo;s confirmed. Try requesting the link
+								again in a few minutes &mdash; if it still doesn&rsquo;t arrive, contact us and
+								we&rsquo;ll confirm the account for you.
+							</p>
+							<div class="p411-empty__actions">
+								<a class="p411-btn" href="<?= base_url('resend-verification') ?>">Send the link again</a>
+								<a class="p411-btn p411-btn--ghost" href="<?= base_url('contact-us') ?>">Contact us</a>
+							</div>
+						<?php endif; ?>
 					</div>
 				<?php else: ?>
 					<h1>Create an account</h1>

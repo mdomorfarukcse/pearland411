@@ -18,6 +18,11 @@ $http_referer = isset($http_referer) ? (string) $http_referer : base_url();
 
 $login_message = $this->session->flashdata('login_message');
 $login_error   = !empty($loginSucess['message']) ? (string) $loginSucess['message'] : '';
+
+// Sign-in was refused only because the address is still unconfirmed. That is
+// the one failure with a self-service fix, so it gets a link rather than the
+// same flat "check your inbox" the user has already read once.
+$needs_verify  = (isset($loginSucess['code']) && $loginSucess['code'] === 'email_unverified');
 ?>
 
 <section class="p411-ct p411-ct--auth">
@@ -43,7 +48,15 @@ $login_error   = !empty($loginSucess['message']) ? (string) $loginSucess['messag
 					<div class="p411-note p411-note--ok" role="status"><?= e($login_message) ?></div>
 				<?php endif; ?>
 				<?php if ($login_error !== ''): ?>
-					<div class="p411-note p411-note--err" role="alert"><?= e($login_error) ?></div>
+					<div class="p411-note p411-note--err" role="alert">
+						<?= e($login_error) ?>
+						<?php if ($needs_verify): ?>
+							<br>
+							<a href="<?= base_url('resend-verification') ?>?email=<?= urlencode((string) set_value('email_id')) ?>">
+								Didn&rsquo;t get it? Send the link again
+							</a>
+						<?php endif; ?>
+					</div>
 				<?php endif; ?>
 
 				<form id="login_form" name="login_form" method="post" data-validate>
@@ -73,6 +86,8 @@ $login_error   = !empty($loginSucess['message']) ? (string) $loginSucess['messag
 
 				<div class="p411-auth__alt">
 					<a href="<?= base_url('forgot-password') ?>">Forgot your password?</a>
+					<span aria-hidden="true">&middot;</span>
+					<a href="<?= base_url('resend-verification') ?>">Resend verification email</a>
 					<span aria-hidden="true">&middot;</span>
 					<a href="<?= base_url('register') ?>">Create an account</a>
 				</div>

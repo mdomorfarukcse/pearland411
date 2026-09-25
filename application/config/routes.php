@@ -98,6 +98,9 @@ $route['all-listing/(:any)'] = 'user/all_listing/$1';
 $route['forgot-password']           = 'user/forgot_password';
 $route['reset-password/(:any)']     = 'user/reset_password/$1';
 $route['verify-email/(:any)']       = 'user/verify_email/$1';
+// A confirmation link that never arrives used to be the end of the road: the
+// account exists, login refuses it, and nothing issued a second copy.
+$route['resend-verification']       = 'user/resend_verification';
 
 // IT / web services catalog (public side)
 $route['services']                    = 'user/services';
@@ -132,6 +135,8 @@ $route['admin/service-requests/delete/(:num)'] = 'admin/service_request_delete/$
 // Admin self-service
 $route['admin/change-password']             = 'admin/change_password';
 $route['admin/setting']                     = 'admin/admin_setting';
+// Outgoing mail: configuration, delivery log, and a live test send.
+$route['admin/email-diagnostics']           = 'admin/email_diagnostics';
 $route['admin-setting']                     = 'admin/admin_setting';
 
 // Listing claims

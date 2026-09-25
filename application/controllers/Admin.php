@@ -352,6 +352,9 @@ class Admin extends CI_Controller
 			'current_ads', 'create_ads', 'ads_edit', 'ads_delete',
 			'ads_price', 'create_ads_price', 'ads_price_edit',
 			'ads_request', 'ads_history', 'ads_history_delete', 'approveAdStatus',
+			// Shows the SMTP username and raw SMTP transcripts, and can send
+			// mail from the site's address. Super-admin only.
+			'email_diagnostics',
 		);
 
 		if (!in_array($page, $public_actions, true)) {
@@ -705,6 +708,90 @@ class Admin extends CI_Controller
 
 		$this->load->view('admin/header');
 		$this->load->view('admin/admin_setting', $data);
+		$this->load->view('admin/footer');
+	}
+
+	/**
+	 * /admin/email-diagnostics — why the site's email is or isn't arriving.
+	 *
+	 * This page exists because of the September 2026 outage: signup
+	 * verification and password-reset mail stopped being delivered on the live
+	 * site, and there was no way to tell from inside the application whether
+	 * the messages were being refused by the relay, accepted and then dropped
+	 * by the recipient, or never attempted at all. The only failure report was
+	 * a log_message('error') going to a directory that did not exist.
+	 *
+	 * Three things, in the order you need them:
+	 *   1. What the mailer is configured to do, and which of those settings
+	 *      are known to break delivery (Mailer::config_status()).
+	 *   2. A test send that shows the actual SMTP error rather than a boolean.
+	 *   3. The last N attempts from `email_log`, so you can see whether a
+	 *      given customer's message left the building and when.
+	 */
+	public function email_diagnostics()
+	{
+		$this->load->library('mailer');
+
+		$data = array();
+		$data['nav_categories'] = $this->usermodel->getAllValues('listing_categories');
+
+		if ($this->input->method() === 'post' && $this->input->post('send_test') !== null) {
+			$result = $this->mailer->test_send($this->input->post('test_email', true));
+			if (!empty($result['success'])) {
+				$this->session->set_flashdata('message', 'Test message handed to the mail server. '
+					. 'If it does not arrive within a few minutes the problem is delivery, not '
+					. 'configuration — check the From-domain warning above.');
+			} else {
+				// The transcript names the problem; admins are the only
+				// audience and it never reaches a public page.
+				$this->session->set_flashdata('error', 'Test send failed: ' . $result['error']);
+			}
+			redirect('admin/email-diagnostics');
+			return;
+		}
+
+		$data['mail_config']    = $this->mailer->config_summary();
+		$data['mail_issues']    = $this->mailer->config_status();
+		$data['mail_ready']     = $this->mailer->is_configured();
+		$data['has_log_table']  = $this->db->table_exists('email_log');
+
+		// Default recipient for the test box: whoever is signed in.
+		$admin = $this->session->userdata('logged_admin');
+		$data['test_default'] = (!empty($admin['admin_email'])) ? $admin['admin_email'] : '';
+
+		// CI's logger writes nowhere when its directory is missing, which is
+		// how the original failures vanished. Say so on the page rather than
+		// leaving an admin to discover it.
+		$log_path = (string) $this->config->item('log_path');
+		if ($log_path === '') {
+			$log_path = APPPATH . 'logs/';
+		}
+		$data['log_path']     = $log_path;
+		$data['log_writable'] = is_dir($log_path) && is_writable($log_path);
+
+		$data['recent'] = array();
+		$data['stats']  = array('sent' => 0, 'failed' => 0);
+		if ($data['has_log_table']) {
+			$show = admin_per_page(50);
+			$data['recent'] = $this->db
+				->order_by('id', 'DESC')
+				->limit($show)
+				->get('email_log')
+				->result();
+
+			// Last 7 days, so a page loaded during an outage says "42 failed"
+			// rather than making someone count rows.
+			$since = date('Y-m-d H:i:s', strtotime('-7 days'));
+			$data['stats']['sent'] = (int) $this->db
+				->where('created_at >=', $since)->where('status', 'sent')
+				->count_all_results('email_log');
+			$data['stats']['failed'] = (int) $this->db
+				->where('created_at >=', $since)->where('status', 'failed')
+				->count_all_results('email_log');
+		}
+
+		$this->load->view('admin/header');
+		$this->load->view('admin/email_diagnostics', $data);
 		$this->load->view('admin/footer');
 	}
 
