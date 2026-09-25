@@ -153,6 +153,22 @@ $has_code = trim((string) $coupon->coupon_code) !== '';
 						<?php endif; ?>
 					</div>
 
+					<?php
+					/*
+					 * The terms the business typed. Nothing rendered this column before,
+					 * which was fine while no screen could write one — /user/add-coupon
+					 * asks for it now, and a term nobody can read is a term the reader
+					 * finds out about at the till.
+					 */
+					$c_terms = isset($coupon->coupon_details) ? content_text($coupon->coupon_details) : '';
+					?>
+					<?php if ($c_terms !== ''): ?>
+						<div class="p411-prose" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--p411-line);">
+							<h3 style="font-size:15px;font-weight:700;color:var(--p411-navy);margin:0 0 8px;">The small print</h3>
+							<?= nl2br(e($c_terms)) ?>
+						</div>
+					<?php endif; ?>
+
 					<?php if (!$has_link && $biz_url === ''): ?>
 						<p class="p411-form__hint" style="margin:14px 0 0;">
 							This deal is redeemed with the business directly. If you are not sure

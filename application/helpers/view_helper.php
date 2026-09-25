@@ -156,6 +156,42 @@ if (!function_exists('pearland_slug')) {
     }
 }
 
+if (!function_exists('pearland_merge_key')) {
+    /**
+     * The key two names are compared on when deciding whether they are the
+     * same thing written two ways.
+     *
+     * Lower-cased, "&" and "+" read as the word "and", punctuation dropped,
+     * runs of whitespace collapsed. So:
+     *
+     *   "Arts & Entertainment"   -> "arts and entertainment"
+     *   "Arts and Entertainment" -> "arts and entertainment"
+     *   "Beauty & Personal Care" -> "beauty and personal care"
+     *
+     * That is the whole rule, and it is deliberately narrow. It catches a
+     * category the directory was given twice in two house styles, which is
+     * how /all-category came to offer "Community & Government" (empty) beside
+     * "Community and Government" (14 businesses). It does not claim Finance
+     * and Financial Services are the same thing, because they might not be —
+     * that is a decision for whoever runs the directory, and /admin has a
+     * Merge control for making it.
+     *
+     * Matches migration 0031's SQL, which does the same transformations in
+     * the same order. If one changes, change both.
+     */
+    function pearland_merge_key($name)
+    {
+        $key = function_exists('mb_strtolower')
+            ? mb_strtolower((string) $name, 'UTF-8')
+            : strtolower((string) $name);
+
+        $key = str_replace(array('&', '+'), ' and ', $key);
+        $key = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $key);
+
+        return trim((string) preg_replace('/\s+/', ' ', (string) $key));
+    }
+}
+
 if (!function_exists('content_text')) {
     /**
      * Turn a stored rich-text body into clean plain text.

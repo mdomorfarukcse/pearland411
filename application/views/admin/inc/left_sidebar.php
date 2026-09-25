@@ -128,6 +128,13 @@
 
                     </li>
 
+                    <?php // Businesses entered more than once. Migration 0032
+                          // clears the unambiguous ones; this is where the pairs
+                          // it deliberately left to a person show up. ?>
+                    <li> <a href="<?= base_url() ?>admin/duplicate_listings">Duplicate listings</a>
+
+                    </li>
+
 
 
                     <li> <a href="<?= base_url() ?>admin/add_new_listings">Add new listings</a>

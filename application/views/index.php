@@ -630,7 +630,7 @@ unset($__ext, $__rel);
                     <div class="p411-empty p411-empty--bu">
                       <h3>No live coupons right now</h3>
                       <p>Running an offer? Deals posted by Pearland businesses show here for as long as they last.</p>
-                      <a class="p411-btn p411-btn--bu" href="<?= base_url('register') ?>">Post a deal</a>
+                      <a class="p411-btn p411-btn--bu" href="<?= base_url('user/add-coupon') ?>">Post a deal</a>
                     </div>
                   <?php endif; ?>
                 </div>

@@ -101,6 +101,12 @@
 					<li>
 						<a href="<?= base_url('user/enquiries'); ?>" class=""><img src="<?= base_url() ?>assets/images/icon/tick.png" alt="" />Lead enquiry</a>
 					</li>
+					<?php // /user/my-coupons, not /user/coupons — that URL is the public
+					      // deals page (User::coupons), which is where the old "Post a
+					      // deal" buttons were landing. ?>
+					<li>
+						<a href="<?= base_url('user/my-coupons'); ?>" class=""><img src="<?= base_url() ?>assets/images/icon/coupons.png" alt="" />Deals &amp; coupons</a>
+					</li>
 					<?php if (site_setting('service_products_enabled','1') !== '0'): ?>
 					<li>
 						<a href="<?= base_url() ?>products" class=""><img src="<?= base_url() ?>assets/images/icon/cart.png" alt="" />All Products</a>

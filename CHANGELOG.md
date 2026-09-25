@@ -6,6 +6,202 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-09-25 — Six QA reports: dead theme JS, duplicated data, unusable search
+
+Six separate reports from a pass over the live site. Two of them turned out to
+be one cause, and two more turned out to be the same cause as each other.
+
+### The one that explained two reports
+
+> *"Get a quote button does not work on any of the business"*
+
+`assets/js/custom_validation.js` carried eight jQuery-validate blocks from the
+bought theme, each hijacking a live form's submit button to POST to
+`enquiry_submit.html`, `review_submit.html` or `claim_submit.html` — flat-file
+endpoints that have never existed in this CodeIgniter application — and each
+building that URL from `webpage_full_link`, a variable no page defines. So the
+handler threw a `ReferenceError` before it even got as far as the 404.
+
+Three of those bindings were on forms that are still rendered:
+`#detail_enquiry_submit` (the quote form on `/listing-details`,
+`/classifieds-details`, `/house-details` and `/rental-details`),
+`#review_submit` (the review form), and `#home_slide_enquiry_submit` — the
+Help & Support slide-out in `footer.php`, which is to say **every page on the
+site**. Somebody had already commented out the `#popup_claim_submit` binding
+for exactly this reason and left the rest live.
+
+All eight are gone. The forms post to their real endpoints, and client-side
+validation comes from the markup via `assets/js/form-validate.js` — one
+implementation that cannot drift from what the server accepts.
+
+### Fixed
+
+- **"Get a quote" pointed at an id that was not on the page.** The hero button
+  is `href="#detail_enquiry_form"`, and that form was only rendered for a
+  signed-in visitor. For everyone else — most of the people who want a quote —
+  the button was an anchor to nothing and clicking it did nothing at all. The
+  button now points at the sidebar **card**, which is always there, and the
+  form is rendered for everyone: `add_enquiry` is on `User::$public_actions`,
+  treats `enquiry_sender_id` as optional and is rate-limited to 8 per IP per
+  hour *because* it accepts anonymous senders. Gating the form only ever cost
+  the business the lead. The rejected-submit path now also re-renders what the
+  visitor typed, with the per-field messages the controller has always flashed
+  and no view ever read.
+- **Four ways to write one review.** `/listing-details` had a Reviews card and
+  a separate Write a review card, between them offering a "Write a review"
+  header link, a "Write the first review" button, a second `<h2>`, a "Sign in
+  to review" `<h3>` and a "be the first" link in the hero — three of which
+  jumped a few hundred pixels down the page to the fourth. That is the
+  reported *"multiple option and tabs to write or view review"*: a choice
+  where there was none. Reading and writing are now the two halves of one
+  `#reviews` section. `#write-review` survives as an id, so the hero link and
+  any external anchor still land in the right place.
+- **"Post a deal" was a link back to the page you were reading.** All three
+  buttons on `/coupons` pointed at `base_url('user/coupons')`, and
+  `/user/coupons` resolves to `User::coupons` — the public deals page. It was
+  not a typo in a `href`: the theme shipped views for a member coupon screen,
+  all posting to `user/add-coupon`, `user/edit-coupon` and
+  `user/delete-coupon`, and **none of those methods was ever written**, on
+  `User` or on `Admin`. Nothing anywhere in the application could create a
+  coupon; `/coupons` read a table only phpMyAdmin could fill. Written now, as
+  `/user/my-coupons` — not `/user/coupons`, because quietly shadowing the
+  public URL is how this started.
+- **Search found no restaurants when asked for "restaurants".** Two causes.
+  There was no singular/plural folding, so the only rows containing the
+  literal string were the ones that mention *serving* restaurants — which is
+  how an electrician came back as the single business result. And every column
+  counted the same, with the row id as the tie-break below the title, so a
+  passing mention in a description outranked a business filed under the
+  matching category because it happened to be newer. `"IT company"` was the
+  other half: `LIKE '%it%'` is true of Smith, Whitney, furniture and capital.
+- **Categories listed twice.** `/all-category` offered `Arts & Entertainment`
+  (4 businesses) beside `Arts and Entertainment` (6), `Beauty & Personal Care`
+  (26) beside `Beauty and Personal Care` (25), `Community & Government` (empty)
+  beside `Community and Government` (14). Two URLs, two counts and two
+  directory pages for one kind of business, with the businesses split between
+  them and neither page admitting the other existed.
+- **The same shop repeated down a category page.** `/all_listing/shopping-retail`
+  said "42 businesses" over a first page that repeated the same shops. The
+  count was never wrong — there really are 42 rows, several of them the same
+  business twice. Same cause as the categories: the directory was seeded more
+  than once and nothing has ever checked whether a business was already there.
+- **A review's rating was never validated.** `price_rating` went from the POST
+  body into `listing_reviews` and then into `updateListingRating()`, so a
+  hand-posted `price_rating=500` moved a business's public average to 500
+  stars. Clamped to 1–5, with the rest of the fields checked alongside it, and
+  the redirect now lands on `#reviews` so the confirmation is beside the form
+  it came from.
+- **`/coupons` fanned out.** It called `getActiveCoupons()`, whose join runs
+  through the *owner's* listings, so a business with four listings put the
+  same offer on the page four times. The homepage has always called the
+  de-duplicating `getDistinctActiveCoupons()`; this page never did.
+
+### Added
+
+- **Member coupon management** — `/user/my-coupons`, `/user/add-coupon`,
+  `/user/edit-coupon/<id>`, `/user/delete-coupon/<id>`, plus a **Deals &
+  coupons** item in the dashboard sidebar. Posting requires a published
+  listing the member owns, which is the same trust gate the claim flow already
+  applies, and the number of live deals per member is capped by
+  `coupon_max_per_member` at `/admin/setting` (default 10). Delete is POST
+  only — the theme's view called it from an `href`, which is one crawler away
+  from clearing somebody's offers. The add and edit forms share
+  `views/partials/coupon_form_fields.php` so they cannot ask for different
+  fields against the same table, which is what they did before.
+- **Merge control for duplicate categories** at `/admin/all_listing_category`.
+  A panel lists the categories that read as the same thing and merges a pair
+  in one click, moving every listing, sub-category and category-targeted ad
+  before deleting the duplicate. It exists because migration 0031
+  deliberately stops at names that are mechanically identical: whether
+  Finance and Financial Services are one category, or Education and Education
+  & Childcare, is an editorial decision about this directory and a migration
+  is the wrong place to make it.
+- **`/admin/duplicate_listings`** — businesses the directory holds more than
+  once, with the evidence. Migration 0032 clears the cases where the duplicate
+  is unclaimed; this is the rest, and nothing on it happens by itself, because
+  "same name, same phone number" is a franchise and a head office as often as
+  it is one business entered twice. Hiding one is the same soft delete the
+  Trash button does.
+- **Name-clash validation on categories.** `is_unique[]` compares the string,
+  so it happily accepted "Arts and Entertainment" next to "Arts &
+  Entertainment"; the edit form had no uniqueness rule of any kind, so
+  renaming a category onto an existing one was simply allowed. Both now
+  compare on `pearland_merge_key()`.
+- **`pearland_merge_key()`** (`application/helpers/view_helper.php`) — the key
+  two names are compared on: lower-cased, `&` and `+` read as the word "and",
+  punctuation dropped, whitespace collapsed. Deliberately narrow, and matched
+  statement for statement by migration 0031's SQL.
+
+### Changed
+
+- **Search matches a word's forms, not its spelling.** `searchTermVariants()`
+  folds a term to its stem — `restaurants` → `restaurant`, `services` →
+  `service`, `plumbers` → `plumber` — which under `LIKE '%stem%'` covers both
+  forms for the price of the same one clause. `parties` → `party` + `parties`
+  is the exception, because there neither contains the other. The stem has to
+  be at least four characters: `news` would otherwise fold to `new` and match
+  every renewal and newsletter on the site.
+- **A word of one or two letters has to sit on a word boundary.** Separators
+  are flattened to spaces first, so "Pearland IT, Inc." still matches "IT". It
+  is a stack of `REPLACE()` rather than a `REGEXP` because the word-boundary
+  syntax MySQL understands changed between 5.7 and 8.0 and this has to run on
+  both. Three letters and up keep substring matching — "spa" should still find
+  "MedSpa".
+- **Where a word matched decides the order.** `searchRelevanceOrder()` takes
+  weighted columns; `searchListings()` weights the name 8, the category 6,
+  services offered 4, address and service area 2, and the description 1.
+- **`applySearchTerms()` builds one SQL fragment** instead of nested
+  `group_start()` calls: a short word needs a boundary test the query builder
+  cannot express, and mixing the two inside one OR group is more error-prone
+  than writing it out. Everything interpolated goes through
+  `escape_like_str()`/`escape()`, and `searchTerms()` has already dropped
+  everything that is not a letter or a digit.
+
+### Migrations
+
+- **`0031_category_dedupe.sql`** — merges categories that are the same name
+  once normalised. The survivor is the one with the most published listings
+  (lowest id breaks the tie) and inherits the loser's slug only if it has none
+  of its own, so no indexed URL is thrown away. `listings`,
+  `listing_sub_categories` and `ads.category_id` are all re-pointed and each
+  merge is recorded in `listing_category_merges` before the row is deleted.
+- **`0032_listing_dedupe.sql`** — hides businesses entered twice. Matches on
+  the same name **and** one hard identifier: the phone number (digits only,
+  last ten, so `+1 281-992-2064` and `(281) 992 2064` are one number), the
+  street address, or the website host. Name alone is never enough — Pearland
+  has more than one Subway. **It will not touch a listing with an owner:**
+  claimed listings are somebody's property, quite possibly somebody's paid
+  package, and where two claimed rows collide both are left for a person. The
+  loser is soft-deleted, so reviews and enquiries stay attached and it is one
+  click from restoring at `/admin/trash_listings`; every action is recorded in
+  `listing_duplicate_merges`. **Run after 0031.**
+
+Both are idempotent, both are mirrored into
+`database/migrations_combined_phpmyadmin.sql` with their loops unrolled into
+`REPLACE()` chains, and both use ordinary scratch tables rather than
+`TEMPORARY` ones — choosing the survivor reads the same scratch table twice in
+one statement, which MySQL answers on a temporary table with "Can't reopen
+table".
+
+### Key files
+
+`assets/js/custom_validation.js`, `application/views/listing_details.php`,
+`application/controllers/User.php`, `application/controllers/Admin.php`,
+`application/models/Usermodel.php`, `application/models/Adminmodel.php`,
+`application/helpers/view_helper.php`, `application/views/user_coupons.php`,
+`application/views/add_coupons.php`, `application/views/edit_coupons.php`,
+`application/views/partials/coupon_form_fields.php`,
+`application/views/admin/duplicate_listings.php`,
+`application/views/admin/all_listing_category.php`,
+`assets/css/directory.css`, migrations `0031`/`0032`.
+
+### Still open
+
+Coupons are now member-posted and public, and there is still no admin screen
+for them — the admin sidebar's coupon links have always been dead `.html`
+theme markup. Posting is gated on owning a published listing, which an admin
+approves through the claim flow, so the trust bar is real; a takedown screen
+is the obvious next piece.
 ## 2026-09-24 — Nobody could sign up, and nothing said why
 
 Reported from the live site: new accounts are created successfully, the

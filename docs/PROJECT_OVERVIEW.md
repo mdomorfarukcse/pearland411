@@ -92,6 +92,14 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `$mf_disabled` locks the file input for a plan without photos while leaving the Remove tickboxes
   live, so a downgraded owner can still delete a photo they can no longer replace. The public page
   has to link `assets/admin/css/media-preview.css` (via `page_css`) and the matching JS itself.
+- **Form JS:** `assets/js/custom_validation.js` is the theme's jQuery-validate file, loaded by
+  `footer.php` on every page. Eight of its blocks were removed in 2026-09: each hijacked a live
+  form's submit button to POST to `enquiry_submit.html` / `review_submit.html` /
+  `claim_submit.html` — flat files that have never existed here — via `webpage_full_link`, which no
+  page defines, so the handler threw before reaching the 404. That broke the listing page's quote
+  and review forms and the Help & Support slide-out in `footer.php` (every page). **Do not add a
+  binding here for a form that posts to a CI endpoint;** put the rules in the markup and let
+  `form-validate.js` read them.
 - **Public form validation:** `assets/js/form-validate.js` attaches to any `<form data-validate>`
   and validates from the markup's own attributes (`required`, `type`, `minlength`, `maxlength`,
   `pattern`, plus `data-match` for confirm fields). It binds in the **capture** phase, so a form
@@ -137,7 +145,7 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   safe to re-run. The hero illustration `assets/images/home/hero-pearland.svg` is hand-authored.
 - **Helpers** (autoloaded): `site_setting` (settings + feature flags), `image` (uploads/resize:
   `safe_upload_image`, `uploadAndResize`, `responsive_img`), `view` — escaping (`e`, `e_attr`,
-  `e_url`, `e_nl2br`), `json_ld`, `pearland_slug`, `enquiry_departments()` / `normalise_enquiry_department()` /
+  `e_url`, `e_nl2br`), `json_ld`, `pearland_slug`, `pearland_merge_key()` (are two names the same thing written two ways? lower-cased, `&` read as "and", punctuation dropped — the rule behind the category merge control and migration 0031, which mirrors it in SQL), `enquiry_departments()` / `normalise_enquiry_department()` /
   `enquiry_department_email()` (the departments a public form can address a message to — Sales,
   Customer Service, Billing… — editable at `/admin/setting`; these replaced a hard-coded list of
   nine named sales reps, most of whom have left), `form_recipient_email()` (one address for every public form, set
@@ -202,17 +210,22 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Edit own listing | `/user/edit-listing/<slug>` | `User::edit_listing` | ownership + capability gated |
 | Packages (customer) | `/pricing-plan` | `User::pricing_plan` → `pricing_plan.php` | lists all active `plans`; carries `partials/sales_help.php` (`#talk-to-us`) so a caller can buy by phone |
 | Start a free plan | `/start-free` (POST) | `User::start_free_plan` → `Usermodel::activateFreePlan` | free tiers are excluded from cart/checkout, so this is the only way to get one; login required, never downgrades an existing subscription |
+| Site search | `/search?q=`, `/search-suggestions` (AJAX) | `User::search` → `Usermodel::globalSearch` | Word-by-word: `searchTerms()` splits the query, `searchTermVariants()` folds each word to its stem (`restaurants` → `restaurant`; four-character minimum, or `news` folds to `new`), `searchColumnCondition()` requires a word boundary for a one- or two-letter word (`LIKE '%it%'` matched most of the directory), `applySearchTerms()` ANDs the words and ORs the columns and forms, and `searchRelevanceOrder()` ranks on the name plus caller-weighted columns — `searchListings()` weights the category above services offered above the description, so a passing mention stops outranking a filed-under match. Sections switched off at `/admin/setting` are not searched |
+| Sign in / register | `/login`, `/register` | `User::login`, `register` | Shared kit (`.p411-ct--auth`); the "who helped you sign up" list comes from `enquiry_departments()` |
 | Site search | `/search?q=`, `/search-suggestions` (AJAX) | `User::search` → `Usermodel::globalSearch` | Word-by-word: `searchTerms()` splits the query, `applySearchTerms()` ANDs the words and ORs the columns, `searchRelevanceOrder()` ranks name matches first. Sections switched off at `/admin/setting` are not searched |
 | Sign in / register | `/login`, `/register` | `User::login`, `register` | Shared kit (`.p411-ct--auth`); the "who helped you sign up" list comes from `enquiry_departments()`. Login is **refused until the address is verified** (`code => 'email_unverified'`), so signup success copy must not say "now sign in" |
 | Auth mail | `/forgot-password`, `/reset-password/<token>`, `/verify-email/<token>`, `/resend-verification` | `User::forgot_password`, `reset_password`, `verify_email`, `resend_verification` | All on the shared kit. Reset links last 1 hour and are single-use; resend re-issues the token, so an older link stops working. Forgot-password and resend both answer identically whether or not the address exists — they must not become account-enumeration oracles — and both are rate-limited 5/IP/hour |
 | Contact | `/contact-us` → `/contact-submit` | `User::contact_us`, `contact_submit` | Shared kit; an email address **or** a phone number is enough; `return_to` sends callback requests back to the page they came from. The posted `topic` sets `enquiries.enquiry_type` — `package` for the `/pricing-plan` callback panel, `contact` for this page — which is what splits sales leads from general questions in admin. `department` (whitelisted against `enquiry_departments()`) records who it is for and picks the mailbox |
 | Enquiries (admin) | `/admin/enquiries[?type=]`, `/admin/saved-enquiry` | `Admin::enquiries`, `saved_enquiry` | One tab per `enquiry_type`, newest first; Department column. Departments and their optional mailboxes are set at `/admin/setting` → Enquiry routing |
-| Deals & coupons | `/coupons`, `/coupons/<id>` | `User::coupons`, `coupon_details` | Shared kit + 5 ad zones on the index |
+| Deals & coupons | `/coupons`, `/coupons/<id>` | `User::coupons`, `coupon_details` | Shared kit + 5 ad zones on the index. The index calls `getDistinctActiveCoupons()`: the plain `getActiveCoupons()` joins through the owner's **listings**, so a business with four listings shows one offer four times |
+| Post a deal (member) | `/user/my-coupons`, `/user/add-coupon`, `/user/edit-coupon/<id>`, `/user/delete-coupon/<id>` (POST) | `User::my_coupons`, `add_coupon`, `edit_coupon`, `delete_coupon` | **Not `/user/coupons`** — that resolves to `User::coupons`, the public page, which is where the old "Post a deal" buttons landed. Requires a published listing the member owns; live deals capped by `coupon_max_per_member` at `/admin/setting`. Add and edit share `partials/coupon_form_fields.php` |
 | Services (web/IT) | `/services[?category=]`, `/services/<slug>` | `User::services`, `service_details` | Shared kit; each service page carries its own quote form |
 | Custom quote | `/request-quote[?service=<slug>]` (GET form), `/request-service[/<slug>]` (POST) | `User::request_quote`, `request_service` | One POST handler for both forms — rate-limited 5/IP/hour, saved to `service_requests`, emailed to `site_setting('service_quote_email')` with the sender as Reply-To |
 | Checkout | `/checkout?plan_id=X` | `User::checkout` / `helcim_init` / `process_checkout` | HelcimPay.js |
 | Manage plan | `/user/my_account` | upgrade/downgrade/cancel | prorated upgrade |
 | Renewal cron | — | `Cli::renew_subscriptions` | daily; emails every active admin plus `billing_notify_emails` on each charge, retry and expiry. Prices each charge with `Usermodel::renewalAmountFor()` — the chosen `plan_durations` price, else the plan's — which `/admin/billing` shows staff so the figure on screen is the figure taken |
+| Duplicate listings (admin) | `/admin/duplicate_listings`, `/admin/hide_duplicate_listing` (POST) | `Admin::duplicate_listings`, `hide_duplicate_listing` → `Adminmodel::getDuplicateListingGroups` | Businesses entered more than once: same name **and** the same phone, address or website host. Nothing automatic — migration 0032 clears the unclaimed cases, this is the rest. Hiding is the Trash soft delete, recorded in `listing_duplicate_merges` |
+| Merge categories (admin) | `/admin/all_listing_category`, `/admin/merge_listing_category` (POST) | `Admin::merge_listing_category` → `Adminmodel::mergeListingCategory` | The panel above the table lists categories that read the same. Migration 0031 merges what is mechanically identical; this is for the judgement calls (Finance / Financial Services). Add and edit both validate the name through `callback_category_name_available` |
 | Email diagnostics (admin) | `/admin/email-diagnostics` | `Admin::email_diagnostics` | Super-admin only — it shows the SMTP username and raw SMTP transcripts and can send mail as the site. Configuration + known-bad settings, a test send, and the `email_log` table (migration 0031) |
 | Members (admin) | `/admin/users[/<page>][?q=]` | `Admin::users` → `Adminmodel::getUserDirectory` | Read-only review list: businesses owned, email verified, joined. `?q=` matches name, email **or business name**. There is deliberately no delete — removing a member orphans everything they own |
 | Customer billing (admin) | `/admin/billing[/<page>][?q=]`, `/admin/billing-customer/<listing_id>` | `Admin::billing`, `billing_customer`, `billing_card_init`, `billing_card_save`, `billing_charge`, `billing_card_delete`, `billing_recurring_save` | Super-admin only, and keyed on the **business listing** — the imported listings share a few data-entry logins, so one account owns dozens of businesses and billing the account would bill all of them. Card on file (HelcimPay.js `verify`, charges nothing; the card lives on the owning account), one-off payment, and the recurring schedule: a **package** sets entitlements, an optional **agreed price** (`subscriptions.custom_amount`) sets what is actually charged on every renewal. `?q=` matches business name, owner name or owner email; with no search the list is only businesses with billing activity. An *active* subscription is rescheduled in place; anything else starts a new term, because `getRenewableSubscriptions()` only charges active rows. The freehand amount is capped by `site_setting('billing_manual_charge_max', 25000)` |
@@ -236,6 +249,11 @@ several. `listings.sub_category_id` survives alongside it holding the **first** 
 because the admin table, the CSV export and several model joins still read it.
 `ads.category_id` (0024) is nullable: NULL runs an ad in its slot everywhere, an id restricts
 it to that listing category and outranks an untargeted booking in the same slot.
+`listing_category_merges` (0031) and `listing_duplicate_merges` (0032) are audit trails, written
+by the migrations **and** by the two admin screens, so a merge done either way reads and unpicks
+the same. The `coupons` table predates the repo and its columns vary by install, which is why
+`Usermodel::saveCoupon()` filters the payload through `list_fields('coupons')` rather than
+assuming.
 Core tables are **not** in repo migrations (they predate git); migrations `0010+` add columns to
 them. Get the run order from `database/README.md`.
 

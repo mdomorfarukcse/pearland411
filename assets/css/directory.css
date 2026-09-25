@@ -955,6 +955,16 @@
 	outline: none;
 }
 .p411-form__hint { font-size: 12.5px; color: var(--p411-ink-3); margin-bottom: 12px; }
+/* Per-field message for an error the server sent back, printed under the
+   offending input. The controller has always flashed `enquiry_errors`
+   keyed by field name; until now nothing rendered them. */
+.p411-form__err {
+	display: block;
+	margin-top: 5px;
+	font-size: 12.5px;
+	line-height: 1.45;
+	color: var(--p411-bu);
+}
 
 .p411-note {
 	border-radius: var(--p411-r-s);
@@ -1157,6 +1167,9 @@
 
 .p411-ld__body { display: flex; flex-direction: column; gap: 18px; }
 .p411-ld__body > .p411-card { scroll-margin-top: 70px; }
+/* "Get a quote" in the hero jumps to the sidebar card, which is outside
+   .p411-ld__body and so missed the rule above. */
+.p411-shell__side > .p411-card { scroll-margin-top: 70px; }
 .p411-prose { font-size: 14.5px; line-height: 1.7; color: var(--p411-ink-2); }
 .p411-prose p + p { margin-top: 10px; }
 /* Links inside stored copy (a listing description, an article body). Without
@@ -1242,6 +1255,24 @@
 .p411-revlist__body h4 { font-size: 14.5px; font-weight: 700; color: var(--p411-navy); }
 .p411-revlist__when { font-size: 12px; color: var(--p411-ink-3); }
 .p411-revlist__body p { margin-top: 6px; font-size: 13.5px; line-height: 1.6; color: var(--p411-ink-2); }
+
+/* The "write one" half of the reviews section. It used to be a card of its own
+   sitting under the Reviews card, heading and all — two panels, four separate
+   invitations to write a review, for one job. It is a ruled-off second half of
+   the same card now, so the section reads as "here are the reviews, here is
+   where you add yours". */
+.p411-revwrite {
+	margin-top: 22px;
+	padding-top: 20px;
+	border-top: 1px solid var(--p411-line);
+}
+.p411-revwrite > h3 {
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--p411-navy);
+	margin: 0 0 10px;
+}
+.p411-revwrite .p411-empty__actions { justify-content: flex-start; margin-top: 12px; }
 
 /* Star picker. The bare `:before` in style.css (see the header of this file)
    carries `position: absolute; font-family: "Material Icons"; font-size: 18px`,

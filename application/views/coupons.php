@@ -94,7 +94,7 @@ foreach ($coupons as $c) {
 							<span class="p411-toolbar__meta">Valid today</span>
 						</div>
 						<div class="p411-toolbar__right">
-							<a class="p411-btn p411-btn--sm p411-btn--ghost" href="<?= e_url(base_url('user/coupons')) ?>">Post a deal</a>
+							<a class="p411-btn p411-btn--sm p411-btn--ghost" href="<?= e_url(base_url('user/add-coupon')) ?>">Post a deal</a>
 						</div>
 					</div>
 
@@ -191,7 +191,7 @@ foreach ($coupons as $c) {
 							If you run a business here, posting one is free.
 						</p>
 						<div class="p411-empty__actions">
-							<a class="p411-btn" href="<?= e_url(base_url('user/coupons')) ?>">Post a deal</a>
+							<a class="p411-btn" href="<?= e_url(base_url('user/add-coupon')) ?>">Post a deal</a>
 							<a class="p411-btn p411-btn--ghost" href="<?= e_url(base_url('all-listing')) ?>">Browse local businesses</a>
 						</div>
 					</div>
@@ -241,7 +241,7 @@ foreach ($coupons as $c) {
 						Post it here and it shows up on this page, on your listing and on the homepage &mdash;
 						free with any listing.
 					</p>
-					<a class="p411-btn p411-btn--block" href="<?= e_url(base_url('user/coupons')) ?>">Post a deal</a>
+					<a class="p411-btn p411-btn--block" href="<?= e_url(base_url('user/add-coupon')) ?>">Post a deal</a>
 					<a class="p411-btn p411-btn--block p411-btn--ghost" style="margin-top:8px;" href="<?= e_url(base_url('pricing-plan')) ?>">See advertising packages</a>
 				</div>
 

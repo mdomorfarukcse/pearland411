@@ -239,9 +239,13 @@ $ld_stars = function ($value) {
 						<?php if ($show_wa): ?>
 							<a class="p411-btn p411-btn--wa" href="https://wa.me/<?= e_attr($wa_number) ?>" target="_blank" rel="noopener nofollow">WhatsApp</a>
 						<?php endif; ?>
-						<?php // Scrolls to the enquiry form in the sidebar. It used to open a
-						      // modal holding a second, identical copy of that same form. ?>
-						<a class="p411-btn p411-btn--ghost" href="#detail_enquiry_form">Get a quote</a>
+						<?php // Scrolls to the enquiry card in the sidebar. It points at the
+						      // CARD, not at the form: #detail_enquiry_form only existed for a
+						      // signed-in visitor, so for everybody else this button was an
+						      // anchor to an id that was not on the page and clicking it did
+						      // nothing at all. Before that it opened a modal holding a second,
+						      // identical copy of the same form. ?>
+						<a class="p411-btn p411-btn--ghost" href="#get-a-quote">Get a quote</a>
 						<?php if (!empty($listing->listing_lat) && !empty($listing->listing_lng)): ?>
 							<a class="p411-btn p411-btn--ghost" target="_blank" rel="noopener"
 							   href="https://www.google.com/maps/dir/?api=1&amp;destination=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>">Directions</a>
@@ -423,10 +427,26 @@ $ld_stars = function ($value) {
 					</div>
 
 					<!-- REVIEWS -->
+					<?php
+					/*
+					 * One card, one heading, one way in.
+					 *
+					 * This was two cards — "Reviews" and "Write a review" — carrying four
+					 * separate invitations to write one: a "Write a review" link in the
+					 * first card's header, a "Write the first review" button in its empty
+					 * state, the second card's own heading, and "be the first" up in the
+					 * hero. Three of them jumped a few hundred pixels down the page to the
+					 * fourth. The reported "multiple option and tabs to write or view
+					 * review" is that: the page offered a choice where there was none.
+					 *
+					 * Reading and writing are now the two halves of one #reviews section,
+					 * in that order. #write-review stays as an id on the second half, so
+					 * the hero link and any external anchor still land in the right place.
+					 */
+					?>
 					<div class="p411-card" id="reviews">
 						<div class="p411-card__head">
 							<h2>Reviews</h2>
-							<a class="p411-more" href="#write-review">Write a review &rarr;</a>
 						</div>
 
 						<?php if ($review_total > 0): ?>
@@ -478,81 +498,79 @@ $ld_stars = function ($value) {
 						<?php else: ?>
 							<div class="p411-empty p411-empty--inline">
 								<h3>No reviews yet</h3>
-								<p>Nobody has reviewed <?= e($ld_name) ?> on Pearland411. If you&rsquo;ve used them, your review helps the next person decide.</p>
-								<div class="p411-empty__actions">
-									<a class="p411-btn p411-btn--sm" href="#write-review">Write the first review</a>
-								</div>
+								<p>Nobody has reviewed <?= e($ld_name) ?> on Pearland411. If you&rsquo;ve used them, your review helps the next person decide &mdash; the form is just below.</p>
 							</div>
 						<?php endif; ?>
-					</div>
 
-					<!-- WRITE A REVIEW -->
-					<div class="p411-card p411-form" id="write-review">
-						<div class="p411-card__head">
-							<h2>Write a review</h2>
-						</div>
+						<!-- ...and the other half of the same section: writing one -->
+						<div class="p411-revwrite p411-form" id="write-review">
+							<h3>Write a review</h3>
 
-						<?php $__rev_ok = $this->session->flashdata('review_success'); ?>
-						<?php if (!empty($__rev_ok)): ?>
-							<div class="p411-note p411-note--ok"><?= e($__rev_ok) ?></div>
-						<?php endif; ?>
+							<?php $__rev_ok = $this->session->flashdata('review_success'); ?>
+							<?php if (!empty($__rev_ok)): ?>
+								<div class="p411-note p411-note--ok"><?= e($__rev_ok) ?></div>
+							<?php endif; ?>
+							<?php $__rev_err = $this->session->flashdata('review_error'); ?>
+							<?php if (!empty($__rev_err)): ?>
+								<div class="p411-note p411-note--err" role="alert"><?= e($__rev_err) ?></div>
+							<?php endif; ?>
 
-						<?php if (empty($logged_id)): ?>
-							<div class="p411-empty p411-empty--inline">
-								<h3>Sign in to review</h3>
-								<p>Reviews are tied to an account so businesses can trust them. It takes a minute to register.</p>
+							<?php if (empty($logged_id)): ?>
+								<p class="p411-form__hint">Reviews are tied to an account so businesses can trust them. It takes a minute to register.</p>
 								<div class="p411-empty__actions">
 									<a class="p411-btn p411-btn--sm" href="<?= e_url(base_url('login')) ?>">Log in</a>
 									<a class="p411-btn p411-btn--sm p411-btn--ghost" href="<?= e_url(base_url('register')) ?>">Create an account</a>
 								</div>
-							</div>
-						<?php else: ?>
-							<p class="p411-form__hint">Say what you had done, how it went and whether you'd go back. Keep it factual &mdash; it's more useful that way.</p>
+							<?php else: ?>
+								<p class="p411-form__hint">Say what you had done, how it went and whether you'd go back. Keep it factual &mdash; it's more useful that way.</p>
 
-							<form name="review_form" id="review_form" method="post" action="<?= base_url('user/submit_review') ?>">
-								<input type="hidden" name="listing_id" value="<?= (int) ($listing->listing_id ?? 0) ?>">
-								<input type="hidden" name="listing_user_id" value="<?= (int) ($listing->user_id ?? 0) ?>">
-								<input type="hidden" name="review_user_id" value="<?= (int) $logged_id ?>">
+								<form name="review_form" id="review_form" method="post" data-validate
+									  action="<?= base_url('user/submit_review') ?>">
+									<input type="hidden" name="listing_id" value="<?= (int) ($listing->listing_id ?? 0) ?>">
+									<input type="hidden" name="listing_user_id" value="<?= (int) ($listing->user_id ?? 0) ?>">
+									<input type="hidden" name="review_user_id" value="<?= (int) $logged_id ?>">
 
-								<div style="margin-bottom:14px;">
-									<fieldset class="p411-rating">
-										<?php foreach (array(5 => 'Awesome', 4 => 'Excellent', 3 => 'Good', 2 => 'Average', 1 => 'Poor') as $stars => $word): ?>
-											<input type="radio" id="p411star<?= $stars ?>" name="price_rating" class="price_rating"
-												   value="<?= $stars ?>" <?= $stars === 3 ? 'checked' : '' ?>>
-											<label for="p411star<?= $stars ?>" title="<?= $stars ?> &ndash; <?= $word ?>"><span class="sr-only"><?= $stars ?> stars</span></label>
-										<?php endforeach; ?>
-									</fieldset>
-									<div class="p411-rating__value" id="p411-star-value">3 stars &mdash; Good</div>
-								</div>
+									<div style="margin-bottom:14px;">
+										<fieldset class="p411-rating">
+											<?php foreach (array(5 => 'Awesome', 4 => 'Excellent', 3 => 'Good', 2 => 'Average', 1 => 'Poor') as $stars => $word): ?>
+												<input type="radio" id="p411star<?= $stars ?>" name="price_rating" class="price_rating"
+													   value="<?= $stars ?>" <?= $stars === 3 ? 'checked' : '' ?>>
+												<label for="p411star<?= $stars ?>" title="<?= $stars ?> &ndash; <?= $word ?>"><span class="sr-only"><?= $stars ?> stars</span></label>
+											<?php endforeach; ?>
+										</fieldset>
+										<div class="p411-rating__value" id="p411-star-value">3 stars &mdash; Good</div>
+									</div>
 
-								<div class="p411-grid2">
-									<div class="form-group">
-										<label class="sr-only" for="review_name">Your name</label>
-										<input id="review_name" name="review_name" type="text" class="form-control" required
-											   placeholder="Your name" value="<?= e_attr($user->name ?? '') ?>" <?= !empty($user->name) ? 'readonly' : '' ?>>
+									<div class="p411-grid2">
+										<div class="form-group">
+											<label class="sr-only" for="review_name">Your name</label>
+											<input id="review_name" name="review_name" type="text" class="form-control" required
+												   placeholder="Your name" value="<?= e_attr($user->name ?? '') ?>" <?= !empty($user->name) ? 'readonly' : '' ?>>
+										</div>
+										<div class="form-group">
+											<label class="sr-only" for="review_mobile">Mobile number</label>
+											<input id="review_mobile" name="review_mobile" type="tel" class="form-control"
+												   placeholder="Mobile number" value="<?= e_attr($user->mobile_number ?? '') ?>" <?= !empty($user->mobile_number) ? 'readonly' : '' ?>>
+										</div>
+										<div class="form-group">
+											<label class="sr-only" for="review_email">Email</label>
+											<input id="review_email" name="review_email" type="email" class="form-control" required
+												   placeholder="Email address" value="<?= e_attr($user->email_id ?? '') ?>" <?= !empty($user->email_id) ? 'readonly' : '' ?>>
+										</div>
+										<div class="form-group">
+											<label class="sr-only" for="review_city">City</label>
+											<input id="review_city" name="review_city" type="text" class="form-control" placeholder="City">
+										</div>
 									</div>
 									<div class="form-group">
-										<label class="sr-only" for="review_mobile">Mobile number</label>
-										<input id="review_mobile" name="review_mobile" type="tel" class="form-control"
-											   placeholder="Mobile number" value="<?= e_attr($user->mobile_number ?? '') ?>" <?= !empty($user->mobile_number) ? 'readonly' : '' ?>>
+										<label class="sr-only" for="review_message">Your review</label>
+										<textarea id="review_message" name="review_message" class="form-control" rows="4" required
+											  minlength="10" maxlength="2000" placeholder="Write your review"></textarea>
 									</div>
-									<div class="form-group">
-										<label class="sr-only" for="review_email">Email</label>
-										<input id="review_email" name="review_email" type="email" class="form-control" required
-											   placeholder="Email address" value="<?= e_attr($user->email_id ?? '') ?>" <?= !empty($user->email_id) ? 'readonly' : '' ?>>
-									</div>
-									<div class="form-group">
-										<label class="sr-only" for="review_city">City</label>
-										<input id="review_city" name="review_city" type="text" class="form-control" placeholder="City">
-									</div>
-								</div>
-								<div class="form-group">
-									<label class="sr-only" for="review_message">Your review</label>
-									<textarea id="review_message" name="review_message" class="form-control" rows="4" placeholder="Write your review"></textarea>
-								</div>
-								<button type="submit" id="review_submit" name="review_submit" class="p411-btn">Submit review</button>
-							</form>
-						<?php endif; ?>
+									<button type="submit" id="review_submit" name="review_submit" class="p411-btn">Submit review</button>
+								</form>
+							<?php endif; ?>
+						</div>
 					</div>
 
 					<!-- RELATED -->
@@ -604,7 +622,28 @@ $ld_stars = function ($value) {
 			<aside class="p411-shell__side">
 
 				<!-- Get a quote -->
-				<div class="p411-card p411-form">
+				<?php
+				/*
+				 * The form is rendered for everybody, signed in or not.
+				 *
+				 * It used to be swapped for a "Log in to enquire" panel for anonymous
+				 * visitors, which is where the reported "Get a quote does not work"
+				 * came from: the hero button is an anchor to this card, and the only
+				 * id on the page was the form's, so for a logged-out visitor — most
+				 * of the people who want a quote — the button pointed at nothing.
+				 *
+				 * Nothing behind it needed the login either. `add_enquiry` is on
+				 * User::$public_actions, takes `enquiry_sender_id` as optional, and
+				 * is rate-limited to 8 per IP per hour precisely because it accepts
+				 * anonymous senders. Gating the form only cost the business the lead.
+				 */
+				$__enq_old = (array) $this->session->flashdata('enquiry_old');
+				$__enq_bad = (array) $this->session->flashdata('enquiry_errors');
+				$__enq_val = function ($field, $fallback = '') use ($__enq_old) {
+					return isset($__enq_old[$field]) ? (string) $__enq_old[$field] : (string) $fallback;
+				};
+				?>
+				<div class="p411-card p411-form" id="get-a-quote">
 					<div class="p411-card__head">
 						<h2>Get a quote</h2>
 					</div>
@@ -618,46 +657,61 @@ $ld_stars = function ($value) {
 						<div class="p411-note p411-note--err"><?= e($__enq_err) ?></div>
 					<?php endif; ?>
 
-					<?php if (empty($logged_id)): ?>
-						<p class="p411-form__hint">Log in to send <?= e($ld_name) ?> an enquiry &mdash; it keeps your details and their inbox tidy.</p>
-						<a class="p411-btn p411-btn--block" href="<?= e_url(base_url('login')) ?>">Log in to enquire</a>
-						<a class="p411-btn p411-btn--block p411-btn--ghost" style="margin-top:8px;" href="<?= e_url(base_url('register')) ?>">Create an account</a>
-						<?php if ($show_phone): ?>
-							<p class="p411-form__hint" style="margin:12px 0 0;">In a hurry? Call <a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) ?>"><?= e($listing->listing_mobile) ?></a>.</p>
-						<?php endif; ?>
-					<?php else: ?>
-						<p class="p411-form__hint">Tell <?= e($ld_name) ?> what you need and they'll come back to you.</p>
-						<form method="post" name="detail_enquiry_form" id="detail_enquiry_form" data-validate
-							  action="<?= base_url('user/add-enquiry/listing_details/' . rawurlencode($ld_slug)) ?>">
-							<input type="hidden" name="listing_id" value="<?= (int) ($listing->listing_id ?? 0) ?>">
-							<input type="hidden" name="receiving_user_id" value="<?= (int) ($listing->user_id ?? 0) ?>">
-							<input type="hidden" name="enquiry_sender_id" value="<?= (int) $logged_id ?>">
-							<input type="hidden" name="enquiry_source" value="<?= e_attr($ld_name) ?>">
-							<input type="hidden" name="enquiry_type" value="listing">
+					<p class="p411-form__hint">Tell <?= e($ld_name) ?> what you need and they&rsquo;ll come back to you.</p>
 
-							<div class="form-group">
-								<label class="sr-only" for="enq_name">Your name</label>
-								<input id="enq_name" type="text" name="enquiry_name" class="form-control" required
-									   placeholder="Enter name*" value="<?= e_attr($user->name ?? '') ?>">
-							</div>
-							<div class="form-group">
-								<label class="sr-only" for="enq_email">Email</label>
-								<input id="enq_email" type="email" name="enquiry_email" class="form-control" required
-									   placeholder="Enter email*" value="<?= e_attr($user->email_id ?? '') ?>">
-							</div>
-							<div class="form-group">
-								<label class="sr-only" for="enq_phone">Phone</label>
-								<input id="enq_phone" type="tel" name="enquiry_mobile" class="form-control" required
-									   placeholder="Enter mobile number*" pattern="[0-9+\-\s()]{7,20}"
-									   title="7 to 20 characters: digits, spaces, + ( ) and - are allowed"
-									   value="<?= e_attr($user->mobile_number ?? '') ?>">
-							</div>
-							<div class="form-group">
-								<label class="sr-only" for="enq_msg">Your message</label>
-								<textarea id="enq_msg" name="enquiry_message" class="form-control" rows="3" placeholder="What do you need a quote for?"></textarea>
-							</div>
-							<button type="submit" id="detail_enquiry_submit" name="enquiry_submit" class="p411-btn p411-btn--block">Send enquiry</button>
-						</form>
+					<form method="post" name="detail_enquiry_form" id="detail_enquiry_form" data-validate
+						  action="<?= base_url('user/add-enquiry/listing_details/' . rawurlencode($ld_slug)) ?>">
+						<input type="hidden" name="listing_id" value="<?= (int) ($listing->listing_id ?? 0) ?>">
+						<input type="hidden" name="receiving_user_id" value="<?= (int) ($listing->user_id ?? 0) ?>">
+						<input type="hidden" name="enquiry_sender_id" value="<?= (int) $logged_id ?>">
+						<input type="hidden" name="enquiry_source" value="<?= e_attr($ld_name) ?>">
+						<input type="hidden" name="enquiry_type" value="listing">
+
+						<div class="form-group">
+							<label class="sr-only" for="enq_name">Your name</label>
+							<input id="enq_name" type="text" name="enquiry_name" class="form-control" required maxlength="100"
+								   placeholder="Enter name*" value="<?= e_attr($__enq_val('enquiry_name', $user->name ?? '')) ?>">
+							<?php if (!empty($__enq_bad['enquiry_name'])): ?>
+								<small class="p411-form__err"><?= e($__enq_bad['enquiry_name']) ?></small>
+							<?php endif; ?>
+						</div>
+						<div class="form-group">
+							<label class="sr-only" for="enq_email">Email</label>
+							<input id="enq_email" type="email" name="enquiry_email" class="form-control" required maxlength="190"
+								   placeholder="Enter email*" value="<?= e_attr($__enq_val('enquiry_email', $user->email_id ?? '')) ?>">
+							<?php if (!empty($__enq_bad['enquiry_email'])): ?>
+								<small class="p411-form__err"><?= e($__enq_bad['enquiry_email']) ?></small>
+							<?php endif; ?>
+						</div>
+						<div class="form-group">
+							<label class="sr-only" for="enq_phone">Phone</label>
+							<input id="enq_phone" type="tel" name="enquiry_mobile" class="form-control" required
+								   placeholder="Enter mobile number*" pattern="[0-9+\-\s()]{7,20}"
+								   title="7 to 20 characters: digits, spaces, + ( ) and - are allowed"
+								   value="<?= e_attr($__enq_val('enquiry_mobile', $user->mobile_number ?? '')) ?>">
+							<?php if (!empty($__enq_bad['enquiry_mobile'])): ?>
+								<small class="p411-form__err"><?= e($__enq_bad['enquiry_mobile']) ?></small>
+							<?php endif; ?>
+						</div>
+						<div class="form-group">
+							<label class="sr-only" for="enq_msg">Your message</label>
+							<textarea id="enq_msg" name="enquiry_message" class="form-control" rows="3" maxlength="5000"
+									  placeholder="What do you need a quote for?"><?= e($__enq_val('enquiry_message')) ?></textarea>
+							<?php if (!empty($__enq_bad['enquiry_message'])): ?>
+								<small class="p411-form__err"><?= e($__enq_bad['enquiry_message']) ?></small>
+							<?php endif; ?>
+						</div>
+						<button type="submit" id="detail_enquiry_submit" name="enquiry_submit" class="p411-btn p411-btn--block">Send enquiry</button>
+					</form>
+
+					<?php if (empty($logged_id)): ?>
+						<p class="p411-form__hint" style="margin:12px 0 0;">
+							<a href="<?= e_url(base_url('login')) ?>">Sign in</a> first and we&rsquo;ll fill your details in
+							and keep the reply with your account.
+						</p>
+					<?php endif; ?>
+					<?php if ($show_phone): ?>
+						<p class="p411-form__hint" style="margin:8px 0 0;">In a hurry? Call <a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) ?>"><?= e($listing->listing_mobile) ?></a>.</p>
 					<?php endif; ?>
 				</div>
 
@@ -858,8 +912,10 @@ $ld_stars = function ($value) {
 			});
 		});
 
-		// Smooth-scroll the sub-nav without losing the sticky offset.
-		Array.prototype.forEach.call(document.querySelectorAll('.p411-ld__nav a[href^="#"], .p411-ld a[href="#write-review"]'), function (link) {
+		// Smooth-scroll the sub-nav and the hero's own anchors without losing
+		// the sticky offset. The hero selector covers "be the first" and
+		// "Get a quote", which both jump past the fold.
+		Array.prototype.forEach.call(document.querySelectorAll('.p411-ld__nav a[href^="#"], .p411-ld__hero a[href^="#"], .p411-ld a[href="#write-review"]'), function (link) {
 			link.addEventListener('click', function (e) {
 				var target = document.getElementById(this.getAttribute('href').slice(1));
 				if (!target) return;

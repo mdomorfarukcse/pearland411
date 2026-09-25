@@ -239,60 +239,34 @@ $(document).ready(function () {
 // Blog Edit Form validation ends
 
 
-<!--All Listing page Enquiry Form Ajax Call And Validation starts-->
-
-$("#all_enquiry_submit").click(function() {
-
-    $("#all_enquiry_form").validate({
-        rules: {
-            enquiry_name: {required: true},
-            enquiry_email: {required: true, email: true},
-            enquiry_mobile: {required: true}
-
-        },
-        messages: {
-
-            enquiry_name: {required: "Name is Required"},
-            enquiry_email: {required: "Email ID is Required"},
-            enquiry_mobile: {required: "Mobile Number is Required"}
-        },
-
-        submitHandler: function (form) { // for demo
-            //form.submit();
-
-            if(webpage_full_link != null){
-                var link = webpage_full_link +'enquiry_submit.html';
-            }else{
-                var link = 'enquiry_submit.html';
-            }
-            
-            $.ajax({
-                type: "POST",
-                data: $("#all_enquiry_form").serialize(),
-                url: link,
-                cache: true,
-                success: function (html) {
-                    // alert(html);
-                    if (html == 1) {
-                        $("#enq_success").show();
-                        $("#all_enquiry_form")[0].reset();
-                    } else {
-                        if (html == 3) {
-                            $("#enq_same").show();
-                            $("#all_enquiry_form")[0].reset();
-                        }else {
-                            $("#enq_fail").show();
-                            $("#all_enquiry_form")[0].reset();
-                        }
-                    }
-
-                }
-
-            })
-        }
-    });
-});
-<!--All Listing page Enquiry Form Ajax Call And Validation ends-->
+/*
+ * The eight jQuery-validate blocks that used to live here are gone.
+ *
+ * Every one of them hijacked a real form's submit button to POST to
+ * `enquiry_submit.html`, `review_submit.html` or `claim_submit.html` --
+ * flat-file endpoints from the bought theme that have never existed in
+ * this CodeIgniter app -- and each built that URL from `webpage_full_link`,
+ * a variable no page defines. So the handler threw a ReferenceError before
+ * it got as far as the 404.
+ *
+ * What that broke, on every page that renders one of these forms:
+ *
+ *   #detail_enquiry_submit  the "Get a quote" form on /listing-details,
+ *                           /classifieds-details, /house-details and
+ *                           /rental-details
+ *   #review_submit          the "Write a review" form on /listing-details
+ *   #home_slide_enquiry_submit  the Help & Support slide-out in footer.php,
+ *                           which is to say every page on the site
+ *
+ * All of those post to live CodeIgniter endpoints (`user/add-enquiry/...`,
+ * `user/submit_review`, `/contact-submit`) and the endpoints validate their
+ * own input. Client-side validation now comes from the markup, via
+ * assets/js/form-validate.js -- one implementation that cannot drift from
+ * what the server accepts.
+ *
+ * Someone had already commented out the `#popup_claim_submit` binding for
+ * the same reason; the rest were left live.
+ */
 
 // User Ad Request Form validation starts
 $(document).ready(function () {
@@ -325,121 +299,8 @@ $(document).ready(function () {
 // User Ad Request Form validation ends
 
 
-<!--Home page slide Enquiry Form Ajax Call And Validation starts-->
-
-$("#home_slide_enquiry_submit").click(function() {
-
-    $("#home_slide_enquiry_form").validate({
-        rules: {
-            enquiry_name: {required: true},
-            enquiry_email: {required: true, email: true},
-            enquiry_mobile: {required: true}
-
-        },
-        messages: {
-
-            enquiry_name: {required: "Name is Required"},
-            enquiry_email: {required: "Email ID is Required"},
-            enquiry_mobile: {required: "Mobile Number is Required"}
-        },
-
-        submitHandler: function (form) { // for demo
-
-            $("#home_slide_enquiry_submit").html("Please Wait....");// or: this.value = "processing";
-            $("#home_slide_enquiry_submit").prop('disabled', true); // no double submit ;)
-
-            //form.submit();
-
-            if(webpage_full_link != null){
-                var link = webpage_full_link +'enquiry_submit.html';
-            }else{
-                var link = 'enquiry_submit.html';
-            }
-            
-            $.ajax({
-                type: "POST",
-                data: $("#home_slide_enquiry_form").serialize(),
-                url: link,
-                cache: true,
-                success: function (html) {
-                    $("#home_slide_enquiry_submit").html("Submit Requirements");// or: this.value = "processing";
-                    $("#home_slide_enquiry_submit").prop('disabled', false); // no double submit ;)
-                    if (html == 1) {
-                        $("#home_slide_enq_success").show();
-                        $("#home_slide_enquiry_form")[0].reset();
-                    } else {
-                        if (html == 3) {
-                            $("#home_slide_enq_same").show();
-                            $("#home_slide_enquiry_form")[0].reset();
-                        }else {
-                            $("#home_slide_enq_fail").show();
-                            $("#home_slide_enquiry_form")[0].reset();
-                        }
-                    }
-
-                }
-
-            })
-        }
-    });
-});
-<!--Home page slide Enquiry Form Ajax Call And Validation ends-->
 
 
-<!--Home page Enquiry Form Ajax Call And Validation starts-->
-
-$("#home_enquiry_submit").click(function() {
-
-    $("#home_enquiry_form").validate({
-        rules: {
-            enquiry_name: {required: true},
-            enquiry_email: {required: true, email: true},
-            enquiry_mobile: {required: true}
-
-        },
-        messages: {
-
-            enquiry_name: {required: "Name is Required"},
-            enquiry_email: {required: "Email ID is Required"},
-            enquiry_mobile: {required: "Mobile Number is Required"}
-        },
-
-        submitHandler: function (form) { // for demo
-            //form.submit();
-
-            if(webpage_full_link != null){
-                var link = webpage_full_link +'enquiry_submit.html';
-            }else{
-                var link = 'enquiry_submit.html';
-            }
-            
-            $.ajax({
-                type: "POST",
-                data: $("#home_enquiry_form").serialize(),
-                url: link,
-                cache: true,
-                success: function (html) {
-                    // alert(html);
-                    if (html == 1) {
-                        $("#home_enq_success").show();
-                        $("#home_enquiry_form")[0].reset();
-                    } else {
-                        if (html == 3) {
-                            $("#home_enq_same").show();
-                            $("#home_enquiry_form")[0].reset();
-                        }else {
-                            $("#home_enq_fail").show();
-                            $("#home_enquiry_form")[0].reset();
-                        }
-                    }
-
-                }
-
-            })
-        }
-    });
-});
-<!--Home page Enquiry Form Ajax Call And Validation ends-->
 
 
 // product Form validation starts
@@ -560,229 +421,10 @@ $(document).ready(function () {
 
 
 //
-<!--Review Form Ajax Call And Validation starts-->
-
-$("#review_submit").click(function () {
-    $("#review_form").validate({
-        rules: {
-            rating: {required: true},
-            review_name: {required: true},
-            review_email: {required: true, email: true},
-            review_mobile: {required: true},
-            review_message: {required: true}
-
-        },
-        messages: {
-            rating: {required: "Rating is Required"},
-            review_name: {required: "Name is Required"},
-            review_email: {required: "Email ID is Required"},
-            review_mobile: {required: "Mobile Number is Required"},
-            review_message: {required: "Write Some review"}
-        },
-
-        submitHandler: function (form) { // for demo
-            //form.submit();
-
-            if(webpage_full_link != null){
-                var link = webpage_full_link +'review_submit.html';
-            }else{
-                var link = 'review_submit.html';
-            }
-            
-            $.ajax({
-                type: "POST",
-                data: $("#review_form").serialize(),
-                url: link,
-                cache: true,
-                success: function (html) {
-                    //  alert(html);
-                    if (html == 1) {
-                        $("#review_success").show();
-                        $("#review_form")[0].reset();
-                    } else {
-                        $("#review_fail").show();
-                        $("#review_form")[0].reset();
-                    }
-
-                }
-
-            })
-        }
-    });
-});
-<!--Review Form Ajax Call And Validation ends-->
-
-<!--Pop Up Claim Form Detail Page Ajax Call And Validation starts-->
-// $("#popup_claim_submit").click(function () {
-$('#popup_claim_form').click(function() {
-    // evt.preventDefault();
 
 
-    $("#popup_claim_form").validate({
-        rules: {
-            enquiry_name: {required: true},
-            enquiry_image: {required: true},
-            enquiry_email: {required: true, email: true},
-            enquiry_mobile: {required: true}
-
-        },
-        messages: {
-
-            enquiry_name: {required: "Name is Required"},
-            enquiry_image: {required: "Identification Proof is Required"},
-            enquiry_email: {required: "Your Business Email ID is Required"},
-            enquiry_mobile: {required: "Mobile Number is Required"}
-        },
-
-        submitHandler: function (form) { // for demo
-            //form.submit();
-            var formData = new FormData(form);
-
-            if(webpage_full_link != null){
-                var link = webpage_full_link +'claim_submit.html';
-            }else{
-                var link = 'claim_submit.html';
-            }
-
-           // alert(formData);
-            
-            $.ajax({
-                type: "POST",
-                // data: $("#popup_claim_form").serialize(),
-                url: link,
-                data:formData,
-                cache:false,
-                contentType: false,
-                processData: false,
-                success: function (html) {
-                     //alert(html);
-                    if (html == 1) {
-                        $("#pop_claim_success").show();
-                        $("#popup_claim_form")[0].reset();
-                    } else {
-                        if (html == 3) {
-                            $("#pop_claim_same").show();
-                            $("#popup_claim_form")[0].reset();
-                        } else {
-                            $("#pop_claim_fail").show();
-                            $("#popup_claim_form")[0].reset();
-                        }
-                    }
-
-                }
-
-            })
-        }
-    });
-});
-<!--Pop Up Claim Form Detail Page Ajax Call And Validation ends-->
 
 
-<!--Pop Up Enquiry Form Detail Page Ajax Call And Validation starts-->
-$("#popup_enquiry_submit").click(function () {
-    $("#popup_enquiry_form").validate({
-        rules: {
-            enquiry_name: {required: true},
-            enquiry_email: {required: true, email: true},
-            enquiry_mobile: {required: true}
-
-        },
-        messages: {
-
-            enquiry_name: {required: "Name is Required"},
-            enquiry_email: {required: "Email ID is Required"},
-            enquiry_mobile: {required: "Mobile Number is Required"}
-        },
-
-        submitHandler: function (form) { // for demo
-            //form.submit();
-            
-            if(webpage_full_link != null){
-                var link = webpage_full_link +'enquiry_submit.html';
-            }else{
-                var link = 'enquiry_submit.html';
-            }
-            
-            $.ajax({
-                type: "POST",
-                data: $("#popup_enquiry_form").serialize(),
-                url: link,
-                cache: true,
-                success: function (html) {
-                    // alert(html);
-                    if (html == 1) {
-                        $("#pop_enq_success").show();
-                        $("#popup_enquiry_form")[0].reset();
-                    } else {
-                        if (html == 3) {
-                            $("#pop_enq_same").show();
-                            $("#popup_enquiry_form")[0].reset();
-                        } else {
-                            $("#pop_enq_fail").show();
-                            $("#popup_enquiry_form")[0].reset();
-                        }
-                    }
-
-                }
-
-            })
-        }
-    });
-});
-<!--Pop Up Enquiry Form Detail Page Ajax Call And Validation ends-->
-
-<!-- Enquiry Form Detail Page Ajax Call And Validation starts-->
-$("#detail_enquiry_submit").click(function () {
-    $("#detail_enquiry_form").validate({
-        rules: {
-            enquiry_name: {required: true},
-            enquiry_email: {required: true, email: true},
-            enquiry_mobile: {required: true}
-
-        },
-        messages: {
-
-            enquiry_name: {required: "Name is Required"},
-            enquiry_email: {required: "Email ID is Required"},
-            enquiry_mobile: {required: "Mobile Number is Required"}
-        },
-
-        submitHandler: function (form) { // for demo
-            //form.submit();
-
-            if(webpage_full_link != null){
-                var link = webpage_full_link +'enquiry_submit.html';
-            }else{
-                var link = 'enquiry_submit.html';
-            }
-            
-            $.ajax({
-                type: "POST",
-                data: $("#detail_enquiry_form").serialize(),
-                url: link,
-                cache: true,
-                success: function (html) {
-                    // alert(html);
-                    if (html == 1) {
-                        $("#detail_enq_success").show();
-                        $("#detail_enquiry_form")[0].reset();
-                    } else {
-                        if (html == 3) {
-                            $("#detail_enq_same").show();
-                            $("#detail_enquiry_form")[0].reset();
-                        } else {
-                            $("#detail_enq_fail").show();
-                            $("#detail_enquiry_form")[0].reset();
-                        }
-                    }
-
-                }
-
-            })
-        }
-    });
-});
-<!--Enquiry Form Detail Page Ajax Call And Validation ends-->
 
 // Promotion Listing Form validation starts
 $(document).ready(function () {
@@ -835,60 +477,6 @@ $(document).ready(function () {
 
 
 
-<!--All product page Enquiry Form Ajax Call And Validation starts-->
-
-$(".all_product_enquiry_submit").click(function() {
-
-    $(".all_product_enquiry_form").validate({
-        rules: {
-            enquiry_name: {required: true},
-            enquiry_email: {required: true, email: true},
-            enquiry_mobile: {required: true}
-
-        },
-        messages: {
-
-            enquiry_name: {required: "Name is Required"},
-            enquiry_email: {required: "Email ID is Required"},
-            enquiry_mobile: {required: "Mobile Number is Required"}
-        },
-
-        submitHandler: function (form) { // for demo
-            //form.submit();
-
-            if(webpage_full_link != null){
-                var link = webpage_full_link +'enquiry_submit.html';
-            }else{
-                var link = 'enquiry_submit.html';
-            }
-
-            $.ajax({
-                type: "POST",
-                data: $(".all_product_enquiry_form").serialize(),
-                url: link,
-                cache: true,
-                success: function (html) {
-                    // alert(html);
-                    if (html == 1) {
-                        $("#enq_success").show();
-                        $(".all_product_enquiry_form")[0].reset();
-                    } else {
-                        if (html == 3) {
-                            $("#enq_same").show();
-                            $(".all_product_enquiry_form")[0].reset();
-                        }else {
-                            $("#enq_fail").show();
-                            $(".all_product_enquiry_form")[0].reset();
-                        }
-                    }
-
-                }
-
-            })
-        }
-    });
-});
-<!--All Listing page Enquiry Form Ajax Call And Validation ends-->
 
 // Installation Form validation starts
 $(document).ready(function () {

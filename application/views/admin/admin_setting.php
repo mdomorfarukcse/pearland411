@@ -258,6 +258,24 @@ $s = isset($settings) ? $settings : array();
 			</div>
 		</section>
 
+		<!-- Deals &amp; coupons ------------------------------------------- -->
+		<section class="setting-card">
+			<h2>Deals &amp; coupons</h2>
+			<p class="hint">
+				Members post their own offers at <a href="<?= base_url('user/my-coupons') ?>">My deals</a>,
+				and they appear on <a href="<?= base_url('coupons') ?>">/coupons</a>, on the business&rsquo;s
+				listing and on the homepage. It is free with any published listing, so this is the only
+				ceiling on it &mdash; a spam limit, not a package entitlement. Expired deals drop off by
+				themselves and do not count.
+			</p>
+			<div class="setting-row">
+				<label for="coupon_max_per_member">Live deals per member<small>Default 10.</small></label>
+				<input type="number" id="coupon_max_per_member" name="coupon_max_per_member"
+					   min="1" max="100" step="1"
+					   value="<?= e_attr(($s['coupon_max_per_member'] ?? '') !== '' ? $s['coupon_max_per_member'] : '10') ?>">
+			</div>
+		</section>
+
 		<!-- Billing ------------------------------------------------------- -->
 		<section class="setting-card">
 			<h2>Billing</h2>

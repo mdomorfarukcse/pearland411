@@ -1,81 +1,39 @@
-	<!-- START -->
-	<!--PRICING DETAILS-->
-	<section class=" login-reg">
-		<div class="container">
-			<div class="row">
-				<div class="login-main add-list">
-					<div class="log-bor">&nbsp;</div> <span class="steps">Add new Coupons</span>
-			        <?php if($this->session->flashdata('message')){ ?>
-			            <div class="log-suc" ><p><?= $this->session->flashdata('message') ?></p></div>
-			        <?php } ?>					
-					<div class="log">
-						<div class="login">
-							<h4>Add New Coupons</h4>
-							<form name="coupon_form" id="coupon_form" enctype="multipart/form-data" method="post" action="<?= base_url('user/add-coupon');?>" class="listing_form_1">
-								<!--FILED START-->
-								<div class="row">
-									<div class="col-md-12">
-										<div class="form-group">
-											<input type="text" class="form-control" name="coupon_name" placeholder="Coupon name" value="<?= set_value('coupon_name');?>" required>
-										</div>
-											<span class="text-danger"><?= form_error("coupon_name")?form_error("coupon_name"):'' ;?></span>
-									</div>
-								</div>
-								<!--FILED END-->
-								<!--FILED START-->
-								<div class="row">
-									<div class="col-md-12">
-										<div class="form-group">
-											<input type="text" class="form-control" name="coupon_code" placeholder="Offer code" value="<?= set_value('coupon_code');?>" required>
-										</div>
-											<span class="text-danger"><?= form_error("coupon_code")?form_error("coupon_code"):'' ;?></span>
-									</div>
-								</div>
-								<!--FILED END-->
-								<!--FILED START-->
-								<div class="row">
-									<div class="col-md-12">
-										<div class="form-group">
-											<input type="text" class="form-control" name="coupon_link" value="<?= set_value('coupon_link');?>" placeholder="Website link(if online offer)">
-										</div>
-											<span class="text-danger"><?= form_error("coupon_link")?form_error("coupon_link"):'' ;?></span>
-									</div>
-								</div>
-								<!--FILED END-->
-								<!--FILED START-->
-								<div class="row">
-									<div class="col-md-12">
-										<div class="form-group">
-											<label>Brand logo or Offer image(Recommended size 65 X 65)</label>
-											<input type="file" required="required" name="coupon_image" class="form-control" placeholder="Offer image">
-										</div>
-									</div>
-								</div>
-								<!--FILED END-->
-								<!--FILED START-->
-								<div class="row">
-									<div class="col-md-6">
-										<div class="form-group">
-											<label>Start date</label>
-											<input type="date" class="form-control" value="<?= set_value('coupon_start_date');?>" name="coupon_start_date" required>
-										</div>
-											<span class="text-danger"><?= form_error("coupon_start_date")?form_error("coupon_start_date"):'' ;?></span>
-									</div>
-									<div class="col-md-6">
-										<div class="form-group">
-											<label>End date</label>
-											<input type="date" class="form-control" value="<?= set_value('coupon_end_date');?>" name="coupon_end_date" required>
-										</div>
-											<span class="text-danger"><?= form_error("coupon_end_date")?form_error("coupon_end_date"):'' ;?></span>
-									</div>
-								</div>
-								<!--FILED END-->
-								<button type="submit" name="coupon_submit" class="btn btn-primary">Submit</button>
-							</form>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-	</section>
-	<!--END PRICING DETAILS-->
+<?php
+/**
+ * /user/add-coupon — post a deal.
+ *
+ * From User::add_coupon(): $listings (non-empty; the controller redirects
+ * otherwise), plus $coupon_errors / $coupon_old on a rejected submit.
+ *
+ * This view has existed since the theme shipped and posted to
+ * `user/add-coupon`, a method nobody had written. It is rewritten here against
+ * the method that now exists.
+ */
+$listings = (isset($listings) && is_array($listings)) ? $listings : array();
+?>
+<!--CENTER SECTION-->
+<div class="ud-cen">
+	<div class="log-bor">&nbsp;</div> <span class="udb-inst">Post a deal</span>
+	<div class="ud-cen-s2">
+		<h2>Post a deal</h2>
+
+		<p style="margin:10px 0 18px;color:#5A6072;font-size:14px;">
+			It goes live straight away on
+			<a href="<?= e_url(base_url('coupons')) ?>">the deals page</a>, on your listing and on the
+			homepage, and comes off by itself on the end date.
+			<?php if (count($listings) === 1): ?>
+				Posting as <strong><?= e($listings[0]->listing_name ?? 'your business') ?></strong>.
+			<?php endif; ?>
+		</p>
+
+		<form name="coupon_form" id="coupon_form" method="post" enctype="multipart/form-data" data-validate
+			  action="<?= e_url(base_url('user/add-coupon')) ?>">
+
+			<?php include APPPATH . 'views/partials/coupon_form_fields.php'; ?>
+
+			<button type="submit" name="coupon_submit" class="btn btn-primary">Post the deal</button>
+			<a href="<?= e_url(base_url('user/my-coupons')) ?>" class="btn btn-link">Cancel</a>
+		</form>
+	</div>
+</div>
+<!--END CENTER SECTION-->

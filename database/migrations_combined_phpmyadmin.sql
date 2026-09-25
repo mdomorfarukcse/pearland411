@@ -1385,6 +1385,418 @@ SET @s := IF(@t = 1 AND @c = 0,
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
+-- ============================================================
+-- 0031_category_dedupe.sql
+-- ============================================================
+-- Merges categories that are the same category written two ways:
+-- "Arts & Entertainment" beside "Arts and Entertainment",
+-- "Community & Government" (empty) beside "Community and
+-- Government" (14 businesses). Two URLs, two counts, one kind of
+-- business, with the listings split between them.
+--
+-- Same name once normalised ONLY — lower-cased, "&" read as "and",
+-- punctuation out, whitespace collapsed. Judgement calls like
+-- Finance / Financial Services are deliberately left alone;
+-- /admin/all_listing_category has a Merge control for those.
+--
+-- The survivor is the one with the most published listings, lowest
+-- id breaking the tie. Everything is re-pointed at it, the merge is
+-- recorded in `listing_category_merges`, then the duplicate row is
+-- deleted.
+--
+-- The WHILE loop in the per-file version is unrolled into a REPLACE
+-- chain here, and the scratch tables are ordinary tables (the
+-- winner is chosen with a correlated read of the table being
+-- scanned, which MySQL refuses on a TEMPORARY table).
+--
+-- Idempotent: a second run finds no two categories sharing a
+-- normalised name and does nothing.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS `listing_category_merges` (
+    `id`                 INT(11) NOT NULL AUTO_INCREMENT,
+    `from_category_id`   INT(11) NOT NULL,
+    `from_category_name` VARCHAR(255) NULL DEFAULT NULL,
+    `from_category_slug` VARCHAR(191) NULL DEFAULT NULL,
+    `to_category_id`     INT(11) NOT NULL,
+    `listings_moved`     INT(11) NOT NULL DEFAULT 0,
+    `merged_at`          DATETIME NOT NULL,
+    PRIMARY KEY (`id`),
+    KEY `lcm_from_idx` (`from_category_id`),
+    KEY `lcm_to_idx`   (`to_category_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  COMMENT='Categories merged by migration 0031 / the admin Merge tool';
+
+DROP TABLE IF EXISTS `p411_cat_loser`;
+DROP TABLE IF EXISTS `p411_cat_winner`;
+DROP TABLE IF EXISTS `p411_cat_rank`;
+DROP TABLE IF EXISTS `p411_cat_key`;
+
+CREATE TABLE `p411_cat_key` (
+    `category_id` INT(11) NOT NULL,
+    `merge_key`   VARCHAR(191) NULL,
+    PRIMARY KEY (`category_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- pearland_merge_key() in SQL: lowercase, "&"/"+" to the word "and",
+-- every other punctuation character to a space, spaces collapsed, trimmed.
+INSERT INTO `p411_cat_key` (`category_id`, `merge_key`)
+SELECT `category_id`, TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LEFT(LOWER(TRIM(`category_name`)), 191), '&', ' and '), '+', ' and '), '!', ' '), '"', ' '), '#', ' '), '$', ' '), '%', ' '), '''', ' '), '(', ' '), ')', ' '), '*', ' '), '+', ' '), ',', ' '), '-', ' '), '.', ' '), '/', ' '), ':', ' '), ';', ' '), '<', ' '), '=', ' '), '>', ' '), '?', ' '), '@', ' '), '[', ' '), '\\', ' '), ']', ' '), '^', ' '), '_', ' '), '`', ' '), '{', ' '), '|', ' '), '}', ' '), '~', ' '), '  ', ' '), '  ', ' '), '  ', ' '), '  ', ' '))
+  FROM `listing_categories`;
+
+DELETE FROM `p411_cat_key` WHERE `merge_key` IS NULL OR `merge_key` = '';
+
+CREATE TABLE `p411_cat_rank` (
+    `category_id`   INT(11) NOT NULL,
+    `merge_key`     VARCHAR(191) NULL,
+    `listing_count` INT(11) NOT NULL DEFAULT 0,
+    PRIMARY KEY (`category_id`),
+    KEY `p411_cr_key` (`merge_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `p411_cat_rank` (`category_id`, `merge_key`, `listing_count`)
+SELECT k.`category_id`, k.`merge_key`,
+       (SELECT COUNT(*) FROM `listings` l
+         WHERE l.`category_id` = k.`category_id`
+           AND (l.`is_deleted` IS NULL OR l.`is_deleted` = 0)
+           AND l.`listing_status` = 1)
+  FROM `p411_cat_key` k;
+
+CREATE TABLE `p411_cat_winner` (
+    `merge_key`   VARCHAR(191) NOT NULL,
+    `category_id` INT(11) NOT NULL,
+    PRIMARY KEY (`merge_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `p411_cat_winner` (`merge_key`, `category_id`)
+SELECT r.`merge_key`,
+       (SELECT w.`category_id` FROM `p411_cat_rank` w
+         WHERE w.`merge_key` = r.`merge_key`
+         ORDER BY w.`listing_count` DESC, w.`category_id` ASC
+         LIMIT 1)
+  FROM `p411_cat_rank` r
+ GROUP BY r.`merge_key`
+HAVING COUNT(*) > 1;
+
+CREATE TABLE `p411_cat_loser` (
+    `from_category_id` INT(11) NOT NULL,
+    `to_category_id`   INT(11) NOT NULL,
+    PRIMARY KEY (`from_category_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `p411_cat_loser` (`from_category_id`, `to_category_id`)
+SELECT r.`category_id`, w.`category_id`
+  FROM `p411_cat_rank` r
+  JOIN `p411_cat_winner` w ON w.`merge_key` = r.`merge_key`
+ WHERE r.`category_id` <> w.`category_id`;
+
+-- Recorded before anything moves.
+INSERT INTO `listing_category_merges`
+    (`from_category_id`, `from_category_name`, `from_category_slug`,
+     `to_category_id`, `listings_moved`, `merged_at`)
+SELECT lc.`category_id`, lc.`category_name`, lc.`category_slug`, p.`to_category_id`,
+       (SELECT COUNT(*) FROM `listings` l WHERE l.`category_id` = lc.`category_id`),
+       NOW()
+  FROM `p411_cat_loser` p
+  JOIN `listing_categories` lc ON lc.`category_id` = p.`from_category_id`;
+
+-- The survivor inherits a slug only when it has none: rewriting a live slug
+-- breaks every link already pointing at it.
+UPDATE `listing_categories` win
+  JOIN `p411_cat_loser` p        ON p.`to_category_id` = win.`category_id`
+  JOIN `listing_categories` lose ON lose.`category_id` = p.`from_category_id`
+   SET win.`category_slug` = lose.`category_slug`
+ WHERE (win.`category_slug` IS NULL OR win.`category_slug` = '')
+   AND lose.`category_slug` IS NOT NULL AND lose.`category_slug` <> '';
+
+UPDATE `listings` l
+  JOIN `p411_cat_loser` p ON p.`from_category_id` = l.`category_id`
+   SET l.`category_id` = p.`to_category_id`;
+
+-- listing_sub_categories.category_id — guarded, the column is not on every install.
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listing_sub_categories'
+             AND COLUMN_NAME = 'category_id');
+SET @s := IF(@c = 1,
+    'UPDATE `listing_sub_categories` s JOIN `p411_cat_loser` p ON p.`from_category_id` = s.`category_id` SET s.`category_id` = p.`to_category_id`',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ads.category_id — category-targeted bookings, added by 0024.
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ads'
+             AND COLUMN_NAME = 'category_id');
+SET @s := IF(@c = 1,
+    'UPDATE `ads` a JOIN `p411_cat_loser` p ON p.`from_category_id` = a.`category_id` SET a.`category_id` = p.`to_category_id`',
+    'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+DELETE lc FROM `listing_categories` lc
+  JOIN `p411_cat_loser` p ON p.`from_category_id` = lc.`category_id`;
+
+DROP TABLE IF EXISTS `p411_cat_loser`;
+DROP TABLE IF EXISTS `p411_cat_winner`;
+DROP TABLE IF EXISTS `p411_cat_rank`;
+DROP TABLE IF EXISTS `p411_cat_key`;
+
+
+-- ============================================================
+-- 0032_listing_dedupe.sql
+-- ============================================================
+-- Hides businesses the directory holds twice — the cause of
+-- "/all_listing/shopping-retail says 42 businesses and the first
+-- page repeats the same shops".
+--
+-- The same name once punctuation and case are out, AND one hard
+-- identifier in common: the phone number (digits only, last ten),
+-- the street address, or the website host. Name alone is never
+-- enough — Pearland has more than one Subway.
+--
+-- A listing with an owner (`user_id` > 0) is NEVER hidden: claimed
+-- listings are somebody's property, quite possibly somebody's paid
+-- package. Where two claimed rows collide both are left alone, and
+-- /admin/all_listings shows the pair for a person to decide.
+--
+-- The loser is soft-deleted (`is_deleted` = 1, `deleted_date` =
+-- NOW()) — nothing is erased, reviews and enquiries stay attached,
+-- and every action is recorded in `listing_duplicate_merges` first.
+--
+-- ROLLBACK
+--   UPDATE `listings` l
+--     JOIN `listing_duplicate_merges` m ON m.`listing_id` = l.`listing_id`
+--      SET l.`is_deleted` = 0, l.`deleted_date` = NULL;
+--
+-- RUN AFTER 0031: two copies of one shop filed under "Beauty &
+-- Personal Care" and "Beauty and Personal Care" have to become one
+-- category first.
+--
+-- Idempotent: a soft-deleted row is out of scope for every later
+-- pass and for a second run.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS `listing_duplicate_merges` (
+    `id`               INT(11) NOT NULL AUTO_INCREMENT,
+    `listing_id`       INT(11) NOT NULL COMMENT 'the row that was hidden',
+    `kept_listing_id`  INT(11) NOT NULL COMMENT 'the row it duplicated',
+    `listing_name`     VARCHAR(255) NULL DEFAULT NULL,
+    `matched_on`       VARCHAR(16)  NULL DEFAULT NULL COMMENT 'phone | address | website',
+    `merged_at`        DATETIME NOT NULL,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `ldm_listing_uniq` (`listing_id`),
+    KEY `ldm_kept_idx` (`kept_listing_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  COMMENT='Listings hidden as duplicates by migration 0032 / the admin Duplicates screen';
+
+-- listings.deleted_date — added by 0022; guard-add for an install that skipped it.
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings'
+             AND COLUMN_NAME = 'deleted_date');
+SET @s := IF(@c = 0, 'ALTER TABLE `listings` ADD COLUMN `deleted_date` DATETIME NULL DEFAULT NULL', 'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+DROP TABLE IF EXISTS `p411_dup_loser`;
+DROP TABLE IF EXISTS `p411_dup_winner`;
+DROP TABLE IF EXISTS `p411_dup_key`;
+
+CREATE TABLE `p411_dup_key` (
+    `listing_id`   INT(11) NOT NULL,
+    `name_key`     VARCHAR(191) NULL,
+    `phone_key`    VARCHAR(64)  NULL,
+    `address_key`  VARCHAR(191) NULL,
+    `website_key`  VARCHAR(191) NULL,
+    `match_key`    VARCHAR(255) NULL,
+    `owned`        TINYINT(1)   NOT NULL DEFAULT 0,
+    `promoted`     TINYINT(1)   NOT NULL DEFAULT 0,
+    `has_image`    TINYINT(1)   NOT NULL DEFAULT 0,
+    `descr_len`    INT(11)      NOT NULL DEFAULT 0,
+    PRIMARY KEY (`listing_id`),
+    KEY `p411_dk_match` (`match_key`(191))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `p411_dup_key`
+    (`listing_id`, `name_key`, `phone_key`, `address_key`, `website_key`,
+     `owned`, `promoted`, `has_image`, `descr_len`)
+SELECT l.`listing_id`,
+       TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LEFT(LOWER(TRIM(COALESCE(l.`listing_name`, ''))), 191), '!', ' '), '"', ' '), '#', ' '), '$', ' '), '%', ' '), '&', ' '), '''', ' '), '(', ' '), ')', ' '), '*', ' '), '+', ' '), ',', ' '), '-', ' '), '.', ' '), '/', ' '), ':', ' '), ';', ' '), '<', ' '), '=', ' '), '>', ' '), '?', ' '), '@', ' '), '[', ' '), '\\', ' '), ']', ' '), '^', ' '), '_', ' '), '`', ' '), '{', ' '), '|', ' '), '}', ' '), '~', ' '), '  ', ' '), '  ', ' '), '  ', ' '), '  ', ' ')),
+       REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LEFT(COALESCE(l.`listing_mobile`, ''), 64), ' ', ''), '-', ''), '(', ''), ')', ''), '+', ''), '.', ''), '/', ''), '#', ''),
+       TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LEFT(LOWER(TRIM(COALESCE(l.`listing_address`, ''))), 191), '!', ' '), '"', ' '), '#', ' '), '$', ' '), '%', ' '), '&', ' '), '''', ' '), '(', ' '), ')', ' '), '*', ' '), '+', ' '), ',', ' '), '-', ' '), '.', ' '), '/', ' '), ':', ' '), ';', ' '), '<', ' '), '=', ' '), '>', ' '), '?', ' '), '@', ' '), '[', ' '), '\\', ' '), ']', ' '), '^', ' '), '_', ' '), '`', ' '), '{', ' '), '|', ' '), '}', ' '), '~', ' '), '  ', ' '), '  ', ' '), '  ', ' '), '  ', ' ')),
+       SUBSTRING_INDEX(REPLACE(REPLACE(REPLACE(LEFT(LOWER(TRIM(COALESCE(l.`listing_website`, ''))), 191), 'https://', ''), 'http://', ''), 'www.', ''), '/', 1),
+       CASE WHEN COALESCE(l.`user_id`, 0) > 0 THEN 1 ELSE 0 END,
+       CASE WHEN COALESCE(l.`featured_listing`, 0) > 0
+              OR COALESCE(l.`spotlight_listing`, 0) > 0 THEN 1 ELSE 0 END,
+       CASE WHEN COALESCE(l.`listing_image`, '') = '' THEN 0 ELSE 1 END,
+       CHAR_LENGTH(COALESCE(l.`listing_description`, ''))
+  FROM `listings` l
+ WHERE (l.`is_deleted` IS NULL OR l.`is_deleted` = 0);
+
+-- Anything still carrying a letter — an extension, a note — is not a number
+-- this can compare, so it sits pass 1 out.
+UPDATE `p411_dup_key` SET `phone_key` = NULL WHERE `phone_key` NOT REGEXP '^[0-9]+$';
+
+-- Last ten digits: a stored country code must not split one number in two.
+UPDATE `p411_dup_key` SET `phone_key` = RIGHT(`phone_key`, 10) WHERE `phone_key` IS NOT NULL;
+
+DELETE FROM `p411_dup_key` WHERE `name_key` IS NULL OR `name_key` = '';
+
+-- ---- pass 1: same name + same phone ----
+UPDATE `p411_dup_key`
+   SET `match_key` = CASE WHEN `phone_key` IS NOT NULL AND CHAR_LENGTH(`phone_key`) >= 7
+                          THEN CONCAT('p:', `name_key`, '|', `phone_key`) END;
+
+DROP TABLE IF EXISTS `p411_dup_winner`;
+CREATE TABLE `p411_dup_winner` (
+    `match_key`  VARCHAR(255) NOT NULL,
+    `listing_id` INT(11) NOT NULL,
+    KEY `p411_dw_match` (`match_key`(191))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `p411_dup_winner` (`match_key`, `listing_id`)
+SELECT k.`match_key`,
+       (SELECT w.`listing_id` FROM `p411_dup_key` w
+         WHERE w.`match_key` = k.`match_key`
+         ORDER BY w.`owned` DESC, w.`promoted` DESC, w.`has_image` DESC,
+                  w.`descr_len` DESC, w.`listing_id` ASC
+         LIMIT 1)
+  FROM `p411_dup_key` k
+ WHERE k.`match_key` IS NOT NULL
+ GROUP BY k.`match_key`
+HAVING COUNT(*) > 1;
+
+DROP TABLE IF EXISTS `p411_dup_loser`;
+CREATE TABLE `p411_dup_loser` (
+    `listing_id`      INT(11) NOT NULL,
+    `kept_listing_id` INT(11) NOT NULL,
+    PRIMARY KEY (`listing_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- `owned` = 0 only: a listing with an owner is never hidden automatically.
+INSERT INTO `p411_dup_loser` (`listing_id`, `kept_listing_id`)
+SELECT k.`listing_id`, w.`listing_id`
+  FROM `p411_dup_key` k
+  JOIN `p411_dup_winner` w ON w.`match_key` = k.`match_key`
+ WHERE k.`listing_id` <> w.`listing_id`
+   AND k.`owned` = 0;
+
+INSERT IGNORE INTO `listing_duplicate_merges`
+    (`listing_id`, `kept_listing_id`, `listing_name`, `matched_on`, `merged_at`)
+SELECT p.`listing_id`, p.`kept_listing_id`, l.`listing_name`, 'phone', NOW()
+  FROM `p411_dup_loser` p
+  JOIN `listings` l ON l.`listing_id` = p.`listing_id`;
+
+UPDATE `listings` l
+  JOIN `p411_dup_loser` p ON p.`listing_id` = l.`listing_id`
+   SET l.`is_deleted` = 1, l.`deleted_date` = NOW();
+
+DELETE k FROM `p411_dup_key` k
+  JOIN `p411_dup_loser` p ON p.`listing_id` = k.`listing_id`;
+
+-- ---- pass 2: same name + same address ----
+UPDATE `p411_dup_key`
+   SET `match_key` = CASE WHEN `address_key` IS NOT NULL AND CHAR_LENGTH(`address_key`) >= 6
+                          THEN CONCAT('a:', `name_key`, '|', `address_key`) END;
+
+DROP TABLE IF EXISTS `p411_dup_winner`;
+CREATE TABLE `p411_dup_winner` (
+    `match_key`  VARCHAR(255) NOT NULL,
+    `listing_id` INT(11) NOT NULL,
+    KEY `p411_dw_match` (`match_key`(191))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `p411_dup_winner` (`match_key`, `listing_id`)
+SELECT k.`match_key`,
+       (SELECT w.`listing_id` FROM `p411_dup_key` w
+         WHERE w.`match_key` = k.`match_key`
+         ORDER BY w.`owned` DESC, w.`promoted` DESC, w.`has_image` DESC,
+                  w.`descr_len` DESC, w.`listing_id` ASC
+         LIMIT 1)
+  FROM `p411_dup_key` k
+ WHERE k.`match_key` IS NOT NULL
+ GROUP BY k.`match_key`
+HAVING COUNT(*) > 1;
+
+DROP TABLE IF EXISTS `p411_dup_loser`;
+CREATE TABLE `p411_dup_loser` (
+    `listing_id`      INT(11) NOT NULL,
+    `kept_listing_id` INT(11) NOT NULL,
+    PRIMARY KEY (`listing_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- `owned` = 0 only: a listing with an owner is never hidden automatically.
+INSERT INTO `p411_dup_loser` (`listing_id`, `kept_listing_id`)
+SELECT k.`listing_id`, w.`listing_id`
+  FROM `p411_dup_key` k
+  JOIN `p411_dup_winner` w ON w.`match_key` = k.`match_key`
+ WHERE k.`listing_id` <> w.`listing_id`
+   AND k.`owned` = 0;
+
+INSERT IGNORE INTO `listing_duplicate_merges`
+    (`listing_id`, `kept_listing_id`, `listing_name`, `matched_on`, `merged_at`)
+SELECT p.`listing_id`, p.`kept_listing_id`, l.`listing_name`, 'address', NOW()
+  FROM `p411_dup_loser` p
+  JOIN `listings` l ON l.`listing_id` = p.`listing_id`;
+
+UPDATE `listings` l
+  JOIN `p411_dup_loser` p ON p.`listing_id` = l.`listing_id`
+   SET l.`is_deleted` = 1, l.`deleted_date` = NOW();
+
+DELETE k FROM `p411_dup_key` k
+  JOIN `p411_dup_loser` p ON p.`listing_id` = k.`listing_id`;
+
+-- ---- pass 3: same name + same website ----
+UPDATE `p411_dup_key`
+   SET `match_key` = CASE WHEN `website_key` IS NOT NULL AND CHAR_LENGTH(`website_key`) >= 4
+                          THEN CONCAT('w:', `name_key`, '|', `website_key`) END;
+
+DROP TABLE IF EXISTS `p411_dup_winner`;
+CREATE TABLE `p411_dup_winner` (
+    `match_key`  VARCHAR(255) NOT NULL,
+    `listing_id` INT(11) NOT NULL,
+    KEY `p411_dw_match` (`match_key`(191))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO `p411_dup_winner` (`match_key`, `listing_id`)
+SELECT k.`match_key`,
+       (SELECT w.`listing_id` FROM `p411_dup_key` w
+         WHERE w.`match_key` = k.`match_key`
+         ORDER BY w.`owned` DESC, w.`promoted` DESC, w.`has_image` DESC,
+                  w.`descr_len` DESC, w.`listing_id` ASC
+         LIMIT 1)
+  FROM `p411_dup_key` k
+ WHERE k.`match_key` IS NOT NULL
+ GROUP BY k.`match_key`
+HAVING COUNT(*) > 1;
+
+DROP TABLE IF EXISTS `p411_dup_loser`;
+CREATE TABLE `p411_dup_loser` (
+    `listing_id`      INT(11) NOT NULL,
+    `kept_listing_id` INT(11) NOT NULL,
+    PRIMARY KEY (`listing_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- `owned` = 0 only: a listing with an owner is never hidden automatically.
+INSERT INTO `p411_dup_loser` (`listing_id`, `kept_listing_id`)
+SELECT k.`listing_id`, w.`listing_id`
+  FROM `p411_dup_key` k
+  JOIN `p411_dup_winner` w ON w.`match_key` = k.`match_key`
+ WHERE k.`listing_id` <> w.`listing_id`
+   AND k.`owned` = 0;
+
+INSERT IGNORE INTO `listing_duplicate_merges`
+    (`listing_id`, `kept_listing_id`, `listing_name`, `matched_on`, `merged_at`)
+SELECT p.`listing_id`, p.`kept_listing_id`, l.`listing_name`, 'website', NOW()
+  FROM `p411_dup_loser` p
+  JOIN `listings` l ON l.`listing_id` = p.`listing_id`;
+
+UPDATE `listings` l
+  JOIN `p411_dup_loser` p ON p.`listing_id` = l.`listing_id`
+   SET l.`is_deleted` = 1, l.`deleted_date` = NOW();
+
+DELETE k FROM `p411_dup_key` k
+  JOIN `p411_dup_loser` p ON p.`listing_id` = k.`listing_id`;
+
+DROP TABLE IF EXISTS `p411_dup_loser`;
+DROP TABLE IF EXISTS `p411_dup_winner`;
+DROP TABLE IF EXISTS `p411_dup_key`;
 -- ---------------------------------------------------------------------------
 -- 0031_email_log.sql — delivery log for every message the site sends
 -- ---------------------------------------------------------------------------
