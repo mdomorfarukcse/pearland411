@@ -670,6 +670,11 @@ class Admin extends CI_Controller
 			// payment taken, a recurring schedule changed, a renewal that
 			// failed. One address per line, ON TOP OF every active admin.
 			'billing_notify_emails',
+			// How many live deals one member may have on /coupons at once.
+			// Posting a deal is free with any listing, so this is a spam
+			// ceiling rather than a plan entitlement. Defaults to 10 — see
+			// User::couponCap().
+			'coupon_max_per_member',
 		);
 
 		if ($this->input->method() === 'post') {
@@ -814,6 +819,59 @@ class Admin extends CI_Controller
 		$this->load->view('admin/footer');
 	}
 	/*====================
+	Duplicate listings
+	=====================*/
+
+	/**
+	 * Businesses the directory is holding more than once.
+	 *
+	 * /all_listing/shopping-retail said "42 businesses" over a first page that
+	 * repeated the same shops. Migration 0032 clears the unambiguous cases —
+	 * where the duplicate is unclaimed, so hiding it takes nothing away from
+	 * anybody. This screen is the rest: pairs where BOTH rows have an owner,
+	 * and anything created since the migration ran.
+	 *
+	 * Nothing here is automatic. A person looks at the two rows and decides,
+	 * because "same name, same phone number" is a franchise and a head office
+	 * as often as it is one business entered twice.
+	 */
+	public function duplicate_listings()
+	{
+		$data = array();
+		$data['user']   = $this->adminmodel->getAdminInformation();
+		$data['groups'] = $this->adminmodel->getDuplicateListingGroups(admin_per_page(50));
+
+		$this->load->view('admin/header');
+		$this->load->view('admin/duplicate_listings', $data);
+		$this->load->view('admin/footer');
+	}
+
+	/**
+	 * Hide one listing as a duplicate of another.
+	 *
+	 * A soft delete, exactly as the Trash button does one — the row keeps its
+	 * reviews and its enquiries and is one click from coming back at
+	 * /admin/trash_listings. It also records which listing it duplicated, in
+	 * the same `listing_duplicate_merges` table migration 0032 writes, so the
+	 * two are indistinguishable afterwards.
+	 */
+	public function hide_duplicate_listing()
+	{
+		if ($this->input->method() !== 'post') {
+			show_404();
+			return;
+		}
+
+		$hide = (int) $this->input->post('listing_id');
+		$keep = (int) $this->input->post('kept_listing_id');
+
+		$result = $this->adminmodel->hideDuplicateListing($hide, $keep);
+
+		$this->session->set_flashdata('message', $result['message']);
+		redirect('admin/duplicate_listings');
+	}
+
+	/*====================
 	All Category
 	=====================*/
 
@@ -860,12 +918,71 @@ class Admin extends CI_Controller
 
 		$data['user'] 				  = $this->adminmodel->getAdminInformation();
 
-		// $data['all_listing_category'] = $this->adminmodel->allListingCategory();
-		// echo "<pre>";var_dump($data['all_listing_category']);die();
+		// Categories that read as the same thing. Detected over the WHOLE
+		// table, not the page being shown, because the two halves of a pair
+		// are alphabetically adjacent and a pager still splits them often
+		// enough ("Beauty & Personal Care" and "Beauty and Personal Care" sort
+		// four rows apart, but nothing says they land on the same page).
+		$data['duplicate_groups'] = $this->adminmodel->getDuplicateCategoryGroups();
 
 		$this->load->view('admin/header');
 		$this->load->view('admin/all_listing_category', $data);
 		$this->load->view('admin/footer');
+	}
+
+	/**
+	 * form_validation callback: no other category already reads like this one.
+	 *
+	 * @param string $name  what was typed
+	 * @param int    $self  the category being renamed, excluded from the check
+	 */
+	public function category_name_available($name, $self = 0)
+	{
+		$clash = $this->adminmodel->findCategoryByMergeKey($name, (int) $self);
+
+		if ($clash) {
+			$this->form_validation->set_message(
+				'category_name_available',
+				'&ldquo;' . html_escape($clash->category_name) . '&rdquo; already covers that &mdash; '
+				. 'the two names read the same. Use it, or rename it first.'
+			);
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+
+	/*====================
+	Merge one category into another
+	=====================*/
+
+	/**
+	 * Move everything filed under `from` to `to`, then delete `from`.
+	 *
+	 * This is the manual half of migration 0031. The migration merges the
+	 * pairs that are mechanically the same name — "Arts & Entertainment" and
+	 * "Arts and Entertainment" — and stops there on purpose. Whether Finance
+	 * and Financial Services are one category, or Education and Education &
+	 * Childcare, is an editorial decision about this directory, and this is
+	 * where it gets made.
+	 *
+	 * POST only, and it writes the same `listing_category_merges` audit row
+	 * the migration does, so the two are indistinguishable afterwards.
+	 */
+	public function merge_listing_category()
+	{
+		if ($this->input->method() !== 'post') {
+			show_404();
+			return;
+		}
+
+		$from = (int) $this->input->post('from_category_id');
+		$to   = (int) $this->input->post('to_category_id');
+
+		$result = $this->adminmodel->mergeListingCategory($from, $to);
+
+		$this->session->set_flashdata('message', $result['message']);
+		redirect('admin/all_listing_category');
 	}
 
 
@@ -875,7 +992,16 @@ class Admin extends CI_Controller
 
 	public function add_new_listing_category()
 	{
-		$this->form_validation->set_rules('category_name', 'Category Name', 'trim|required|is_unique[listing_categories.category_name]');
+		// is_unique[] compares the string, so it happily accepted
+		// "Arts and Entertainment" next to "Arts & Entertainment" — which is
+		// how /all-category ended up offering both, with the businesses split
+		// between them. category_name_available[] compares the two the way a
+		// reader does.
+		$this->form_validation->set_rules(
+			'category_name',
+			'Category Name',
+			'trim|required|is_unique[listing_categories.category_name]|callback_category_name_available'
+		);
 
 		if ($this->form_validation->run() == FALSE) {
 			$this->load->view('admin/header');
@@ -927,7 +1053,13 @@ class Admin extends CI_Controller
 		$data['category'] = $this->adminmodel->getSingleValue($id, 'category_id', 'listing_categories');
 		$old_image        = $data['category']->category_image;
 
-		$this->form_validation->set_rules('category_name', 'Category Name', 'trim|required');
+		// The edit form had no uniqueness rule of any kind, so renaming a
+		// category onto an existing one was simply allowed.
+		$this->form_validation->set_rules(
+			'category_name',
+			'Category Name',
+			'trim|required|callback_category_name_available[' . (int) $id . ']'
+		);
 
 		if ($this->form_validation->run() == FALSE) {
 			$this->load->view('admin/header');

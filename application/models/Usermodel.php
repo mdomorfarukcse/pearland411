@@ -3792,7 +3792,103 @@ class Usermodel extends CI_Model
 	}
 
 	/**
-	 * AND across the words, OR across the columns:
+	 * The forms a typed word may take in the data.
+	 *
+	 * Searching is `LIKE '%word%'`, so a shorter form covers a longer one:
+	 * `%restaurant%` finds "restaurant" and "restaurants" both, and asking for
+	 * the plural as well would only cost a clause. So most of the time this
+	 * returns the STEM on its own, and the list is longer than one entry only
+	 * where the singular is not a substring of the plural ("party"/"parties").
+	 *
+	 * This is why /search?q=restaurants returned an electrician and no
+	 * restaurants: the only rows containing the literal string "restaurants"
+	 * were the ones that mention serving them, while every actual restaurant
+	 * writes "restaurant", "Restaurant" or nothing at all.
+	 *
+	 * The stem has to be at least four characters. "news" would otherwise fold
+	 * to "new" and match every renewal and newsletter on the site, which is the
+	 * opposite of the problem being fixed. That leaves short plurals ("cars",
+	 * "pets") unfolded, and they stay that way: a three-letter stem matches too
+	 * much to be worth it.
+	 *
+	 * @param  string $term one word, already lower-cased by searchTerms()
+	 * @return string[] at least the term itself
+	 */
+	private function searchTermVariants($term)
+	{
+		$term = (string) $term;
+		$len  = function ($s) {
+			return function_exists('mb_strlen') ? mb_strlen($s, 'UTF-8') : strlen($s);
+		};
+
+		$stem = NULL;
+		$also = NULL;
+
+		// Most specific ending first: "classes" has to be read as -sses before
+		// the bare -s rule gets to it and leaves "classe", which matches
+		// nothing at all. The four-character floor below is the only length
+		// test that matters, so these only ask for enough word to test.
+		if ($len($term) >= 5 && substr($term, -3) === 'ies') {
+			// parties -> party, and keep parties: neither contains the other.
+			$stem = substr($term, 0, -3) . 'y';
+			$also = $term;
+		} elseif ($len($term) >= 5 && preg_match('/(sses|ches|shes|xes|zes|ses)$/', $term)) {
+			// services -> service, classes -> class, churches -> church.
+			$stem = substr($term, 0, -2);
+		} elseif ($len($term) >= 5 && substr($term, -1) === 's' && !preg_match('/(ss|us|is|os)$/', $term)) {
+			// restaurants -> restaurant, plumbers -> plumber.
+			$stem = substr($term, 0, -1);
+		} elseif ($len($term) >= 5 && substr($term, -1) === 'y' && !preg_match('/[aeiou]y$/', $term)) {
+			// bakery -> bakeries. The singular does not contain the plural.
+			$stem = $term;
+			$also = substr($term, 0, -1) . 'ies';
+		}
+
+		if ($stem === NULL || $len($stem) < 4) {
+			return array($term);
+		}
+
+		$out = array($stem);
+		if ($also !== NULL && $also !== $stem) $out[] = $also;
+
+		return $out;
+	}
+
+	/**
+	 * One column matching one word, as a raw SQL fragment.
+	 *
+	 * A word of one or two letters has to sit on a word boundary. "IT company"
+	 * is the reported case: `LIKE '%it%'` is true of Smith, Whitney, furniture,
+	 * capital and most of the directory, so ANDing it with "company" still left
+	 * a page of businesses that have nothing to do with IT. Separators are
+	 * flattened to spaces first so "Pearland IT, Inc." still matches; it is a
+	 * stack of REPLACE() rather than a REGEXP because the word-boundary syntax
+	 * MySQL understands changed between 5.7 and 8.0 and this has to run on both.
+	 *
+	 * Three letters and up keep plain substring matching: "spa" should still
+	 * find "MedSpa", and the noise a three-letter word brings in is bounded by
+	 * the other words it is ANDed with.
+	 */
+	private function searchColumnCondition($column, $term)
+	{
+		$term = (string) $term;
+		$len  = function_exists('mb_strlen') ? mb_strlen($term, 'UTF-8') : strlen($term);
+		$esc  = $this->db->escape_like_str($term);
+
+		if ($len > 2) {
+			return 'LOWER(' . $column . ") LIKE '%" . $esc . "%' ESCAPE '!'";
+		}
+
+		$flat = 'COALESCE(' . $column . ", '')";
+		foreach (array(',', '.', '-', '/', '(', ')') as $ch) {
+			$flat = 'REPLACE(' . $flat . ', ' . $this->db->escape($ch) . ", ' ')";
+		}
+
+		return "CONCAT(' ', LOWER(" . $flat . "), ' ') LIKE '% " . $esc . " %' ESCAPE '!'";
+	}
+
+	/**
+	 * AND across the words, OR across the columns and each word's forms:
 	 *
 	 *   ( (name LIKE %central% OR descr LIKE %central%)
 	 *     AND (name LIKE %bbq% OR descr LIKE %bbq%) )
@@ -3800,6 +3896,13 @@ class Usermodel extends CI_Model
 	 * Every word has to appear somewhere in the row, but not in the same
 	 * column and not next to each other — which is what makes "central bbq"
 	 * find "Central Texas BBQ".
+	 *
+	 * Built as one SQL fragment rather than with like()/or_like(): a short word
+	 * needs a word-boundary test the query builder cannot express, and mixing
+	 * the two inside the same OR group is more error-prone than writing it out.
+	 * Everything interpolated goes through escape_like_str()/escape() first, and
+	 * searchTerms() has already dropped everything that is not a letter or a
+	 * digit before that.
 	 *
 	 * @param string[] $columns fully-qualified column names
 	 * @param string[] $terms   from searchTerms(); must not be empty
@@ -3810,33 +3913,44 @@ class Usermodel extends CI_Model
 			return;
 		}
 
-		$this->db->group_start();
+		$and = array();
 		foreach ($terms as $term) {
-			$this->db->group_start();
-			$first = true;
-			foreach ($columns as $column) {
-				$first ? $this->db->like($column, $term) : $this->db->or_like($column, $term);
-				$first = false;
+			$or = array();
+			foreach ($this->searchTermVariants($term) as $variant) {
+				foreach ($columns as $column) {
+					$or[] = $this->searchColumnCondition($column, $variant);
+				}
 			}
-			$this->db->group_end();
+			if ($or) $and[] = '(' . implode(' OR ', $or) . ')';
 		}
-		$this->db->group_end();
+
+		if ($and) {
+			$this->db->where('(' . implode(' AND ', $and) . ')', NULL, FALSE);
+		}
 	}
 
 	/**
-	 * Relevance for a name/title column, as a raw ORDER BY fragment.
+	 * Relevance for a result set, as a raw ORDER BY fragment.
 	 *
-	 * Results were ordered by id DESC, so "Central Texas BBQ" could sit below
-	 * any newer row that merely mentioned barbecue in its description. This
-	 * puts an exact name first, then a name that starts with what was typed,
-	 * then one that contains it, then rows by how many of the words are in the
-	 * name at all.
+	 * Two parts. First the title column on its own: an exact match, then one
+	 * that starts with what was typed, then one that contains it. Then a score
+	 * over every column the caller weights, so WHERE a word matched decides the
+	 * order and not just WHETHER it did.
 	 *
-	 * @param string   $column fully-qualified, e.g. 'listings.listing_name'
-	 * @param string   $phrase what the visitor typed, whole
-	 * @param string[] $terms  from searchTerms()
+	 * The weights are the other half of the /search?q=restaurants report. Every
+	 * column used to count the same, and the tie-break below the title was the
+	 * row id — so a business that merely lists restaurants among its customers
+	 * outranked one filed under the Restaurants category, because it happened to
+	 * be newer. Pass $weighted as column => weight, highest for the columns an
+	 * operator curates (the category) and lowest for free prose (a description,
+	 * which is where an incidental mention lives).
+	 *
+	 * @param string   $column   fully-qualified title column, e.g. 'listings.listing_name'
+	 * @param string   $phrase   what the visitor typed, whole
+	 * @param string[] $terms    from searchTerms()
+	 * @param array    $weighted column => weight for the rest of the row
 	 */
-	private function searchRelevanceOrder($column, $phrase, array $terms)
+	private function searchRelevanceOrder($column, $phrase, array $terms, array $weighted = array())
 	{
 		$name   = 'LOWER(' . $column . ')';
 		$phrase = trim(strtolower((string) $phrase));
@@ -3857,12 +3971,26 @@ class Usermodel extends CI_Model
 			. ' WHEN ' . $like('%' . $esc . '%') . ' THEN 2'
 			. ' ELSE 3 END ASC';
 
-		$hits = array();
-		foreach ($terms as $term) {
-			$hits[] = '(' . $like('%' . $this->db->escape_like_str($term) . '%') . ')';
+		// The title column always carries the most weight; anything the caller
+		// names is ranked beneath it.
+		$columns = array($column => 8);
+		foreach ($weighted as $col => $weight) {
+			$weight = (int) $weight;
+			if ($col !== $column && $weight > 0) $columns[$col] = $weight;
 		}
 
-		return $rank . ', (' . implode(' + ', $hits) . ') DESC';
+		$score = array();
+		foreach ($columns as $col => $weight) {
+			foreach ($terms as $term) {
+				$conds = array();
+				foreach ($this->searchTermVariants($term) as $variant) {
+					$conds[] = $this->searchColumnCondition($col, $variant);
+				}
+				$score[] = '(CASE WHEN (' . implode(' OR ', $conds) . ') THEN ' . (int) $weight . ' ELSE 0 END)';
+			}
+		}
+
+		return $rank . ', (' . implode(' + ', $score) . ') DESC';
 	}
 
 	/**
@@ -4020,7 +4148,23 @@ class Usermodel extends CI_Model
 			'listing_categories.category_name',
 		), $terms);
 
-		$this->db->order_by($this->searchRelevanceOrder('listings.listing_name', $search_term, $terms), '', false);
+		// Where the word was found decides the order. The category an operator
+		// filed the business under is the strongest signal after the name; the
+		// description is the weakest, because that is where "we also serve
+		// restaurants and offices" lives — the sentence that used to put an
+		// electrician at the top of a search for restaurants.
+		$this->db->order_by($this->searchRelevanceOrder(
+			'listings.listing_name',
+			$search_term,
+			$terms,
+			array(
+				'listing_categories.category_name' => 6,
+				'listings.service_offered'         => 4,
+				'listings.service_locations'       => 2,
+				'listings.listing_address'         => 2,
+				'listings.listing_description'     => 1,
+			)
+		), '', false);
 		$this->db->order_by('COALESCE(listings.featured_listing, 0) DESC, listings.listing_id DESC', '', false);
 		$this->db->limit($limit);
 
@@ -6175,6 +6319,123 @@ class Usermodel extends CI_Model
 			->limit(1)
 			->get()
 			->row();
+	}
+
+	/*=========================
+		Member-posted coupons (/user/my-coupons)
+
+		Until now nothing anywhere in the application could create a row in
+		`coupons` — not the member dashboard, not the admin panel. The public
+		/coupons page read a table only phpMyAdmin could fill, and its "Post a
+		deal" button pointed back at /coupons itself.
+		==========================*/
+
+	/**
+	 * Which of the `coupons` columns this install actually has.
+	 *
+	 * The table predates the repo's migrations, so `coupon_details` and
+	 * `coupon_use_members` are present on some installs and not others. Writing
+	 * a column that is not there fails the whole INSERT, so the payload is
+	 * filtered through this rather than assumed.
+	 *
+	 * @return array column name => TRUE
+	 */
+	private function couponColumns()
+	{
+		static $cols = NULL;
+		if ($cols === NULL) {
+			$cols = array();
+			if ($this->db->table_exists('coupons')) {
+				foreach ($this->db->list_fields('coupons') as $field) {
+					$cols[$field] = TRUE;
+				}
+			}
+		}
+		return $cols;
+	}
+
+	/**
+	 * One member's coupons, newest first, live and expired alike — this is the
+	 * management list, so an expired offer has to stay visible to be edited.
+	 */
+	public function getCouponsByUser($user_id, $limit = NULL, $offset = 0)
+	{
+		$this->db->from('coupons')
+			->where('coupon_user_id', (int) $user_id)
+			->order_by('coupon_id', 'DESC');
+
+		if ($limit !== NULL) $this->db->limit((int) $limit, (int) $offset);
+
+		return $this->db->get()->result();
+	}
+
+	/**
+	 * @param bool $live_only count only what the public can see today
+	 */
+	public function countCouponsByUser($user_id, $live_only = FALSE)
+	{
+		$this->db->from('coupons')->where('coupon_user_id', (int) $user_id);
+
+		if ($live_only) {
+			$today = date('Y-m-d');
+			$this->db->where('coupon_status', 1)
+				->where('coupon_end_date >=', $today);
+		}
+
+		return (int) $this->db->count_all_results();
+	}
+
+	/**
+	 * A coupon, but only if this member posted it. Every edit and delete goes
+	 * through here, so ownership is checked in one place instead of in each
+	 * controller method.
+	 */
+	public function getCouponForOwner($coupon_id, $user_id)
+	{
+		return $this->db
+			->from('coupons')
+			->where('coupon_id', (int) $coupon_id)
+			->where('coupon_user_id', (int) $user_id)
+			->limit(1)
+			->get()
+			->row();
+	}
+
+	/**
+	 * Insert or update, keeping only the columns that exist.
+	 *
+	 * @param  array    $data
+	 * @param  int|null $coupon_id  NULL inserts
+	 * @param  int|null $owner_id   required on update: the WHERE that stops one
+	 *                              member editing another's coupon
+	 * @return int|bool  new id on insert, TRUE/FALSE on update
+	 */
+	public function saveCoupon(array $data, $coupon_id = NULL, $owner_id = NULL)
+	{
+		$cols    = $this->couponColumns();
+		$payload = array();
+		foreach ($data as $key => $value) {
+			if (isset($cols[$key])) $payload[$key] = $value;
+		}
+		if (empty($payload)) return FALSE;
+
+		if ($coupon_id === NULL) {
+			if (!$this->db->insert('coupons', $payload)) return FALSE;
+			return (int) $this->db->insert_id();
+		}
+
+		$this->db->where('coupon_id', (int) $coupon_id);
+		if ($owner_id !== NULL) $this->db->where('coupon_user_id', (int) $owner_id);
+
+		return $this->db->update('coupons', $payload);
+	}
+
+	public function deleteCouponForOwner($coupon_id, $user_id)
+	{
+		return $this->db
+			->where('coupon_id', (int) $coupon_id)
+			->where('coupon_user_id', (int) $user_id)
+			->delete('coupons');
 	}
 
 	/*=========================

@@ -307,6 +307,364 @@
 
 
 		/*=======================
+		Duplicate listings
+		========================*/
+
+		/**
+		 * Businesses the directory is holding more than once.
+		 *
+		 * The same rule migration 0032 applies: the same name once case and
+		 * punctuation are out, AND one hard identifier in common — the phone
+		 * number, the street address or the website host. Name alone is never
+		 * enough, because Pearland has more than one Subway and they are
+		 * separate businesses.
+		 *
+		 * The migration acts on a group on its own only when the losers are
+		 * unclaimed. This returns every group, including the ones it left
+		 * alone, because those are the ones that need a person: two claimed
+		 * rows for one business is either an owner with two accounts or two
+		 * businesses that happen to share a phone line, and no rule can tell
+		 * which from the row.
+		 *
+		 * Reads every published listing once and groups in PHP. That is a few
+		 * thousand rows on this directory, and doing it in SQL means the same
+		 * REPLACE chain in a second place, drifting from this one.
+		 *
+		 * @param  int $limit  how many GROUPS to return
+		 * @return array of arrays of listing rows, biggest group first
+		 */
+		public function getDuplicateListingGroups($limit = 50)
+		{
+			if (!$this->db->table_exists('listings')) return array();
+
+			$rows = $this->db
+				->select('l.listing_id, l.listing_name, l.listing_slug, l.listing_mobile,
+					l.listing_address, l.listing_website, l.listing_image, l.user_id,
+					l.created_at, lc.category_name', FALSE)
+				->from('listings l')
+				->join('listing_categories lc', 'lc.category_id = l.category_id', 'left')
+				->where('(l.is_deleted IS NULL OR l.is_deleted = 0)', NULL, FALSE)
+				->where('l.listing_status', 1)
+				->order_by('l.listing_id', 'ASC')
+				->get()
+				->result();
+
+			$by_key = array();
+			foreach ($rows as $row) {
+				$name = pearland_merge_key($row->listing_name);
+				if ($name === '') continue;
+
+				foreach ($this->listingMatchKeys($row, $name) as $key) {
+					$by_key[$key][(int) $row->listing_id] = $row;
+				}
+			}
+
+			// One business can collide on the phone AND the address, which is
+			// two keys and one duplicate. Keep the first group a listing turns
+			// up in and drop the rest, so it is not reported twice.
+			$seen   = array();
+			$groups = array();
+			foreach ($by_key as $members) {
+				if (count($members) < 2) continue;
+
+				$fresh = array();
+				foreach ($members as $id => $row) {
+					if (isset($seen[$id])) continue;
+					$fresh[$id] = $row;
+				}
+				if (count($fresh) < 2) continue;
+
+				foreach ($fresh as $id => $row) $seen[$id] = TRUE;
+				$groups[] = array_values($fresh);
+			}
+
+			usort($groups, function ($a, $b) { return count($b) - count($a); });
+
+			return array_slice($groups, 0, max(1, (int) $limit));
+		}
+
+		/**
+		 * The keys one listing can be matched on. Mirrors the three passes in
+		 * migration 0032, in the same order and with the same minimum lengths.
+		 */
+		private function listingMatchKeys($row, $name_key)
+		{
+			$keys = array();
+
+			$phone = preg_replace('/\D+/', '', (string) ($row->listing_mobile ?? ''));
+			if (strlen($phone) >= 7) {
+				$keys[] = 'p:' . $name_key . '|' . substr($phone, -10);
+			}
+
+			$address = pearland_merge_key($row->listing_address ?? '');
+			if (strlen($address) >= 6) {
+				$keys[] = 'a:' . $name_key . '|' . $address;
+			}
+
+			$site = strtolower(trim((string) ($row->listing_website ?? '')));
+			$site = preg_replace('#^https?://#', '', $site);
+			$site = preg_replace('#^www\.#', '', $site);
+			$site = explode('/', $site);
+			$site = $site[0];
+			if (strlen($site) >= 4) {
+				$keys[] = 'w:' . $name_key . '|' . $site;
+			}
+
+			return $keys;
+		}
+
+		/**
+		 * Hide $hide_id as a duplicate of $keep_id.
+		 *
+		 * The same soft delete the Trash button does, plus the audit row
+		 * migration 0032 writes, so a listing hidden here and one hidden by
+		 * the migration look the same afterwards and restore the same way.
+		 *
+		 * @return array {ok: bool, message: string}
+		 */
+		public function hideDuplicateListing($hide_id, $keep_id)
+		{
+			$hide_id = (int) $hide_id;
+			$keep_id = (int) $keep_id;
+
+			if ($hide_id < 1 || $keep_id < 1 || $hide_id === $keep_id) {
+				return array('ok' => FALSE, 'message' => 'Pick the listing to hide and the one it duplicates.');
+			}
+
+			$hide = $this->getSingleValue($hide_id, 'listing_id', 'listings');
+			$keep = $this->getSingleValue($keep_id, 'listing_id', 'listings');
+			if (!$hide || !$keep) {
+				return array('ok' => FALSE, 'message' => 'One of those listings no longer exists.');
+			}
+
+			$this->ensureListingDuplicateTable();
+
+			$this->db->replace('listing_duplicate_merges', array(
+				'listing_id'      => $hide_id,
+				'kept_listing_id' => $keep_id,
+				'listing_name'    => $hide->listing_name,
+				'matched_on'      => 'admin',
+				'merged_at'       => date('Y-m-d H:i:s'),
+			));
+
+			if (!$this->softDeleteListing($hide_id)) {
+				return array('ok' => FALSE, 'message' => 'That listing could not be hidden.');
+			}
+
+			return array(
+				'ok'      => TRUE,
+				'message' => '"' . $hide->listing_name . '" is hidden as a duplicate of "'
+					. $keep->listing_name . '". It is in Trash if you need it back.',
+			);
+		}
+
+		/**
+		 * The audit table migration 0032 creates. Created here too, so the
+		 * screen works on an install that has not run 0032 yet.
+		 */
+		private function ensureListingDuplicateTable()
+		{
+			if ($this->db->table_exists('listing_duplicate_merges')) return;
+
+			$this->db->query(
+				'CREATE TABLE IF NOT EXISTS `listing_duplicate_merges` (
+					`id`              INT(11) NOT NULL AUTO_INCREMENT,
+					`listing_id`      INT(11) NOT NULL,
+					`kept_listing_id` INT(11) NOT NULL,
+					`listing_name`    VARCHAR(255) NULL DEFAULT NULL,
+					`matched_on`      VARCHAR(16)  NULL DEFAULT NULL,
+					`merged_at`       DATETIME NOT NULL,
+					PRIMARY KEY (`id`),
+					UNIQUE KEY `ldm_listing_uniq` (`listing_id`),
+					KEY `ldm_kept_idx` (`kept_listing_id`)
+				) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+				  COMMENT="Listings hidden as duplicates by migration 0032 / the admin Duplicates screen"'
+			);
+		}
+
+		/*=======================
+		Duplicate categories: detection and merging
+		========================*/
+
+		/**
+		 * Categories that read as the same thing, grouped.
+		 *
+		 * Compared on pearland_merge_key() — lower-cased, "&" read as "and",
+		 * punctuation dropped — which is the same rule migration 0031 applies
+		 * in SQL. After that migration has run this normally returns nothing;
+		 * it stays because a category added by hand afterwards can recreate
+		 * the problem, and because it is the list the merge panel offers.
+		 *
+		 * @return array merge_key => array of rows (category_id, name, slug,
+		 *               listing_count), busiest first
+		 */
+		public function getDuplicateCategoryGroups()
+		{
+			if (!$this->db->table_exists('listing_categories')) return array();
+
+			$rows = $this->db
+				->select('lc.category_id, lc.category_name, lc.category_slug,
+					(SELECT COUNT(*) FROM listings l
+					  WHERE l.category_id = lc.category_id
+					    AND (l.is_deleted IS NULL OR l.is_deleted = 0)) AS listing_count', FALSE)
+				->from('listing_categories lc')
+				->order_by('lc.category_name', 'ASC')
+				->get()
+				->result();
+
+			$by_key = array();
+			foreach ($rows as $row) {
+				$key = pearland_merge_key($row->category_name);
+				if ($key === '') continue;
+				$by_key[$key][] = $row;
+			}
+
+			$groups = array();
+			foreach ($by_key as $key => $members) {
+				if (count($members) < 2) continue;
+				usort($members, function ($a, $b) {
+					$diff = (int) $b->listing_count - (int) $a->listing_count;
+					return $diff !== 0 ? $diff : ((int) $a->category_id - (int) $b->category_id);
+				});
+				$groups[$key] = $members;
+			}
+
+			return $groups;
+		}
+
+		/**
+		 * The category whose name reads the same as $name, if there is one.
+		 *
+		 * @param  string $name
+		 * @param  int    $exclude_id  the row being renamed, which is not a clash
+		 *                             with itself
+		 * @return object|null
+		 */
+		public function findCategoryByMergeKey($name, $exclude_id = 0)
+		{
+			$key = pearland_merge_key($name);
+			if ($key === '') return NULL;
+
+			$rows = $this->db
+				->select('category_id, category_name')
+				->from('listing_categories')
+				->get()
+				->result();
+
+			foreach ($rows as $row) {
+				if ((int) $row->category_id === (int) $exclude_id) continue;
+				if (pearland_merge_key($row->category_name) === $key) return $row;
+			}
+
+			return NULL;
+		}
+
+		/**
+		 * Move everything under $from_id to $to_id, then delete $from_id.
+		 *
+		 * The PHP half of migration 0031: the migration merges what is
+		 * mechanically the same name, this merges what an operator decides is
+		 * the same category. Both write the same `listing_category_merges`
+		 * audit row, so either can be traced or unpicked afterwards.
+		 *
+		 * @return array {ok: bool, message: string}
+		 */
+		public function mergeListingCategory($from_id, $to_id)
+		{
+			$from_id = (int) $from_id;
+			$to_id   = (int) $to_id;
+
+			if ($from_id < 1 || $to_id < 1) {
+				return array('ok' => FALSE, 'message' => 'Pick both a category to merge and one to merge it into.');
+			}
+			if ($from_id === $to_id) {
+				return array('ok' => FALSE, 'message' => 'A category cannot be merged into itself.');
+			}
+
+			$from = $this->getSingleValue($from_id, 'category_id', 'listing_categories');
+			$to   = $this->getSingleValue($to_id,   'category_id', 'listing_categories');
+			if (!$from || !$to) {
+				return array('ok' => FALSE, 'message' => 'One of those categories no longer exists.');
+			}
+
+			$moved = (int) $this->db->where('category_id', $from_id)->count_all_results('listings');
+
+			$this->ensureCategoryMergeTable();
+
+			$this->db->trans_start();
+
+			$this->db->insert('listing_category_merges', array(
+				'from_category_id'   => $from_id,
+				'from_category_name' => $from->category_name,
+				'from_category_slug' => isset($from->category_slug) ? $from->category_slug : NULL,
+				'to_category_id'     => $to_id,
+				'listings_moved'     => $moved,
+				'merged_at'          => date('Y-m-d H:i:s'),
+			));
+
+			// The survivor inherits the slug only if it has none of its own:
+			// rewriting a live slug breaks every link already pointing at it.
+			if (empty($to->category_slug) && !empty($from->category_slug)) {
+				$this->db->where('category_id', $to_id)
+					->update('listing_categories', array('category_slug' => $from->category_slug));
+			}
+
+			$this->db->where('category_id', $from_id)
+				->update('listings', array('category_id' => $to_id));
+
+			if ($this->db->table_exists('listing_sub_categories')
+				&& $this->db->field_exists('category_id', 'listing_sub_categories')) {
+				$this->db->where('category_id', $from_id)
+					->update('listing_sub_categories', array('category_id' => $to_id));
+			}
+
+			// Category-targeted ad bookings (migration 0024).
+			if ($this->db->table_exists('ads') && $this->db->field_exists('category_id', 'ads')) {
+				$this->db->where('category_id', $from_id)
+					->update('ads', array('category_id' => $to_id));
+			}
+
+			$this->db->where('category_id', $from_id)->delete('listing_categories');
+
+			$this->db->trans_complete();
+
+			if ($this->db->trans_status() === FALSE) {
+				return array('ok' => FALSE, 'message' => 'That merge could not be completed; nothing was changed.');
+			}
+
+			return array(
+				'ok'      => TRUE,
+				'message' => 'Merged "' . $from->category_name . '" into "' . $to->category_name . '". '
+					. $moved . ' listing' . ($moved === 1 ? '' : 's') . ' moved.',
+			);
+		}
+
+		/**
+		 * The audit table migration 0031 creates. Created here too, so the
+		 * merge control works on an install that has not run 0031 yet.
+		 */
+		private function ensureCategoryMergeTable()
+		{
+			if ($this->db->table_exists('listing_category_merges')) return;
+
+			$this->db->query(
+				'CREATE TABLE IF NOT EXISTS `listing_category_merges` (
+					`id`                 INT(11) NOT NULL AUTO_INCREMENT,
+					`from_category_id`   INT(11) NOT NULL,
+					`from_category_name` VARCHAR(255) NULL DEFAULT NULL,
+					`from_category_slug` VARCHAR(191) NULL DEFAULT NULL,
+					`to_category_id`     INT(11) NOT NULL,
+					`listings_moved`     INT(11) NOT NULL DEFAULT 0,
+					`merged_at`          DATETIME NOT NULL,
+					PRIMARY KEY (`id`),
+					KEY `lcm_from_idx` (`from_category_id`),
+					KEY `lcm_to_idx`   (`to_category_id`)
+				) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+				  COMMENT="Categories merged by migration 0031 / the admin Merge tool"'
+			);
+		}
+
+		/*=======================
 		Add Listing Category Information
 		========================*/
 

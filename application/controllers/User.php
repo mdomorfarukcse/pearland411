@@ -6862,6 +6862,44 @@ class User extends CI_Controller
 		$listing = $this->db->get_where('listings', array('listing_id' => $listing_id))->row();
 		$listing_slug = $listing ? $listing->listing_slug : $listing_id;
 
+		// The star picker posts 1-5. Nothing checked that, and the value feeds
+		// updateListingRating(), so a hand-posted `price_rating=500` moved the
+		// business's public average to 500 stars. Clamp it, and refuse a review
+		// with no listing behind it.
+		$rating = (int) $rating;
+		if ($rating < 1 || $rating > 5) {
+			$rating = 0;
+		}
+
+		$errors = array();
+		if (!$listing) {
+			$errors[] = 'That business could not be found.';
+		}
+		if ($rating === 0) {
+			$errors[] = 'Please choose a rating from one to five stars.';
+		}
+		if (trim((string) $message) === '') {
+			$errors[] = 'Please write a few words about what you thought.';
+		} elseif (mb_strlen((string) $message) > 2000) {
+			$errors[] = 'That review is too long (2000 characters maximum).';
+		}
+		if (trim((string) $name) === '') {
+			$errors[] = 'Please give the name to show on the review.';
+		} elseif (mb_strlen(trim((string) $name)) > 100) {
+			$errors[] = 'That name is too long (100 characters maximum).';
+		}
+		if (trim((string) $email) === '' || !filter_var(trim((string) $email), FILTER_VALIDATE_EMAIL)) {
+			$errors[] = 'Please give a valid email address.';
+		}
+
+		if (!empty($errors)) {
+			$this->session->set_flashdata('review_error', reset($errors));
+			redirect($listing
+				? 'listing-details/' . rawurlencode((string) $listing_slug) . '#write-review'
+				: base_url('all_listing'));
+			return;
+		}
+
 		// Simple direct database insert
 		$data = array(
 			'listing_id' => $listing_id,
@@ -6885,8 +6923,10 @@ class User extends CI_Controller
 		// Set flash message
 		$this->session->set_flashdata('review_success', 'Thank you! Your review has been submitted successfully.');
 
-		// Redirect back to listing page with slug
-		redirect('user/listing_details/' . $listing_slug);
+		// Back to the reviews section, not the top of the page — the banner
+		// confirming the review sits beside the form it came from, and landing
+		// in the hero left no sign that anything had happened.
+		redirect('listing-details/' . rawurlencode((string) $listing_slug) . '#reviews');
 	}
 
 	/*===================
@@ -8560,7 +8600,11 @@ class User extends CI_Controller
 	public function coupons()
 	{
 		$data = array();
-		$data['coupons']  = $this->usermodel->getActiveCoupons(60);
+		// getDistinctActiveCoupons(), not getActiveCoupons(): the join runs
+		// through the OWNER's listings, so a business with four listings put
+		// the same offer on this page four times. The homepage has always
+		// called the de-duplicating one; this page never did.
+		$data['coupons']  = $this->usermodel->getDistinctActiveCoupons(60);
 		$data['ad_house_cap'] = $this->thinPageAdCap(count($data['coupons']));
 		$data['ad_slots'] = $this->contentAdSlots();
 		$data['page_css'] = $this->contentPageCss();
@@ -8609,6 +8653,293 @@ class User extends CI_Controller
 		$this->load->view('header', $data);
 		$this->load->view('coupon_details', $data);
 		$this->load->view('footer');
+	}
+
+	/*=========================
+		Member coupons (the other half of /coupons)
+
+		"Post a deal" used to link to base_url('user/coupons'), and
+		/user/coupons resolves to User::coupons — the public page the button
+		was on. Every one of the three buttons was a link back to the page you
+		were already reading.
+
+		It was not a typo in a href. The theme shipped views for a member
+		coupon screen (user_coupons.php, add_coupons.php, edit_coupons.php),
+		all three posting to user/add-coupon, user/edit-coupon and
+		user/delete-coupon — and none of those methods was ever written, on
+		this controller or on Admin. Nothing in the application could create a
+		coupon. These four methods are the missing half.
+
+		/user/my-coupons rather than /user/coupons, because that URL is taken
+		by the public page and quietly shadowing it is how this started.
+		==========================*/
+
+	/**
+	 * A member's own coupons: what is live, what has expired, and the way in
+	 * to posting another.
+	 */
+	public function my_coupons()
+	{
+		$session   = (array) $this->session->userdata('logged_user');
+		$logged_id = isset($session['logged_id']) ? (int) $session['logged_id'] : 0;
+
+		$data = array();
+		$data['logged_id'] = $logged_id;
+		$data['coupons']   = $this->usermodel->getCouponsByUser($logged_id);
+		$data['listings']  = $this->usermodel->getListingById($logged_id, NULL, NULL);
+		$data['live_count'] = $this->usermodel->countCouponsByUser($logged_id, TRUE);
+		$data['coupon_cap'] = $this->couponCap();
+		$data['title']     = 'My deals & coupons';
+
+		$this->load->view('header', $data);
+		$this->load->view('user_left_sidebar', $data);
+		$this->load->view('user_coupons', $data);
+		$this->load->view('user_right_sidebar', $data);
+		$this->load->view('footer');
+	}
+
+	/**
+	 * How many live coupons one member may have at once.
+	 *
+	 * The page says posting a deal is free with any listing, so this is not a
+	 * plan entitlement — it is a spam ceiling, and an operator can move it at
+	 * /admin/setting without a deploy.
+	 */
+	private function couponCap()
+	{
+		return max(1, (int) site_setting('coupon_max_per_member', '10'));
+	}
+
+	/**
+	 * Post a deal. GET renders the form, POST writes it.
+	 */
+	public function add_coupon()
+	{
+		$session   = (array) $this->session->userdata('logged_user');
+		$logged_id = isset($session['logged_id']) ? (int) $session['logged_id'] : 0;
+
+		$data = array();
+		$data['logged_id'] = $logged_id;
+		$data['coupon']    = NULL;
+		$data['listings']  = $this->usermodel->getListingById($logged_id, NULL, NULL);
+		$data['title']     = 'Post a deal';
+
+		// A deal belongs to a business. Without a listing there is nothing for
+		// it to appear on, and /coupons would show an offer from nobody.
+		if (empty($data['listings'])) {
+			// getListingById() only returns PUBLISHED listings, so this also
+			// catches a listing that is still waiting on approval — say so,
+			// rather than telling someone to add what they have already added.
+			$this->session->set_flashdata('coupon_error',
+				'You need a published business listing first: a deal is posted against a listing, so people can see whose it is. '
+				. 'If you have just added or claimed one, it may still be waiting for approval.');
+			redirect('user/my-coupons');
+			return;
+		}
+
+		$live = $this->usermodel->countCouponsByUser($logged_id, TRUE);
+		if ($live >= $this->couponCap()) {
+			$this->session->set_flashdata('coupon_error',
+				'You already have ' . $live . ' live deals, which is the limit. End or edit one of those to post another.');
+			redirect('user/my-coupons');
+			return;
+		}
+
+		if ($this->input->method() === 'post') {
+			// 10 posts per IP per hour. A business posting its own offers never
+			// comes near it; a script filling the public page does.
+			if (!$this->rate_limit->check_ip('add_coupon', 10, 3600)) {
+				$this->rate_limit->reject(3600);
+				return;
+			}
+
+			$clean = $this->validateCouponPost($errors);
+			if (empty($errors)) {
+				$clean['coupon_user_id'] = $logged_id;
+				$clean['coupon_status']  = 1;
+				$clean['coupon_cdt']     = date('Y-m-d H:i:s');
+
+				$photo = $this->uploadCouponPhoto();
+				if ($photo !== NULL) $clean['coupon_photo'] = $photo;
+
+				$new_id = $this->usermodel->saveCoupon($clean);
+				if ($new_id) {
+					$this->session->set_flashdata('coupon_message',
+						'Your deal is live — it is on the deals page, on your listing and on the homepage.');
+					redirect('user/my-coupons');
+					return;
+				}
+				$errors['general'] = 'Something went wrong saving that deal. Please try again.';
+			}
+
+			$data['coupon_errors'] = $errors;
+			$data['coupon_old']    = $this->input->post();
+		}
+
+		$this->load->view('header', $data);
+		$this->load->view('user_left_sidebar', $data);
+		$this->load->view('add_coupons', $data);
+		$this->load->view('user_right_sidebar', $data);
+		$this->load->view('footer');
+	}
+
+	/**
+	 * Edit a deal. The model's WHERE carries the ownership check, so another
+	 * member's coupon id is a 404 and never an edit form.
+	 */
+	public function edit_coupon($coupon_id = 0)
+	{
+		$session   = (array) $this->session->userdata('logged_user');
+		$logged_id = isset($session['logged_id']) ? (int) $session['logged_id'] : 0;
+
+		$coupon = $this->usermodel->getCouponForOwner((int) $coupon_id, $logged_id);
+		if (!$coupon) {
+			show_404();
+			return;
+		}
+
+		$data = array();
+		$data['logged_id'] = $logged_id;
+		$data['coupon']    = $coupon;
+		$data['listings']  = $this->usermodel->getListingById($logged_id, NULL, NULL);
+		$data['title']     = 'Edit deal';
+
+		if ($this->input->method() === 'post') {
+			$clean = $this->validateCouponPost($errors);
+			if (empty($errors)) {
+				$clean['coupon_status'] = $this->input->post('coupon_status') === '0' ? 0 : 1;
+
+				$photo = $this->uploadCouponPhoto();
+				if ($photo !== NULL) $clean['coupon_photo'] = $photo;
+
+				if ($this->usermodel->saveCoupon($clean, (int) $coupon->coupon_id, $logged_id)) {
+					$this->session->set_flashdata('coupon_message', 'Deal updated.');
+					redirect('user/my-coupons');
+					return;
+				}
+				$errors['general'] = 'Something went wrong saving that deal. Please try again.';
+			}
+
+			$data['coupon_errors'] = $errors;
+			$data['coupon_old']    = $this->input->post();
+		}
+
+		$this->load->view('header', $data);
+		$this->load->view('user_left_sidebar', $data);
+		$this->load->view('edit_coupons', $data);
+		$this->load->view('user_right_sidebar', $data);
+		$this->load->view('footer');
+	}
+
+	/**
+	 * Delete a deal. POST only: a GET link is one crawler away from clearing
+	 * a member's offers, and the legacy view called it from an href.
+	 */
+	public function delete_coupon($coupon_id = 0)
+	{
+		$session   = (array) $this->session->userdata('logged_user');
+		$logged_id = isset($session['logged_id']) ? (int) $session['logged_id'] : 0;
+
+		if ($this->input->method() !== 'post') {
+			show_404();
+			return;
+		}
+
+		$coupon = $this->usermodel->getCouponForOwner((int) $coupon_id, $logged_id);
+		if (!$coupon) {
+			show_404();
+			return;
+		}
+
+		$this->usermodel->deleteCouponForOwner((int) $coupon->coupon_id, $logged_id);
+		$this->session->set_flashdata('coupon_message', 'Deal deleted.');
+		redirect('user/my-coupons');
+	}
+
+	/**
+	 * Shared validation for the add and edit forms.
+	 *
+	 * @param  array|null $errors filled with field => message
+	 * @return array the columns to write
+	 */
+	private function validateCouponPost(&$errors)
+	{
+		$errors = array();
+
+		$name  = trim((string) $this->input->post('coupon_name'));
+		$code  = trim((string) $this->input->post('coupon_code'));
+		$link  = trim((string) $this->input->post('coupon_link'));
+		$from  = trim((string) $this->input->post('coupon_start_date'));
+		$to    = trim((string) $this->input->post('coupon_end_date'));
+		$terms = trim((string) $this->input->post('coupon_details'));
+		$who   = trim((string) $this->input->post('coupon_use_members'));
+
+		if ($name === '') {
+			$errors['coupon_name'] = 'Give the deal a name — "20% off your first visit", say.';
+		} elseif (mb_strlen($name) > 150) {
+			$errors['coupon_name'] = 'That name is too long (150 characters maximum).';
+		}
+
+		if ($code === '') {
+			$errors['coupon_code'] = 'Give the code people show in store or type at checkout.';
+		} elseif (!preg_match('/^[A-Za-z0-9 _-]{2,40}$/', $code)) {
+			$errors['coupon_code'] = 'Codes are 2 to 40 characters: letters, numbers, spaces, - and _.';
+		}
+
+		// external_url() refuses anything that is not http/https, so a
+		// javascript: or data: link cannot reach the public page. It also
+		// prefixes a bare domain with https://, which means it never returns
+		// '' for plain nonsense — hence the second check: "not a url" would
+		// otherwise be stored as https://not a url.
+		$link_url = $link !== '' ? external_url($link) : '';
+		if ($link !== '' && ($link_url === '' || !filter_var($link_url, FILTER_VALIDATE_URL))) {
+			$errors['coupon_link'] = 'That link does not look like a web address.';
+			$link_url = '';
+		}
+
+		$from_ts = $from !== '' ? strtotime($from) : FALSE;
+		$to_ts   = $to   !== '' ? strtotime($to)   : FALSE;
+
+		if ($from_ts === FALSE) {
+			$errors['coupon_start_date'] = 'When does the deal start?';
+		}
+		if ($to_ts === FALSE) {
+			$errors['coupon_end_date'] = 'When does the deal end?';
+		} elseif ($from_ts !== FALSE && $to_ts < $from_ts) {
+			$errors['coupon_end_date'] = 'The end date is before the start date.';
+		}
+
+		if (mb_strlen($terms) > 2000) {
+			$errors['coupon_details'] = 'The terms are too long (2000 characters maximum).';
+		}
+		if (mb_strlen($who) > 150) {
+			$errors['coupon_use_members'] = 'That is too long (150 characters maximum).';
+		}
+
+		return array(
+			'coupon_name'        => $name,
+			'coupon_code'        => $code,
+			'coupon_link'        => $link_url,
+			'coupon_details'     => $terms,
+			'coupon_use_members' => $who,
+			'coupon_start_date'  => $from_ts !== FALSE ? date('Y-m-d', $from_ts) : NULL,
+			'coupon_end_date'    => $to_ts   !== FALSE ? date('Y-m-d', $to_ts)   : NULL,
+		);
+	}
+
+	/**
+	 * @return string|null the stored path, or NULL when nothing was uploaded —
+	 *                     which on an edit means "keep the picture you have".
+	 */
+	private function uploadCouponPhoto()
+	{
+		if (empty($_FILES['coupon_photo']['name'])) {
+			return NULL;
+		}
+
+		$saved = safe_upload_image($_FILES['coupon_photo'], 'uploads/coupons/');
+
+		return $saved === FALSE ? NULL : $saved;
 	}
 
 	/*=========================
