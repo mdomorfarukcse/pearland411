@@ -82,6 +82,11 @@ class Mailer
             'wordwrap'  => true,
             'newline'   => "\r\n",
             'crlf'      => "\r\n",
+            // CI stamps its own name into BOTH `User-Agent` and `X-Mailer`,
+            // so every message announced itself as sent by a PHP framework.
+            // Filters read those headers, and "script on a web host" is not
+            // the reputation a signup confirmation wants. Name the product.
+            'useragent' => 'Pearland411',
             // CI defaults to quoted-printable for HTML, which is right; being
             // explicit keeps 8-bit characters out of the raw body, where some
             // filters score them.
@@ -143,8 +148,20 @@ class Mailer
         $this->CI->email->from($from_addr, $from_name);
 
         $reply_to = isset($opts['reply_to']) ? trim((string) $opts['reply_to']) : '';
-        if ($reply_to !== '' && filter_var($reply_to, FILTER_VALIDATE_EMAIL)) {
+        if ($reply_to === '' || !filter_var($reply_to, FILTER_VALIDATE_EMAIL)) {
+            // No caller-supplied Reply-To: point it at a mailbox a person
+            // actually reads, via the same helper every public form uses.
+            // CI's own fallback is the From address — `no-reply@` — which
+            // sends a customer's "I still can't get in" reply into a black
+            // hole, and which Gmail treats as a mild negative signal in its
+            // own right. An unreplyable transactional email is a support
+            // failure waiting to happen.
+            $reply_to   = function_exists('form_recipient_email') ? form_recipient_email() : '';
+            $reply_name = $this->from_name();
+        } else {
             $reply_name = isset($opts['reply_to_name']) ? trim((string) $opts['reply_to_name']) : '';
+        }
+        if ($reply_to !== '' && filter_var($reply_to, FILTER_VALIDATE_EMAIL)) {
             $this->CI->email->reply_to($reply_to, $reply_name);
         }
 

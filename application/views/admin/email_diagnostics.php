@@ -233,11 +233,24 @@ foreach ($issues as $i) {
 
 	<!-- ================================================ WHAT TO CHECK -->
 	<div class="maild-card">
-		<h2>If mail sends but never arrives</h2>
+		<h2>If mail lands in Spam, or never arrives at all</h2>
 		<p class="hint">
 			&ldquo;Sent&rdquo; above means a mail server accepted the message. It does not mean a
-			person received it. When messages vanish without landing in Spam and without bouncing,
-			it is almost always one of these:
+			person received it, or that it reached an Inbox. Both outcomes have the same short list
+			of causes, and they are all on the <strong>sending domain</strong> rather than in this
+			application &mdash; nothing on this page can fix them.
+		</p>
+		<p class="hint">
+			<strong>Two tools tell you which one it is.</strong>
+			Send a test to the throwaway address that
+			<a href="https://www.mail-tester.com" target="_blank" rel="noopener">mail-tester.com</a>
+			gives you: it scores the message out of 10 and names every failing check, SPF and DKIM
+			included. And on a message that did arrive, open the raw source (Gmail:
+			&#8942; &rarr; &ldquo;Show original&rdquo;) and read the
+			<code>Authentication-Results:</code> line &mdash; the <code>spf=</code>,
+			<code>dkim=</code> and <code>dmarc=</code> verdicts turn guesswork into a fact. For
+			ongoing monitoring, add the domain to
+			<a href="https://postmaster.google.com" target="_blank" rel="noopener">Gmail Postmaster Tools</a>.
 		</p>
 		<table class="maild-kv">
 			<tr>
@@ -275,6 +288,25 @@ foreach ($issues as $i) {
 				<td>
 					<code>SMTP_PASS</code> must be a 16-character app password with 2-step
 					verification on, not the account password.
+				</td>
+			</tr>
+			<tr>
+				<th>From domain &ne; link domain</th>
+				<td>
+					A message sent from an address at <code>gmail.com</code> whose body links to
+					<code>pearland411.com</code> has the exact shape of a phishing attempt, and
+					Gmail files it accordingly. If the From-domain mismatch above was worked around
+					by sending as the SMTP account's own address, this is the price &mdash; it is a
+					stopgap, not the fix. Authenticate the real domain instead.
+				</td>
+			</tr>
+			<tr>
+				<th>No sending history</th>
+				<td>
+					A domain that has never sent mail has no reputation to draw on, so early
+					messages are judged harshly. Volume here is low and steady, which is the good
+					case; give it days, not hours, after SPF and DKIM are correct, and do not
+					test by sending the same message twenty times.
 				</td>
 			</tr>
 		</table>

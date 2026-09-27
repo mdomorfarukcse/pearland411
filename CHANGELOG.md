@@ -6,6 +6,53 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-09-27 — Mail arrives now, but Gmail files it as Spam
+
+The 24th's work got messages moving again. They land in Gmail's Spam folder,
+which is a different problem: delivery works, the sender is not trusted. Almost
+all of that is DNS on the sending domain and cannot be fixed from this
+repository — but two things the code was doing were actively unhelpful, and both
+are cheap to stop doing.
+
+### Fixed
+
+- **Every message announced itself as script-sent.** CI stamps its own name into
+  *both* `User-Agent` and `X-Mailer`, so a signup confirmation went out headed
+  `X-Mailer: CodeIgniter`. Filters read those headers; "PHP framework on a web
+  host" is not the reputation a verification email wants. They now say
+  `Pearland411`.
+- **`Reply-To` was `no-reply@`.** CI defaults Reply-To to the From address when a
+  caller supplies none, which was every transactional message. So a customer
+  answering "I still can't get in" was replying into a black hole — and Gmail
+  treats an unreplyable address as a mild negative signal of its own. `send()`
+  now falls back to `form_recipient_email()`, the same helper every public form
+  already uses, so it follows `forms_recipient_email` → `contact_email` from
+  `/admin/setting`. An explicit `reply_to` (enquiry alerts, where Reply should
+  answer the enquirer) still wins.
+
+### Changed
+
+- `/admin/email-diagnostics` and `README.md` now cover **Spam placement**, not
+  just non-delivery: mail-tester.com and the `Authentication-Results:` header as
+  the two diagnostics, then DKIM → DMARC → From-domain/link-domain match →
+  monitored Reply-To → sending history, in order of impact. Both also spell out
+  that the `MAIL_FROM_ADDRESS` stopgap from the 24th **costs Inbox placement**:
+  a message from a `gmail.com` address linking to `pearland411.com` has the
+  shape of a phishing attempt, so it is a stopgap and not the fix.
+
+### Still outstanding — not a code change
+
+DKIM signing and a DMARC record on `pearland411.com`. Until the domain itself is
+authenticated, no change in this repository will reliably move mail from Spam to
+Inbox. See **Email troubleshooting → Mail arrives, but in Spam** in `README.md`.
+
+### Key files
+
+`application/libraries/Mailer.php`, `application/views/admin/email_diagnostics.php`,
+`README.md`. No schema change, no migration.
+
+---
+
 ## 2026-09-24 — Nobody could sign up, and nothing said why
 
 Reported from the live site: new accounts are created successfully, the

@@ -146,7 +146,47 @@ sent anything. Fix it at the domain, not in the code:
 Until steps 1–3 are done, the honest short-term fix is to set
 `MAIL_FROM_ADDRESS` to the SMTP account's own address, so the From domain and
 the authenticated domain match. `/admin/email-diagnostics` flags the mismatch
-explicitly.
+explicitly. Treat it as a stopgap: see the next section for why it costs you
+Inbox placement.
+
+### Mail arrives, but in Spam
+
+Delivery works; the sender isn't trusted yet. Everything that fixes this lives
+on the domain, not in this application. Two tools tell you which check is
+failing:
+
+- **[mail-tester.com](https://www.mail-tester.com)** — send a test to the
+  throwaway address it gives you. Scores the message out of 10 and names every
+  failing check, SPF and DKIM included. Fastest single diagnostic there is.
+- **The `Authentication-Results:` header** on a message that did arrive (Gmail:
+  ⋮ → "Show original"). The `spf=`, `dkim=` and `dmarc=` verdicts convert
+  guesswork into fact.
+- **[Gmail Postmaster Tools](https://postmaster.google.com)** — add
+  pearland411.com for ongoing domain reputation and spam-rate reporting.
+
+In rough order of impact:
+
+1. **DKIM signing on the From domain.** The single biggest lever. SPF alone is
+   weak — and SPF breaks when a message is forwarded, while a DKIM signature
+   survives it. `dkim=none` in the headers means this is your problem.
+2. **A DMARC record.** Start at `p=none` with a `rua=` address to collect
+   reports, and only tighten to `quarantine`/`reject` once SPF and DKIM have
+   been passing for a couple of weeks.
+3. **From domain must match the link domain.** A message from an address at
+   `gmail.com` whose body links to `pearland411.com` has the exact shape of a
+   phishing attempt. This is the cost of the `MAIL_FROM_ADDRESS` stopgap above
+   and the reason it is only a stopgap.
+4. **A monitored `Reply-To`.** Set `contact_email` (or `forms_recipient_email`)
+   at `/admin/setting`; `Mailer::send()` uses it automatically. `no-reply@` as
+   the only contactable address is a mild negative signal, and it black-holes a
+   customer replying "I still can't get in".
+5. **Sending history.** A domain with no track record is judged harshly at
+   first. After SPF and DKIM are correct, placement improves over days. Don't
+   try to force it by sending the same message repeatedly — that hurts.
+
+Marking a message "Not spam" in Gmail trains that one recipient's filter only.
+It does not fix placement for anybody else, so it is not a test of whether the
+problem is solved.
 
 ## What ships in this branch
 
