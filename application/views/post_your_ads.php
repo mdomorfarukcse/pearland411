@@ -48,6 +48,10 @@
 
 						<form method="post" action="<?= base_url('contact-submit') ?>">
 							<input type="hidden" name="subject" value="Advertising enquiry">
+							<?php // Back to this page afterwards (it shows the confirmation), and
+							      // filed as a package lead rather than a general question. ?>
+							<input type="hidden" name="return_to" value="post-your-ads">
+							<input type="hidden" name="topic" value="package">
 
 							<div class="form-group">
 								<label for="ads_fullname">Your name *</label>

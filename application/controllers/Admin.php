@@ -361,6 +361,8 @@ class Admin extends CI_Controller
 			// Shows the SMTP username and raw SMTP transcripts, and can send
 			// mail from the site's address. Super-admin only.
 			'email_diagnostics',
+			// Member moderation: suspending or deleting an account.
+			'user_suspend', 'user_restore', 'user_delete',
 		);
 
 		if (!in_array($page, $public_actions, true)) {
@@ -1017,6 +1019,9 @@ class Admin extends CI_Controller
 		// enough ("Beauty & Personal Care" and "Beauty and Personal Care" sort
 		// four rows apart, but nothing says they land on the same page).
 		$data['duplicate_groups'] = $this->adminmodel->getDuplicateCategoryGroups();
+		// Any pair, for the merges that are a judgement call rather than a
+		// spelling difference.
+		$data['merge_options']    = $this->adminmodel->getCategoriesForMerge();
 
 		$this->load->view('admin/header');
 		$this->load->view('admin/all_listing_category', $data);
@@ -1074,7 +1079,7 @@ class Admin extends CI_Controller
 
 		$result = $this->adminmodel->mergeListingCategory($from, $to);
 
-		$this->session->set_flashdata('message', $result['message']);
+		$this->session->set_flashdata(!empty($result['ok']) ? 'message' : 'error', $result['message']);
 		redirect('admin/all_listing_category');
 	}
 
@@ -2252,13 +2257,23 @@ class Admin extends CI_Controller
 				$info['google_map'] = "https://maps.google.com/maps?q={$lat},{$lng}&output=embed";
 			}
 
-			if ($_FILES && $_FILES['listing_profile_image']['name']) {
+			// A refused logo used to be written as NULL over the stored one, so
+			// a too-large or wrong-type file deleted the business's logo while
+			// the screen said "Listing updated successfully". Only a successful
+			// upload replaces it now, and a refusal is reported.
+			$upload_notes = array();
+			if (!empty($_FILES['listing_profile_image']['name'])) {
 				$img_info = [
 					'upload_path' => 'images/listings',
 					'quality'     => '60%',
 					'image_name'  => 'listing_profile_image'
 				];
-				$info['listing_image'] = uploadWithoutResize($img_info);
+				$new_logo = uploadWithoutResize($img_info);
+				if ($new_logo) {
+					$info['listing_image'] = $new_logo;
+				} else {
+					$upload_notes[] = 'The logo was not changed: ' . (upload_last_error() ?: 'the file could not be read.');
+				}
 			}
 
 			// Gallery: keep what is already there, drop what was ticked for
@@ -2299,6 +2314,9 @@ class Admin extends CI_Controller
 						if ($uploaded_image) {
 							// Store path with assets prefix like logo image
 							$gallery_images[] = 'assets/images/listings/' . basename($uploaded_image);
+						} else {
+							$upload_notes[] = 'Photo "' . $_FILES['listing_image_gallery']['name'][$i] . '" was not added: '
+								. (upload_last_error() ?: 'the file could not be read.');
 						}
 					}
 				}
@@ -2314,7 +2332,9 @@ class Admin extends CI_Controller
 
 			if ($this->adminmodel->update($slug, $info, 'listing_slug', 'listings')) {
 				$this->adminmodel->saveListingSubCategories($data['listing']->listing_id, $this->postedSubCategoryIds());
-				$this->session->set_flashdata('message', 'Listing updated successfully.');
+				// Partial failures used to be hidden behind "updated successfully".
+				$this->session->set_flashdata($upload_notes ? 'error' : 'message',
+					'Listing updated successfully.' . ($upload_notes ? ' ' . implode(' ', $upload_notes) : ''));
 				redirect('admin/all-listings');
 			} else {
 				$this->session->set_flashdata('error', 'Could not update the listing. ' . $this->adminmodel->lastDbError());
@@ -7001,6 +7021,168 @@ class Admin extends CI_Controller
 		$this->load->view('admin/header');
 		$this->load->view('admin/users', $data);
 		$this->load->view('admin/footer');
+	}
+
+	/*=====================================================================
+		Member moderation (super_admin) — POST from /admin/users
+
+		/admin/users was read-only and nothing wrote user.banned, so the
+		answer to "are these users all allowed to publish content?" was
+		"yes, and there is no way to stop one". Suspend is the normal tool
+		(reversible, keeps everything they own); delete is only offered for an
+		account that owns nothing at all.
+	=====================================================================*/
+	public function user_suspend($user_id = 0)
+	{
+		$this->moderateUser((int) $user_id, TRUE);
+	}
+
+	public function user_restore($user_id = 0)
+	{
+		$this->moderateUser((int) $user_id, FALSE);
+	}
+
+	private function moderateUser($user_id, $ban)
+	{
+		if ($this->input->method() !== 'post' || $user_id < 1) {
+			redirect('admin/users');
+			return;
+		}
+		$user = $this->db->where('user_id', $user_id)->limit(1)->get('user')->row();
+		if (!$user) {
+			$this->session->set_flashdata('error', 'No such member.');
+		} elseif (!$this->db->field_exists('banned', 'user')) {
+			$this->session->set_flashdata('error', 'Run migration 0035 first: the user table has no `banned` column.');
+		} elseif ($this->adminmodel->setUserBanned($user_id, $ban)) {
+			$this->session->set_flashdata('message', $ban
+				? '"' . $user->name . '" is suspended: they cannot sign in, and are signed out on their next click. Everything they own stays as it is.'
+				: '"' . $user->name . '" is restored and can sign in again.');
+		} else {
+			$this->session->set_flashdata('error', 'Could not update that member. ' . $this->adminmodel->lastDbError());
+		}
+		redirect($this->usersReturnUrl());
+	}
+
+	public function user_delete($user_id = 0)
+	{
+		$user_id = (int) $user_id;
+		if ($this->input->method() !== 'post' || $user_id < 1) {
+			redirect('admin/users');
+			return;
+		}
+		$user = $this->db->where('user_id', $user_id)->limit(1)->get('user')->row();
+		if (!$user) {
+			$this->session->set_flashdata('error', 'No such member.');
+			redirect($this->usersReturnUrl());
+			return;
+		}
+
+		$owned = $this->adminmodel->userOwnership($user_id);
+		if ($owned) {
+			$parts = array();
+			foreach ($owned as $label => $n) $parts[] = $n . ' ' . $label;
+			$this->session->set_flashdata('error', '"' . $user->name . '" was not deleted: they own ' . implode(', ', $parts)
+				. '. Suspend the account instead, or move those to another owner first.');
+		} elseif ($this->adminmodel->deleteEmptyUser($user_id)) {
+			$this->session->set_flashdata('message', 'Deleted the empty account "' . $user->name . '".');
+		} else {
+			$this->session->set_flashdata('error', 'Could not delete that account. ' . $this->adminmodel->lastDbError());
+		}
+		redirect($this->usersReturnUrl());
+	}
+
+	/** Back to the members page the action came from, search and page kept. */
+	private function usersReturnUrl()
+	{
+		$back = (string) $this->input->post('return_to');
+		return (strpos($back, 'admin/users') === 0) ? $back : 'admin/users';
+	}
+
+	/*=====================================================================
+		Deals & coupons (admin) — /admin/coupons
+
+		Members post deals at /user/my-coupons; until this screen nothing in
+		admin could see them, switch one off or remove one (the old sidebar
+		links went to admin-coupons.html, a theme file that never existed).
+	=====================================================================*/
+	public function coupons($page = 1)
+	{
+		$q = trim((string) $this->input->get('q', TRUE));
+
+		$per_page   = admin_per_page(20);
+		$total_rows = $this->adminmodel->countCouponsAdmin($q);
+
+		$this->pagination->initialize(array(
+			'base_url'           => base_url('admin/coupons'),
+			'total_rows'         => $total_rows,
+			'per_page'           => $per_page,
+			'uri_segment'        => 3,
+			'use_page_numbers'   => TRUE,
+			'reuse_query_string' => TRUE,
+			'full_tag_open'      => '<nav><ul class="pagination">',
+			'full_tag_close'     => '</ul></nav>',
+			'num_tag_open'       => '<li class="page-item">',
+			'num_tag_close'      => '</li>',
+			'cur_tag_open'       => '<li class="page-item active"><a class="page-link">',
+			'cur_tag_close'      => '</a></li>',
+			'next_tag_open'      => '<li class="page-item">',
+			'next_tag_close'     => '</li>',
+			'prev_tag_open'      => '<li class="page-item">',
+			'prev_tag_close'     => '</li>',
+			'first_tag_open'     => '<li class="page-item">',
+			'first_tag_close'    => '</li>',
+			'last_tag_open'      => '<li class="page-item">',
+			'last_tag_close'     => '</li>',
+			'attributes'         => array('class' => 'page-link'),
+		));
+
+		$page   = max(1, (int) $page);
+		$offset = ($page - 1) * $per_page;
+
+		$data = array(
+			'coupons'      => $this->adminmodel->getCouponsAdmin($per_page, $offset, $q),
+			'start_number' => $offset + 1,
+			'search_query' => $q,
+			'total_rows'   => $total_rows,
+			'link'         => $this->pagination->create_links(),
+		);
+
+		$this->load->view('admin/header');
+		$this->load->view('admin/coupons', $data);
+		$this->load->view('admin/footer');
+	}
+
+	/** POST — switch a deal on or off. */
+	public function coupon_toggle($coupon_id = 0)
+	{
+		$coupon = $this->input->method() === 'post' ? $this->adminmodel->getCouponAdmin((int) $coupon_id) : NULL;
+		if (!$coupon) {
+			redirect('admin/coupons');
+			return;
+		}
+		$on = empty($coupon->coupon_status) ? 1 : 0;
+		if ($this->adminmodel->setCouponStatus((int) $coupon->coupon_id, $on)) {
+			$this->session->set_flashdata('message', '"' . $coupon->coupon_name . '" is now ' . ($on ? 'live.' : 'switched off — hidden from /coupons and the homepage.'));
+		} else {
+			$this->session->set_flashdata('error', 'Could not change that deal.');
+		}
+		redirect('admin/coupons');
+	}
+
+	/** POST — delete a deal (and its picture). */
+	public function coupon_delete($coupon_id = 0)
+	{
+		$coupon = $this->input->method() === 'post' ? $this->adminmodel->getCouponAdmin((int) $coupon_id) : NULL;
+		if (!$coupon) {
+			redirect('admin/coupons');
+			return;
+		}
+		if ($this->adminmodel->deleteCouponAdmin((int) $coupon->coupon_id)) {
+			$this->session->set_flashdata('message', 'Deleted the deal "' . $coupon->coupon_name . '".');
+		} else {
+			$this->session->set_flashdata('error', 'Could not delete that deal.');
+		}
+		redirect('admin/coupons');
 	}
 
 	/*=====================================================================

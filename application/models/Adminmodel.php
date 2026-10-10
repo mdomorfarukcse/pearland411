@@ -498,6 +498,28 @@
 		 * @return array merge_key => array of rows (category_id, name, slug,
 		 *               listing_count), busiest first
 		 */
+		/**
+		 * Every listing category with its listing count, A-Z — the two
+		 * pickers of the "merge any two categories" form. The lookalike panel
+		 * only ever offered pairs whose NAMES matched, so the judgement calls
+		 * the client actually asked about (Finance / Financial Services, the
+		 * Education variants) could not be merged from any screen.
+		 */
+		public function getCategoriesForMerge()
+		{
+			if (!$this->db->table_exists('listing_categories')) return array();
+
+			return $this->db
+				->select('lc.category_id, lc.category_name,
+					(SELECT COUNT(*) FROM listings l
+					  WHERE l.category_id = lc.category_id
+					    AND (l.is_deleted IS NULL OR l.is_deleted = 0)) AS listing_count', FALSE)
+				->from('listing_categories lc')
+				->order_by('lc.category_name', 'ASC')
+				->get()
+				->result();
+		}
+
 		public function getDuplicateCategoryGroups()
 		{
 			if (!$this->db->table_exists('listing_categories')) return array();
@@ -2635,8 +2657,11 @@
 				// one signal that separates a live customer from a leftover
 				// test row in a list of business-shaped account names.
 				return $this->db
-					->select('u.user_id, u.name, u.email_id,
-						(SELECT COUNT(*) FROM `listings` l
+					->select('u.user_id, u.name, u.email_id, '
+						// Suspended accounts stay in the list (a record they own
+						// must still show its owner) but are labelled.
+						. ($this->db->field_exists('banned', 'user') ? 'u.banned, ' : '0 AS banned, ')
+						. '(SELECT COUNT(*) FROM `listings` l
 						  WHERE l.user_id = u.user_id AND l.is_deleted = 0) AS listing_count', false)
 					->from('user u')
 					->where("(u.name IS NOT NULL AND u.name != '')", null, false)
@@ -2680,8 +2705,10 @@
 			$verified = $this->db->field_exists('email_verified', 'user')
 				? 'u.email_verified' : 'NULL';
 
+			$banned = $this->db->field_exists('banned', 'user') ? 'u.banned' : '0';
+
 			$sql = "SELECT u.user_id, u.name, u.email_id, u.mobile_number, u.user_created,
-					{$verified} AS email_verified,
+					{$verified} AS email_verified, {$banned} AS banned,
 					(SELECT COUNT(*) FROM `listings` l
 					  WHERE l.user_id = u.user_id AND l.is_deleted = 0) AS listing_count,
 					(SELECT GROUP_CONCAT(l.listing_name ORDER BY l.listing_id SEPARATOR ', ')
@@ -2693,6 +2720,134 @@
 				LIMIT " . (int) $offset . ", " . (int) $limit;
 
 			return $this->db->query($sql, $bind)->result();
+		}
+
+		/**
+		 * Suspend (1) or restore (0) a member. Usermodel::login() refuses a
+		 * suspended account and User::__construct() ends a session that is
+		 * already open, so it takes effect on the member's next click.
+		 */
+		public function setUserBanned($user_id, $banned)
+		{
+			if (!$this->db->field_exists('banned', 'user')) return false;
+			return $this->db->where('user_id', (int) $user_id)
+				->update('user', array('banned' => $banned ? 1 : 0));
+		}
+
+		/**
+		 * Everything a member owns, by kind — the guard on deleting one.
+		 * A member who owns anything is suspended, not deleted: deleting them
+		 * would leave listings, posts and payments pointing at nobody.
+		 *
+		 * @return array label => count, only the non-zero ones
+		 */
+		public function userOwnership($user_id)
+		{
+			$user_id = (int) $user_id;
+			$checks = array(
+				'listings'      => array('listings', 'user_id'),
+				'events'        => array('events', 'user_id'),
+				'blog posts'    => array('blogs', 'user_id'),
+				'news articles' => array('news', 'user_id'),
+				'videos'        => array('video', 'user_id'),
+				'products'      => array('products', 'user_id'),
+				'classifieds'   => array('classifieds', 'user_id'),
+				'houses'        => array('house', 'user_id'),
+				'rentals'       => array('rental', 'user_id'),
+				'deals'         => array('coupons', 'coupon_user_id'),
+				'subscriptions' => array('subscriptions', 'user_id'),
+				'payments'      => array('transactions', 'user_id'),
+				'claims'        => array('claim_listings', 'user_id'),
+			);
+			$owned = array();
+			foreach ($checks as $label => $c) {
+				if (!$this->db->table_exists($c[0]) || !$this->db->field_exists($c[1], $c[0])) continue;
+				$n = (int) $this->db->where($c[1], $user_id)->count_all_results($c[0]);
+				if ($n > 0) $owned[$label] = $n;
+			}
+			return $owned;
+		}
+
+		/** Delete a member who owns nothing. @return bool */
+		public function deleteEmptyUser($user_id)
+		{
+			$user_id = (int) $user_id;
+			if ($user_id < 1 || $this->userOwnership($user_id)) return false;
+
+			foreach (array('user_usage_tracking', 'payment_cards') as $t) {
+				if ($this->db->table_exists($t) && $this->db->field_exists('user_id', $t)) {
+					$this->db->where('user_id', $user_id)->delete($t);
+				}
+			}
+			return $this->db->where('user_id', $user_id)->delete('user');
+		}
+
+		/*
+		 * Coupons (admin). The table predates the repo and its columns vary,
+		 * so these stick to the columns User::add_coupon writes.
+		 */
+		private function couponAdminSearch($q)
+		{
+			$q = trim((string) $q);
+			if ($q === '') return;
+			$this->db->group_start()
+				->like('c.coupon_name', $q)
+				->or_like('c.coupon_code', $q)
+				->or_like('u.name', $q)
+				->or_like('u.email_id', $q)
+				->group_end();
+		}
+
+		public function getCouponsAdmin($limit, $offset, $q = '')
+		{
+			if (!$this->db->table_exists('coupons')) return array();
+			$this->db->select('c.*, u.name AS owner_name, u.email_id AS owner_email,
+				(SELECT l.listing_name FROM listings l
+				  WHERE l.user_id = c.coupon_user_id AND (l.is_deleted IS NULL OR l.is_deleted = 0)
+				  ORDER BY l.listing_id LIMIT 1) AS listing_name', FALSE)
+				->from('coupons c')
+				->join('user u', 'u.user_id = c.coupon_user_id', 'left');
+			$this->couponAdminSearch($q);
+			return $this->db->order_by('c.coupon_id', 'DESC')
+				->limit((int) $limit, (int) $offset)
+				->get()->result();
+		}
+
+		public function countCouponsAdmin($q = '')
+		{
+			if (!$this->db->table_exists('coupons')) return 0;
+			$this->db->from('coupons c')->join('user u', 'u.user_id = c.coupon_user_id', 'left');
+			$this->couponAdminSearch($q);
+			return (int) $this->db->count_all_results();
+		}
+
+		public function getCouponAdmin($coupon_id)
+		{
+			if (!$this->db->table_exists('coupons')) return NULL;
+			return $this->db->where('coupon_id', (int) $coupon_id)->limit(1)->get('coupons')->row();
+		}
+
+		public function setCouponStatus($coupon_id, $on)
+		{
+			return $this->db->where('coupon_id', (int) $coupon_id)
+				->update('coupons', array('coupon_status' => $on ? 1 : 0));
+		}
+
+		public function deleteCouponAdmin($coupon_id)
+		{
+			$row = $this->getCouponAdmin($coupon_id);
+			if (!$row) return false;
+			if (!$this->db->where('coupon_id', (int) $coupon_id)->delete('coupons')) return false;
+
+			if (!empty($row->coupon_photo)) {
+				$base = FCPATH . ltrim($row->coupon_photo, '/');
+				foreach (array($base,
+					preg_replace('/\.[a-z0-9]+$/i', '_thumb.jpg', $base),
+					preg_replace('/\.[a-z0-9]+$/i', '_medium.jpg', $base)) as $f) {
+					if ($f && is_file($f)) @unlink($f);
+				}
+			}
+			return true;
 		}
 
 		/** Row count for getUserDirectory(), for the pager. */

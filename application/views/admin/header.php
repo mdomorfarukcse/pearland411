@@ -177,6 +177,10 @@
                 </ol>
               </div>
             </li>
+            <?php // Deals members post at /user/my-coupons — see, switch off, delete. ?>
+            <li class="ic-prod">
+              <a href="<?= base_url('admin/coupons') ?>">Deals &amp; Coupons</a>
+            </li>
             <?php // Contact-us messages, pricing-page callback requests and
                   // listing quote requests. The screen existed with no link
                   // to it, so sales leads were only ever seen by email. ?>

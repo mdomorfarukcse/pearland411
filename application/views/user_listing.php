@@ -7,9 +7,15 @@
 	<?php if ($this->session->flashdata('message')) { ?>
 
 		<div class="log-suc">
-			<p><?= $this->session->flashdata('message') ?></p>
+			<p><?= e($this->session->flashdata('message')) ?></p>
 		</div>
 
+	<?php } ?>
+	<?php // A partly failed save (a refused logo or photo) — said nowhere before. ?>
+	<?php if ($this->session->flashdata('error')) { ?>
+		<div class="log-err">
+			<p><?= e($this->session->flashdata('error')) ?></p>
+		</div>
 	<?php } ?>
 
 	<div class="ud-cen-s2">

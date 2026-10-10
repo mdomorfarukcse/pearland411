@@ -110,7 +110,12 @@ function pp_features($plan, $cat)
     .pp-sec-rule{height:3px;width:54px;background:var(--go);border-radius:3px;margin:10px 0 22px;}
 
     /* Cards */
-    .pp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:20px;}
+    /* auto-fill, not auto-fit: auto-fit collapsed the empty tracks, so a
+       section holding ONE package (Special Package) or two stretched its
+       cards across the full 1180px — a price and a button marooned at either
+       end of a banner, which is how the page read as "misaligned". auto-fill
+       keeps every card the width of a column wherever it sits. */
+    .pp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:20px;}
     .pp-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px 22px 22px;display:flex;flex-direction:column;transition:.18s;position:relative;}
     .pp-card:hover{transform:translateY(-3px);box-shadow:0 14px 32px rgba(31,36,48,.11);border-color:#D6DAE4;}
     .pp-card.is-selected{border-color:var(--go);box-shadow:0 0 0 2px rgba(121,184,42,.20);}
@@ -119,7 +124,9 @@ function pp_features($plan, $cat)
     .pp-badge.pop{background:var(--bu);}
     .pp-name{font-size:14px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--ink);margin:0 0 8px;line-height:1.35;}
     .pp-desc{font-size:13px;line-height:1.6;color:var(--ink2);margin:0 0 18px;}
-    .pp-price{display:flex;align-items:baseline;gap:5px;margin-bottom:4px;}
+    .pp-price{display:flex;align-items:baseline;flex-wrap:wrap;gap:5px;margin-bottom:4px;}
+    /* Whether the package renews — its own line under the price. */
+    .pp-renew{flex-basis:100%;font-size:12px;line-height:1.45;color:var(--ink2);margin-top:4px;}
     .pp-price .amt{font-size:36px;font-weight:800;color:var(--ink);line-height:1;}
     .pp-price .per{font-size:13px;color:var(--ink2);}
     .pp-feats{list-style:none;padding:0;margin:18px 0 22px;border-top:1px solid var(--line);padding-top:16px;}
@@ -285,7 +292,7 @@ function pp_features($plan, $cat)
                                 <span class="amt">$<?= number_format($price, ($price - floor($price)) > 0 ? 2 : 0) ?></span>
                                 <span class="per"><?= $isFree ? '' : htmlspecialchars($per) ?></span>
                                 <?php if (!$isFree): ?>
-                                    <small class="pp-renew" style="display:block;font-size:12px;color:#5A6472;margin-top:4px;"><?= htmlspecialchars($renewNote) ?></small>
+                                    <small class="pp-renew"><?= htmlspecialchars($renewNote) ?></small>
                                 <?php endif; ?>
                             </div>
 

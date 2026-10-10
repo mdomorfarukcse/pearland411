@@ -1323,6 +1323,12 @@ if (!function_exists('user_option_label')) {
             $label .= ' · ' . ($n === 0 ? 'no listings' : $n . ' listing' . ($n === 1 ? '' : 's'));
         }
 
+        // Suspended at /admin/users: still listed, so a record it owns keeps
+        // showing its owner, but nobody picks it for new content by mistake.
+        if (!empty($row->banned)) {
+            $label .= ' · SUSPENDED';
+        }
+
         return $label;
     }
 }

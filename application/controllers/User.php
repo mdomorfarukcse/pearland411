@@ -75,6 +75,23 @@ class User extends CI_Controller
 
 		$page = $this->router->fetch_method();
 
+		// A member suspended at /admin/users is signed out on their next
+		// request. login() already refused a banned account, but a session
+		// opened before the suspension carried on publishing until it
+		// expired. SELECT * rather than naming `banned`, so an install
+		// without the column (pre-0035) is unaffected.
+		$__sess = $this->session->userdata('logged_user');
+		if (!empty($__sess['logged_id'])) {
+			$__q = $this->db->query('SELECT * FROM ' . $this->db->protect_identifiers('user', TRUE) . ' WHERE user_id = ? LIMIT 1', array((int) $__sess['logged_id']));
+			$__me = $__q ? $__q->row() : NULL;
+			if ($__me && isset($__me->banned) && (int) $__me->banned === 1) {
+				$this->session->unset_userdata('logged_user');
+				$this->session->set_flashdata('login_message', 'Your account has been suspended. Please contact Pearland411 if you think this is a mistake.');
+				redirect(base_url('login'));
+				return;
+			}
+		}
+
 		if (!in_array($page, $public_actions, true)) {
 			if (!$this->session->userdata('logged_user')) {
 				$this->session->set_userdata('redirect_url', current_url());
@@ -713,7 +730,7 @@ class User extends CI_Controller
 		// after they asked to be phoned back about a package loses their
 		// place. Whitelisted — never redirect to a posted URL.
 		$return_to = (string) $this->input->post('return_to');
-		$back = in_array($return_to, array('pricing-plan', 'contact-us'), true)
+		$back = in_array($return_to, array('pricing-plan', 'contact-us', 'post-your-ads'), true)
 			? $return_to
 			: 'contact-us';
 
@@ -746,7 +763,12 @@ class User extends CI_Controller
 
 		// Where it came from, so the sales team can see a callback request for
 		// what it is rather than reading it as a general enquiry.
-		$source = $back === 'pricing-plan' ? 'Pricing plan — callback' : 'Contact Us';
+		$sources = array(
+			'pricing-plan'  => 'Pricing plan — callback',
+			'post-your-ads' => 'Advertise with us',
+			'contact-us'    => 'Contact Us',
+		);
+		$source = $sources[$back];
 
 		// Which inbox it belongs in. Whitelisted, not trusted: `topic` comes
 		// off a hidden field, and the type column drives the admin filters.
@@ -754,7 +776,7 @@ class User extends CI_Controller
 		// else stays a `contact` message, which is what /contact-us posts.
 		$topic = trim((string) $this->input->post('topic'));
 		if (!in_array($topic, array('package', 'contact'), true)) {
-			$topic = $back === 'pricing-plan' ? 'package' : 'contact';
+			$topic = in_array($back, array('pricing-plan', 'post-your-ads'), true) ? 'package' : 'contact';
 		}
 
 		// Who it is for. Matched back against enquiry_departments() so the
@@ -782,25 +804,19 @@ class User extends CI_Controller
 			$row['enquiry_message'] = 'For: ' . $department . "\n\n" . $row['enquiry_message'];
 		}
 
-		$this->db->insert('enquiries', $row);
+		// Saved first, through the schema-tolerant insert add_enquiry uses.
+		$saved = (bool) $this->usermodel->addEnquiry($row);
 
 		$this->load->library('mailer');
 
-		// Acknowledge to the sender — only when they left an address.
-		if (trim($email) !== '') {
-			$ack = '<p>Thanks — we received your message and passed it to '
-				. html_escape($department) . '. Someone there will get back to you shortly.</p>'
-				. '<p>For reference, you sent:</p>'
-				. '<blockquote>' . nl2br(html_escape($message)) . '</blockquote>';
-			$this->mailer->send($email, 'We received your message', $ack);
-		}
-
 		// Notify the admin address. A department with a mailbox of its own gets
 		// it directly; everything else falls through to the site-wide address,
-		// so leaving the department emails blank changes nothing.
-		$admin_to = form_recipient_email(enquiry_department_email($department));
+		// so leaving the department emails blank changes nothing. Reply-To is
+		// the sender, so answering the alert answers them.
+		$admin_sent = FALSE;
+		$admin_to   = form_recipient_email(enquiry_department_email($department));
 		if ($admin_to) {
-			$alert = '<p>New ' . ($topic === 'package' ? 'package callback request' : 'contact-form submission') . ':</p>'
+			$alert = '<p>New ' . ($topic === 'package' ? 'package / advertising enquiry' : 'contact-form submission') . ':</p>'
 				. '<ul>'
 				. '<li>Department: ' . html_escape($department) . '</li>'
 				. '<li>Name: '       . html_escape($name)       . '</li>'
@@ -809,19 +825,49 @@ class User extends CI_Controller
 				. '<li>Subject: '    . html_escape($subject)    . '</li>'
 				. '<li>Page: '       . html_escape($source)     . '</li>'
 				. '</ul>'
-				. '<p>Message:</p><blockquote>' . nl2br(html_escape($message)) . '</blockquote>';
-			$this->mailer->send(
+				. '<p>Message:</p><blockquote>' . nl2br(html_escape($message)) . '</blockquote>'
+				. '<p>All enquiries: <a href="' . html_escape(base_url('admin/enquiries')) . '">' . html_escape(base_url('admin/enquiries')) . '</a></p>';
+			$admin_sent = $this->mailer->send(
 				$admin_to,
-				'[Pearland411] ' . ($topic === 'package' ? 'Package callback' : 'Contact-Us message')
+				'[Pearland411] ' . ($topic === 'package' ? 'Package enquiry' : 'Contact-Us message')
 					. ' for ' . $department . ' from ' . $name,
-				$alert
+				$this->mailer->render('New enquiry', $alert, array('preheader' => 'From ' . $name)),
+				NULL,
+				array('reply_to' => $email, 'reply_to_name' => $name, 'log_type' => 'contact')
 			);
 		}
 
-		$this->session->set_flashdata('contact_success',
-			$back === 'pricing-plan'
-				? 'Thanks! Someone from ' . $department . ' will call you back shortly.'
-				: 'Thanks! We passed this to ' . $department . ' and will be in touch soon.');
+		// Acknowledge to the sender — only when they left an address, and
+		// only once we know the message is somewhere: saved, or delivered to
+		// the team.
+		if (trim($email) !== '' && ($saved || $admin_sent)) {
+			$ack = '<p>Thanks — we received your message and passed it to '
+				. html_escape($department) . '. Someone there will get back to you shortly.</p>'
+				. '<p>For reference, you sent:</p>'
+				. '<blockquote>' . nl2br(html_escape($message)) . '</blockquote>';
+			$this->mailer->send($email, 'We received your message',
+				$this->mailer->render('We received your message', $ack),
+				NULL, array('log_type' => 'contact'));
+		}
+
+		// Both results used to be ignored, so the page said "Thanks" even when
+		// the message had been neither stored nor sent. A failed email with a
+		// saved row is still a success for the visitor (the team sees it at
+		// /admin/enquiries, and the failure is in email_log); losing both is not.
+		if (!$saved && !$admin_sent) {
+			log_message('error', 'contact_submit: enquiry neither saved nor emailed (from ' . $email . ')');
+			$this->session->set_flashdata('contact_error',
+				'Sorry — your message could not be sent just now. Please try again in a few minutes, or call us.');
+			redirect($back);
+			return;
+		}
+
+		$thanks = array(
+			'pricing-plan'  => 'Thanks! Someone from ' . $department . ' will call you back shortly.',
+			'post-your-ads' => 'Thanks! Our sales team will contact you with placements and pricing within one business day.',
+			'contact-us'    => 'Thanks! We passed this to ' . $department . ' and will be in touch soon.',
+		);
+		$this->session->set_flashdata('contact_success', $thanks[$back]);
 		redirect($back);
 	}
 
@@ -4318,7 +4364,7 @@ class User extends CI_Controller
 					$info['listing_seo_description'] = $this->input->post('listing_seo_description');
 				}
 
-				if ($_FILES && $_FILES['listing_profile_image']['name']) {
+				if (!empty($_FILES['listing_profile_image']['name'])) {
 					$img_info = [
 						'upload_path' => 'images/listings',
 						'quality'     => '60%',
@@ -4327,7 +4373,11 @@ class User extends CI_Controller
 						'image_name'  => 'listing_profile_image'
 					];
 
-					$info['listing_image'] = uploadAndResize($img_info);
+					// Never write NULL over a stored logo because an upload failed.
+					$new_logo = uploadAndResize($img_info);
+					if ($new_logo) {
+						$info['listing_image'] = $new_logo;
+					}
 				}
 
 				// Handle Gallery Images Upload for User
@@ -4588,7 +4638,10 @@ class User extends CI_Controller
 				if (!$caps['can_video'])         { unset($info['listing_video']); }
 				if (!$caps['can_extra_details']) { unset($info['listing_seo_title'], $info['listing_seo_keywords'], $info['listing_seo_description']); }
 
-				if ($caps['can_photos'] && $_FILES && $_FILES['listing_profile_image']['name']) {
+				// Only a successful upload replaces the logo. A refused file used
+				// to be written as NULL over the stored logo.
+				$logo_note = '';
+				if ($caps['can_photos'] && !empty($_FILES['listing_profile_image']['name'])) {
 					$img_info = [
 						'upload_path' => 'images/listings',
 						'quality'     => '60%',
@@ -4597,7 +4650,12 @@ class User extends CI_Controller
 						'image_name'  => 'listing_profile_image'
 					];
 
-					$info['listing_image'] = uploadAndResize($img_info);
+					$new_logo = uploadAndResize($img_info);
+					if ($new_logo) {
+						$info['listing_image'] = $new_logo;
+					} else {
+						$logo_note = 'Your logo was not changed: ' . (upload_last_error() ?: 'the file could not be read.');
+					}
 				}
 
 				// Handle Gallery Images Upload for User Edit.
@@ -4657,9 +4715,10 @@ class User extends CI_Controller
 							if ($uploaded_image) {
 								// Store path with assets prefix like logo image
 								$gallery_images[] = 'assets/images/listings/' . basename($uploaded_image);
-								error_log("USER EDIT Gallery image uploaded: " . $uploaded_image);
 							} else {
-								error_log("USER EDIT Gallery image upload failed for: " . $_FILES['listing_image_gallery']['name'][$i]);
+								// Said nothing before: the save reported success over a lost photo.
+								$gallery_notes[] = 'Photo "' . $_FILES['listing_image_gallery']['name'][$i] . '" was not added: '
+									. (upload_last_error() ?: 'the file could not be read.');
 							}
 						}
 					}
@@ -4694,6 +4753,10 @@ class User extends CI_Controller
 				$update_result = $this->usermodel->update($slug, $info, 'listing_slug', 'listings');
 
 				if ($update_result) {
+					$notes = array_filter(array_merge(array($logo_note), isset($gallery_notes) ? $gallery_notes : array()));
+					if ($notes) {
+						$this->session->set_flashdata('error', 'Listing updated, but: ' . implode(' ', $notes));
+					}
 					$this->session->set_flashdata('message', 'Listing Updated Successfully.');
 					redirect('user/user-listing', 'refresh');
 				} else {

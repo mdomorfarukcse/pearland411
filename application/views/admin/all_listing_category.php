@@ -110,6 +110,49 @@
             </div>
           <?php endif; ?>
 
+          <?php $merge_options = (isset($merge_options) && is_array($merge_options)) ? $merge_options : array(); ?>
+          <?php if (count($merge_options) > 1): ?>
+            <details style="margin:16px 0;padding:12px 16px;border:1px solid #DCE3EE;background:#F7F9FC;border-radius:8px;">
+              <summary style="cursor:pointer;font-weight:600;color:#20245B;">Merge any two categories</summary>
+              <p style="margin:10px 0 12px;font-size:13px;color:#5A6072;">
+                For pairs that mean the same thing but are not spelled alike &mdash; Finance and Financial
+                Services, say. Every listing, sub-category and category-targeted ad in the first moves to
+                the second, then the first is removed. Recorded in the merge log; it cannot be undone from here.
+              </p>
+              <form method="post" action="<?= base_url('admin/merge_listing_category') ?>" id="mergeAnyForm"
+                    style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+                <label style="flex:1 1 240px;margin:0;">Merge this category
+                  <select name="from_category_id" id="mergeFrom" required class="form-control">
+                    <option value="">Choose&hellip;</option>
+                    <?php foreach ($merge_options as $mo): ?>
+                      <option value="<?= (int) $mo->category_id ?>"><?= e($mo->category_name) ?> (<?= (int) $mo->listing_count ?>)</option>
+                    <?php endforeach; ?>
+                  </select>
+                </label>
+                <label style="flex:1 1 240px;margin:0;">into this one (kept)
+                  <select name="to_category_id" id="mergeTo" required class="form-control">
+                    <option value="">Choose&hellip;</option>
+                    <?php foreach ($merge_options as $mo): ?>
+                      <option value="<?= (int) $mo->category_id ?>"><?= e($mo->category_name) ?> (<?= (int) $mo->listing_count ?>)</option>
+                    <?php endforeach; ?>
+                  </select>
+                </label>
+                <button type="submit" class="db-tit-btn" style="position:static;top:auto;right:auto;">Merge</button>
+              </form>
+              <script>
+                document.getElementById('mergeAnyForm').addEventListener('submit', function (e) {
+                  var f = document.getElementById('mergeFrom'), t = document.getElementById('mergeTo');
+                  if (!f.value || !t.value) { e.preventDefault(); alert('Choose both categories.'); return; }
+                  if (f.value === t.value) { e.preventDefault(); alert('Choose two different categories.'); return; }
+                  var fn = f.options[f.selectedIndex].text, tn = t.options[t.selectedIndex].text;
+                  if (!confirm('Move everything in "' + fn + '" into "' + tn + '" and delete "' + fn + '"? This cannot be undone from here.')) {
+                    e.preventDefault();
+                  }
+                });
+              </script>
+            </details>
+          <?php endif; ?>
+
           <form method="post" action="<?= base_url('admin/delete_selected_listing_category'); ?>" id="bulk-category-form">
 
             <div class="bulk-actions" style="margin: 10px 0;">
