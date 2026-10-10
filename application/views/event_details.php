@@ -59,26 +59,11 @@ $ev_map = embed_src($event->event_map ?? '');
 $ev_about = content_text($event->event_description ?? '');
 
 /**
- * "Add to Google Calendar" for an all-day entry on the event's date.
- *
- * event_time is free text ("4:00 PM – 9:00 PM", "6PM till late"), so it can't
- * be turned into a reliable start/end timestamp. The all-day entry is honest,
- * always right, and carries the written time in the description.
+ * "Add to Google Calendar". Timed when event_time can be read (see
+ * event_time_range() in view_helper.php), all-day otherwise — it used to be
+ * all-day always, so a 7 PM concert landed in the calendar with no time.
  */
-$ev_calendar = '';
-if ($ev_start_ts) {
-	$cal_end = $ev_end_ts && $ev_end_ts >= $ev_start_ts ? $ev_end_ts : $ev_start_ts;
-	$details = trim(($ev_time !== '' ? 'Time: ' . $ev_time . "\n\n" : '')
-		. content_excerpt($event->event_description ?? '', 600)
-		. "\n\n" . $ev_link);
-	$ev_calendar = 'https://calendar.google.com/calendar/render?' . http_build_query(array(
-		'action'   => 'TEMPLATE',
-		'text'     => $ev_name,
-		'dates'    => date('Ymd', $ev_start_ts) . '/' . date('Ymd', strtotime('+1 day', $cal_end)),
-		'details'  => $details,
-		'location' => $ev_address,
-	));
-}
+$ev_calendar = event_calendar_url($event, $ev_link, content_excerpt($event->event_description ?? '', 600));
 
 $ev_directions = $ev_address !== ''
 	? 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($ev_address)

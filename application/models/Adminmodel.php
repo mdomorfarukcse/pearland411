@@ -1481,31 +1481,52 @@
 			Delete Video Category Information
 			====================================*/
 
+		/**
+		 * Delete a video category. Its videos are kept, moved to "no
+		 * category" (NULL, or 0 where the column is NOT NULL).
+		 *
+		 * @return int|false how many videos were uncategorised, FALSE if no
+		 *                   such category or the delete failed
+		 */
 		public function deleteVideoCategory($slug)
 		{
 			$data = $this->db->select('*')->from('video_categories')->where('category_slug', $slug)->get()->row();
-			$img = '';
-			if ($data->category_image) {
-				$image_link = './' . $data->category_image;
-
-				if (file_exists($image_link)) {
-					$img = $image_link;
-				} else {
-					$img = '';
-				}
-			}
-
-			if ($this->db->where('category_slug', $slug)->delete('video_categories')) {
-				if ($img != '') {
-					unlink($img);
-					return true;
-				} else {
-					return true;
-				}
-			} else {
+			if (!$data) {
 				return false;
 			}
+
+			$moved = (int) $this->db->where('video_category_id', (int) $data->category_id)->count_all_results('video');
+			if ($moved > 0) {
+				$this->db->where('video_category_id', (int) $data->category_id)->update('video', array('video_category_id' => NULL));
+				if ($this->db->error()['code']) {
+					$this->db->where('video_category_id', (int) $data->category_id)->update('video', array('video_category_id' => 0));
+				}
+			}
+
+			if (!$this->db->where('category_id', (int) $data->category_id)->delete('video_categories')) {
+				return false;
+			}
+
+			if (!empty($data->category_image) && file_exists('./' . $data->category_image)) {
+				@unlink('./' . $data->category_image);
+			}
+
+			return $moved;
 		}
+
+		/** A video_categories.category_slug no other category has. */
+		public function uniqueVideoCategorySlug($name, $except_id = 0)
+		{
+			$base = function_exists('pearland_slug') ? pearland_slug((string) $name) : '';
+			if ($base === '') $base = 'category';
+
+			$slug = $base;
+			for ($n = 2; $this->db->where('category_slug', $slug)->where('category_id !=', (int) $except_id)->count_all_results('video_categories') > 0; $n++) {
+				$slug = $base . '-' . $n;
+			}
+			return $slug;
+		}
+
 		public function getVideo($limit, $offset)
 		{
 			return $this->db->select('video.*, user.name, categories.category_name')
@@ -2915,18 +2936,106 @@
 			return $this->db->select('*')->from('plans')->where('id', $id)->get()->row();
 		}
 
+		/** Every plan, active or not, for the admin screen. */
+		public function getAllPricingPlansAdmin()
+		{
+			return $this->db->from('plans')
+				->order_by('is_active', 'DESC')
+				->order_by('sort_order', 'ASC')
+				->order_by('id', 'ASC')
+				->get()->result();
+		}
+
+		/** @return int|false the new plan id */
 		public function addPricingPlan($data)
 		{
-			if ($this->db->insert('plans', $data)) {
-				return true;
-			} else {
-				return false;
+			foreach (array_keys($data) as $col) {
+				if (!$this->db->field_exists($col, 'plans')) unset($data[$col]);
 			}
+			if ($this->db->insert('plans', $data)) {
+				return (int) $this->db->insert_id();
+			}
+			return false;
+		}
+
+		/** A plans.slug no other plan has: `name` → `name`, `name-2`, `name-3`… */
+		public function uniquePlanSlug($source)
+		{
+			$base = function_exists('pearland_slug') ? pearland_slug((string) $source) : '';
+			if ($base === '') $base = strtolower(trim(preg_replace('/[^a-z0-9]+/i', '-', (string) $source), '-'));
+			if ($base === '') $base = 'plan';
+			$base = substr($base, 0, 90);
+
+			if (!$this->db->field_exists('slug', 'plans')) return $base;
+
+			$slug = $base;
+			for ($n = 2; $this->db->where('slug', $slug)->count_all_results('plans') > 0; $n++) {
+				$slug = $base . '-' . $n;
+			}
+			return $slug;
+		}
+
+		public function nextPlanSortOrder()
+		{
+			$row = $this->db->select_max('sort_order', 'm')->get('plans')->row();
+			return ($row && $row->m !== NULL) ? ((int) $row->m + 1) : 1;
+		}
+
+		/**
+		 * Make the plan's base-term plan_durations row (the one whose length
+		 * equals plans.duration_days) carry plans.price, creating it if the
+		 * plan has none.
+		 *
+		 * The two stores used to drift: /pricing-plan prints plans.price, but
+		 * the checkout charges the matching plan_durations row when one
+		 * exists — so editing either one alone put two prices on the site.
+		 */
+		public function syncPlanBaseTerm($plan_id)
+		{
+			if (!$this->db->table_exists('plan_durations')) return false;
+			$plan = $this->getPricingPlan((int) $plan_id);
+			if (!$plan) return false;
+
+			$days = (int) $plan->duration_days > 0 ? (int) $plan->duration_days : 30;
+			$row  = $this->db->where('plan_id', (int) $plan->id)
+				->where('duration_days', $days)
+				->order_by('id', 'ASC')->limit(1)
+				->get('plan_durations')->row();
+
+			if ($row) {
+				return $this->updatePricingDuration($row->id, (float) $plan->price, array(
+					'currency'  => (string) $plan->currency,
+					'is_active' => 1,
+				));
+			}
+
+			$months = $days >= 28 ? (int) round($days / 30) : 0;
+			return (bool) $this->addPlanDuration((int) $plan->id, $months, $days, (float) $plan->price, (string) ($plan->currency ?: 'USD'));
+		}
+
+		/** The reverse: a base-term row was re-priced, so re-price the plan. */
+		public function syncPlanPriceFromTerm($term)
+		{
+			if (!$term || empty($term->plan_id)) return false;
+			$plan = $this->getPricingPlan((int) $term->plan_id);
+			if (!$plan) return false;
+
+			$days = (int) $plan->duration_days > 0 ? (int) $plan->duration_days : 30;
+			if ((int) $term->duration_days !== $days) return false;
+
+			return $this->updatePricingPlan((int) $plan->id, array(
+				'price'      => round((float) $term->price, 2),
+				'updated_at' => date('Y-m-d H:i:s'),
+			));
 		}
 
 		public function updatePricingPlan($id, $data)
 		{
-			$this->db->where('id', $id);
+			foreach (array_keys($data) as $col) {
+				if (!$this->db->field_exists($col, 'plans')) unset($data[$col]);
+			}
+			if (empty($data)) return false;
+			$this->db->where('id', (int) $id);
 			if ($this->db->update('plans', $data)) {
 				return true;
 			} else {

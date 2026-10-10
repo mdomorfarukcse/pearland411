@@ -150,6 +150,9 @@
 															<?php if (site_setting('service_news_enabled', '1') !== '0'): ?>
 																<li><a href="<?= base_url('news') ?>"><img src="<?= base_url() ?>assets/images/icon/news.png" loading="lazy" alt="">Local News</a></li>
 															<?php endif; ?>
+															<?php if (site_setting('service_blog_enabled', '1') !== '0'): ?>
+																<li><a href="<?= base_url('all-blog') ?>"><img src="<?= base_url() ?>assets/images/icon/blog.png" loading="lazy" alt="">Blog</a></li>
+															<?php endif; ?>
 															<?php if (site_setting('service_events_enabled', '1') !== '0'): ?>
 																<li><a href="<?= base_url('event') ?>"><img src="<?= base_url() ?>assets/images/icon/calendar.png" loading="lazy" alt="">Events</a></li>
 															<?php endif; ?>

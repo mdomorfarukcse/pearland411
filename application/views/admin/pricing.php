@@ -63,8 +63,19 @@
                         $currentCategory = null;
                         ?>
                         <div class="row">
-                            <?php if (!empty($pricing_plans)): ?>
-                                <?php foreach ($pricing_plans as $index => $plan): ?>
+                            <?php if ($this->session->flashdata('message')): ?>
+                                <div class="col-12"><div class="alert alert-success"><?= e($this->session->flashdata('message')) ?></div></div>
+                            <?php endif; ?>
+                            <?php if ($this->session->flashdata('error')): ?>
+                                <div class="col-12"><div class="alert alert-danger"><?= e($this->session->flashdata('error')) ?></div></div>
+                            <?php endif; ?>
+                            <?php
+                            // Cards are what the customer sees, so only plans on sale;
+                            // the table below lists every plan, off-sale ones included.
+                            $active_plans = array_values(array_filter((array) $pricing_plans, function ($p) { return !empty($p->is_active); }));
+                            ?>
+                            <?php if (!empty($active_plans)): ?>
+                                <?php foreach ($active_plans as $index => $plan): ?>
                                     <?php
                                     $badge_colors = ['primary', 'success', 'warning', 'info'];
                                     $color = $badge_colors[$index % count($badge_colors)];
@@ -78,15 +89,20 @@
                                             <h4 class="mt-3 mb-2 border-bottom pb-2"><?php echo isset($catLabels[$cat]) ? $catLabels[$cat] : ucfirst($cat); ?></h4>
                                         </div>
                                     <?php endif; ?>
-                                    <!-- <?php echo $plan->name; ?> -->
                                     <div class="col-lg-4">
                                         <div class="card border border-<?php echo $color; ?>">
                                             <div class="card-body p-4">
                                                 <div class="text-center">
-                                                    <h4 class="mt-0"><?php echo $plan->name; ?></h4>
+                                                    <h4 class="mt-0"><?= e($plan->name) ?></h4>
                                                     <h2 class="text-<?php echo $color; ?>">
-                                                        <?php echo $plan->currency; ?><?php echo $plan->price; ?>
-                                                        <span class="font-13 text-muted">/ <?= e(billing_interval_noun(isset($plan->billing_interval) ? $plan->billing_interval : '')) ?></span>
+                                                        <?php if ($plan->price === null || $plan->price === ''): ?>
+                                                            <span class="text-danger font-16">No price set</span>
+                                                        <?php else: ?>
+                                                            <?= e($plan->currency) ?> <?= number_format((float) $plan->price, 2) ?>
+                                                            <?php // What the customer reads on /pricing-plan. A one-time
+                                                                  // plan used to print "/ month" here. ?>
+                                                            <span class="font-13 text-muted"><?= e(plan_term_copy($plan)[0]) ?></span>
+                                                        <?php endif; ?>
                                                     </h2>
                                                 </div>
                                                 <div class="pricing-features mt-4">
@@ -170,11 +186,13 @@
                                             <select id="manage_plan_select" class="form-control mr-2">
                                                 <option value="">-- Select Plan --</option>
                                                 <?php if (!empty($pricing_plans)): foreach ($pricing_plans as $p): ?>
-                                                        <option value="<?= $p->id ?>"><?= htmlspecialchars($p->name) ?> (ID: <?= $p->id ?>)</option>
+                                                        <option value="<?= (int) $p->id ?>"><?= htmlspecialchars($p->name) ?> (ID: <?= (int) $p->id ?>)<?= empty($p->is_active) ? ' — off sale' : '' ?></option>
                                                 <?php endforeach;
                                                 endif; ?>
                                             </select>
-                                            <button id="manage_durations_btn mt-3" class="btn btn-sm btn-outline-primary">Edit Durations</button>
+                                            <?php // The id carried a stray " mt-3", so $('#manage_durations_btn') matched
+                                                  // nothing and this button — the only price editor on the page — did nothing. ?>
+                                            <button type="button" id="manage_durations_btn" class="btn btn-sm btn-outline-primary">Edit Durations</button>
                                             <small class="form-text text-muted ml-3">Open the duration editor for the selected plan to change per-duration pricing.</small>
                                         </div>
                                     </div>
@@ -189,7 +207,7 @@
                                     <div class="card-body">
                                         <div class="d-flex justify-content-between align-items-center mb-3">
                                             <h5 class="card-title mb-0">Manage Pricing</h5>
-                                            <button class="btn btn-sm btn-primary" data-toggle="modal" data-target="#addPricingModal">
+                                            <button type="button" class="btn btn-sm btn-primary" data-toggle="modal" data-target="#addPricingModal">
                                                 <i class="mdi mdi-plus"></i> Add New Plan
                                             </button>
                                         </div>
@@ -209,23 +227,32 @@
                                                 <tbody>
                                                     <?php if (!empty($pricing_plans)): ?>
                                                         <?php foreach ($pricing_plans as $plan): ?>
-                                                            <tr>
-                                                                <td><?php echo $plan->name; ?></td>
-                                                                <td><?php echo $plan->currency; ?><?php echo $plan->price; ?></td>
-                                                                <td><?php echo $plan->duration_days; ?> days</td>
+                                                            <tr<?= empty($plan->is_active) ? ' class="text-muted"' : '' ?>>
+                                                                <td><?= e($plan->name) ?><?php if (!empty($plan->slug)): ?><br><small class="text-muted"><?= e($plan->slug) ?></small><?php endif; ?></td>
+                                                                <td><?= ($plan->price === null || $plan->price === '') ? '<span class="text-danger">not set</span>' : e($plan->currency) . ' ' . number_format((float) $plan->price, 2) ?></td>
+                                                                <td><?= (int) $plan->duration_days ?> days &middot; <?= e(billing_interval_is_one_time($plan->billing_interval ?? '') ? 'one-time' : ($plan->billing_interval ?? '')) ?></td>
                                                                 <td>
-                                                                    <?php echo ($plan->listing_limit == -1) ? 'Unlimited' : $plan->listing_limit . ' listings'; ?>
+                                                                    <?php echo ((int) $plan->listing_limit === -1 || (int) $plan->listing_limit === 0) ? 'Unlimited' : (int) $plan->listing_limit . ' listings'; ?>
                                                                 </td>
                                                                 <td>
                                                                     <?php if ($plan->is_active): ?>
                                                                         <span class="badge badge-success">Active</span>
                                                                     <?php else: ?>
-                                                                        <span class="badge badge-danger">Inactive</span>
+                                                                        <span class="badge badge-danger">Off sale</span>
                                                                     <?php endif; ?>
                                                                 </td>
                                                                 <td>
-                                                                    <button class="btn btn-sm btn-info" onclick="editPlan(<?php echo $plan->id; ?>)">Edit</button>
-                                                                    <!-- <button class="btn btn-sm btn-danger" onclick="deletePlan(<?php echo $plan->id; ?>)">Delete</button> -->
+                                                                    <button type="button" class="btn btn-sm btn-info" onclick="editPlan(<?= (int) $plan->id ?>)">Edit</button>
+                                                                    <?php // Off sale rather than deleted: subscriptions and
+                                                                          // transactions reference the plan, and renewals read its price. ?>
+                                                                    <form method="post" action="<?= base_url('admin/toggle_pricing_plan/' . (int) $plan->id) ?>" style="display:inline;"
+                                                                          onsubmit="return confirm(<?= e_attr(json_encode(!empty($plan->is_active)
+                                                                              ? 'Take this plan off sale? Existing customers keep it until it ends.'
+                                                                              : 'Put this plan back on sale?')) ?>);">
+                                                                        <button type="submit" class="btn btn-sm <?= !empty($plan->is_active) ? 'btn-outline-danger' : 'btn-outline-success' ?>">
+                                                                            <?= !empty($plan->is_active) ? 'Deactivate' : 'Activate' ?>
+                                                                        </button>
+                                                                    </form>
                                                                 </td>
                                                             </tr>
                                                         <?php endforeach; ?>
@@ -283,11 +310,50 @@
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
-                <form action="<?php echo base_url('admin/add_pricing_plan'); ?>" method="post">
+                <form action="<?php echo base_url('admin/add_pricing_plan'); ?>" method="post" id="planForm">
                     <div class="modal-body">
                         <div class="form-group">
                             <label for="planName">Plan Name</label>
-                            <input type="text" class="form-control" name="plan_name" id="planName" placeholder="Enter plan name" required>
+                            <input type="text" class="form-control" name="plan_name" id="planName" placeholder="Enter plan name" required maxlength="150">
+                        </div>
+                        <?php // Price, currency and term. The modal had none of these while the
+                              // controller wrote them, so every save set the price to NULL. ?>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="planPrice">Price</label>
+                                    <input type="number" step="0.01" min="0" class="form-control" name="plan_price" id="planPrice" required placeholder="0.00">
+                                    <small class="form-text text-muted">0 makes it a free tier.</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="planCurrency">Currency</label>
+                                    <input type="text" class="form-control" name="currency" id="planCurrency" value="USD" maxlength="3" pattern="[A-Za-z]{3}">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="planDuration">Term (days)</label>
+                                    <input type="number" min="1" max="3650" class="form-control" name="duration_days" id="planDuration" value="30" required>
+                                    <small class="form-text text-muted">The price above buys this many days. Longer terms: Edit Durations.</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="planSlug">Slug / ad-zone key</label>
+                                    <input type="text" class="form-control" name="slug" id="planSlug" placeholder="generated from the name" maxlength="90" pattern="[a-z0-9-]*">
+                                    <small class="form-text text-muted" id="planSlugHint">For a banner plan this must match the ad zone&rsquo;s key. Cannot be changed after the plan is created.</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="planSort">Sort order</label>
+                                    <input type="number" class="form-control" name="sort_order" id="planSort" placeholder="last">
+                                </div>
+                            </div>
                         </div>
                         <div class="row">
                             <div class="col-md-6">
@@ -296,6 +362,7 @@
                                     <select class="form-control" name="billing_interval" id="billingInterval">
                                         <option value="monthly">Monthly</option>
                                         <option value="yearly">Yearly</option>
+                                        <option value="weekly">Weekly</option>
                                         <option value="one-time">One Time</option>
                                     </select>
                                 </div>
@@ -543,11 +610,13 @@ function ppAdminReady(fn) {
                     if (response && typeof response === 'object') {
                         // Populate form fields safely
                         $('#planName').val(response.name || '');
-                        $('#planPrice').val(response.price || '');
+                        $('#planPrice').val(response.price !== null && response.price !== undefined ? response.price : '');
                         $('#planCurrency').val(response.currency || 'USD');
-                        $('#planDuration').val(response.duration_days || '');
-                        $('#billingInterval').val(response.billing_interval || 'monthly');
-                        $('#planCategory').val(response.category || 'business-listing');
+                        $('#planDuration').val(response.duration_days || 30);
+                        $('#planSlug').val(response.slug || '').prop('readonly', true);
+                        $('#planSort').val(response.sort_order !== null && response.sort_order !== undefined ? response.sort_order : '');
+                        $('#billingInterval').val(response.billing_interval || 'monthly').trigger('change');
+                        $('#planCategory').val(response.category || 'business-listing').trigger('change');
 
                         // Sidebar section limits
                         $('#listingsLimit').val(response.listing_limit || 0);
@@ -578,8 +647,9 @@ function ppAdminReady(fn) {
 
                         $('#planDescription').val(response.description || '');
 
-                        // Update form for editing
-                        $('form').attr('action', '<?php echo base_url("admin/edit_pricing_plan/"); ?>' + planId);
+                        // Update form for editing. #planForm, not $('form'): that
+                        // rewrote the action of every form on the page.
+                        $('#planForm').attr('action', '<?php echo base_url("admin/edit_pricing_plan/"); ?>' + planId);
                         $('#addPricingModalLabel').text('Edit Pricing Plan');
                         $('#addPricingModal').modal('show');
                     } else {
@@ -599,16 +669,23 @@ function ppAdminReady(fn) {
                 return;
             }
 
-            if (confirm('Are you sure you want to delete this pricing plan?')) {
-                window.location.href = '<?php echo base_url("admin/delete_pricing_plan/"); ?>' + planId;
+            if (confirm('Take this pricing plan off sale?')) {
+                var f = document.createElement('form');
+                f.method = 'post';
+                f.action = '<?php echo base_url("admin/toggle_pricing_plan/"); ?>' + planId;
+                var t = document.querySelector('meta[name="csrf-token"]'), n = document.querySelector('meta[name="csrf-token-name"]');
+                if (t && n) { var i = document.createElement('input'); i.type = 'hidden'; i.name = n.content; i.value = t.content; f.appendChild(i); }
+                document.body.appendChild(f);
+                f.submit();
             }
         }
 
         function resetForm() {
-            if ($('form')[0]) {
-                $('form')[0].reset();
+            if ($('#planForm')[0]) {
+                $('#planForm')[0].reset();
             }
-            $('form').attr('action', '<?php echo base_url("admin/add_pricing_plan"); ?>');
+            $('#planSlug').prop('readonly', false);
+            $('#planForm').attr('action', '<?php echo base_url("admin/add_pricing_plan"); ?>');
             $('#addPricingModalLabel').text('Add New Pricing Plan');
         }
 
@@ -623,12 +700,25 @@ function ppAdminReady(fn) {
             resetForm();
         });
 
-        // Form validation: require only Plan Name (price handled by durations editor)
-        $('form').on('submit', function(e) {
+        // Form validation: a name, a price and a term. The server checks
+        // the same three (Admin::pricingPlanPost) — this only saves a trip.
+        $('#planForm').on('submit', function(e) {
             var planName = $('#planName').val().trim();
+            var price = $('#planPrice').val();
+            var days = parseInt($('#planDuration').val(), 10);
             if (!planName) {
                 e.preventDefault();
                 alert('Please fill in Plan Name!');
+                return false;
+            }
+            if (price === '' || isNaN(parseFloat(price)) || parseFloat(price) < 0) {
+                e.preventDefault();
+                alert('Please enter a price (0 for a free tier).');
+                return false;
+            }
+            if (!days || days < 1) {
+                e.preventDefault();
+                alert('Please enter the term in days (30 for a month).');
                 return false;
             }
         });

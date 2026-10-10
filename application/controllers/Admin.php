@@ -345,7 +345,13 @@ class Admin extends CI_Controller
 		$super_admin_only = array(
 			'sub_admin_all', 'sub_admin_create', 'sub_admin_edit', 'sub_admin_delete',
 			'pricing', 'pricing_plan', 'add_pricing_plan', 'edit_pricing_plan',
-			'delete_pricing_plan', 'all_subscriptions', 'subscription_view',
+			'delete_pricing_plan', 'toggle_pricing_plan',
+			// The AJAX half of the pricing screen. Missing from this list, an
+			// editor could not open /admin/pricing but could re-price any
+			// term by posting to these directly.
+			'get_pricing_plan', 'get_pricing_plan_durations', 'update_pricing_duration',
+			'add_pricing_duration', 'delete_pricing_duration',
+			'all_subscriptions', 'subscription_view',
 			'cancel_subscription', 'delete_subscription', 'purchase_subscription',
 			'billing', 'billing_customer', 'billing_card_init', 'billing_card_save',
 			'billing_charge', 'billing_card_delete', 'billing_recurring_save',
@@ -1114,13 +1120,10 @@ class Admin extends CI_Controller
 			// the form still works on an install that has not run 0027.
 			if (!empty($_FILES['category_banner']['name'])
 				&& $this->db->field_exists('category_banner', 'listing_categories')) {
-				$data['category_banner'] = uploadAndResize([
-					'upload_path' => 'images/services',
-					'quality'     => '80%',
-					'height'      => 420,
-					'width'       => 1600,
-					'image_name'  => 'category_banner'
-				]);
+				$data['category_banner'] = $this->uploadCategoryBanner($banner_error);
+				if (!$data['category_banner']) {
+					$this->session->set_flashdata('error', 'The category was added without a header banner: ' . $banner_error);
+				}
 			}
 
 			if ($this->adminmodel->addListingCategory($data)) {
@@ -1162,28 +1165,28 @@ class Admin extends CI_Controller
 				$info['category_slug'] = $this->makeUniqueCategorySlug($info['category_name'], $id);
 			}
 
-			if ($_FILES && $_FILES['category_image']['name']) {
-				$img_info = [
+			// Upload first, unlink after. Both images used to delete the old
+			// file BEFORE the new upload ran, so a rejected upload (too big,
+			// wrong type) left the category with a dead path and no picture.
+			$upload_notes = array();
+
+			$info['category_image'] = $old_image;
+			if (!empty($_FILES['category_image']['name'])) {
+				$new_image = uploadAndResize([
 					'upload_path' => 'images/services',
 					'quality'     => '60%',
 					'height'      => 250,
 					'width'       => 400,
 					'image_name'  => 'category_image'
-				];
-
-				$image_link = $old_image;
-
-				if ($image_link != null) {
-					if (file_exists('./' . $image_link)) {
-
-						unlink($image_link);
+				]);
+				if ($new_image) {
+					$info['category_image'] = $new_image;
+					if ($old_image && $old_image !== $new_image && file_exists('./' . $old_image)) {
+						@unlink('./' . $old_image);
 					}
+				} else {
+					$upload_notes[] = 'The icon was not changed: ' . (upload_last_error() ?: 'the file could not be read.');
 				}
-
-
-				$info['category_image'] = uploadAndResize($img_info);
-			} else {
-				$info['category_image'] = $old_image;
 			}
 
 			// The editorial header banner (migration 0027). Wide artwork behind
@@ -1194,29 +1197,28 @@ class Admin extends CI_Controller
 			if ($this->db->field_exists('category_banner', 'listing_categories')) {
 				$old_banner = isset($data['category']->category_banner)
 					? $data['category']->category_banner : null;
+				$info['category_banner'] = $old_banner;
 
 				if (!empty($_FILES['category_banner']['name'])) {
-					$banner_info = [
-						'upload_path' => 'images/services',
-						'quality'     => '80%',
-						'height'      => 420,
-						'width'       => 1600,
-						'image_name'  => 'category_banner'
-					];
-
-					if ($old_banner && file_exists('./' . $old_banner)) {
-						unlink('./' . $old_banner);
+					$new_banner = $this->uploadCategoryBanner($banner_error);
+					if ($new_banner) {
+						$info['category_banner'] = $new_banner;
+						if ($old_banner && $old_banner !== $new_banner && file_exists('./' . $old_banner)) {
+							@unlink('./' . $old_banner);
+						}
+					} else {
+						$upload_notes[] = 'The header banner was not changed: ' . $banner_error;
 					}
-
-					$info['category_banner'] = uploadAndResize($banner_info);
 				} elseif ($this->input->post('remove_category_banner')) {
 					if ($old_banner && file_exists('./' . $old_banner)) {
-						unlink('./' . $old_banner);
+						@unlink('./' . $old_banner);
 					}
 					$info['category_banner'] = null;
-				} else {
-					$info['category_banner'] = $old_banner;
 				}
+			}
+
+			if ($upload_notes) {
+				$this->session->set_flashdata('error', implode(' ', $upload_notes));
 			}
 
 			if ($this->adminmodel->updateListingCategory($id, $info)) {
@@ -1227,6 +1229,46 @@ class Admin extends CI_Controller
 				redirect('admin/edit_listing_category', 'refresh');
 			}
 		}
+	}
+
+	/**
+	 * Upload a category header banner and check it is the right shape.
+	 *
+	 * The hero it fills is 1600x420 and is cropped with background-size:
+	 * cover, so a square logo or a small photo was blown up and cut down to
+	 * a meaningless strip. The upload is refused (and the new file removed)
+	 * unless it is at least 1200px wide and at least 2.5x as wide as it is
+	 * tall — 1600x420 is 3.8:1, so this still allows some latitude.
+	 *
+	 * @param  string $error set to the reason on failure
+	 * @return string|null the stored path
+	 */
+	private function uploadCategoryBanner(&$error = '')
+	{
+		$error = '';
+		$path  = uploadAndResize([
+			'upload_path' => 'images/services',
+			'quality'     => '80%',
+			'height'      => 420,
+			'width'       => 1600,
+			'image_name'  => 'category_banner'
+		]);
+		if (!$path) {
+			$error = upload_last_error() ?: 'the file could not be read.';
+			return null;
+		}
+
+		// Measured on the ORIGINAL upload: uploadAndResize() may downscale
+		// a very large file, which keeps the proportions anyway.
+		$size = @getimagesize('./' . $path);
+		if ($size && ($size[0] < 1200 || $size[0] < 2.5 * $size[1])) {
+			@unlink('./' . $path);
+			$error = 'it is ' . (int) $size[0] . ' x ' . (int) $size[1] . ' px. A header banner needs to be wide — '
+				. '1600 x 420 px is ideal (at least 1200 px wide, and 2.5 times as wide as it is tall).';
+			return null;
+		}
+
+		return $path;
 	}
 
 	/*====================
@@ -3002,9 +3044,11 @@ class Admin extends CI_Controller
 				];
 				$info['gallery_image'] = uploadMultipleAndResize($img_info, 5);
 			}
+			$gallery_note = upload_last_error();
 
 			if ($this->adminmodel->add('products', $info)) {
-				$this->session->set_flashdata('message', 'Successfully Product Added!!');
+				$this->session->set_flashdata('message', 'Successfully Product Added!!'
+					. ($gallery_note !== '' ? ' Note: ' . $gallery_note : ''));
 				redirect('admin/products');
 			} else {
 				$this->session->set_flashdata('message', 'Adding Product Failed!!');
@@ -3251,6 +3295,32 @@ class Admin extends CI_Controller
 		return $empty === 'now' ? date('Y-m-d H:i:s') : $empty;
 	}
 
+	/**
+	 * Form-validation callback for the author account on news and blog
+	 * posts (config/form_validation.php). The leading underscore keeps it
+	 * from being reachable as a URL.
+	 */
+	public function _content_author_exists($user_id)
+	{
+		$ok = (int) $user_id > 0
+			&& $this->db->where('user_id', (int) $user_id)->count_all_results('user') > 0;
+		if (!$ok) {
+			$this->form_validation->set_message('_content_author_exists', 'Choose the account this post belongs to.');
+		}
+		return $ok;
+	}
+
+	/**
+	 * Add the byline to a news/blog row when the column exists (0035). An
+	 * empty byline is stored as NULL, which means "print the account name".
+	 */
+	private function applyByline(array &$info, $table, $column)
+	{
+		if (!$this->db->field_exists($column, $table)) return;
+		$byline = trim((string) $this->input->post($column));
+		$info[$column] = $byline !== '' ? mb_substr($byline, 0, 120) : NULL;
+	}
+
 	public function add_blog()
 	{
 		$data['users']             = $this->adminmodel->getActiveUsersForDropdown();
@@ -3281,6 +3351,7 @@ class Admin extends CI_Controller
 				// The form's date field wins; an empty one means "now".
 				'created_at'		=> $this->blogPublishDate($this->input->post('created_at')),
 			);
+			$this->applyByline($info, 'blogs', 'blog_byline');
 
 			if ($_FILES && $_FILES['blog_image']['name']) {
 				$img_info = [
@@ -3340,6 +3411,7 @@ class Admin extends CI_Controller
 				'blog_description'  => $this->input->post('blog_description'),
 				'isenquiry'         => $isenquiry,
 			);
+			$this->applyByline($info, 'blogs', 'blog_byline');
 
 			// Publish date is editable here — posts that predate this field
 			// carry no usable date at all, and there is nothing in the row to
@@ -3515,6 +3587,7 @@ class Admin extends CI_Controller
 				'featured_news'  	=> $this->input->post('featured_news'),
 				'news_slug'			=> $news_slug
 			);
+			$this->applyByline($info, 'news', 'news_byline');
 
 			// isset(), not just a truthy $_FILES: a save with no picture attached
 			// left $_FILES non-empty but without this key, which is an
@@ -3587,6 +3660,7 @@ class Admin extends CI_Controller
 				'news_seo_keywords'  => $this->input->post('news_seo_keywords'),
 				'featured_news'  => $this->input->post('featured_news')
 			);
+			$this->applyByline($info, 'news', 'news_byline');
 
 			$upload_note = '';
 
@@ -3812,9 +3886,13 @@ class Admin extends CI_Controller
 
 		$this->pagination->initialize($config);
 
-		$page = ($this->uri->segment(3)) ? (int) $this->uri->segment(3) : 0;
-		// When pagination uses offset in the URI segment, $page is already the offset.
-		$offset = $page;
+		// use_page_numbers is TRUE, so segment 3 is a PAGE NUMBER (1, 2, 3…),
+		// not a row offset. It used to be passed straight through as the
+		// offset, so page 2 started at row 2 and every category past the
+		// first page could never be reached — which is where the "random"
+		// junk categories at the end of the alphabet were hiding.
+		$page   = max(1, (int) $this->uri->segment(3));
+		$offset = ($page - 1) * (int) $config['per_page'];
 		$data['start_number'] = $offset + 1;
 		$data['all_video_category']   = $this->adminmodel->allVideoCategoryWithCount($config['per_page'], $offset);
 
@@ -3868,40 +3946,57 @@ class Admin extends CI_Controller
 	public function edit_video_category($slug)
 	{
 		$data['category'] = $this->adminmodel->getSingleValue($slug, 'category_slug', 'video_categories');
+		if (!$data['category']) {
+			$this->session->set_flashdata('error', 'Video category not found.');
+			redirect('admin/all_video_category');
+			return;
+		}
 		$old_image        = $data['category']->category_image;
+		$category_id      = (int) $data['category']->category_id;
 
-		$this->form_validation->set_rules('category_name', 'Category Name', 'trim|required');
+		// Renaming onto another category's name used to be allowed, leaving
+		// two "Sports" entries — the add form checked, the edit form did not.
+		$this->form_validation->set_rules('category_name', 'Category Name',
+			'trim|required|max_length[100]|callback__video_category_name_free[' . $category_id . ']');
 
 		if ($this->form_validation->run() == FALSE) {
 			$this->load->view('admin/header');
 			$this->load->view('admin/edit_video_category', $data);
 			$this->load->view('admin/footer');
 		} else {
-			$info['category_name'] = $this->input->post('category_name');
-			$category_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('category_name'));
-			$info['category_name'] = $this->input->post('category_name');
-			$info['category_seo_title'] = $this->input->post('category_seo_title');
-			$info['category_seo_keywords'] = $this->input->post('category_seo_keywords');
-			$info['category_seo_description'] = $this->input->post('category_seo_description');
-			$info['category_slug'] = $category_slug;
+			$name = trim((string) $this->input->post('category_name'));
+			$info = array(
+				'category_name'            => $name,
+				'category_seo_title'       => $this->input->post('category_seo_title'),
+				'category_seo_keywords'    => $this->input->post('category_seo_keywords'),
+				'category_seo_description' => $this->input->post('category_seo_description'),
+			);
 
-			if ($_FILES && $_FILES['category_image']['name']) {
-				$img_info = [
+			// A new slug only when the NAME changed, and one no other
+			// category has. It was regenerated on every save, and could
+			// collide with an existing category's slug.
+			if (strcasecmp($name, (string) $data['category']->category_name) !== 0) {
+				$info['category_slug'] = $this->adminmodel->uniqueVideoCategorySlug($name, $category_id);
+			}
+
+			// Upload first, unlink after — a rejected upload used to leave the
+			// category pointing at a deleted file.
+			$info['category_image'] = $old_image;
+			$upload_note = '';
+			if (!empty($_FILES['category_image']['name'])) {
+				$new_image = uploadAndResize([
 					'upload_path' => 'images/video',
 					'quality'     => '60%',
 					'image_name'  => 'category_image'
-				];
-
-				$image_link = $old_image;
-				if ($image_link != null) {
-					if (file_exists('./' . $image_link)) {
-						unlink($image_link);
+				]);
+				if ($new_image) {
+					$info['category_image'] = $new_image;
+					if ($old_image && $old_image !== $new_image && file_exists('./' . $old_image)) {
+						@unlink('./' . $old_image);
 					}
+				} else {
+					$upload_note = ' The new image was not saved: ' . (upload_last_error() ?: 'the file could not be read.');
 				}
-
-				$info['category_image'] = uploadAndResize($img_info);
-			} else {
-				$info['category_image'] = $old_image;
 			}
 
 			// updateVideoCategory(), not updatemarketplaceCategory(). This used
@@ -3912,7 +4007,7 @@ class Admin extends CI_Controller
 			// runs, so renaming a video category reported "Successfully Updated"
 			// every time while the name never changed.
 			if ($this->adminmodel->updateVideoCategory($slug, $info)) {
-				$this->session->set_flashdata('message', 'Video category updated.');
+				$this->session->set_flashdata($upload_note === '' ? 'message' : 'error', 'Video category updated.' . $upload_note);
 				redirect('admin/all_video_category', 'refresh');
 			} else {
 				$this->session->set_flashdata('error', 'Sorry, updating the video category failed. ' . $this->adminmodel->lastDbError());
@@ -3920,17 +4015,35 @@ class Admin extends CI_Controller
 			}
 		}
 	}
+
+	/** Form-validation callback: is this video category name free (bar $except_id)? */
+	public function _video_category_name_free($name, $except_id = 0)
+	{
+		$taken = $this->db->where('LOWER(TRIM(category_name)) =', mb_strtolower(trim((string) $name)))
+			->where('category_id !=', (int) $except_id)
+			->count_all_results('video_categories') > 0;
+		if ($taken) {
+			$this->form_validation->set_message('_video_category_name_free', 'There is already a video category with that name.');
+		}
+		return !$taken;
+	}
+
 	/*====================
 			Delete Video Category
 			=====================*/
 	public function delete_video_category($slug)
 	{
-		if ($this->adminmodel->deleteVideoCategory($slug)) {
-			$this->session->set_flashdata('message', 'Category has been Permanently Deleted!!!');
-			redirect('admin/all_video_category', 'refresh');
+		// Videos filed under the category are kept and become uncategorised
+		// (Adminmodel::deleteVideoCategory); they used to be left pointing at
+		// a category id that no longer existed.
+		$moved = $this->adminmodel->deleteVideoCategory($slug);
+		if ($moved === false) {
+			$this->session->set_flashdata('error', 'That video category could not be deleted (it may already be gone).');
 		} else {
-			redirect('admin/all_video_category', 'refresh');
+			$this->session->set_flashdata('message', 'Category deleted.'
+				. ($moved > 0 ? ' ' . $moved . ' video' . ($moved === 1 ? ' was' : 's were') . ' in it and are now uncategorised — they are still published.' : ''));
 		}
+		redirect('admin/all_video_category', 'refresh');
 	}
 	/*End Video Category*/
 
@@ -4042,17 +4155,25 @@ class Admin extends CI_Controller
 				'video_slug'  => $video_slug
 			);
 
-			if ($_FILES && $_FILES['video_image']['name']) {
+			$upload_note = '';
+			if (!empty($_FILES['video_image']['name'])) {
 				$img_info = [
 					'upload_path' => 'images/video',
 					'quality'     => '60%',
 					'image_name'  => 'video_image'
 				];
 				$info['video_image'] = uploadAndResize($img_info);
+				if (!$info['video_image']) {
+					// No still is fine — the YouTube thumbnail stands in — but
+					// say so rather than dropping the upload in silence.
+					$upload_note = ' The picture was not saved: '
+						. (upload_last_error() ?: 'the file could not be read.')
+						. ' The YouTube thumbnail will be shown instead.';
+				}
 			}
 
 			if ($this->adminmodel->add('video', $info)) {
-				$this->session->set_flashdata('message', 'Successfully Added Video!!');
+				$this->session->set_flashdata($upload_note === '' ? 'message' : 'error', 'Successfully Added Video!!' . $upload_note);
 				redirect('admin/video-list');
 			} else {
 				$this->session->set_flashdata('error', 'Could not save the video. ' . $this->adminmodel->lastDbError());
@@ -4069,6 +4190,12 @@ class Admin extends CI_Controller
 	{
 		$data['users']   = $this->adminmodel->getActiveUsersForDropdown();
 		$data['video']    = $this->usermodel->getSingleValue($slug, 'video_slug', 'video');
+		// A stale or mistyped link used to fatal on ->video_image of NULL.
+		if (!$data['video']) {
+			$this->session->set_flashdata('error', 'Video not found.');
+			redirect('admin/video-list');
+			return;
+		}
 		$old_image       = $data['video']->video_image;
 
 		if ($this->form_validation->run('video') == FALSE) {
@@ -4091,32 +4218,37 @@ class Admin extends CI_Controller
 				'video_seo_keywords'  => $this->input->post('video_seo_keywords')
 			);
 
-			if ($_FILES && $_FILES['video_image']['name']) {
-				$img_info = [
+			// Upload first, unlink after — as edit_news() does. This deleted the
+			// old still BEFORE the upload ran, so a rejected file left the
+			// video pointing at a picture that no longer existed.
+			$info['video_image'] = $old_image;
+			$upload_note = '';
+			if (!empty($_FILES['video_image']['name'])) {
+				$new_image = uploadWithoutResize([
 					'upload_path' => 'images/video',
 					'quality'     => '60%',
 					'image_name'  => 'video_image'
-				];
-
-				$image_link = $old_image;
-
-				if ($image_link != null) {
-					if (file_exists('./' . $image_link)) {
-						unlink($image_link);
+				]);
+				if ($new_image) {
+					$info['video_image'] = $new_image;
+					if ($old_image && $old_image !== $new_image && file_exists(FCPATH . $old_image)) {
+						@unlink(FCPATH . $old_image);
 					}
+				} else {
+					$upload_note = ' The new picture was not saved: '
+						. (upload_last_error() ?: 'the file could not be read.')
+						. ' The previous one was kept.';
 				}
-
-				$info['video_image'] = uploadWithoutResize($img_info);
-			} else {
-				$info['video_image'] = $old_image;
 			}
 
 			if ($this->adminmodel->update($slug, $info, 'video_slug', 'video')) {
-				$this->session->set_flashdata('message', 'Successfully Updated Video!!');
+				$this->session->set_flashdata($upload_note === '' ? 'message' : 'error', 'Successfully Updated Video!!' . $upload_note);
 				redirect('admin/video-list', 'refresh');
 			} else {
-				$this->session->set_flashdata('message', 'Sorry, Update Video Failed!!');
-				redirect('admin/edit-video' . $slug, 'refresh');
+				$this->session->set_flashdata('error', 'Sorry, Update Video Failed!! ' . $this->adminmodel->lastDbError());
+				// The slash was missing ('admin/edit-video' . $slug), so a
+				// failed save redirected to a URL that does not exist.
+				redirect('admin/edit-video/' . rawurlencode($slug), 'refresh');
 			}
 		}
 	}
@@ -6280,9 +6412,11 @@ class Admin extends CI_Controller
 		// Initialize empty data to avoid errors
 		$data = array();
 
-		// Try to get pricing plans, fallback to empty array if fails
+		// Every plan, inactive ones included: a deactivated plan used to
+		// vanish from this screen (getAllPricingPlans() is active-only), so
+		// nothing could ever switch it back on.
 		try {
-			$data['pricing_plans'] = $this->adminmodel->getAllPricingPlans();
+			$data['pricing_plans'] = $this->adminmodel->getAllPricingPlansAdmin();
 		} catch (Exception $e) {
 			$data['pricing_plans'] = array(); // Empty array if database not ready
 		}
@@ -6301,11 +6435,93 @@ class Admin extends CI_Controller
 	=====================*/
 	public function pricing_plan()
 	{
-		$data = array();
-		$data['pricing_plans'] = $this->adminmodel->getAllPricingPlans();
-		$this->load->view('admin/header');
-		$this->load->view('admin/pricing', $data);
-		$this->load->view('admin/footer');
+		$this->pricing();
+	}
+
+	/** The categories /pricing-plan groups packages under. */
+	private function pricingCategories()
+	{
+		return array('business-listing', 'add-ons', 'site-wide-banners', 'category-banners',
+			'site-wide-videos', 'category-videos', 'special');
+	}
+
+	/**
+	 * Validate the plan modal and build the `plans` row.
+	 *
+	 * Price, currency and term are real fields now. The modal used to have
+	 * no price input at all while edit_pricing_plan() wrote
+	 * `price => post('plan_price') ?? null` — so saving ANY change (a typo in
+	 * the description) set the price to NULL, the public page read that as
+	 * $0 and showed "Get started free", and /start-free would hand the paid
+	 * tier out for nothing.
+	 *
+	 * @param  object|null $existing the plan being edited
+	 * @return array|false  the row, or FALSE with a flash error set
+	 */
+	private function pricingPlanPost($existing = NULL)
+	{
+		$this->form_validation->set_rules('plan_name', 'Plan Name', 'trim|required|max_length[150]');
+		$this->form_validation->set_rules('plan_price', 'Price', 'trim|required|numeric|greater_than_equal_to[0]');
+		$this->form_validation->set_rules('duration_days', 'Term (days)', 'trim|required|is_natural_no_zero|less_than_equal_to[3650]');
+
+		if ($this->form_validation->run() == FALSE) {
+			$this->session->set_flashdata('error', strip_tags(validation_errors()));
+			return FALSE;
+		}
+
+		$interval = strtolower(trim((string) $this->input->post('billing_interval')));
+		if (!in_array($interval, array('monthly', 'yearly', 'weekly', 'one-time'), true)) $interval = 'monthly';
+
+		$category = (string) $this->input->post('category');
+		if (!in_array($category, $this->pricingCategories(), true)) $category = 'business-listing';
+
+		$currency = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', (string) $this->input->post('currency')), 0, 3));
+		if (strlen($currency) !== 3) $currency = 'USD';
+
+		$int = function ($field, $default = 0) {
+			$v = $this->input->post($field);
+			return ($v === NULL || $v === '' || !is_numeric($v)) ? $default : (int) $v;
+		};
+
+		$row = array(
+			'name'             => trim((string) $this->input->post('plan_name')),
+			'price'            => round((float) $this->input->post('plan_price'), 2),
+			'currency'         => $currency,
+			'billing_interval' => $interval,
+			'duration_days'    => (int) $this->input->post('duration_days'),
+			'category'         => $category,
+			'description'      => trim((string) $this->input->post('description')),
+			'listing_limit'    => $int('listing_limit'),
+			'product_limit'    => $int('product_limit'),
+			'event_limit'      => $int('event_limit'),
+			'classified_limit' => $int('classified_limit'),
+			'blog_limit'       => $int('blog_limit'),
+			'news_limit'       => $int('news_limit'),
+			'video_limit'      => $int('video_limit'),
+			'rental_limit'     => $int('rental_limit'),
+			'house_limit'      => $int('house_limit'),
+			'ad_limit'         => $int('ad_limit'),
+			'ad_boost_limit'   => $int('ad_boost_limit'),
+			'placeholder_images_limit' => $int('placeholder_images_limit'),
+			'featured_listing' => $this->input->post('featured_listing') ? 1 : 0,
+			'priority_support' => $this->input->post('priority_support') ? 1 : 0,
+			'analytics_access' => $this->input->post('analytics_access') ? 1 : 0,
+			// Field-level listing capabilities (freemium editing)
+			'can_photos'        => $this->input->post('can_photos') ? 1 : 0,
+			'photo_limit'       => $int('photo_limit'),
+			'can_map'           => $this->input->post('can_map') ? 1 : 0,
+			'can_services'      => $this->input->post('can_services') ? 1 : 0,
+			'can_extra_details' => $this->input->post('can_extra_details') ? 1 : 0,
+			'allow_video'       => $this->input->post('allow_video') ? 1 : 0,
+			'updated_at'        => date('Y-m-d H:i:s'),
+		);
+
+		$sort = $this->input->post('sort_order');
+		if ($sort !== NULL && $sort !== '' && is_numeric($sort)) {
+			$row['sort_order'] = (int) $sort;
+		}
+
+		return $row;
 	}
 
 	/*====================
@@ -6313,54 +6529,39 @@ class Admin extends CI_Controller
 	=====================*/
 	public function add_pricing_plan()
 	{
-		// Only require a plan name from the modal; price/duration managed via Durations editor
-		$this->form_validation->set_rules('plan_name', 'Plan Name', 'trim|required');
+		if ($this->input->method() !== 'post') {
+			redirect('admin/pricing');
+			return;
+		}
 
-		if ($this->form_validation->run() == FALSE) {
-			$this->session->set_flashdata('error', validation_errors());
+		$data = $this->pricingPlanPost();
+		if ($data === FALSE) {
+			redirect('admin/pricing');
+			return;
+		}
+
+		// A slug, which is also the ad-zone key a banner plan sells: a plan
+		// added here used to have none, so it could never be matched to a
+		// zone or told apart from another plan of the same name.
+		$data['slug']       = $this->adminmodel->uniquePlanSlug(
+			trim((string) $this->input->post('slug')) !== '' ? $this->input->post('slug') : $data['name']
+		);
+		$data['is_active']  = 1;
+		$data['created_at'] = date('Y-m-d H:i:s');
+		if (!isset($data['sort_order'])) {
+			$data['sort_order'] = $this->adminmodel->nextPlanSortOrder();
+		}
+
+		$plan_id = $this->adminmodel->addPricingPlan($data);
+		if ($plan_id) {
+			// The base term, so the checkout's term picker and the card on
+			// /pricing-plan quote the same figure from the first day.
+			$this->adminmodel->syncPlanBaseTerm((int) $plan_id);
+			$this->session->set_flashdata('message', 'Pricing plan added successfully!');
 		} else {
-			$data = array(
-				'name' => $this->input->post('plan_name'),
-				// keep price/duration optional with safe defaults for backward compatibility
-				'price' => $this->input->post('plan_price') !== null ? $this->input->post('plan_price') : 0,
-				'currency' => $this->input->post('currency') !== null ? $this->input->post('currency') : 'USD',
-				'billing_interval' => $this->input->post('billing_interval') !== null ? $this->input->post('billing_interval') : 'monthly',
-				'duration_days' => $this->input->post('duration_days') !== null ? $this->input->post('duration_days') : 30,
-				'category' => $this->input->post('category') ? $this->input->post('category') : 'business-listing',
-				'description' => $this->input->post('description'),
-				'listing_limit' => $this->input->post('listing_limit'),
-				'product_limit' => $this->input->post('product_limit'),
-				'event_limit' => $this->input->post('event_limit'),
-				'classified_limit' => $this->input->post('classified_limit'),
-				'blog_limit' => $this->input->post('blog_limit'),
-				'news_limit' => $this->input->post('news_limit'),
-				'video_limit' => $this->input->post('video_limit'),
-				'rental_limit' => $this->input->post('rental_limit'),
-				'house_limit' => $this->input->post('house_limit'),
-				'ad_limit' => $this->input->post('ad_limit'),
-				'ad_boost_limit' => $this->input->post('ad_boost_limit'),
-				'placeholder_images_limit' => $this->input->post('placeholder_images_limit'),
-				'featured_listing' => $this->input->post('featured_listing') ? 1 : 0,
-				'priority_support' => $this->input->post('priority_support') ? 1 : 0,
-				'analytics_access' => $this->input->post('analytics_access') ? 1 : 0,
-				// Field-level listing capabilities (freemium editing)
-				'can_photos' => $this->input->post('can_photos') ? 1 : 0,
-				'photo_limit' => $this->input->post('photo_limit') !== null ? (int) $this->input->post('photo_limit') : 0,
-				'can_map' => $this->input->post('can_map') ? 1 : 0,
-				'can_services' => $this->input->post('can_services') ? 1 : 0,
-				'can_extra_details' => $this->input->post('can_extra_details') ? 1 : 0,
-				'allow_video' => $this->input->post('allow_video') ? 1 : 0,
-				'is_active' => 1,
-				'sort_order' => 1,
-				'created_at' => date('Y-m-d H:i:s'),
-				'updated_at' => date('Y-m-d H:i:s')
-			);
-
-			if ($this->adminmodel->addPricingPlan($data)) {
-				$this->session->set_flashdata('message', 'Pricing plan added successfully!');
-			} else {
-				$this->session->set_flashdata('error', 'Failed to add pricing plan!');
-			}
+			$err = $this->db->error();
+			$this->session->set_flashdata('error', 'Failed to add pricing plan!'
+				. (!empty($err['message']) ? ' Database: ' . $err['message'] : ''));
 		}
 		redirect('admin/pricing');
 	}
@@ -6408,7 +6609,11 @@ class Admin extends CI_Controller
 		);
 		$ok = $this->adminmodel->updatePricingDuration($id, $price, $extra);
 		if ($ok) {
-			echo json_encode(['success' => true, 'duration' => $this->adminmodel->getPlanDurationById($id)]);
+			$row = $this->adminmodel->getPlanDurationById($id);
+			// Re-pricing the base term re-prices the card too, so
+			// /pricing-plan and the checkout never quote two figures.
+			if ($row) $this->adminmodel->syncPlanPriceFromTerm($row);
+			echo json_encode(['success' => true, 'duration' => $row]);
 			return;
 		}
 		// Surface the actual DB error — "DB update failed" on its own sent us
@@ -6438,6 +6643,8 @@ class Admin extends CI_Controller
 		}
 		$new_id = $this->adminmodel->addPlanDuration($plan_id, $months, $days, $price, $this->input->post('currency') ?: 'USD');
 		if ($new_id) {
+			$row = $this->adminmodel->getPlanDurationById($new_id);
+			if ($row) $this->adminmodel->syncPlanPriceFromTerm($row);
 			echo json_encode(['success' => true, 'id' => $new_id]);
 			return;
 		}
@@ -6465,51 +6672,51 @@ class Admin extends CI_Controller
 	=====================*/
 	public function edit_pricing_plan($id)
 	{
-		// Only require name; price/duration are edited in Durations UI
-		$this->form_validation->set_rules('plan_name', 'Plan Name', 'trim|required');
+		$id   = (int) $id;
+		$plan = $id ? $this->adminmodel->getPricingPlan($id) : NULL;
+		if (!$plan || $this->input->method() !== 'post') {
+			redirect('admin/pricing');
+			return;
+		}
 
-		if ($this->form_validation->run() == FALSE) {
-			$this->session->set_flashdata('error', validation_errors());
+		$data = $this->pricingPlanPost($plan);
+		if ($data === FALSE) {
+			redirect('admin/pricing');
+			return;
+		}
+
+		// The slug is not editable here: for a banner plan it is the ad-zone
+		// key, and renaming it would silently take the zone off sale.
+		if ($this->adminmodel->updatePricingPlan($id, $data)) {
+			// One price, two stores: plans.price (the card) and the base-term
+			// plan_durations row (what checkout charges for that term).
+			$this->adminmodel->syncPlanBaseTerm($id);
+			$this->session->set_flashdata('message', 'Pricing plan updated successfully!');
 		} else {
-			$data = array(
-				'name' => $this->input->post('plan_name'),
-				// optional fields preserved or defaulted
-				'price' => $this->input->post('plan_price') !== null ? $this->input->post('plan_price') : null,
-				'currency' => $this->input->post('currency') !== null ? $this->input->post('currency') : null,
-				'billing_interval' => $this->input->post('billing_interval') !== null ? $this->input->post('billing_interval') : 'monthly',
-				'duration_days' => $this->input->post('duration_days') !== null ? $this->input->post('duration_days') : null,
-				'category' => $this->input->post('category') ? $this->input->post('category') : 'business-listing',
-				'description' => $this->input->post('description'),
-				'listing_limit' => $this->input->post('listing_limit'),
-				'product_limit' => $this->input->post('product_limit'),
-				'event_limit' => $this->input->post('event_limit'),
-				'classified_limit' => $this->input->post('classified_limit'),
-				'blog_limit' => $this->input->post('blog_limit'),
-				'news_limit' => $this->input->post('news_limit'),
-				'video_limit' => $this->input->post('video_limit'),
-				'rental_limit' => $this->input->post('rental_limit'),
-				'house_limit' => $this->input->post('house_limit'),
-				'ad_limit' => $this->input->post('ad_limit'),
-				'ad_boost_limit' => $this->input->post('ad_boost_limit'),
-				'placeholder_images_limit' => $this->input->post('placeholder_images_limit'),
-				'featured_listing' => $this->input->post('featured_listing') ? 1 : 0,
-				'priority_support' => $this->input->post('priority_support') ? 1 : 0,
-				'analytics_access' => $this->input->post('analytics_access') ? 1 : 0,
-				// Field-level listing capabilities (freemium editing)
-				'can_photos' => $this->input->post('can_photos') ? 1 : 0,
-				'photo_limit' => $this->input->post('photo_limit') !== null ? (int) $this->input->post('photo_limit') : 0,
-				'can_map' => $this->input->post('can_map') ? 1 : 0,
-				'can_services' => $this->input->post('can_services') ? 1 : 0,
-				'can_extra_details' => $this->input->post('can_extra_details') ? 1 : 0,
-				'allow_video' => $this->input->post('allow_video') ? 1 : 0,
-				'updated_at' => date('Y-m-d H:i:s')
-			);
+			$this->session->set_flashdata('error', 'Failed to update pricing plan!');
+		}
+		redirect('admin/pricing');
+	}
 
-			if ($this->adminmodel->updatePricingPlan($id, $data)) {
-				$this->session->set_flashdata('message', 'Pricing plan updated successfully!');
-			} else {
-				$this->session->set_flashdata('error', 'Failed to update pricing plan!');
-			}
+	/*====================
+		Deactivate / reactivate a plan (POST)
+	=====================*/
+	public function toggle_pricing_plan($id)
+	{
+		$id   = (int) $id;
+		$plan = $id ? $this->adminmodel->getPricingPlan($id) : NULL;
+		if (!$plan || $this->input->method() !== 'post') {
+			redirect('admin/pricing');
+			return;
+		}
+
+		// Never a hard delete: subscriptions and transactions point at the
+		// plan id, and renewals read its price.
+		$on = empty($plan->is_active) ? 1 : 0;
+		if ($this->adminmodel->updatePricingPlan($id, array('is_active' => $on, 'updated_at' => date('Y-m-d H:i:s')))) {
+			$this->session->set_flashdata('message', '"' . $plan->name . '" is now ' . ($on ? 'on sale.' : 'off sale (existing customers keep it).'));
+		} else {
+			$this->session->set_flashdata('error', 'Could not change that plan.');
 		}
 		redirect('admin/pricing');
 	}
@@ -6519,8 +6726,14 @@ class Admin extends CI_Controller
 	=====================*/
 	public function delete_pricing_plan($id)
 	{
-		if ($this->adminmodel->deletePricingPlan($id)) {
-			$this->session->set_flashdata('message', 'Pricing plan deleted successfully!');
+		// Kept for old links. It was always a soft delete (is_active = 0);
+		// toggle_pricing_plan() is the POST equivalent the screen uses.
+		if ($this->input->method() !== 'post') {
+			redirect('admin/pricing');
+			return;
+		}
+		if ($this->adminmodel->deletePricingPlan((int) $id)) {
+			$this->session->set_flashdata('message', 'Pricing plan taken off sale.');
 		} else {
 			$this->session->set_flashdata('error', 'Failed to delete pricing plan!');
 		}

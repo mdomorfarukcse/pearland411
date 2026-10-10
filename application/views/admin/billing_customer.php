@@ -383,6 +383,11 @@ $amount_default = ($renewal_amount > 0)
                                                 <?php } else { ?>
                                                     Online checkout
                                                 <?php } ?>
+                                                <?php if (!empty($txn->target_category_id)) {
+                                                    // A category-specific banner/video: which category it runs in (0033).
+                                                    $__tc = $this->db->select('category_name')->where('category_id', (int) $txn->target_category_id)->limit(1)->get('listing_categories')->row(); ?>
+                                                    <br><small>Category: <?= e($__tc ? $__tc->category_name : ('#' . (int) $txn->target_category_id)) ?></small>
+                                                <?php } ?>
                                             </td>
                                             <td><?= !empty($txn->helcim_transaction_id) ? e($txn->helcim_transaction_id) : '&mdash;' ?></td>
                                         </tr>

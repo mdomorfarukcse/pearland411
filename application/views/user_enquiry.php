@@ -4,13 +4,13 @@
 
 	<?php if ($this->session->flashdata('success_msg')) { ?>
 		<div class="log-suc">
-			<p><?= $this->session->flashdata('success_msg') ?></p>
+			<p><?= e($this->session->flashdata('success_msg')) ?></p>
 		</div>
 	<?php } ?>
 
 	<?php if ($this->session->flashdata('error_msg')) { ?>
 		<div class="log-err">
-			<p><?= $this->session->flashdata('error_msg') ?></p>
+			<p><?= e($this->session->flashdata('error_msg')) ?></p>
 		</div>
 	<?php } ?>
 
@@ -131,7 +131,7 @@
 								<tr>
 									<td><?php echo $counter; ?></td>
 									<td><?php echo isset($enquiry->enquiry_id) ? 'ENQ-' . str_pad($enquiry->enquiry_id, 4, '0', STR_PAD_LEFT) : 'N/A'; ?></td>
-									<td><?php echo htmlspecialchars($enquiry->enquiry_name); ?> <span><?php echo date('d, M Y', strtotime($enquiry->enquiry_created_at)); ?></span></td>
+									<td><?php echo htmlspecialchars((string) $enquiry->enquiry_name); ?> <span><?php echo e(us_date($enquiry->enquiry_created_at)); ?></span></td>
 									<td><?php echo htmlspecialchars($enquiry->enquiry_email); ?></td>
 									<td>
 										<button type="button" class="enq-view-btn" onclick="openEnquiryModal(<?php echo $enquiry->enquiry_id; ?>)"
@@ -142,11 +142,14 @@
 											data-message="<?php echo htmlspecialchars($enquiry->enquiry_message); ?>"
 											data-source="<?php echo htmlspecialchars($enquiry->enquiry_source); ?>"
 											data-type="<?php echo htmlspecialchars($enquiry->enquiry_type); ?>"
-											data-url="<?php if (!empty($enquiry->listing_id)): ?>listing-details?src=<?php echo urlencode($enquiry->enquiry_source); ?>&code=<?php echo htmlspecialchars($enquiry->listing_id); ?><?php else: ?>-<?php endif; ?>"
-											data-date="<?php echo date('d, M Y', strtotime($enquiry->enquiry_created_at)); ?>">
+											data-url="<?php if (!empty($enquiry->listing_id)): ?>listing-details?src=<?php echo urlencode((string) $enquiry->enquiry_source); ?>&amp;code=<?php echo (int) $enquiry->listing_id; ?><?php else: ?>-<?php endif; ?>"
+											data-date="<?php echo e_attr(us_date($enquiry->enquiry_created_at)); ?>">
 											View
 										</button>
-										<a href="<?php echo (function_exists('base_url') ? base_url() : '') . 'user/delete_enquiry/' . $enquiry->enquiry_id; ?>" class="enq-delete-btn" onclick="return confirm('Are you sure you want to delete this enquiry?');">Delete</a>
+										<form method="post" action="<?= e_attr(base_url('user/delete-enquiry/' . (int) $enquiry->enquiry_id)) ?>" style="display:inline;"
+											  onsubmit="return confirm('Are you sure you want to delete this enquiry?');">
+											<button type="submit" class="enq-delete-btn" style="border:0;cursor:pointer;">Delete</button>
+										</form>
 									</td>
 								</tr>
 								<?php

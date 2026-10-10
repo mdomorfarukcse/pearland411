@@ -298,10 +298,15 @@
             </div>
             <div class="rhs">
                 <div class="list-rhs-form pglist-bg pglist-p-com">
-                    <div class="quote-pop">
+                    <div class="quote-pop" id="get-a-quote">
                         <?php if ($this->session->flashdata('message')) { ?>
                             <div class="log-suc">
                                 <p><?= e($this->session->flashdata('message')); ?></p>
+                            </div>
+                        <?php } ?>
+                        <?php if ($this->session->flashdata('error_msg')) { ?>
+                            <div class="log-err">
+                                <p><?= e($this->session->flashdata('error_msg')); ?></p>
                             </div>
                         <?php } ?>
                         <h3>Get Quote</h3>
@@ -315,42 +320,40 @@
                             <p>Something Went Wrong!!!</p>
                         </div>
 
-                        <?php $disabled = empty($logged_id) ? 'disabled' : ''; ?>
+                        <?php // Open to everyone, as on /listing-details: add_enquiry accepts anonymous
+                              // senders and is rate-limited. The login gate only cost the owner the lead. ?>
                         <form method="post" action="<?= base_url('user/add-enquiry/' . 'rental_details/' . $rentals->rental_slug); ?>" name="detail_enquiry_form" id="detail_enquiry_form" data-validate>
 
                             <input type="hidden" class="form-control" name="listing_id" value="" placeholder="">
                             <input type="hidden" class="form-control" name="event_id" value="" placeholder="">
                             <input type="hidden" class="form-control" name="news_id" value="" placeholder="">
                             <input type="hidden" class="form-control" name="blog_id" value="" placeholder="">
-                            <input type="hidden" class="form-control" name="product_id" value="<?= set_value('product_id', $rentals->rental_id); ?>" placeholder="">
+                            <input type="hidden" class="form-control" name="product_id" value="" placeholder="">
                             <input type="hidden" class="form-control" name="rental_id" value="<?= set_value('rental_id', $rentals->rental_id); ?>" placeholder="">
                             <input type="hidden" class="form-control" name="classifieds_id" value="" placeholder="">
                             <input type="hidden" class="form-control" name="video_id" value="" placeholder="">
-                            <input type="hidden" class="form-control" name="receiving_user_id" value="<?= set_value('receiving_user_id', $rentals->user_id); ?>" placeholder="">
-                            <input type="hidden" class="form-control" name="enquiry_sender_id" value="<?= set_value('enquiry_sender_id', $logged_id); ?>" placeholder="">
                             <input type="hidden" class="form-control" name="enquiry_source" value="<?= set_value('enquiry_source', $rentals->rental_title); ?>" placeholder="">
                             <input type="hidden" class="form-control" name="enquiry_type" value="<?= set_value('enquiry_type', 'rental'); ?>" placeholder="">
 
                             <div class="form-group ic-user">
-                                <input type="text" name="enquiry_name" <?= $disabled; ?> value="<?= set_value('enquiry_name'); ?>" required="required" class="form-control" placeholder="Enter name*">
+                                <input type="text" name="enquiry_name" value="<?= set_value('enquiry_name'); ?>" required="required" class="form-control" placeholder="Enter name*">
                                 <span class="text-danger"><?= form_error("enquiry_name") ? form_error("enquiry_name") : ''; ?></span>
                             </div>
                             <div class="form-group ic-eml">
-                                <input type="email" class="form-control" <?= $disabled; ?> name="enquiry_email" placeholder="Enter email*" required="required" value="<?= set_value('enquiry_email'); ?>" pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$" title="Invalid email address">
+                                <input type="email" class="form-control" name="enquiry_email" placeholder="Enter email*" required="required" value="<?= set_value('enquiry_email'); ?>" pattern="^[\w]{1,}[\w.+-]{0,}@[\w-]{2,}([.][a-zA-Z]{2,}|[.][\w-]{2,}[.][a-zA-Z]{2,})$" title="Invalid email address">
                                 <span class="text-danger"><?= form_error("enquiry_email") ? form_error("enquiry_email") : ''; ?></span>
                             </div>
                             <div class="form-group ic-pho">
-                                <input type="tel" inputmode="tel" class="form-control" <?= $disabled; ?> name="enquiry_mobile" value="<?= set_value('enquiry_mobile'); ?>" placeholder="Enter mobile number *" pattern="[0-9+\-\s()]{7,20}" title="7 to 20 characters: digits, spaces, + ( ) and - are allowed" required>
+                                <input type="tel" inputmode="tel" class="form-control" name="enquiry_mobile" value="<?= set_value('enquiry_mobile'); ?>" placeholder="Enter mobile number *" pattern="[0-9+\-\s()]{7,20}" title="7 to 20 characters: digits, spaces, + ( ) and - are allowed" required>
                                 <span class="text-danger"><?= form_error("enquiry_mobile") ? form_error("enquiry_mobile") : ''; ?></span>
                             </div>
                             <div class="form-group">
-                                <textarea class="form-control" rows="3" <?= $disabled; ?> name="enquiry_message" placeholder="Enter your query or message"></textarea>
+                                <textarea class="form-control" rows="3" name="enquiry_message" placeholder="Enter your query or message"></textarea>
                                 <span class="text-danger"><?= form_error("enquiry_message") ? form_error("enquiry_message") : ''; ?></span>
                             </div>
-                            <?php if (!empty($logged_id)): ?>
-                                <button type="submit" id="detail_enquiry_submit" name="enquiry_submit" class="btn btn-primary">Submit</button>
-                            <?php else: ?>
-                                <a href="<?= base_url('/login'); ?>"><button type="button" class="btn btn-primary" style="background:#f44336; border:none;">Please Log In First</button></a>
+                            <button type="submit" id="detail_enquiry_submit" name="enquiry_submit" class="btn btn-primary">Submit</button>
+                            <?php if (empty($logged_id)): ?>
+                                <p style="margin:10px 0 0;font-size:13px;color:#6b7280;"><a href="<?= base_url('login'); ?>">Sign in</a> first and the reply is kept with your account.</p>
                             <?php endif; ?>
                         </form>
 

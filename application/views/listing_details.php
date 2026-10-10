@@ -524,8 +524,13 @@ $ld_stars = function ($value) {
 							<?php else: ?>
 								<p class="p411-form__hint">Say what you had done, how it went and whether you'd go back. Keep it factual &mdash; it's more useful that way.</p>
 
+								<?php // onsubmit disables the button once the form is on its way — a
+								      // second click used to post a second copy of the review. It
+								      // checks defaultPrevented after the other handlers have run, so
+								      // a submit form-validate.js cancelled leaves the button usable. ?>
 								<form name="review_form" id="review_form" method="post" data-validate
-									  action="<?= base_url('user/submit_review') ?>">
+									  action="<?= base_url('user/submit_review') ?>"
+									  onsubmit="var ev=event,b=document.getElementById('review_submit');setTimeout(function(){if(b&&!ev.defaultPrevented){b.disabled=true;b.textContent='Sending\u2026';}},0);">
 									<input type="hidden" name="listing_id" value="<?= (int) ($listing->listing_id ?? 0) ?>">
 									<input type="hidden" name="listing_user_id" value="<?= (int) ($listing->user_id ?? 0) ?>">
 									<input type="hidden" name="review_user_id" value="<?= (int) $logged_id ?>">
@@ -662,8 +667,6 @@ $ld_stars = function ($value) {
 					<form method="post" name="detail_enquiry_form" id="detail_enquiry_form" data-validate
 						  action="<?= base_url('user/add-enquiry/listing_details/' . rawurlencode($ld_slug)) ?>">
 						<input type="hidden" name="listing_id" value="<?= (int) ($listing->listing_id ?? 0) ?>">
-						<input type="hidden" name="receiving_user_id" value="<?= (int) ($listing->user_id ?? 0) ?>">
-						<input type="hidden" name="enquiry_sender_id" value="<?= (int) $logged_id ?>">
 						<input type="hidden" name="enquiry_source" value="<?= e_attr($ld_name) ?>">
 						<input type="hidden" name="enquiry_type" value="listing">
 
@@ -714,6 +717,26 @@ $ld_stars = function ($value) {
 						<p class="p411-form__hint" style="margin:8px 0 0;">In a hurry? Call <a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) ?>"><?= e($listing->listing_mobile) ?></a>.</p>
 					<?php endif; ?>
 				</div>
+
+				<?php if (!empty($listing_coupons)): ?>
+					<!-- Current deals (posted by the owner at /user/my-coupons) -->
+					<div class="p411-card" id="deals">
+						<div class="p411-card__head">
+							<h2>Current deals</h2>
+						</div>
+						<ul class="p411-info">
+							<?php foreach ($listing_coupons as $deal): ?>
+								<li>
+									<a href="<?= e_url(base_url('coupons/' . (int) $deal->coupon_id)) ?>"><?= e($deal->coupon_name) ?></a>
+									<span>
+										<?php if (!empty($deal->coupon_code)): ?>Code <strong><?= e($deal->coupon_code) ?></strong> &middot; <?php endif; ?>
+										until <?= e(us_date($deal->coupon_end_date)) ?>
+									</span>
+								</li>
+							<?php endforeach; ?>
+						</ul>
+					</div>
+				<?php endif; ?>
 
 				<!-- Contact details -->
 				<div class="p411-card">

@@ -418,7 +418,7 @@
                     <!-- Duration Dropdown -->
                     <div class="form-group">
                         <label for="duration_id">Duration</label>
-                        <select name="duration_id" id="duration_id" class="form-control">
+                        <select name="duration_id" id="duration_id" class="form-control no-select2">
                             <?php if (isset($plan_durations) && is_array($plan_durations)): ?>
                                 <?php foreach ($plan_durations as $duration): ?>
                                     <?php $currency = isset($duration->currency) && $duration->currency ? $duration->currency : 'USD'; ?>

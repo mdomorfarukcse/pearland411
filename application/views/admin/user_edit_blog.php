@@ -26,11 +26,19 @@
                                                 if($users){
                                                   foreach($users as $user){
                                                 ?>
-                                                <option value="<?= $user->user_id; ?>" <?= ($user->user_id == $blog->user_id)?'SELECTED':'';?> ><?= e($user->name) ?></option>
+                                                <option value="<?= $user->user_id; ?>" <?= ($user->user_id == $blog->user_id)?'SELECTED':'';?> ><?= e(user_option_label($user)) ?></option>
                         
                                                 <?php } } ?>
                         
-                                              </select>                        
+                                              </select>
+                        <?php // Byline (migration 0035). The author account above decides who
+                              // owns the post; this decides the NAME printed on it — so a post
+                              // filed under a staff login can read "Pearland411" or a reporter's
+                              // name instead of whatever that login happens to be called. ?>
+                        <label for="blog_byline" style="display:block;margin-top:10px;">Byline <small class="text-muted">(optional — the author name shown on the site; leave empty to use the account&rsquo;s name)</small></label>
+                        <input type="text" name="blog_byline" id="blog_byline" maxlength="120" class="form-control"
+                               placeholder="e.g. Pearland411 Staff" value="<?= e_attr(set_value('blog_byline', (string) ($blog->blog_byline ?? ''))) ?>">
+                        <?= form_error('user_id', '<div class="text-danger" style="margin-top:8px;">', '</div>') ?>                        
                                                 
                                               </div>
                                             </div>

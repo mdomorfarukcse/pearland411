@@ -115,7 +115,7 @@ function cc_cat_label($c)
                     <?php if (!empty($it['terms']) && count($it['terms']) > 1): ?>
                         <div class="cco-term">
                             <label for="term-<?= (int) $it['plan_id'] ?>">Buy for</label>
-                            <select class="cco-term-sel" id="term-<?= (int) $it['plan_id'] ?>"
+                            <select class="cco-term-sel no-select2" id="term-<?= (int) $it['plan_id'] ?>"
                                     data-plan="<?= (int) $it['plan_id'] ?>">
                                 <?php foreach ($it['terms'] as $t):
                                     $val = $t['duration_id'] ? 'd:' . $t['duration_id'] : 'm:' . $t['multiplier'];
@@ -131,7 +131,25 @@ function cc_cat_label($c)
                     <?php else: ?>
                         <div class="cco-term-static"><?= htmlspecialchars($it['term_label']) ?></div>
                     <?php endif; ?>
-                    <div class="cco-exp">Runs until <strong><?= date('M j, Y', strtotime($it['expires_at'])) ?></strong></div>
+                    <?php if (!empty($it['needs_category'])): ?>
+                        <div class="cco-term">
+                            <label for="cat-<?= (int) $it['plan_id'] ?>">Show it in</label>
+                            <select class="cco-cat-sel" id="cat-<?= (int) $it['plan_id'] ?>" data-plan="<?= (int) $it['plan_id'] ?>">
+                                <option value="">Choose a category&hellip;</option>
+                                <?php foreach ((array) ($cart_categories ?? array()) as $cc): ?>
+                                    <option value="<?= (int) $cc->category_id ?>" <?= (int) $cc->category_id === (int) $it['target_category_id'] ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($cc->category_name) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    <?php endif; ?>
+                    <div class="cco-exp">
+                        Runs until <strong><?= date('M j, Y', strtotime($it['expires_at'])) ?></strong>
+                        &middot; <?= !empty($it['recurring'])
+                            ? 'renews only if you tick &ldquo;Renew automatically&rdquo;'
+                            : 'one-time &mdash; does not renew' ?>
+                    </div>
                 </div>
                 <div class="p"><?= htmlspecialchars($cur) ?> <?= number_format($it['price'], 2) ?></div>
                 <button class="x" type="button" data-plan="<?= (int) $it['plan_id'] ?>" title="Remove">&times;</button>
@@ -158,7 +176,9 @@ function cc_cat_label($c)
                         <span>
                             <strong>Renew automatically</strong> at the end of each term so your listing
                             never lapses. We'll save your card securely with Helcim — cancel anytime from
-                            your account.
+                            <a href="<?= base_url('user/my-account') ?>">your account</a>.
+                            This applies to your business listing only: banners, videos and add-ons
+                            run for the term you chose and then end.
                         </span>
                     </label>
                 <?php endif; ?>
@@ -228,9 +248,18 @@ function cc_cat_label($c)
 
     // Term picker -> re-price the line, then reload so totals/expiry agree
     // with what the server will actually charge.
+    //
+    // The select carries `no-select2` so footer.php leaves it native: Select2
+    // fires only jQuery events, so a native listener on a Select2-wrapped
+    // select never ran — the widget showed "3 months" while the cart, the
+    // total, the end date and the amount charged all stayed on 1 month.
+    // Bound through jQuery when it is there, which hears both kinds of event,
+    // so the handler survives even if the opt-out class is ever dropped.
     Array.prototype.forEach.call(document.querySelectorAll('.cco-term-sel'), function (sel) {
-        sel.addEventListener('change', function () {
+        var current = sel.value;
+        var onChange = function () {
             var v = sel.value || '';
+            if (v === current) return;
             var params = { plan_id: sel.getAttribute('data-plan') };
             if (v.indexOf('d:') === 0) { params.duration_id = v.slice(2); }
             else { params.multiplier = v.slice(2); }
@@ -239,9 +268,39 @@ function cc_cat_label($c)
                 base + 'cart-set-term',
                 params,
                 function () { location.reload(); },
-                function (msg) { sel.disabled = false; showErr(msg); }
+                function (msg) {
+                    // Put the picker back on the term the cart actually
+                    // holds, so the page never shows a term it will not charge.
+                    sel.value = current;
+                    if (window.jQuery) { window.jQuery(sel).trigger('change.select2'); }
+                    sel.disabled = false;
+                    showErr(msg);
+                }
             );
-        });
+        };
+        if (window.jQuery) { window.jQuery(sel).on('change', onChange); }
+        else { sel.addEventListener('change', onChange); }
+    });
+
+    // Category picker for category-specific banners/videos. Bound through
+    // jQuery when present, for the same Select2 reason as the term picker.
+    Array.prototype.forEach.call(document.querySelectorAll('.cco-cat-sel'), function (sel) {
+        var current = sel.value;
+        var onChange = function () {
+            if (!sel.value || sel.value === current) return;
+            ppPost(
+                base + 'cart-set-category',
+                { plan_id: sel.getAttribute('data-plan'), category_id: sel.value },
+                function () { current = sel.value; if (err) { err.style.display = 'none'; } },
+                function (msg) {
+                    sel.value = current;
+                    if (window.jQuery) { window.jQuery(sel).trigger('change.select2'); }
+                    showErr(msg);
+                }
+            );
+        };
+        if (window.jQuery) { window.jQuery(sel).on('change', onChange); }
+        else { sel.addEventListener('change', onChange); }
     });
 
     // Guest auth tabs.

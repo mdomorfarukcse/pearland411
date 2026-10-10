@@ -283,6 +283,9 @@ unset($__ext, $__rel);
                             <?php if (!empty($show_news)): ?>
                               <li><a href="<?= base_url('news') ?>"><img src="<?= base_url() ?>assets/images/icon/news.png" loading="lazy" alt="">Local News</a></li>
                             <?php endif; ?>
+                            <?php if (site_setting('service_blog_enabled', '1') !== '0'): ?>
+                              <li><a href="<?= base_url('all-blog') ?>"><img src="<?= base_url() ?>assets/images/icon/blog.png" loading="lazy" alt="">Blog</a></li>
+                            <?php endif; ?>
                             <?php if (!empty($show_events)): ?>
                               <li><a href="<?= base_url('event') ?>"><img src="<?= base_url() ?>assets/images/icon/calendar.png" loading="lazy" alt="">Events</a></li>
                             <?php endif; ?>
@@ -343,7 +346,7 @@ unset($__ext, $__rel);
                     <ul class="bl">
                       <li><a href="<?= base_url('pricing-plan') ?>">Add Business</a></li>
                       <li><a href="<?= base_url('login') ?>">Sign In</a></li>
-                      <li><a href="<?= base_url('login?login=register') ?>">Create an Account</a></li>
+                      <li><a href="<?= base_url('register') ?>">Create an Account</a></li>
                     </ul>
                   <?php else: ?>
                     <ul class="bl">
@@ -363,7 +366,7 @@ unset($__ext, $__rel);
                           <li><a href="<?= base_url('pricing-plan') ?>">Add Business</a></li>
                           <?php if (!$is_logged_in): ?>
                             <li><a href="<?= base_url('login') ?>">Sign In</a></li>
-                            <li><a href="<?= base_url('login?login=register') ?>">Create an Account</a></li>
+                            <li><a href="<?= base_url('register') ?>">Create an Account</a></li>
                           <?php else: ?>
                             <li><a href="<?= base_url('dashboard') ?>">My Dashboard</a></li>
                             <li><span style="color:#666;font-size:14px;padding:8px 16px;">Welcome, <?= e($user_name) ?></span></li>
@@ -589,8 +592,9 @@ unset($__ext, $__rel);
                       <?php foreach (array_slice($home_deals, 0, 3) as $deal): ?>
                         <?php
                         $deal_url = base_url('coupons/' . (int) $deal->coupon_id);
-                        $deal_biz = !empty($deal->listing_name) ? $deal->listing_name
-                                  : (!empty($deal->owner_name) ? $deal->owner_name : 'Pearland411');
+                        // The business, never the posting account's personal name —
+                        // which for imported listings is a staff data-entry login.
+                        $deal_biz = !empty($deal->listing_name) ? $deal->listing_name : 'Pearland411';
                         $deal_end = (!empty($deal->coupon_end_date) && strtotime($deal->coupon_end_date))
                                   ? strtotime($deal->coupon_end_date) : false;
                         ?>
@@ -652,20 +656,10 @@ unset($__ext, $__rel);
                             ? base_url('event-details/' . rawurlencode($event->event_slug))
                             : base_url('event');
                           // "Add to calendar" without asking anyone to install
-                          // anything: Google's template URL, as an all-day
-                          // entry, because event_time is free text.
-                          $gcal = '';
-                          if ($ets) {
-                            $ends = (!empty($event->event_end_date) && strtotime($event->event_end_date))
-                              ? strtotime($event->event_end_date) : $ets;
-                            $gcal = 'https://calendar.google.com/calendar/render?' . http_build_query(array(
-                              'action'   => 'TEMPLATE',
-                              'text'     => (string) $event->event_name,
-                              'dates'    => date('Ymd', $ets) . '/' . date('Ymd', strtotime('+1 day', $ends)),
-                              'details'  => $eurl,
-                              'location' => (string) ($event->event_address ?? 'Pearland, TX'),
-                            ), '', '&amp;');
-                          }
+                          // anything: Google's template URL — timed when the
+                          // free-text event_time can be read, all-day otherwise
+                          // (event_calendar_url() in view_helper.php).
+                          $gcal = event_calendar_url($event, $eurl);
                           ?>
                           <article class="p411-event">
                             <?php if ($ets): ?>
@@ -689,7 +683,7 @@ unset($__ext, $__rel);
                                 </span>
                               <?php endif; ?>
                               <?php if ($gcal !== ''): ?>
-                                <a class="p411-mini" href="<?= $gcal ?>" target="_blank" rel="noopener nofollow">
+                                <a class="p411-mini" href="<?= e_attr($gcal) ?>" target="_blank" rel="noopener nofollow">
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M12 11v6M9 14h6"/></svg>
                                   Add to Calendar
                                 </a>
@@ -990,7 +984,7 @@ unset($__ext, $__rel);
             <div>
               <h3>Advertise on Pearland411</h3>
               <p>Banner positions across the site, starting at $20 a month.</p>
-              <a href="<?= base_url('post-your-ads') ?>">View Advertising Packages &rarr;</a>
+              <a href="<?= base_url('pricing-plan#pp-site-wide-banners') ?>">View Advertising Packages &rarr;</a>
             </div>
           </div>
         </div>

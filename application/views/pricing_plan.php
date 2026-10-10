@@ -243,7 +243,7 @@ function pp_features($plan, $cat)
 
         <?php foreach ($catLabels as $catKey => $catLabel): ?>
             <?php if (empty($grouped[$catKey])) continue; ?>
-            <section class="pp-sec">
+            <section class="pp-sec" id="pp-<?= htmlspecialchars($catKey) ?>">
                 <div class="pp-sec-head">
                     <h2><?= htmlspecialchars($catLabel) ?></h2>
                     <span class="hint"><?= isset($catBlurbs[$catKey]) ? htmlspecialchars($catBlurbs[$catKey]) : '' ?></span>
@@ -252,14 +252,19 @@ function pp_features($plan, $cat)
 
                 <div class="pp-grid">
                     <?php foreach ($grouped[$catKey] as $plan):
+                        // A plan with no price set is half-configured, not
+                        // free: never show it as "Get started free".
+                        if (!isset($plan->price) || $plan->price === '' || !is_numeric($plan->price)) continue;
                         $price    = (float) $plan->price;
                         $isFree   = $price <= 0;
                         $inCart   = in_array((int) $plan->id, $cartIds);
                         $isOwned  = (isset($user_subscription) && $user_subscription && (int) $user_subscription->plan_id === (int) $plan->id);
                         $feats    = pp_features($plan, $catKey);
-                        $per      = $catKey === 'business-listing' || $catKey === 'special'
-                                    ? 'per ' . billing_interval_noun(isset($plan->billing_interval) ? $plan->billing_interval : '')
-                                    : 'one-time';
+                        // Every card says whether it renews. Non-listing cards
+                        // used to hard-code "one-time" and the special package
+                        // read "per month" — though nothing but a listing tier
+                        // ever renews.
+                        list($per, $renewNote) = plan_term_copy($plan);
                         ?>
                         <div class="pp-card <?= $inCart ? 'is-selected' : '' ?> <?= $isOwned ? 'owned' : '' ?>" data-card="<?= (int) $plan->id ?>">
                             <?php if ($isOwned): ?>
@@ -278,7 +283,10 @@ function pp_features($plan, $cat)
 
                             <div class="pp-price">
                                 <span class="amt">$<?= number_format($price, ($price - floor($price)) > 0 ? 2 : 0) ?></span>
-                                <span class="per"><?= $isFree ? '' : $per ?></span>
+                                <span class="per"><?= $isFree ? '' : htmlspecialchars($per) ?></span>
+                                <?php if (!$isFree): ?>
+                                    <small class="pp-renew" style="display:block;font-size:12px;color:#5A6472;margin-top:4px;"><?= htmlspecialchars($renewNote) ?></small>
+                                <?php endif; ?>
                             </div>
 
                             <?php if (!empty($feats)): ?>

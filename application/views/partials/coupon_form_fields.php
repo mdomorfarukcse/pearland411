@@ -118,6 +118,7 @@ $c_bad = function ($field) use ($c_err) {
 			<small class="form-text text-muted">
 				Your logo or a photograph of what is on offer. JPG, PNG, GIF or WebP, under 5&nbsp;MB.
 			</small>
+			<?php if ($c_bad('coupon_photo')): ?><span class="text-danger"><?= e($c_bad('coupon_photo')) ?></span><?php endif; ?>
 		</div>
 	</div>
 </div>

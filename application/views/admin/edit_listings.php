@@ -228,6 +228,12 @@
                               }
                               ?>
                             </select>
+                            <?php if (!empty($listing->category_id)) { ?>
+                              <small class="form-text text-muted">
+                                The header banner on this category&rsquo;s page is set on the category:
+                                <a href="<?= base_url('admin/edit_listing_category/' . (int) $listing->category_id) ?>" target="_blank" rel="noopener">edit category banner</a>.
+                              </small>
+                            <?php } ?>
                           </div>
                         </div>
                         <div class="col-md-6">

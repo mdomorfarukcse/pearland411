@@ -79,6 +79,7 @@ $route['cart-clear']  = 'User/cart_clear';
 $route['cart-pay-init'] = 'User/cart_pay_init';
 $route['buy-now']       = 'User/buy_now';
 $route['cart-set-term'] = 'User/cart_set_term';
+$route['cart-set-category'] = 'User/cart_set_category';
 
 $route['(:any)'] = 'User/$1';
 $route['404_override'] = 'errors/page_missing';

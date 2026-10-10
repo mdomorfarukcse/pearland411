@@ -370,7 +370,6 @@ $(document).ready(function () {
         rules: {
             coupon_name: {required: true},
             coupon_code: {required: true},
-            coupon_photo: {required: true},
             coupon_start_date: {required: true},
             coupon_end_date: {required: true}
         },
@@ -378,7 +377,6 @@ $(document).ready(function () {
 
             coupon_name: {required: "Coupon Name is Required"},
             coupon_code: {required: "Offer Code is Required"},
-            coupon_photo: {required: "Coupon Photo is Required"},
             coupon_start_date: {required: "Start date is Required"},
             coupon_end_date: {required: "End date is Required"}
         },

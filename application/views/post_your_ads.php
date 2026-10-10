@@ -2,11 +2,9 @@
 /**
  * /post-your-ads (Post your ads) — public page.
  *
- * The previous form posted to /post-ads which had no controller
- * method behind it (every submission 404'd). The full
- * self-serve ad-purchase flow is blocked on the Authorize.Net
- * integration; until that lands we collect interest via the same
- * Contact-Us pipeline so requests aren't lost.
+ * Two ways to buy: online at /pricing-plan (cart + Helcim checkout, the
+ * self-serve flow), or by sending this form, which goes through the same
+ * /contact-submit pipeline as /contact-us so a request is never lost.
  */
 ?>
 
@@ -37,9 +35,15 @@
 					<div class="login">
 						<h4>Reach Pearland-area customers</h4>
 						<p>
-							Display ads on the homepage, listing pages and category pages.
-							Inventory is sold by week or month. Tell us a bit about your
-							business and we&rsquo;ll send you placement options + pricing.
+							Display ads on the homepage, listing pages and category pages,
+							sold in terms of 3, 6, 12 or 24 months.
+						</p>
+						<p>
+							<a class="btn btn-primary" href="<?= e_url(base_url('pricing-plan')) ?>">Buy online &rarr; see packages &amp; prices</a>
+						</p>
+						<p>
+							Would rather talk it through? Tell us a bit about your business and
+							we&rsquo;ll send you placement options and pricing.
 						</p>
 
 						<form method="post" action="<?= base_url('contact-submit') ?>">
@@ -75,9 +79,9 @@
 						</form>
 
 						<p style="margin-top:18px;color:#6b7280;">
-							Self-serve ad checkout is coming soon. In the meantime our
-							sales team will contact you with placements and pricing
-							within one business day.
+							You can <a href="<?= e_url(base_url('pricing-plan')) ?>">buy any ad package online</a>
+							and pay by card at checkout. Send this form instead and our sales team will
+							contact you with placements and pricing within one business day.
 						</p>
 					</div>
 				</div>

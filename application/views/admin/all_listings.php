@@ -19,6 +19,18 @@
         <div class="ud-cen-s2">
 
           <h2>Listing details</h2>
+          <?php // Banners for the directory are set per CATEGORY, not per listing:
+                // the header artwork at the top of /all_listing/<category>
+                // (editorial, free) and the sold "Category Header Banner" /
+                // category banners booked against a category. Both used to be
+                // reachable only from screens nobody looked for from here. ?>
+          <p style="margin:6px 0 12px;">
+            <a class="db-tit-btn" style="position:static;display:inline-block;margin-right:8px;" href="<?= base_url('admin/all_listing_category') ?>">Category header banners</a>
+            <?php $__al_admin = $this->session->userdata('logged_admin'); ?>
+            <?php if (is_array($__al_admin) && ($__al_admin['role'] ?? 'editor') === 'super_admin') { ?>
+              <a class="db-tit-btn" style="position:static;display:inline-block;" href="<?= base_url('admin/create-ads') ?>">Book a category banner ad</a>
+            <?php } ?>
+          </p>
           <?php
           // A real GET form, not the old #pg-sear box. That one was picked up by
           // admin-table.js and filtered the ten rows already on the page, so a

@@ -96,20 +96,29 @@ $usage_data = [
     'placeholder_images' => isset($usage_counts['placeholder_images']) ? $usage_counts['placeholder_images'] : 0,
 ];
 
-// Extract comprehensive limit information
+// Extract comprehensive limit information.
+// -1 and 0 both mean unlimited (Usermodel::canUserAddContent()); 0 used to
+// print as a bare "0" — "Blog limit 0" beside posts the member had made.
+$__lim_src = (isset($subscription_limits) && is_array($subscription_limits)) ? $subscription_limits : array();
+$__lim = function ($key, $fallback) use ($__lim_src) {
+    $subscription_limits = $__lim_src;
+    if (!isset($subscription_limits[$key])) return $fallback;
+    $v = (int) $subscription_limits[$key];
+    return ($v === -1 || $v === 0) ? '∞' : $v;
+};
 $limits_data = [
-    'listing' => isset($subscription_limits['listing']) ? ($subscription_limits['listing'] == -1 ? '∞' : $subscription_limits['listing']) : 5,
-    'product' => isset($subscription_limits['product']) ? ($subscription_limits['product'] == -1 ? '∞' : $subscription_limits['product']) : 3,
-    'event' => isset($subscription_limits['event']) ? ($subscription_limits['event'] == -1 ? '∞' : $subscription_limits['event']) : 3,
-    'classified' => isset($subscription_limits['classified']) ? ($subscription_limits['classified'] == -1 ? '∞' : $subscription_limits['classified']) : 2,
-    'rental' => isset($subscription_limits['rental']) ? ($subscription_limits['rental'] == -1 ? '∞' : $subscription_limits['rental']) : 2,
-    'house' => isset($subscription_limits['house']) ? ($subscription_limits['house'] == -1 ? '∞' : $subscription_limits['house']) : 2,
-    'blog' => isset($subscription_limits['blog']) ? ($subscription_limits['blog'] == -1 ? '∞' : $subscription_limits['blog']) : 2,
-    'video' => isset($subscription_limits['video']) ? ($subscription_limits['video'] == -1 ? '∞' : $subscription_limits['video']) : 1,
-    'news' => isset($subscription_limits['news']) ? ($subscription_limits['news'] == -1 ? '∞' : $subscription_limits['news']) : 1,
-    'ad' => isset($subscription_limits['ad']) ? ($subscription_limits['ad'] == -1 ? '∞' : $subscription_limits['ad']) : 1,
+    'listing' => $__lim('listing', 5),
+    'product' => $__lim('product', 3),
+    'event' => $__lim('event', 3),
+    'classified' => $__lim('classified', 2),
+    'rental' => $__lim('rental', 2),
+    'house' => $__lim('house', 2),
+    'blog' => $__lim('blog', 2),
+    'video' => $__lim('video', 1),
+    'news' => $__lim('news', 1),
+    'ad' => $__lim('ad', 1),
     'ad_boost' => isset($subscription_limits['ad_boost']) ? ($subscription_limits['ad_boost'] == -1 ? '∞' : $subscription_limits['ad_boost']) : 0,
-    'placeholder_images' => isset($subscription_limits['placeholder_images']) ? ($subscription_limits['placeholder_images'] == -1 ? '∞' : $subscription_limits['placeholder_images']) : 5,
+    'placeholder_images' => $__lim('placeholder_images', 5),
 ];
 
 // Plan features for display

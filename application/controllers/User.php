@@ -34,6 +34,10 @@ class User extends CI_Controller
 			// Auth pages
 			'register', 'login', 'forgot_password',
 			'reset_password', 'verify_email',
+			// For people who cannot sign in until they verify: login,
+			// register, verify-email and forgot-password all link here, and
+			// without this entry a logged-out visitor was bounced to /login.
+			'resend_verification',
 			'logout', 'subscribe_newsletter', 'newsletter_confirm',
 			'contact_submit',
 			// Home + static pages
@@ -56,7 +60,7 @@ class User extends CI_Controller
 			// and is signature-verified instead of session-gated.
 			'checkout', 'checkout_success', 'process_checkout', 'helcim_webhook',
 			// Advertising cart — guests build a cart before logging in.
-			'cart_add', 'cart_remove', 'cart_get', 'cart_clear', 'buy_now', 'cart_set_term',
+			'cart_add', 'cart_remove', 'cart_get', 'cart_clear', 'buy_now', 'cart_set_term', 'cart_set_category',
 			// Enquiry submission (rate-limited; anonymous OK)
 			'add_enquiry',
 			// Services catalog + quote requests
@@ -90,11 +94,12 @@ class User extends CI_Controller
 		// Try the original method first
 		$header_cats = $this->usermodel->getCategoriesForHeader(50);
 
-		// If no results (probably due to category_status filter), use getAllCategory with limit
+		// If no results, fall back to the busiest listing categories. This
+		// used to fall back to getAllCategory(), which reads the marketplace
+		// product_categories table — names that /all_listing/<slug> (listing
+		// categories) cannot resolve.
 		if (empty($header_cats)) {
-			// Get all categories and limit to 50 for header/modal
-			$all_cats = $this->usermodel->getAllCategory();
-			$data['header_categories'] = array_slice($all_cats, 0, 50);
+			$data['header_categories'] = $this->usermodel->getCategoriesWithCounts(50);
 		} else {
 			$data['header_categories'] = $header_cats;
 		}
@@ -507,12 +512,15 @@ class User extends CI_Controller
 					'name'     => 'Pearland411',
 					'url'      => base_url('/'),
 					'logo'     => base_url('assets/images/pearland-logo.png'),
+					// external_url(), as the footer icons use: a schemeless
+					// "facebook.com/x" becomes https://, and anything that is
+					// not http(s) is dropped rather than published as sameAs.
 					'sameAs'   => array_values(array_filter(array(
-						site_setting('social_facebook_url',  '') ?: null,
-						site_setting('social_twitter_url',   '') ?: null,
-						site_setting('social_instagram_url', '') ?: null,
-						site_setting('social_linkedin_url',  '') ?: null,
-						site_setting('social_youtube_url',   '') ?: null,
+						external_url(site_setting('social_facebook_url',  '')) ?: null,
+						external_url(site_setting('social_twitter_url',   '')) ?: null,
+						external_url(site_setting('social_instagram_url', '')) ?: null,
+						external_url(site_setting('social_linkedin_url',  '')) ?: null,
+						external_url(site_setting('social_youtube_url',   '')) ?: null,
 					))),
 				),
 			),
@@ -1021,7 +1029,13 @@ class User extends CI_Controller
 
 			// Load additional data for the page
 			try {
-				$data['categories'] = $this->usermodel->getAllCategory();
+				// Business categories, busiest first, only ones with published
+				// listings. This used to be getAllCategory() — MARKETPLACE
+				// product_categories ("Laptop", "Simulator") — rendered as
+				// /all_listing/<slug> links, which resolve against LISTING
+				// categories, so every one of them opened "That category
+				// doesn't exist" or an empty page.
+				$data['categories'] = $this->usermodel->getCategoriesWithCounts(8);
 				$data['latest_news'] = $this->usermodel->getlatest_news(5);
 			} catch (Exception $e) {
 				$data['categories'] = array();
@@ -1543,8 +1557,11 @@ class User extends CI_Controller
 		// Author. This was a raw `$this->db->select('name')` inside the view —
 		// a query in the template, and one that blew up whenever the loader had
 		// not copied `db` across. Resolved here, where the model belongs.
-		$data['blog_author'] = '';
-		if (!empty($data['blog']->user_id)) {
+		// A byline typed at /admin (migration 0035) wins over the account name:
+		// posts are often filed under a staff login whose name is not the one
+		// the client wants on the article.
+		$data['blog_author'] = trim((string) ($data['blog']->blog_byline ?? ''));
+		if ($data['blog_author'] === '' && !empty($data['blog']->user_id)) {
 			$author = $this->usermodel->getSingleValue((int) $data['blog']->user_id, 'user_id', 'user');
 			if ($author && !empty($author->name)) {
 				$data['blog_author'] = (string) $author->name;
@@ -1626,11 +1643,18 @@ class User extends CI_Controller
 			$data['current_enquiry_count'] = 0;
 		}
 
-		// Pagination config
+		// Only this member's leads. This used getAllEnquiries() ("showing all
+		// for now"), which put every business's enquiries — names, emails,
+		// phone numbers, messages — in front of every signed-in member.
+		$total_rows = $this->usermodel->countEnquiriesForReceiver($data['logged_id']);
+		$data['total_rows'] = $total_rows;
+
+		// Pagination config. The base URL used to be user/user-enquiries,
+		// which is a different method, so page 2 never loaded this one.
 		$config = [
-			'base_url' => base_url('user/user-enquiries'),
+			'base_url' => base_url('user/enquiries'),
 			'per_page' => 10,
-			'total_rows' => count($this->usermodel->getAllEnquiries()),
+			'total_rows' => $total_rows,
 			'uri_segment' => 3,
 		];
 		$config['full_tag_open'] = '<ul class="pagination">';
@@ -1653,8 +1677,7 @@ class User extends CI_Controller
 		$this->pagination->initialize($config);
 		$page = (int) ($this->uri->segment(3)) ? (int) ($this->uri->segment(3)) : 0;
 
-		// Get enquiries - showing all for now (can be changed to user-specific later)
-		$data['allEnquiries'] = $this->usermodel->getAllEnquiries();
+		$data['allEnquiries'] = $this->usermodel->getEnquiriesForReceiver($data['logged_id'], $config['per_page'], $page);
 		$data['start_number'] = $page + 1;
 		$data['per_page'] = $config['per_page'];
 		$data['link'] = $this->pagination->create_links();
@@ -1680,39 +1703,38 @@ class User extends CI_Controller
 	}
 
 	/**
-	 * Delete a specific enquiry
+	 * Delete one of the member's own enquiries.
+	 *
+	 * POST only (the CSRF hook covers every POST form) and owner-scoped: this
+	 * used to be a GET link that deleted any enquiry by id, so any signed-in
+	 * member could clear any business's leads — or a crafted <img> could do
+	 * it for them.
 	 */
 	public function delete_enquiry($enquiry_id = null)
 	{
-		if (!$enquiry_id) {
-			$this->session->set_flashdata('error_msg', 'Invalid enquiry ID.');
-			redirect('user/enquiries');
+		if ($this->input->method() !== 'post') {
+			show_404();
 			return;
 		}
 
-		$data['logged_id'] = null;
-		if ($this->session->userdata('logged_user')) {
-			$session = $this->session->userdata('logged_user');
-			$data['logged_id'] = $session['logged_id'];
-		}
-
-		if (!$data['logged_id']) {
+		$session   = (array) $this->session->userdata('logged_user');
+		$logged_id = isset($session['logged_id']) ? (int) $session['logged_id'] : 0;
+		if (!$logged_id) {
 			$this->session->set_flashdata('error_msg', 'Please login to continue.');
 			redirect('login');
 			return;
 		}
 
-		// Check if enquiry exists
-		$enquiry = $this->usermodel->getEnquiryByIdSimple($enquiry_id);
+		$enquiry_id = (int) $enquiry_id;
+		$enquiry    = $enquiry_id > 0 ? $this->usermodel->getEnquiryForReceiver($enquiry_id, $logged_id) : NULL;
 		if (!$enquiry) {
+			// Same answer for "no such enquiry" and "not yours".
 			$this->session->set_flashdata('error_msg', 'Enquiry not found.');
 			redirect('user/enquiries');
 			return;
 		}
 
-		// Delete the enquiry
-		$delete_result = $this->usermodel->deleteEnquirySimple($enquiry_id);
-		if ($delete_result) {
+		if ($this->usermodel->deleteEnquirySimple((int) $enquiry->enquiry_id)) {
 			$this->session->set_flashdata('success_msg', 'Enquiry #' . $enquiry_id . ' deleted successfully.');
 		} else {
 			$this->session->set_flashdata('error_msg', 'Failed to delete enquiry #' . $enquiry_id . '. Please try again.');
@@ -2967,11 +2989,22 @@ class User extends CI_Controller
 			$data['usage_counts'] = [];
 		}
 
-		$data['AllListings'] = $this->usermodel->getListingById($data['logged_id'], 10, NULL);
+		$uid = (int) $data['logged_id'];
+		$data['AllListings'] = $this->usermodel->getListingById($uid, 10, NULL);
 
-		$data['AllEvents'] = $this->usermodel->dashboardInfo('events', 'event_status', 0, NULL);
+		// This member's own events and blog posts. Both used to come from
+		// dashboardInfo(), which had no WHERE at all, so every member saw the
+		// first ten events and blogs on the whole site as theirs — and the
+		// "Used" figure was a count of other people's posts.
+		$data['AllEvents'] = $uid ? $this->usermodel->getAllEvent($uid, 10, 0) : array();
+		$data['AllBlogs']  = $uid ? $this->usermodel->getAllBlogs($uid, 10, 0) : array();
 
-		$data['AllBlogs'] = $this->usermodel->dashboardInfo('blogs', 'blog_status', 0, NULL);
+		// "Used" is a COUNT of what they own, not the length of a 10-row list.
+		$data['dashboard_used'] = array(
+			'listing' => $this->usermodel->countOwnedContent('listings', $uid),
+			'event'   => $this->usermodel->countOwnedContent('events', $uid),
+			'blog'    => $this->usermodel->countOwnedContent('blogs', $uid),
+		);
 
 
 
@@ -3219,6 +3252,13 @@ class User extends CI_Controller
 
 		// Get listing likes data
 		$data['listing_likes'] = $this->usermodel->getRecentLikers($data['listing']->listing_id, 5);
+
+		// The owner's live deals. The post-a-deal screen promises the offer
+		// appears "on your listing"; until this card it appeared only on
+		// /coupons and the homepage.
+		$data['listing_coupons'] = !empty($data['listing']->user_id)
+			? $this->usermodel->getActiveCouponsByUser((int) $data['listing']->user_id, 3)
+			: array();
 
 
 
@@ -3509,8 +3549,10 @@ class User extends CI_Controller
 
 		// Byline. The view used to run this query itself, straight off
 		// $this->db in the middle of the markup.
-		$data['news_author'] = 'Pearland411';
-		if (!empty($news->user_id)) {
+		// The byline field (migration 0035) first, then the account name.
+		$data['news_author'] = trim((string) ($news->news_byline ?? ''));
+		if ($data['news_author'] === '') $data['news_author'] = 'Pearland411';
+		if (empty($news->news_byline) && !empty($news->user_id)) {
 			$author = $this->usermodel->getSingleValue($news->user_id, 'user_id', 'user');
 			if ($author && !empty($author->name)) $data['news_author'] = $author->name;
 		}
@@ -3917,6 +3959,9 @@ class User extends CI_Controller
 				];
 
 				$info['gallery_image'] = uploadMultipleAndResize($img_info);
+				if (upload_last_error() !== '') {
+					$this->session->set_flashdata('error', upload_last_error());
+				}
 			}
 
 
@@ -4840,10 +4885,13 @@ class User extends CI_Controller
 				}
 
 				// Try to update the product
+				$gallery_note  = isset($update_data['gallery_image']) ? upload_last_error() : '';
 				$update_result = $this->usermodel->update($product_id, $update_data, 'product_id', 'products');
 
 				if ($update_result) {
-					$this->session->set_flashdata('message', 'Product updated successfully!');
+					// Partial gallery failures used to be hidden behind this message.
+					$this->session->set_flashdata('message', 'Product updated successfully!'
+						. ($gallery_note !== '' ? ' Note: ' . $gallery_note : ''));
 					redirect('user/products', 'refresh');
 				} else {
 					$this->session->set_flashdata('error', 'Failed to update product. Please try again.');
@@ -4936,10 +4984,12 @@ class User extends CI_Controller
 				}
 
 				// Try to insert the product
+				$gallery_note  = isset($insert_data['gallery_image']) ? upload_last_error() : '';
 				$insert_result = $this->usermodel->addProduct($insert_data);
 
 				if ($insert_result) {
-					$this->session->set_flashdata('message', 'Product added successfully!');
+					$this->session->set_flashdata('message', 'Product added successfully!'
+						. ($gallery_note !== '' ? ' Note: ' . $gallery_note : ''));
 					redirect('user/products', 'refresh');
 				} else {
 					$this->session->set_flashdata('error', 'Failed to add product. Please try again.');
@@ -5337,16 +5387,16 @@ class User extends CI_Controller
 	}
 
 	/**
-	 * Public "advertise on Pearland411" landing page.
-	 * Form is now wired to /contact-submit (see views/post_your_ads.php)
-	 * — self-serve ad checkout is blocked on Authorize.Net.
+	 * Public "advertise on Pearland411" landing page. Sends buyers to
+	 * /pricing-plan (self-serve cart + Helcim checkout); the form beside it
+	 * posts to /contact-submit for anyone who would rather be called.
 	 */
 	public function post_your_ads()
 	{
 		$data = array();
 		$this->loadHeaderCategories($data);
 		$data['title'] = 'Advertise on Pearland411';
-		$data['meta_description'] = 'Display ads on Pearland411 — homepage, listing, and category placements. Request pricing and inventory from our sales team.';
+		$data['meta_description'] = 'Display ads on Pearland411 — homepage, listing and category placements. Buy a package online or ask our sales team for placements and pricing.';
 		// Advertising. A banner above and below the form. No sidebar, and nothing between the fields.
 		$data['ad_slots'] = $this->pageAdSlots('banner');
 
@@ -5814,17 +5864,25 @@ class User extends CI_Controller
 			$video_title = $_POST['video_title'];
 			$video_slug = pearland_slug($video_title . '-' . time());
 
-			// Handle image upload
+			// Handle image upload. `images/video` — the folder the admin side
+			// uses and the one that exists. This said `images/videos`, which
+			// does not, so CodeIgniter refused every member upload ("the upload
+			// path does not appear to be valid") and the still was lost.
 			$video_image = '';
-			if ($_FILES && $_FILES['video_image']['name']) {
+			$upload_note = '';
+			if (!empty($_FILES['video_image']['name'])) {
 				$img_info = [
-					'upload_path' => 'images/videos',
+					'upload_path' => 'images/video',
 					'quality'     => '60%',
 					'height'      => 500,
 					'width'       => 500,
 					'image_name'  => 'video_image'
 				];
-				$video_image = uploadAndResize($img_info);
+				$video_image = (string) uploadAndResize($img_info);
+				if ($video_image === '') {
+					$upload_note = ' The picture was not saved: ' . (upload_last_error() ?: 'the file could not be read.')
+						. ' The YouTube thumbnail will be shown instead.';
+				}
 			}
 
 			// Prepare data
@@ -5846,7 +5904,7 @@ class User extends CI_Controller
 
 			// Insert video
 			if ($this->db->insert('video', $video_data)) {
-				$this->session->set_flashdata('message', 'Video added successfully!');
+				$this->session->set_flashdata('message', 'Video added successfully!' . $upload_note);
 				redirect('user/video-list');
 			} else {
 				$this->session->set_flashdata('message', 'Failed to add video.');
@@ -5893,19 +5951,29 @@ class User extends CI_Controller
 		if (isset($_POST['video_submit'])) {
 			// Handle image upload
 			$video_image = $video->video_image; // Keep existing image by default
-			if ($_FILES && $_FILES['video_image']['name']) {
+			$upload_note = '';
+			if (!empty($_FILES['video_image']['name'])) {
 				$img_info = [
-					'upload_path' => 'images/videos',
+					'upload_path' => 'images/video',
 					'quality'     => '60%',
 					'height'      => 500,
 					'width'       => 500,
 					'image_name'  => 'video_image'
 				];
-				$video_image = uploadAndResize($img_info);
+				$new_image = uploadAndResize($img_info);
 
-				// Delete old image if new one uploaded
-				if (!empty($video->video_image) && file_exists('./' . $video->video_image)) {
-					unlink('./' . $video->video_image);
+				// Only replace — and only then delete the old file — when the
+				// upload actually succeeded. This unlinked the old still and
+				// stored NULL whenever the upload failed, which (with the wrong
+				// folder above) was every time.
+				if ($new_image) {
+					if (!empty($video->video_image) && $video->video_image !== $new_image && file_exists('./' . $video->video_image)) {
+						@unlink('./' . $video->video_image);
+					}
+					$video_image = $new_image;
+				} else {
+					$upload_note = ' The new picture was not saved: ' . (upload_last_error() ?: 'the file could not be read.')
+						. ' The previous one was kept.';
 				}
 			}
 
@@ -5924,7 +5992,7 @@ class User extends CI_Controller
 
 			// Update video
 			if ($this->db->where('video_slug', $video_slug)->update('video', $video_data)) {
-				$this->session->set_flashdata('message', 'Video updated successfully!');
+				$this->session->set_flashdata('message', 'Video updated successfully!' . $upload_note);
 				redirect('user/video-list');
 			} else {
 				$this->session->set_flashdata('message', 'Failed to update video.');
@@ -6892,6 +6960,12 @@ class User extends CI_Controller
 			return;
 		}
 
+		// A GET here (a refresh of the redirect, a crawler) has nothing to save.
+		if ($this->input->method() !== 'post') {
+			redirect('all_listing');
+			return;
+		}
+
 		// 10 reviews per IP per hour. Stops review-bombing.
 		if (!$this->rate_limit->check_ip('submit_review', 10, 3600)) {
 			$this->rate_limit->reject(3600);
@@ -6953,28 +7027,54 @@ class User extends CI_Controller
 			return;
 		}
 
-		// Simple direct database insert
+		$listing_id = (int) $listing->listing_id;
 		$data = array(
 			'listing_id' => $listing_id,
-			'user_id' => $logged_id,
-			'reviewer_name' => $name,
-			'reviewer_email' => $email,
-			'reviewer_mobile' => $mobile,
-			'reviewer_city' => $city,
+			'user_id' => (int) $logged_id,
+			'reviewer_name' => trim((string) $name),
+			'reviewer_email' => trim((string) $email),
+			'reviewer_mobile' => (string) $mobile,
+			'reviewer_city' => (string) $city,
 			'rating' => $rating,
-			'review_message' => $message,
+			'review_message' => (string) $message,
 			'review_status' => 1,
-			'created_at' => date('Y-m-d H:i:s')
 		);
 
-		// Insert into database
-		if ($this->db->insert('listing_reviews', $data)) {
-			// Update listing average rating and review count
-			$this->usermodel->updateListingRating($listing_id);
+		// One review per member per business. Nothing checked before
+		// inserting (hasUserReviewed() existed and was never called), so the
+		// Back button and a second click each added another copy. A second
+		// submission now REPLACES the member's earlier review — the newest
+		// opinion is the one that counts — instead of stacking up.
+		$existing = $this->db->select('review_id')
+			->where('listing_id', $listing_id)
+			->where('user_id', (int) $logged_id)
+			->order_by('review_id', 'DESC')
+			->limit(1)
+			->get('listing_reviews')->row();
+
+		if ($existing) {
+			$ok = $this->db->where('review_id', (int) $existing->review_id)->update('listing_reviews', $data);
+			$success_msg = 'Your review has been updated. You can only leave one review per business, so this replaces your earlier one.';
+		} else {
+			$data['created_at'] = date('Y-m-d H:i:s');
+			$ok = $this->db->insert('listing_reviews', $data);
+			$success_msg = 'Thank you! Your review has been submitted successfully.';
 		}
 
+		if (!$ok) {
+			// A failed insert used to be reported as a success.
+			$err = $this->db->error();
+			log_message('error', 'submit_review failed for listing ' . $listing_id . ': ' . ($err['message'] ?? 'unknown'));
+			$this->session->set_flashdata('review_error', 'Sorry — your review could not be saved. Please try again in a moment.');
+			redirect('listing-details/' . rawurlencode((string) $listing_slug) . '#write-review');
+			return;
+		}
+
+		// Update listing average rating and review count
+		$this->usermodel->updateListingRating($listing_id);
+
 		// Set flash message
-		$this->session->set_flashdata('review_success', 'Thank you! Your review has been submitted successfully.');
+		$this->session->set_flashdata('review_success', $success_msg);
 
 		// Back to the reviews section, not the top of the page — the banner
 		// confirming the review sits beside the form it came from, and landing
@@ -7010,8 +7110,14 @@ class User extends CI_Controller
 		$enquiry_message = $this->input->post('enquiry_message');
 		$enquiry_source = $this->input->post('enquiry_source');
 		$enquiry_type = $this->input->post('enquiry_type');
-		$receiving_user_id = $this->input->post('receiving_user_id');
-		$enquiry_sender_id = $this->input->post('enquiry_sender_id');
+
+		// Who is asking comes from the session and who it is for comes from
+		// the content — never from the form. Both used to be hidden fields
+		// taken as posted, so anyone could file an enquiry in another
+		// member's name, or address one to any account id they liked.
+		$__sess = (array) $this->session->userdata('logged_user');
+		$enquiry_sender_id = !empty($__sess['logged_id']) ? (int) $__sess['logged_id'] : NULL;
+		$receiving_user_id = NULL;
 
 		// Get individual IDs from form (support multiple content types)
 		$listing_id = $this->input->post('listing_id') ?: null;
@@ -7081,7 +7187,7 @@ class User extends CI_Controller
 				'enquiry_mobile'  => $enquiry_mobile,
 				'enquiry_message' => $enquiry_message,
 			));
-			redirect($this->enquiryReturnUrl());
+			redirect($this->withEnquiryAnchor($this->enquiryReturnUrl(), $source));
 			return;
 		}
 
@@ -7106,11 +7212,37 @@ class User extends CI_Controller
 			}
 		}
 
-		// If receiving_user_id is empty, try to get it from the content
+		// The owner of the thing being asked about. The URL segment comes
+		// first for the pages whose forms posted the wrong id field (house
+		// sent its slug as news_id, rentals and classifieds sent theirs as
+		// product_id); the posted ids are the fallback for everything else.
+		$__listing = NULL;
+		if ($source === 'listing_details' && !empty($identifier)) {
+			$__listing = $this->db->get_where('listings', array('listing_slug' => (string) $identifier))->row();
+			if ($__listing) $listing_id = $__listing->listing_id;
+		}
+		if (!$__listing && !empty($listing_id)) {
+			$__listing = $this->db->get_where('listings', array('listing_id' => (int) $listing_id))->row();
+		}
+		if ($source === 'house_details' && !empty($identifier)) {
+			$__house = $this->db->get_where('house', array('house_slug' => (string) $identifier))->row();
+			$receiving_user_id = $__house ? $__house->user_id : NULL;
+			$news_id = NULL;
+		} elseif ($source === 'rental_details' && !empty($identifier)) {
+			$__rental = $this->db->get_where('rental', array('rental_slug' => (string) $identifier))->row();
+			$receiving_user_id = $__rental ? $__rental->user_id : NULL;
+			if ($__rental) $rental_id = $__rental->rental_id;
+			$product_id = NULL;
+		} elseif ($source === 'classifieds_details' && !empty($identifier)) {
+			$__cls = $this->db->get_where('classifieds', array('classifieds_id' => (int) $identifier))->row();
+			$receiving_user_id = $__cls ? $__cls->user_id : NULL;
+			if ($__cls) $classifieds_id = $__cls->classifieds_id;
+			$product_id = NULL;
+		}
+
 		if (empty($receiving_user_id)) {
-			if (!empty($listing_id)) {
-				$listing = $this->db->get_where('listings', array('listing_id' => $listing_id))->row();
-				$receiving_user_id = $listing ? $listing->user_id : null;
+			if ($__listing) {
+				$receiving_user_id = $__listing->user_id;
 			} elseif (!empty($blog_id)) {
 				$blog = $this->db->get_where('blogs', array('blog_id' => $blog_id))->row();
 				$receiving_user_id = $blog ? $blog->user_id : null;
@@ -7166,6 +7298,12 @@ class User extends CI_Controller
 		// Insert enquiry into database
 		$enquiry_success = $this->usermodel->addEnquiry($data);
 
+		// Tell somebody. Nothing was emailed before: a lead sat in the table
+		// until the owner happened to open /user/enquiries.
+		if ($enquiry_success) {
+			$this->notifyEnquiry($data, $__listing);
+		}
+
 		// Check if it's an AJAX request
 		if ($this->input->is_ajax_request()) {
 			// Return JSON response for AJAX requests
@@ -7184,9 +7322,97 @@ class User extends CI_Controller
 			$this->session->set_flashdata('error_msg', 'Something went wrong! Please try again.');
 		}
 
-		// Dynamic redirect back to the same page for non-AJAX requests
+		// Dynamic redirect back to the same page for non-AJAX requests — to
+		// the form itself, where the confirmation is printed. Without the
+		// anchor a phone landed at the top of the page, the banner a long
+		// scroll below, and it looked as if nothing had happened.
 		$redirect_url = $this->getDynamicRedirectUrl($source, $identifier);
-		redirect($redirect_url);
+		redirect($this->withEnquiryAnchor($redirect_url, $source));
+	}
+
+	/**
+	 * Append the enquiry card's id to a return URL so the browser scrolls to
+	 * the confirmation (or the error) rather than the top of the page.
+	 */
+	private function withEnquiryAnchor($url, $source)
+	{
+		$anchors = array(
+			'listing_details'     => 'get-a-quote',
+			'classifieds_details' => 'get-a-quote',
+			'house_details'       => 'get-a-quote',
+			'rental_details'      => 'get-a-quote',
+			'event_details'       => 'enquire',
+			'news_details'        => 'enquire',
+			'video_details'       => 'enquire',
+		);
+		if (!isset($anchors[$source])) return $url;
+
+		$url = preg_replace('/#.*$/', '', (string) $url);
+		return $url . '#' . $anchors[$source];
+	}
+
+	/**
+	 * Email a new enquiry to whoever should answer it, with the sender as
+	 * Reply-To so hitting Reply reaches the visitor and not the site's
+	 * no-reply box.
+	 *
+	 * The business first: for a listing, its public listing_email, else the
+	 * owning account's address. The site's forms inbox
+	 * (form_recipient_email()) gets it when there is no owner address — so
+	 * a lead is never only in the table — and always when
+	 * `enquiry_copy_admin` is '1' at /admin/setting.
+	 */
+	private function notifyEnquiry(array $row, $listing = NULL)
+	{
+		$to = array();
+
+		if ($listing && !empty($listing->listing_email) && filter_var(trim($listing->listing_email), FILTER_VALIDATE_EMAIL)) {
+			$to[] = trim($listing->listing_email);
+		}
+		if (!$to && !empty($row['receiving_user_id'])) {
+			$owner = $this->db->select('email_id')
+				->where('user_id', (int) $row['receiving_user_id'])
+				->limit(1)->get('user')->row();
+			if ($owner && !empty($owner->email_id) && filter_var(trim($owner->email_id), FILTER_VALIDATE_EMAIL)) {
+				$to[] = trim($owner->email_id);
+			}
+		}
+
+		$admin = form_recipient_email();
+		if ($admin !== '' && (!$to || site_setting('enquiry_copy_admin', '0') === '1')) {
+			$to[] = $admin;
+		}
+		$to = array_values(array_unique(array_map('strtolower', $to)));
+		if (!$to) return FALSE;
+
+		$about = (string) ($row['enquiry_source'] ?? 'your listing');
+
+		$body = '<p>Someone has sent an enquiry about <strong>' . html_escape($about) . '</strong> on Pearland411.</p>'
+			. '<ul>'
+			. '<li>Name: '  . html_escape((string) ($row['enquiry_name']   ?? '')) . '</li>'
+			. '<li>Email: ' . html_escape((string) ($row['enquiry_email']  ?? '')) . '</li>'
+			. '<li>Phone: ' . html_escape((string) ($row['enquiry_mobile'] ?? '')) . '</li>'
+			. '</ul>'
+			. '<p>Message:</p><blockquote>' . nl2br(html_escape((string) ($row['enquiry_message'] ?? ''))) . '</blockquote>'
+			. '<p>Reply to this email to answer them directly. Your enquiries are also listed at '
+			. '<a href="' . html_escape(base_url('user/enquiries')) . '">' . html_escape(base_url('user/enquiries')) . '</a>.</p>';
+
+		$this->load->library('mailer');
+		$html = $this->mailer->render('New enquiry', $body, array(
+			'preheader' => 'New enquiry from ' . (string) ($row['enquiry_name'] ?? 'a visitor'),
+		));
+
+		return $this->mailer->send(
+			$to,
+			'[Pearland411] New enquiry about ' . $about,
+			$html,
+			NULL,
+			array(
+				'reply_to'      => (string) ($row['enquiry_email'] ?? ''),
+				'reply_to_name' => (string) ($row['enquiry_name']  ?? ''),
+				'log_type'      => 'enquiry',
+			)
+		);
 	}
 
 	/*===================
@@ -7503,8 +7729,19 @@ class User extends CI_Controller
 		$plan_id = (int) $this->input->post('plan_id');
 		$plan    = $plan_id ? $this->usermodel->getPlanByIdForPricing($plan_id) : null;
 
-		// Only ever hand out an active, genuinely free plan this way.
-		if (!$plan || (float) $plan->price > 0) {
+		// Only ever hand out an active, genuinely free plan this way: a price
+		// that is SET to 0 (a NULL price is a half-configured plan, and
+		// (float) NULL is 0 — that is how a paid tier could be had for
+		// nothing), a business-listing tier, and no paid term on it.
+		$paid_term = FALSE;
+		if ($plan) {
+			foreach ($this->usermodel->getPlanDurations((int) $plan->id) as $__d) {
+				if ((float) $__d->price > 0) { $paid_term = TRUE; break; }
+			}
+		}
+		if (!$plan || $plan->price === NULL || $plan->price === '' || (float) $plan->price > 0
+			|| (isset($plan->category) && $plan->category !== '' && $plan->category !== 'business-listing')
+			|| $paid_term) {
 			$this->session->set_flashdata('message', 'That plan is not available for free signup.');
 			redirect('pricing-plan');
 			return;
@@ -7589,6 +7826,15 @@ class User extends CI_Controller
 
 		$this->loadHeaderCategories($data);
 		$data['title'] = 'Checkout';
+
+		// Category-specific banners/videos ask which category they are for.
+		$data['cart_categories'] = array();
+		foreach ($data['cart']['items'] as $__it) {
+			if (!empty($__it['needs_category'])) {
+				$data['cart_categories'] = $this->usermodel->getCategoriesForHeader(2000);
+				break;
+			}
+		}
 
 		// Helcim front-end config.
 		$this->load->library('helcim_lib');
@@ -7946,11 +8192,13 @@ class User extends CI_Controller
 					'plan_id'     => $pid,
 					'duration_id' => !empty($entry['duration_id']) ? (int) $entry['duration_id'] : null,
 					'multiplier'  => max(1, isset($entry['multiplier']) ? (int) $entry['multiplier'] : 1),
+					// Category-specific banners/videos: which category it is for.
+					'category_id' => !empty($entry['category_id']) ? (int) $entry['category_id'] : null,
 				);
 			} else {
 				$pid = (int) $entry;
 				if ($pid) {
-					$lines[] = array('plan_id' => $pid, 'duration_id' => null, 'multiplier' => 1);
+					$lines[] = array('plan_id' => $pid, 'duration_id' => null, 'multiplier' => 1, 'category_id' => null);
 				}
 			}
 		}
@@ -8072,6 +8320,16 @@ class User extends CI_Controller
 			$days  = $term ? (int) $term['days'] : ((int) $p->duration_days ?: 30);
 			$price = $term ? (float) $term['price'] : (float) $p->price;
 
+			// A category-specific placement has to say which category.
+			$needs_cat = $this->planNeedsTargetCategory($p);
+			$cat_id    = $needs_cat && !empty($line['category_id']) ? (int) $line['category_id'] : null;
+			$cat_name  = '';
+			if ($cat_id) {
+				$cat_row  = $this->usermodel->getSingleValue($cat_id, 'category_id', 'listing_categories');
+				$cat_name = $cat_row ? (string) $cat_row->category_name : '';
+				if (!$cat_row) $cat_id = null;
+			}
+
 			$items[] = array(
 				'line'        => $idx,
 				'plan_id'     => (int) $p->id,
@@ -8086,7 +8344,15 @@ class User extends CI_Controller
 				'term_label'  => $term ? $term['label'] : $this->termLabel($days),
 				'expires_at'  => date('Y-m-d', strtotime('+' . $days . ' days')),
 				'terms'       => $this->planTermOptions($p),
-				'recurring'   => in_array(isset($p->category) ? $p->category : '', array('business-listing', 'special'), true),
+				'needs_category'       => $needs_cat,
+				'target_category_id'   => $cat_id,
+				'target_category_name' => $cat_name,
+				// Only a business-listing tier becomes a subscription
+				// (Usermodel::recordCartPurchase); everything else — the
+				// special package included — is filed as a one-off purchase
+				// with an end date. Flagging `special` here offered "Renew
+				// automatically" for an item that could never renew.
+				'recurring'   => (isset($p->category) ? $p->category : '') === 'business-listing',
 			);
 			$total += $price;
 		}
@@ -8203,6 +8469,47 @@ class User extends CI_Controller
 		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
 	}
 
+	/** Is this a category-specific placement (sold per listing category)? */
+	private function planNeedsTargetCategory($plan)
+	{
+		$cat = isset($plan->category) ? (string) $plan->category : '';
+		return in_array($cat, array('category-banners', 'category-videos'), true);
+	}
+
+	/**
+	 * POST — choose which listing category a category-specific banner or
+	 * video is for. URL: /cart-set-category
+	 *
+	 * The cart had nowhere to record it, so a "Category Specific Banner" was
+	 * paid for without anyone knowing which category it should run in.
+	 */
+	public function cart_set_category()
+	{
+		$this->output->set_content_type('application/json');
+		if ($this->input->method() !== 'post') {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Not allowed.')));
+		}
+		$plan_id     = (int) $this->input->post('plan_id');
+		$category_id = (int) $this->input->post('category_id');
+
+		$plan = $this->usermodel->getPlanByIdForPricing($plan_id);
+		if (!$plan || !$this->planNeedsTargetCategory($plan)) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Invalid item.')));
+		}
+		if (!$category_id || !$this->usermodel->getSingleValue($category_id, 'category_id', 'listing_categories')) {
+			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Choose a category from the list.')));
+		}
+
+		$lines = $this->cartLines();
+		foreach ($lines as $i => $l) {
+			if ((int) $l['plan_id'] === $plan_id) {
+				$lines[$i]['category_id'] = $category_id;
+			}
+		}
+		$this->saveCartLines($lines);
+		return $this->output->set_output(json_encode(array('success' => true, 'cart' => $this->cartSummary())));
+	}
+
 	/** POST — empty the cart. URL: /cart-clear */
 	public function cart_clear()
 	{
@@ -8245,6 +8552,12 @@ class User extends CI_Controller
 		$cart = $this->cartSummary();
 		if (empty($cart['items']) || $cart['total'] <= 0) {
 			return $this->output->set_output(json_encode(array('success' => false, 'error' => 'Your cart is empty.')));
+		}
+		foreach ($cart['items'] as $it) {
+			if (!empty($it['needs_category']) && empty($it['target_category_id'])) {
+				return $this->output->set_output(json_encode(array('success' => false,
+					'error' => 'Choose which category "' . $it['name'] . '" should run in, then pay.')));
+			}
 		}
 		$this->load->library('helcim_lib');
 		$init = $this->helcim_lib->initialize_checkout($cart['total'], null, array(
@@ -8807,13 +9120,18 @@ class User extends CI_Controller
 			}
 
 			$clean = $this->validateCouponPost($errors);
+			// Checked before anything is written: a picture the member chose
+			// and we refused used to vanish while the deal posted anyway.
+			$photo = empty($errors) ? $this->uploadCouponPhoto($errors) : NULL;
 			if (empty($errors)) {
 				$clean['coupon_user_id'] = $logged_id;
 				$clean['coupon_status']  = 1;
 				$clean['coupon_cdt']     = date('Y-m-d H:i:s');
 
-				$photo = $this->uploadCouponPhoto();
-				if ($photo !== NULL) $clean['coupon_photo'] = $photo;
+				// The picture is optional. Write '' rather than leaving the
+				// column out, so an install whose coupon_photo is NOT NULL
+				// with no default still accepts a deal without one.
+				$clean['coupon_photo'] = $photo !== NULL ? $photo : '';
 
 				$new_id = $this->usermodel->saveCoupon($clean);
 				if ($new_id) {
@@ -8859,10 +9177,10 @@ class User extends CI_Controller
 
 		if ($this->input->method() === 'post') {
 			$clean = $this->validateCouponPost($errors);
+			$photo = empty($errors) ? $this->uploadCouponPhoto($errors) : NULL;
 			if (empty($errors)) {
 				$clean['coupon_status'] = $this->input->post('coupon_status') === '0' ? 0 : 1;
 
-				$photo = $this->uploadCouponPhoto();
 				if ($photo !== NULL) $clean['coupon_photo'] = $photo;
 
 				if ($this->usermodel->saveCoupon($clean, (int) $coupon->coupon_id, $logged_id)) {
@@ -8981,18 +9299,26 @@ class User extends CI_Controller
 	}
 
 	/**
+	 * @param  array      $errors gains a coupon_photo message when a picture
+	 *                            was chosen but refused
 	 * @return string|null the stored path, or NULL when nothing was uploaded —
 	 *                     which on an edit means "keep the picture you have".
 	 */
-	private function uploadCouponPhoto()
+	private function uploadCouponPhoto(array &$errors = array())
 	{
 		if (empty($_FILES['coupon_photo']['name'])) {
 			return NULL;
 		}
 
 		$saved = safe_upload_image($_FILES['coupon_photo'], 'uploads/coupons/');
+		if ($saved === FALSE) {
+			$errors['coupon_photo'] = 'That picture was not accepted: '
+				. (upload_last_error() ?: 'the file could not be read.')
+				. ' Choose another, or leave the field empty — the picture is optional.';
+			return NULL;
+		}
 
-		return $saved === FALSE ? NULL : $saved;
+		return $saved;
 	}
 
 	/*=========================

@@ -452,6 +452,30 @@ $config = [
 
   'blogs' => [
 
+    // The author account. Required server-side: the select is `required`
+    // in the markup only, so a hand-posted form saved a post with no owner
+    // (byline "Pearland411" by accident, and no one able to edit it from the
+    // member side). Admin::_content_author_exists() checks the id is real.
+    [
+
+      'field' => 'user_id',
+
+      'label' => 'Author account',
+
+      'rules' => 'required|is_natural_no_zero|callback__content_author_exists'
+
+    ],
+
+    [
+
+      'field' => 'blog_byline',
+
+      'label' => 'Byline',
+
+      'rules' => 'trim|max_length[120]'
+
+    ],
+
     [
 
       'field' => 'blog_name',
@@ -842,6 +866,30 @@ $config = [
 
   ],
   'news' =>[        
+
+    // The author account. Required server-side: the select is `required`
+    // in the markup only, so a hand-posted form saved a post with no owner
+    // (byline "Pearland411" by accident, and no one able to edit it from the
+    // member side). Admin::_content_author_exists() checks the id is real.
+    [
+
+      'field' => 'user_id',
+
+      'label' => 'Author account',
+
+      'rules' => 'required|is_natural_no_zero|callback__content_author_exists'
+
+    ],
+
+    [
+
+      'field' => 'news_byline',
+
+      'label' => 'Byline',
+
+      'rules' => 'trim|max_length[120]'
+
+    ],
 
     [
 

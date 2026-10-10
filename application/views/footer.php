@@ -197,7 +197,10 @@
 	<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 	<script>
 		$(document).ready(function() {
-			$('select').select2({
+			// `no-select2` opts a select out (admin/footer.php has the same
+			// rule): Select2 only fires jQuery events, so a page script that
+			// listens with addEventListener('change') never hears the change.
+			$('select:not(.no-select2)').select2({
 				width: '100%',
 				minimumResultsForSearch: 0 // always show search box
 			});
