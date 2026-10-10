@@ -1815,5 +1815,156 @@ CREATE TABLE IF NOT EXISTS `email_log` (
     KEY `email_log_to_idx`      (`to_email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ============================================================
+-- 0033_plan_catalog_corrections.sql
+-- ============================================================
+-- (1) Right-hand banner packages described as "900x100" though
+--     their zones render at 300x250. Only rows still carrying the
+--     seeded "900x100" text are touched.
+-- (2) "Skyscraper" (slug `skyscraper`) has no ad zone, so it could
+--     be bought and never shown. Taken off sale, not deleted.
+-- (3) A sellable plan for the `top-banner-category` zone (0024
+--     seeded the zone but no plan), with its 30-day base term.
+-- (4) transactions.target_category_id — which category a
+--     category-specific banner/video was bought for.
+-- Prices are not changed (client decision, /admin/pricing-plan).
+-- ============================================================
+
+UPDATE `plans` SET `description` = 'Site-wide right side banner (position 1). Size 300x250px.'
+ WHERE `slug` = 'right-side-banner-1' AND `description` LIKE '%900x100%';
+UPDATE `plans` SET `description` = 'Site-wide right side banner (position 2). Size 300x250px.'
+ WHERE `slug` = 'right-side-banner-2' AND `description` LIKE '%900x100%';
+UPDATE `plans` SET `description` = 'Site-wide right side banner (position 3). Size 300x250px.'
+ WHERE `slug` = 'right-side-banner-3' AND `description` LIKE '%900x100%';
+UPDATE `plans` SET `description` = 'Category-specific right banner (position 1). Size 300x250px.'
+ WHERE `slug` = 'right-banner-1' AND `description` LIKE '%900x100%';
+UPDATE `plans` SET `description` = 'Category-specific right banner (position 2). Size 300x250px.'
+ WHERE `slug` = 'right-banner-2' AND `description` LIKE '%900x100%';
+
+UPDATE `plans` SET `is_active` = 0
+ WHERE `slug` = 'skyscraper'
+   AND NOT EXISTS (SELECT 1 FROM `ads_prices` WHERE `ads_prices`.`slot_key` = 'skyscraper');
+
+INSERT INTO `plans`
+ (`name`,`slug`,`price`,`currency`,`billing_interval`,`duration_days`,`description`,
+  `listing_limit`,`product_limit`,`event_limit`,`classified_limit`,`blog_limit`,`news_limit`,
+  `video_limit`,`rental_limit`,`house_limit`,`ad_limit`,`ad_boost_limit`,`placeholder_images_limit`,
+  `featured_listing`,`priority_support`,`analytics_access`,
+  `is_active`,`sort_order`,`category`,`created_at`,`updated_at`)
+SELECT * FROM (
+    SELECT 'Category Header Banner' AS name, 'top-banner-category' AS slug, 25.00 AS price, 'USD' AS currency,
+           'monthly' AS billing_interval, 30 AS duration_days,
+           'Header banner across the top of one category''s directory page. Size 900x100px.' AS description,
+           0 AS l1,0 AS l2,0 AS l3,0 AS l4,0 AS l5,0 AS l6,0 AS l7,0 AS l8,0 AS l9,0 AS l10,0 AS l11,0 AS l12,
+           0 AS f1,0 AS f2,0 AS f3,
+           1 AS is_active,
+           (SELECT COALESCE(MAX(p.`sort_order`), 0) + 1 FROM `plans` p) AS sort_order,
+           'category-banners' AS category, NOW() AS created_at, NOW() AS updated_at
+) AS seed
+WHERE NOT EXISTS (SELECT 1 FROM `plans` WHERE `plans`.`slug` = 'top-banner-category');
+
+INSERT INTO `plan_durations` (`plan_id`,`duration_months`,`duration_days`,`price`,`currency`,`is_active`,`created_at`,`updated_at`)
+SELECT p.`id`, 1, 30, p.`price`, p.`currency`, 1, NOW(), NOW()
+  FROM `plans` p
+ WHERE p.`slug` = 'top-banner-category'
+   AND NOT EXISTS (SELECT 1 FROM `plan_durations` d WHERE d.`plan_id` = p.`id` AND d.`duration_days` = 30);
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions'
+             AND COLUMN_NAME = 'target_category_id');
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transactions');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `transactions` ADD COLUMN `target_category_id` INT(11) NULL DEFAULT NULL COMMENT ''listing_categories.category_id a category-specific banner/video was bought for''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
+-- ============================================================
+-- 0034_review_dedupe.sql
+-- ============================================================
+-- One review per member per business. Older copies of a member's
+-- review of the same listing are copied to
+-- `listing_reviews_dedupe_backup` and deleted (the newest is kept),
+-- then UNIQUE KEY `listing_reviews_one_per_member` is added — only
+-- if no duplicate pair remains. Cached listing ratings refreshed.
+-- ============================================================
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listing_reviews');
+
+SET @s := IF(@t = 1,
+  'CREATE TABLE IF NOT EXISTS `listing_reviews_dedupe_backup` LIKE `listing_reviews`',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := IF(@t = 1,
+  'INSERT IGNORE INTO `listing_reviews_dedupe_backup` SELECT r.* FROM `listing_reviews` r JOIN `listing_reviews` n ON n.`listing_id` = r.`listing_id` AND n.`user_id` = r.`user_id` AND n.`review_id` > r.`review_id` WHERE r.`user_id` > 0',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := IF(@t = 1,
+  'DELETE r FROM `listing_reviews` r JOIN `listing_reviews` n ON n.`listing_id` = r.`listing_id` AND n.`user_id` = r.`user_id` AND n.`review_id` > r.`review_id` WHERE r.`user_id` > 0',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := IF(@t = 1,
+  'SET @d := (SELECT COUNT(*) FROM (SELECT `listing_id`, `user_id` FROM `listing_reviews` GROUP BY `listing_id`, `user_id` HAVING COUNT(*) > 1) AS d)',
+  'SET @d := 1');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @k := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listing_reviews'
+             AND INDEX_NAME = 'listing_reviews_one_per_member');
+SET @s := IF(@t = 1 AND @k = 0 AND @d = 0,
+  'ALTER TABLE `listing_reviews` ADD UNIQUE KEY `listing_reviews_one_per_member` (`listing_id`, `user_id`)',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @r := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings'
+             AND COLUMN_NAME IN ('average_rating', 'total_reviews'));
+SET @s := IF(@t = 1 AND @r = 2,
+  'UPDATE `listings` l LEFT JOIN (SELECT `listing_id`, ROUND(AVG(`rating`), 1) AS avg_r, COUNT(*) AS n FROM `listing_reviews` WHERE `review_status` = 1 GROUP BY `listing_id`) s ON s.`listing_id` = l.`listing_id` SET l.`average_rating` = COALESCE(s.avg_r, 0), l.`total_reviews` = COALESCE(s.n, 0) WHERE l.`listing_id` IN (SELECT `listing_id` FROM `listing_reviews_dedupe_backup`)',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
+-- ============================================================
+-- 0035_bylines_and_member_ban.sql
+-- ============================================================
+-- news.news_byline / blogs.blog_byline: the author name printed
+-- on a post (NULL = the owning account's name, as before).
+-- user.banned: written by Suspend / Restore at /admin/users; read
+-- by login and on every request. Added only where missing.
+-- ============================================================
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'news' AND COLUMN_NAME = 'news_byline');
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'news');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `news` ADD COLUMN `news_byline` VARCHAR(120) NULL DEFAULT NULL COMMENT ''Author name shown on the article; NULL = the owning account name''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'blogs' AND COLUMN_NAME = 'blog_byline');
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'blogs');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `blogs` ADD COLUMN `blog_byline` VARCHAR(120) NULL DEFAULT NULL COMMENT ''Author name shown on the post; NULL = the owning account name''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'banned');
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `user` ADD COLUMN `banned` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''1 = suspended at /admin/users''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 
 SET FOREIGN_KEY_CHECKS = 1;
