@@ -23,7 +23,7 @@
 													if($users){
 														foreach($users as $user){
 															?>
-															<option value="<?= $user->user_id; ?>" <?= ($video->user_id == $user->user_id) ? 'SELECTED' : '';?> ><?= e($user->name) ?></option>
+															<option value="<?= $user->user_id; ?>" <?= ($video->user_id == $user->user_id) ? 'SELECTED' : '';?> ><?= e(user_option_label($user)) ?></option>
 														<?php } } ?>
 													</select>      
 												</div>

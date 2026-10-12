@@ -30,16 +30,25 @@ defined('BASEPATH') OR exit('No direct script access allowed');
  */
 function safe_upload_image($file, $target_dir, $max_bytes = 5 * 1024 * 1024)
 {
+    // Every refusal records why, so a caller can tell the member instead of
+    // silently dropping the picture (the coupon form used to).
+    upload_last_error('');
+
     if (!is_array($file) || empty($file['name']) || !isset($file['tmp_name'], $file['error'])) {
         return false;
     }
     if ($file['error'] !== UPLOAD_ERR_OK) {
+        upload_last_error(in_array($file['error'], array(UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE), true)
+            ? 'the file is larger than the server accepts.'
+            : 'the upload did not complete. Please try again.');
         return false;
     }
     if (!is_uploaded_file($file['tmp_name'])) {
+        upload_last_error('the upload did not complete. Please try again.');
         return false;
     }
     if (!isset($file['size']) || $file['size'] <= 0 || $file['size'] > $max_bytes) {
+        upload_last_error('the file is empty or larger than ' . round($max_bytes / 1048576) . ' MB.');
         return false;
     }
 
@@ -47,18 +56,26 @@ function safe_upload_image($file, $target_dir, $max_bytes = 5 * 1024 * 1024)
     $allowed = array('jpg', 'jpeg', 'png', 'gif', 'webp');
     $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
     if (!in_array($ext, $allowed, true)) {
+        upload_last_error('only JPG, PNG, GIF and WebP pictures are accepted.');
         return false;
     }
 
     // MIME sniff. getimagesize() returns FALSE for non-images.
     $info = @getimagesize($file['tmp_name']);
     if (!$info || empty($info['mime'])) {
+        upload_last_error('the file is not a picture this site can read.');
         return false;
     }
     $allowed_mimes = array(
         'image/jpeg', 'image/png', 'image/gif', 'image/webp',
     );
     if (!in_array($info['mime'], $allowed_mimes, true)) {
+        upload_last_error('only JPG, PNG, GIF and WebP pictures are accepted.');
+        return false;
+    }
+    $px_error = pearland411_image_pixel_error($file['tmp_name']);
+    if ($px_error !== '') {
+        upload_last_error($px_error);
         return false;
     }
 
@@ -85,6 +102,7 @@ function safe_upload_image($file, $target_dir, $max_bytes = 5 * 1024 * 1024)
     $dest_abs = $abs_dir . $new_name;
 
     if (!move_uploaded_file($file['tmp_name'], $dest_abs)) {
+        upload_last_error('the picture could not be saved on the server.');
         return false;
     }
     @chmod($dest_abs, 0644);
@@ -187,6 +205,39 @@ if (!defined('PEARLAND411_MAX_IMAGE_EDGE')) {
     define('PEARLAND411_MAX_IMAGE_EDGE', 2400);
 }
 
+/*
+ * Hard ceiling on decoded size, independent of memory_limit.
+ *
+ * pearland411_image_fits_memory() used to answer TRUE whenever memory_limit
+ * was -1 or 0 ("no limit"), which is exactly the configuration where a
+ * 100-megapixel PNG gets decoded at 4 bytes a pixel and the container — not
+ * PHP — kills the request: the residual risk on the news upload 500. 40 MP
+ * is a 7300x5500 photograph, beyond any phone or the site's needs; an image
+ * over it is refused with a message rather than decoded.
+ */
+if (!defined('PEARLAND411_MAX_IMAGE_PIXELS')) {
+    define('PEARLAND411_MAX_IMAGE_PIXELS', 40000000);
+}
+
+/**
+ * The refusal message for an image whose pixel count is over the hard cap,
+ * or '' when it is within it. Reads only the header (getimagesize), so it is
+ * safe to call on anything.
+ */
+function pearland411_image_pixel_error($abs_path)
+{
+    $info = @getimagesize($abs_path);
+    if (!$info || $info[0] < 1 || $info[1] < 1) {
+        return '';
+    }
+    if ($info[0] * $info[1] <= PEARLAND411_MAX_IMAGE_PIXELS) {
+        return '';
+    }
+    return 'the picture is ' . (int) $info[0] . ' x ' . (int) $info[1] . ' px ('
+        . round($info[0] * $info[1] / 1000000) . ' megapixels). Please resize it to under '
+        . round(PEARLAND411_MAX_IMAGE_PIXELS / 1000000) . ' megapixels — 2400 px on the longest side is plenty.';
+}
+
 /**
  * `memory_limit` in bytes. 0 means "no limit" (the ini value is -1 or unset).
  */
@@ -226,6 +277,11 @@ function pearland411_memory_limit_bytes()
  */
 function pearland411_image_fits_memory($w, $h, $frames = 2)
 {
+    // Over the hard pixel cap nothing is decoded, whatever memory_limit says.
+    if ($w * $h > PEARLAND411_MAX_IMAGE_PIXELS) {
+        return false;
+    }
+
     $limit = pearland411_memory_limit_bytes();
     if ($limit <= 0) {
         return true;
@@ -457,7 +513,9 @@ function uploadAndResize($data)
     }
 
     $config['upload_path']          = './assets/'.$data['upload_path'];
-    $config['allowed_types']        = 'gif|jpg|jpeg|png|GIF|JPG|JPEG|PNG';
+    // webp too: every file input says it accepts WebP (image_guidance()),
+    // and this list used to refuse it with "filetype not allowed".
+    $config['allowed_types']        = 'gif|jpg|jpeg|png|webp|GIF|JPG|JPEG|PNG|WEBP';
     $config['max_size']             = 5024;
 
     $CI->load->library('upload', $config);
@@ -474,6 +532,15 @@ function uploadAndResize($data)
 
     $avatar   = $CI->upload->data();
     $abs_path = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
+
+    // Refused outright over the pixel cap — decoding it is what crashes.
+    $px_error = pearland411_image_pixel_error($abs_path);
+    if ($px_error !== '') {
+        @unlink($abs_path);
+        upload_last_error($px_error);
+        log_message('error', 'Upload rejected for ' . $image_name . ': ' . $px_error);
+        return null;
+    }
 
     /*
      * This used to hand the file to CI's Image_lib with `maintain_ratio` off
@@ -510,7 +577,9 @@ function uploadWithoutResize($data)
     }
 
     $config['upload_path']          = './assets/'.$data['upload_path'];
-    $config['allowed_types']        = 'gif|jpg|jpeg|png|GIF|JPG|JPEG|PNG';
+    // webp too: every file input says it accepts WebP (image_guidance()),
+    // and this list used to refuse it with "filetype not allowed".
+    $config['allowed_types']        = 'gif|jpg|jpeg|png|webp|GIF|JPG|JPEG|PNG|WEBP';
     $config['max_size']             = 5024;
 
     $CI->load->library('upload', $config);
@@ -526,6 +595,15 @@ function uploadWithoutResize($data)
     $avatar   = $CI->upload->data();
     $abs_path = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
 
+    // Refused outright over the pixel cap — decoding it is what crashes.
+    $px_error = pearland411_image_pixel_error($abs_path);
+    if ($px_error !== '') {
+        @unlink($abs_path);
+        upload_last_error($px_error);
+        log_message('error', 'Upload rejected for ' . $image_name . ': ' . $px_error);
+        return null;
+    }
+
     /*
      * Despite the name this ran the same Image_lib pass as uploadAndResize()
      * — no width, no height, so a same-size copy at full memory cost — and
@@ -540,73 +618,90 @@ function uploadWithoutResize($data)
     return 'assets/'.$data['upload_path'].'/'.$avatar['file_name'];
 }
 
+    /**
+     * Upload a multi-file input (name="x[]") and return the stored paths as
+     * JSON, keyed by the input's own index — the shape every caller already
+     * decodes.
+     *
+     * It used to run CI's Image_lib on each file with maintain_ratio OFF, so
+     * every photo was squashed to exactly width x height, and Image_lib
+     * decodes at full size with no memory check — the same 500 the single
+     * upload had. Now each file goes through pearland411_downscale_image()
+     * (longest edge capped at the larger of width/height, proportions kept,
+     * memory checked first) and the pixel cap. A file that is refused is
+     * counted: upload_last_error() then says how many were skipped and why,
+     * so a caller can stop flashing "updated successfully" over lost photos.
+     */
     function uploadMultipleAndResize($data,$limit = null)
     {
         $CI =& get_instance();
 
-        $imageData = array();
+        upload_last_error('');
 
+        $imageData = array();
         $image_name = $data['image_name'];
 
-        // step 1: Count total files
-        if($limit != null){
-            $countFiles = $limit;
-        } else {
-            $countFiles = count($_FILES[$image_name]['name']);
+        if (empty($_FILES[$image_name]['name']) || !is_array($_FILES[$image_name]['name'])) {
+            return json_encode($imageData);
         }
-        $count = 1;
-        $j = 0;
-        // step 2: loop all files
-        for ($i=0; $i < $countFiles; $i++) { 
 
-            // step 3: check if file empty or not 
-            if(!empty($_FILES[$image_name]['name'][$i]))
-            {
-                // step 4: Define temp files
-                $_FILES['file']['name']     = $_FILES[$image_name]['name'][$i]; 
-                $_FILES['file']['type']     = $_FILES[$image_name]['type'][$i];
-                $_FILES['file']['tmp_name'] = $_FILES[$image_name]['tmp_name'][$i];
-                $_FILES['file']['error']    = $_FILES[$image_name]['error'][$i];
-                $_FILES['file']['size']     = $_FILES[$image_name]['size'][$i];
-
-                // step 5: configuration for the uploading the file
-                $config['upload_path']      = './assets/'.$data['upload_path'];
-                $config['allowed_types']    = 'gif|jpg|jpeg|png|GIF|JPG|JPEG|PNG';
-                $config['max_size']         = 5024;
-                $config['file_name']        = $_FILES[$image_name]['name'][$i];  
-
-                $CI->load->library('upload', $config);
-                $CI->upload->initialize($config);
-
-                if ($CI->upload->do_upload('file')) {
-
-                    $avatar = $CI->upload->data();
-
-                    // step 6: configuration for resizing image
-                    $config['image_library'] = 'gd2';
-                    $config['source_image']  = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
-                    $config['create_thumb']  = FALSE;
-                    $config['maintain_ratio']= FALSE;
-                    $config['height']        = $data['height'];
-                    $config['width']         = $data['width'];
-                    $config['quality']       = '60%';
-                    $config['new_image']     = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
-
-                    // See the note in uploadWithoutResize(): image_lib must be
-                    // re-initialised per file or every image after the first is
-                    // processed with the first one's paths.
-                    $CI->load->library('image_lib',$config);
-                    $CI->image_lib->initialize($config);
-                    $CI->image_lib->resize();
-                    $CI->image_lib->clear();
-
-                    $avatar_name = 'assets/'.$data['upload_path'].'/'.$avatar['file_name'];
-
-                    $imageData[$j] = $avatar_name;                   
-                }
-            } 
-            $j++;
+        $countFiles = count($_FILES[$image_name]['name']);
+        if ($limit != null) {
+            $countFiles = min($countFiles, (int) $limit);
         }
-        $allImages = json_encode($imageData);
-        return $allImages;
+
+        $max_edge = max((int) ($data['width'] ?? 0), (int) ($data['height'] ?? 0));
+        if ($max_edge <= 0) $max_edge = PEARLAND411_MAX_IMAGE_EDGE;
+
+        $refused = array();
+        for ($i = 0; $i < $countFiles; $i++) {
+            if (empty($_FILES[$image_name]['name'][$i])) {
+                continue;
+            }
+
+            $_FILES['file']['name']     = $_FILES[$image_name]['name'][$i];
+            $_FILES['file']['type']     = $_FILES[$image_name]['type'][$i];
+            $_FILES['file']['tmp_name'] = $_FILES[$image_name]['tmp_name'][$i];
+            $_FILES['file']['error']    = $_FILES[$image_name]['error'][$i];
+            $_FILES['file']['size']     = $_FILES[$image_name]['size'][$i];
+
+            $config = array(
+                'upload_path'   => './assets/'.$data['upload_path'],
+                'allowed_types' => 'gif|jpg|jpeg|png|webp|GIF|JPG|JPEG|PNG|WEBP',
+                'max_size'      => 5024,
+                'file_name'     => $_FILES[$image_name]['name'][$i],
+            );
+
+            $CI->load->library('upload', $config);
+            $CI->upload->initialize($config);
+
+            if (!$CI->upload->do_upload('file')) {
+                $refused[] = $_FILES[$image_name]['name'][$i] . ' (' . trim(strip_tags($CI->upload->display_errors('', ''))) . ')';
+                continue;
+            }
+
+            $avatar   = $CI->upload->data();
+            $abs_path = './assets/'.$data['upload_path'].'/'.$avatar['file_name'];
+
+            $px_error = pearland411_image_pixel_error($abs_path);
+            if ($px_error !== '') {
+                @unlink($abs_path);
+                $refused[] = $_FILES[$image_name]['name'][$i] . ' (' . $px_error . ')';
+                continue;
+            }
+
+            if (!pearland411_downscale_image($abs_path, $max_edge, 60)) {
+                log_message('debug', 'Stored gallery image at its original size: ' . $abs_path);
+            }
+
+            $imageData[$i] = 'assets/'.$data['upload_path'].'/'.$avatar['file_name'];
+        }
+
+        if ($refused) {
+            upload_last_error(count($refused) . ' picture' . (count($refused) === 1 ? ' was' : 's were')
+                . ' not uploaded: ' . implode('; ', $refused));
+            log_message('error', 'uploadMultipleAndResize: ' . upload_last_error());
+        }
+
+        return json_encode($imageData);
     }

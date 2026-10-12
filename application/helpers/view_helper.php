@@ -782,6 +782,210 @@ if (!function_exists('billing_interval_noun')) {
     }
 }
 
+if (!function_exists('event_time_range')) {
+    /**
+     * Pull a start (and maybe end) clock time out of the free-text
+     * `events.event_time` — "4:00 PM – 9:00 PM", "6pm till late",
+     * "10am-2pm", "18:00 - 21:00", "7:30 p.m.".
+     *
+     * Deliberately conservative: a number only counts as a time when it has
+     * minutes ("6:30") or an am/pm ("6pm"), so a date or a price in the text
+     * is never mistaken for one. Anything it cannot read returns NULL and the
+     * caller falls back to an all-day entry, which is always correct.
+     *
+     * @return array|null ['start' => 'H:i', 'end' => 'H:i'|null]
+     */
+    function event_time_range($text)
+    {
+        $text = strtolower(trim((string) $text));
+        if ($text === '') return null;
+        if (preg_match('/\b(noon|midday)\b/', $text) && !preg_match('/\d/', $text)) {
+            return array('start' => '12:00', 'end' => null);
+        }
+
+        $T  = '(\d{1,2})(?::([0-5]\d))?\s*(a\.?\s?m\.?|p\.?\s?m\.?)?';
+        $mk = function ($h, $min, $mer) {
+            $min = (string) $min;
+            $mer = (string) $mer;
+            return array(
+                'h'       => (int) $h,
+                'm'       => $min !== '' ? (int) $min : 0,
+                'has_min' => $min !== '',
+                'mer'     => $mer !== '' ? $mer[0] : '',   // 'a' | 'p' | ''
+            );
+        };
+        $valid = function ($t) {
+            return $t['h'] <= 23 && ($t['mer'] === '' || ($t['h'] >= 1 && $t['h'] <= 12));
+        };
+        $qualified = function ($t) {
+            return $t['has_min'] || $t['mer'] !== '';
+        };
+
+        $times = array();
+
+        // A range first ("4 - 9 pm", "10am-2pm", "18:00 – 21:00"): one side
+        // may be a bare number as long as the other is unmistakably a time.
+        if (preg_match('/' . $T . '\s*(?:-|–|—|to|till|until)\s*' . $T . '/u', $text, $r)) {
+            $a = $mk($r[1], $r[2] ?? '', $r[3] ?? '');
+            $b = $mk($r[4], $r[5] ?? '', $r[6] ?? '');
+            if (($qualified($a) || $qualified($b)) && $valid($a) && $valid($b)) {
+                $times = array($a, $b);
+            }
+        }
+
+        // Otherwise the first single number that is unmistakably a time.
+        // One with am/pm wins ("Doors 6:30, show 7:30pm" → 7:30 pm).
+        if (!$times && preg_match_all('/' . $T . '/u', $text, $m, PREG_SET_ORDER)) {
+            foreach ($m as $hit) {
+                $t = $mk($hit[1], $hit[2] ?? '', $hit[3] ?? '');
+                if (!$qualified($t) || !$valid($t)) continue;   // a bare number, or nonsense
+                if (!$times) $times = array($t);
+                if ($t['mer'] !== '') { $times = array($t); break; }
+            }
+        }
+        if (!$times) return null;
+
+        // No am/pm anywhere and every hour under 12 ("7:00", "6:30 - 9:00"):
+        // morning or evening cannot be told apart, and guessing put a 7 PM
+        // concert in the calendar at 7 AM. Fall back to the all-day entry.
+        // A 24-hour time ("18:00", "12:30") is unambiguous and still counts.
+        $has_mer = false;
+        $max_h   = 0;
+        foreach ($times as $t) {
+            if ($t['mer'] !== '') $has_mer = true;
+            $max_h = max($max_h, $t['h']);
+        }
+        if (!$has_mer && $max_h < 12) return null;
+
+        // "4 - 9 pm": the start borrows the end's am/pm.
+        if (count($times) === 2 && $times[0]['mer'] === '' && $times[1]['mer'] !== '' && $times[0]['h'] <= 12) {
+            $times[0]['mer'] = $times[1]['mer'];
+            // …unless that would put the start after the end ("11 - 2 pm").
+            if ($times[0]['h'] > $times[1]['h'] && $times[0]['h'] !== 12) $times[0]['mer'] = 'a';
+        }
+
+        $fmt = function ($t) {
+            $h = $t['h'];
+            if ($t['mer'] === 'p' && $h < 12) $h += 12;
+            if ($t['mer'] === 'a' && $h === 12) $h = 0;
+            return sprintf('%02d:%02d', $h, $t['m']);
+        };
+
+        return array(
+            'start' => $fmt($times[0]),
+            'end'   => isset($times[1]) ? $fmt($times[1]) : null,
+        );
+    }
+}
+
+if (!function_exists('event_calendar_url')) {
+    /**
+     * Google Calendar "add event" link for an events row.
+     *
+     * Timed (with ctz=America/Chicago) when event_time can be read by
+     * event_time_range(); otherwise an all-day entry on the event's dates —
+     * which is what every link used to be, so "Add to calendar" dropped the
+     * time even for "7:00 PM – 9:00 PM".
+     *
+     * @param object $event  events row
+     * @param string $link   the event page, appended to the details
+     * @param string $about  optional description text
+     * @return string '' when the event has no start date
+     */
+    function event_calendar_url($event, $link = '', $about = '')
+    {
+        $start_ts = !empty($event->event_start_date) ? strtotime((string) $event->event_start_date) : false;
+        if (!$start_ts) return '';
+        $end_ts = !empty($event->event_end_date) ? strtotime((string) $event->event_end_date) : false;
+        if (!$end_ts || $end_ts < $start_ts) $end_ts = $start_ts;
+
+        $time_text = trim((string) ($event->event_time ?? ''));
+        $range     = event_time_range($time_text);
+
+        if ($range) {
+            $from = strtotime(date('Y-m-d', $start_ts) . ' ' . $range['start']);
+            if ($range['end'] !== null) {
+                $to = strtotime(date('Y-m-d', $end_ts) . ' ' . $range['end']);
+                if ($to <= $from) $to = strtotime('+1 day', $to);   // "8pm - 1am"
+            } else {
+                $to = strtotime('+2 hours', $from);                   // "6pm till late"
+            }
+            $dates = date('Ymd\THis', $from) . '/' . date('Ymd\THis', $to);
+        } else {
+            $dates = date('Ymd', $start_ts) . '/' . date('Ymd', strtotime('+1 day', $end_ts));
+        }
+
+        $details = implode("\n\n", array_filter(array(
+            $time_text !== '' ? 'Time: ' . $time_text : '',
+            trim((string) $about),
+            (string) $link,
+        ), 'strlen'));
+
+        $query = array(
+            'action'   => 'TEMPLATE',
+            'text'     => (string) ($event->event_name ?? ''),
+            'dates'    => $dates,
+            'details'  => $details,
+            'location' => (string) (!empty($event->event_address) ? $event->event_address : 'Pearland, TX'),
+        );
+        if ($range) $query['ctz'] = 'America/Chicago';
+
+        return 'https://calendar.google.com/calendar/render?' . http_build_query($query);
+    }
+}
+
+if (!function_exists('billing_interval_is_one_time')) {
+    /**
+     * Is a plans.billing_interval value a one-off ("one-time", "once",
+     * "lifetime")? billing_interval_noun() maps anything unknown to "month",
+     * so a one-time plan used to print "/ month" in admin.
+     */
+    function billing_interval_is_one_time($interval)
+    {
+        $key = strtolower(trim(str_replace(array('_', ' '), '-', (string) $interval)));
+        return in_array($key, array('one-time', 'onetime', 'once', 'one-off', 'lifetime'), true);
+    }
+}
+
+if (!function_exists('plan_term_copy')) {
+    /**
+     * The billing line under a package price on /pricing-plan, so every card
+     * says plainly whether it renews.
+     *
+     *   business-listing  → "per month · renews only if you choose auto-renew"
+     *   everything else   → "for 30 days · one-time, does not renew"
+     *
+     * Only a business-listing tier ever becomes a subscription (see
+     * Usermodel::recordCartPurchase); banners, videos, add-ons and the
+     * special package are one-off purchases with an end date.
+     *
+     * @param  object $plan a plans row
+     * @return array  [price suffix, renewal note]
+     */
+    function plan_term_copy($plan)
+    {
+        $cat      = isset($plan->category) && $plan->category ? (string) $plan->category : 'business-listing';
+        $interval = isset($plan->billing_interval) ? (string) $plan->billing_interval : '';
+        $days     = isset($plan->duration_days) ? (int) $plan->duration_days : 0;
+
+        if ($cat === 'business-listing' && !billing_interval_is_one_time($interval)) {
+            return array(
+                'per ' . billing_interval_noun($interval),
+                'Recurring: choose auto-renew at checkout to keep it running until you cancel.',
+            );
+        }
+
+        $span = $days === 7 ? '1 week' : ($days > 0 && $days % 30 === 0
+            ? ($days / 30) . ' month' . ($days === 30 ? '' : 's')
+            : ($days > 0 ? $days . ' days' : ''));
+
+        return array(
+            $span !== '' ? 'for ' . $span : 'one-time',
+            'One-time: runs for the term you buy, then ends. It does not renew.',
+        );
+    }
+}
+
 if (!function_exists('enquiry_department_email')) {
     /**
      * The mailbox a department's enquiries should be delivered to, if one is set.
@@ -1130,6 +1334,12 @@ if (!function_exists('user_option_label')) {
         if (isset($row->listing_count)) {
             $n = (int) $row->listing_count;
             $label .= ' · ' . ($n === 0 ? 'no listings' : $n . ' listing' . ($n === 1 ? '' : 's'));
+        }
+
+        // Suspended at /admin/users: still listed, so a record it owns keeps
+        // showing its owner, but nobody picks it for new content by mistake.
+        if (!empty($row->banned)) {
+            $label .= ' · SUSPENDED';
         }
 
         return $label;

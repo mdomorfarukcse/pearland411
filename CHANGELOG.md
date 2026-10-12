@@ -6,6 +6,167 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-10-10 — Tracker remaining work: 26 open rows, the contradictory six, five new bugs
+
+Worked from `PEARLAND411_REMAINING_WORK.md` (the 105-row tracker audit). Every row
+that needed code is addressed below; rows that need an operator, the live database
+or the client's decision are listed at the end. **Run migrations 0033–0035** (also
+appended to `database/migrations_combined_phpmyadmin.sql`). All three were run twice
+against MariaDB 10.11 (idempotent), and the model, cart, enquiry, review, coupon,
+pricing and moderation paths were exercised end-to-end against a local database.
+
+### Security / privacy
+
+- **`/user/enquiries` showed every business's leads to every member** (#6). It used
+  `getAllEnquiries()` ("showing all for now"). Now `Usermodel::getEnquiriesForReceiver()`
+  — leads addressed to the member, or about a listing they own (legacy rows with no
+  receiver). Pagination pointed at `user/user-enquiries`, a different method; fixed.
+- **Any member could delete any enquiry by id, by GET** (N4). `delete_enquiry` is POST
+  only (CSRF via the existing hook) and owner-scoped through `getEnquiryForReceiver()`.
+- **`add_enquiry` trusted `receiving_user_id` and `enquiry_sender_id` from the form**
+  (N3). The sender is the session (or none); the receiver is the listing's owner, looked
+  up from the URL slug — the house, rental and classifieds forms also posted their id in
+  the wrong field (`news_id`, `product_id`), now ignored. Hidden id fields removed.
+- **The member dashboard listed other members' events and blogs** (#5).
+  `dashboardInfo()` had no WHERE; now `getAllEvent()/getAllBlogs()` for the member, and
+  "Used" is a COUNT (`Usermodel::countOwnedContent()`), not the length of a preview.
+- **Pricing AJAX endpoints were open to editors** — `get/update/add/delete_pricing_duration`
+  and `get_pricing_plan` are now in `$super_admin_only`; the Pricing/Subscriptions/Billing
+  menu links are hidden from editors.
+- **Member moderation** (B2). `/admin/users` gains Suspend / Restore (writes
+  `user.banned`, migration 0035) and Delete for accounts that own nothing at all
+  (`Adminmodel::userOwnership()` checks 13 tables). `User::__construct` signs a suspended
+  member out on their next request; login already refused them. Owner pickers label a
+  suspended account. The 14 owner dropdowns that printed a bare name now use
+  `user_option_label()`.
+- Review debug `error_log()` calls that wrote reviewers' emails and phones to the server
+  log are gone.
+
+### Fixed — checkout and pricing
+
+- **Checkout term picker never re-priced** (#2). `footer.php` wrapped every select in
+  Select2, which fires only jQuery events; the native listener never ran, so the widget
+  said "3 months" while the cart, total, end date and charge stayed on 1 month. The
+  select carries `no-select2` (footer honours it, like admin), the handler binds through
+  jQuery, and a failed POST puts the picker back on the term the cart holds.
+- **Admin plan editor** (#4). The Edit-Durations button had `id="manage_durations_btn mt-3"`
+  so nothing bound to it; the plan modal had no price/currency/term inputs while
+  `edit_pricing_plan` wrote `price => NULL` — any save made the plan $0, "Get started
+  free", and claimable through `/start-free`. Now: price, currency, term (days), slug and
+  sort order in the modal, validated server-side (`Admin::pricingPlanPost`); new plans
+  get a unique slug and a base term; `plans.price` and the base-term `plan_durations` row
+  are kept in step both ways (`syncPlanBaseTerm` / `syncPlanPriceFromTerm`);
+  Deactivate/Activate (POST `toggle_pricing_plan`) replaces the commented-out delete, and
+  inactive plans stay visible in admin; a one-time plan no longer prints "/ month";
+  `$('form')` selectors that rewrote every form on the page now target `#planForm`.
+- **`/start-free` could hand out a plan whose price was NULL** — refused unless the price
+  is set to 0, it is a business-listing tier, and no term on it costs money.
+- **One-time vs recurring** (#25). Only a business-listing tier becomes a subscription,
+  but `special` was flagged recurring, so checkout offered "Renew automatically" for an
+  item that could never renew. Every card on `/pricing-plan` and every checkout line now
+  says which it is (`plan_term_copy()`), and the auto-renew box says it applies to the
+  listing only.
+- **Catalog** (#26, migration 0033): right-hand banners described as 900x100 → 300x250;
+  the zone-less "Skyscraper" taken off sale; prices untouched (client decision).
+- **Category-specific banners** (#19). 0033 seeds a sellable Category Header Banner plan
+  for the `top-banner-category` zone; checkout asks which category a category banner or
+  video is for (`/cart-set-category`), refuses payment without one, and stores it in
+  `transactions.target_category_id` (shown in admin billing history). The category
+  banner upload no longer deletes the old banner before the new one succeeds, and is
+  checked for shape (≥1200px wide, ≥2.5:1). Shortcuts to category banners on the admin
+  listings screens.
+- **`/pricing-plan` single-card sections stretched across 1180px** (#24): `auto-fill`.
+
+### Fixed — content, forms and uploads
+
+- **"Post a deal" could not be submitted without a picture** (#17): the stale
+  `coupon_photo: required` rule in `custom_validation.js` is gone; a refused picture is
+  now reported instead of dropped; a deal with no picture writes `''` so a NOT NULL
+  column accepts it; and the owner's live deals appear on their listing (the post-a-deal
+  screen always promised they would).
+- **Admin coupon screen** — `/admin/coupons`: list, search, switch off, delete. The old
+  sidebar links went to `admin-coupons.html`.
+- **Get a quote** (#16): the redirect lands on `#get-a-quote`; the insert drops columns
+  the live table lacks and turns NULL into 0/'' for NOT NULL columns
+  (`Usermodel::addEnquiry`); the business is emailed with the visitor as Reply-To; the
+  classifieds/house/rental quote forms are open to visitors like the listing page.
+- **Reviews** (#18): a member's second review of a business replaces the first (migration
+  0034 clears existing copies into a backup table and adds a unique key); a failed insert
+  is no longer reported as success; `updateListingRating()` only writes cache columns
+  that exist; the button disables once the form is really submitted.
+- **Videos** (#8): admin `edit_video` deleted the old still before the upload, redirected
+  to `admin/edit-video<slug>` (no slash) and fataled on a bad slug; member add/edit
+  uploaded to `images/videos`, which does not exist, so every still was lost — and edit
+  then unlinked the old one. All fixed, with the reason shown when an upload is refused.
+- **Video categories** (#23): page N used N as a row offset (page 2 started at row 2);
+  rename checks uniqueness and only regenerates the slug when the name changes; delete
+  uncategorises the category's videos instead of orphaning them.
+- **Bylines** (#20, migration 0035): Byline box on admin news/blog forms, printed on the
+  article and in search; the author account is required server-side; homepage deals and
+  directory search no longer print a data-entry login as a business's "owner".
+- **Uploads** (#7, N5, B4): a 40-megapixel hard cap refuses an image before decoding it,
+  even where `memory_limit` is unlimited; `uploadMultipleAndResize` no longer squashes
+  photos to a fixed size through Image_lib, and reports refused files; a refused logo no
+  longer overwrites the stored one with NULL (admin and owner edit); partial gallery
+  failures are reported instead of "updated successfully"; WebP accepted (`mimes.php`);
+  `safe_upload_image()` records why it refused.
+- **Contact form** (N2): the enquiry is saved through `addEnquiry()`, both mails go
+  through `Mailer::render()` with the sender as Reply-To and `log_type` `contact`, and the
+  visitor is told when the message was neither saved nor sent. `/post-your-ads` posts as
+  a package lead and returns to its own page.
+- **Add to Calendar** (B3) is timed when `event_time` can be read ("4 - 9 pm", "7:30
+  p.m.") via `event_calendar_url()`, all-day otherwise.
+- **Blog links** (B5): header Explore, homepage, footer and section strip, shown only
+  while the Blogs service is on.
+- **Popular Categories on `/search`** (#13–#15) listed marketplace product categories
+  ("Laptop", "Simulator") as `/all_listing/` links; now busiest listing categories with
+  counts. The header-category fallback had the same bug.
+- Small: classifieds CTAs (#9); homepage "Create an Account" → `/register` (#10);
+  `/post-your-ads` "checkout coming soon" → Buy online (#11), copy says 3/6/12/24-month
+  terms; `resend_verification` added to `$public_actions` (N1); social `sameAs` URLs
+  through `external_url()`; dead `views/user_footer.php` deleted (#1); dashboard greets
+  the member by name (was "Welcom back, User Test"); 0 plan limits show ∞ on the account
+  page; admin enquiries linked in the menu; `merge_listing_category` reports failures as
+  errors; "Merge any two categories" picker (#12).
+
+### Follow-up (2026-10-12) — checked against the main tracker spreadsheet
+
+- **Member dashboard limits are hidden** (tracker row R192, Angel: "internal limits …
+  should not be displayed on the user-facing dashboard"). The tiles now show only how
+  many listings, events and blog posts the member has, linking to each list; the add
+  screens still enforce the plan limits.
+- **PHP 8.1+ safety.** This is CodeIgniter 3.1.11, which predates PHP 8.1 making mysqli
+  throw on a failed query, so a failure surfaces as HTTP 500 whatever `db_debug` says.
+  The video-category delete now reads the column's nullability before writing instead
+  of trying NULL and falling back on the error; `addEnquiry()`, its column probe and the
+  review save catch the exception and take their normal failure path. Verified in
+  production mode on PHP 8.3.
+- **Add to Calendar** no longer guesses morning for a time with no am/pm ("7:00",
+  "6:30 - 9:00" → all-day entry); a time that does carry am/pm wins ("Doors 6:30, show
+  7:30pm" → 7:30 pm).
+- `assets/js/custom_validation.js` is now versioned by mtime in `footer.php`, so
+  returning visitors stop running the cached copy with the old "Coupon Photo is
+  Required" rule. `/post-your-ads` copy includes the 1-month term.
+
+### Needs an operator / the client (no code can do these)
+
+- Run 0024, 0027, 0031 (both), 0032 and **0033–0035** on live.
+- SMTP credentials, From on the authenticated domain, SPF/DKIM/DMARC, then
+  `php index.php cli mail_test <addr>` (#3); set `forms_recipient_email`.
+- Enter the five social URLs at `/admin/setting` (#1); switch Blogs on if wanted (B5);
+  pin the two top-menu categories (#21, #22).
+- Decide: which near-duplicate categories to merge (#12, now possible in admin); per-size
+  ad prices (#26); which accounts to suspend (B2).
+- Rename/delete junk video and product categories (#23, #14).
+- Retest each row's URL on a deployed copy — #2, #24 and the upload limits especially.
+
+Key files: `application/controllers/{User,Admin}.php`, `application/models/{Usermodel,Adminmodel}.php`,
+`application/helpers/{image,view}_helper.php`, `application/views/{cart_checkout,pricing_plan,listing_details,user_enquiry,user_dashboard,search,…}.php`,
+`application/views/admin/{pricing,users,coupons,all_listing_category,…}.php`, `application/config/{routes,form_validation,mimes}.php`,
+`assets/js/custom_validation.js`, `database/migrations/0033–0035`.
+
+---
+
 ## 2026-09-25 — Six QA reports: dead theme JS, duplicated data, unusable search
 
 Six separate reports from a pass over the live site. Two of them turned out to

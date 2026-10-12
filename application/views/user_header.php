@@ -151,7 +151,7 @@
 												<ul>
 													<li>A few reasons you’ll love Online Business Directory <span>Call us on: +01 6214 6548</span>
 													</li>
-													<li><a href="post-your-ads.html.html" class="waves-effect waves-light btn-large"><i class="material-icons">font_download</i> Advertise with us</a>
+													<li><a href="<?= base_url('post-your-ads') ?>" class="waves-effect waves-light btn-large"><i class="material-icons">font_download</i> Advertise with us</a>
 													</li>
 													<li>
 														<a href="pricing-details.html.html" class="waves-effect waves-light btn-large"> <i class="material-icons">store</i> Add your business</a>

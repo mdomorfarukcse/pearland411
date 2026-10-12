@@ -996,7 +996,7 @@
 
 
 
-                      <a href="admin-coupons.html">All Coupons</a>
+                      <a href="<?= base_url('admin/coupons') ?>">All Coupons</a>
 
 
 
@@ -1008,7 +1008,7 @@
 
 
 
-                      <a href="admin-add-new-coupons.html">Add new coupon</a>
+                      <a href="<?= base_url('user/add-coupon') ?>">Add new coupon</a>
 
 
 

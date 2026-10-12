@@ -177,6 +177,29 @@
                 </ol>
               </div>
             </li>
+            <?php // Deals members post at /user/my-coupons — see, switch off, delete. ?>
+            <li class="ic-prod">
+              <a href="<?= base_url('admin/coupons') ?>">Deals &amp; Coupons</a>
+            </li>
+            <?php // Contact-us messages, pricing-page callback requests and
+                  // listing quote requests. The screen existed with no link
+                  // to it, so sales leads were only ever seen by email. ?>
+            <li class="ic-prod">
+              <a href="#" class="">Enquiries &amp; Leads</a>
+              <div>
+                <ol>
+                  <li>
+                    <a href="<?= base_url('admin/enquiries') ?>">All Enquiries</a>
+                  </li>
+                  <li>
+                    <a href="<?= base_url('admin/enquiries?type=package') ?>">Package / Pricing Leads</a>
+                  </li>
+                  <li>
+                    <a href="<?= base_url('admin/enquiries?type=contact') ?>">Contact-us Messages</a>
+                  </li>
+                </ol>
+              </div>
+            </li>
             <li class="ic-cat">
               <a href="#" class="">Listing Category</a>
               <div>
@@ -408,6 +431,14 @@
                 </ol>
               </div>
             </li>
+            <?php
+              // Pricing, subscriptions and billing are super-admin screens
+              // (Admin::__construct $super_admin_only). An editor used to see
+              // the links and be bounced to the dashboard on every click.
+              $__menu_admin = $this->session->userdata('logged_admin');
+              $__menu_super = is_array($__menu_admin) && ($__menu_admin['role'] ?? 'editor') === 'super_admin';
+            ?>
+            <?php if ($__menu_super): ?>
             <li class="ic-pay">
               <a href="<?= base_url('/admin/pricing-plan'); ?>">Pricing Plans</a>
             </li>
@@ -419,6 +450,7 @@
             <li class="ic-pay">
               <a href="<?= base_url('/admin/billing'); ?>">Customer Billing</a>
             </li>
+            <?php endif; ?>
             <?php // Read-only review list of member accounts — who owns what,
                   // and which accounts are leftovers from testing. ?>
             <li class="ic-pay">

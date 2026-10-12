@@ -17,10 +17,15 @@ $allListingsArr = (isset($AllListings) && is_array($AllListings)) ? $AllListings
 $allEventsArr   = (isset($AllEvents)   && is_array($AllEvents))   ? $AllEvents   : [];
 $allBlogsArr    = (isset($AllBlogs)    && is_array($AllBlogs))    ? $AllBlogs    : [];
 
-// Calculate actual usage counts from the data arrays (this is the correct count)
-$listing_used = count($allListingsArr);
-$event_used   = count($allEventsArr);
-$blog_used    = count($allBlogsArr);
+// What the member owns, counted by the controller. count() of the arrays
+// is the length of a 10-row preview, not usage.
+$dashboard_used = (isset($dashboard_used) && is_array($dashboard_used)) ? $dashboard_used : array();
+$listing_used = isset($dashboard_used['listing']) ? (int) $dashboard_used['listing'] : count($allListingsArr);
+$event_used   = isset($dashboard_used['event'])   ? (int) $dashboard_used['event']   : count($allEventsArr);
+$blog_used    = isset($dashboard_used['blog'])    ? (int) $dashboard_used['blog']    : count($allBlogsArr);
+
+// Who to greet. This was the literal "Welcom back, User Test".
+$dash_name = (isset($user) && is_object($user) && !empty($user->name)) ? (string) $user->name : '';
 
 // Determine what to display on dashboard without altering design
 if ($has_subscription) {
@@ -64,7 +69,7 @@ if (!function_exists('createSafeSlug')) {
 
 		<div class="cd-cen-intr-inn">
 
-			<h2>Welcom back, <b>User Test</b></h2>
+			<h2>Welcome back<?= $dash_name !== '' ? ', <b>' . e($dash_name) . '</b>' : '' ?></h2>
 
 			<p>Stay up to date reports in your listing, products, events and blog reports here</p>
 
@@ -78,23 +83,14 @@ if (!function_exists('createSafeSlug')) {
 
 			<li>
 
-				<div> <b><?= ($listing_limit === -1 ? '∞' : (int)$listing_limit) ?></b>
+				<?php // Counts only. The plan limits are internal (tracker R192:
+				      // "should not be displayed on the user-facing dashboard"); the
+				      // add screens still enforce them and say so when one is reached. ?>
+				<div> <b><?= (int) $listing_used ?></b>
 
-					<h4>Listings Limit</h4>
+					<h4>Your Listings</h4>
 
-					<p>Used: <?= (int)$listing_used ?></p> <a href="#">&nbsp;</a>
-
-				</div>
-
-			</li>
-
-			<li>
-
-				<div> <b><?= ($event_limit === -1 ? '∞' : (int)$event_limit) ?></b>
-
-					<h4>Events Limit</h4>
-
-					<p>Used: <?= (int)$event_used ?></p> <a href="#">&nbsp;</a>
+					<p>&nbsp;</p> <a href="<?= base_url('user-listing') ?>">&nbsp;</a>
 
 				</div>
 
@@ -102,11 +98,23 @@ if (!function_exists('createSafeSlug')) {
 
 			<li>
 
-				<div> <b><?= ($blog_limit === -1 ? '∞' : (int)$blog_limit) ?></b>
+				<div> <b><?= (int) $event_used ?></b>
 
-					<h4>Blog Posts Limit</h4>
+					<h4>Your Events</h4>
 
-					<p>Used: <?= (int)$blog_used ?></p> <a href="#">&nbsp;</a>
+					<p>&nbsp;</p> <a href="<?= base_url('user-events') ?>">&nbsp;</a>
+
+				</div>
+
+			</li>
+
+			<li>
+
+				<div> <b><?= (int) $blog_used ?></b>
+
+					<h4>Your Blog Posts</h4>
+
+					<p>&nbsp;</p> <a href="<?= base_url('blog-list') ?>">&nbsp;</a>
 
 				</div>
 
@@ -372,11 +380,11 @@ if (!function_exists('createSafeSlug')) {
 
 						<div class="db-eve">
 
-							<a href="<?= base_url('user/event-details/' . createSafeSlug($value->event_name)); ?>">
+							<a href="<?= base_url('event-details/' . rawurlencode(!empty($value->event_slug) ? $value->event_slug : createSafeSlug($value->event_name))); ?>">
 
 								<img src="<?= base_url($value->event_image); ?>" alt="">
 
-								<h5><?= $value->event_name; ?></h5>
+								<h5><?= e($value->event_name); ?></h5>
 
 								<span>Created: <?= date('d, M Y', strtotime($value->created_at)); ?></span>
 

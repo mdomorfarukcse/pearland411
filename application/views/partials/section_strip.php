@@ -90,6 +90,10 @@
 
 <?php if (site_setting('service_news_enabled','1') !== '0'): ?><li><a href="<?= base_url() ?>news" class="">News</a></li><?php endif; ?>
 
+<?php // The blog had no public link anywhere — "can't find the blogs". Shown
+      // only while the Blogs service is on at /admin/setting → Services. ?>
+<?php if (site_setting('service_blog_enabled','1') !== '0'): ?><li><a href="<?= base_url() ?>all-blog" class="">Blog</a></li><?php endif; ?>
+
 <?php if (site_setting('service_videos_enabled','1') !== '0'): ?><li><a href="<?= base_url() ?>videos" class="">Videos</a></li><?php endif; ?>
 
 <?php if (site_setting('service_classifieds_enabled','1') !== '0'): ?><li><a href="<?= base_url() ?>classifieds" class="">Classifieds</a></li><?php endif; ?>

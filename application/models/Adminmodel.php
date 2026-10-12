@@ -498,6 +498,28 @@
 		 * @return array merge_key => array of rows (category_id, name, slug,
 		 *               listing_count), busiest first
 		 */
+		/**
+		 * Every listing category with its listing count, A-Z — the two
+		 * pickers of the "merge any two categories" form. The lookalike panel
+		 * only ever offered pairs whose NAMES matched, so the judgement calls
+		 * the client actually asked about (Finance / Financial Services, the
+		 * Education variants) could not be merged from any screen.
+		 */
+		public function getCategoriesForMerge()
+		{
+			if (!$this->db->table_exists('listing_categories')) return array();
+
+			return $this->db
+				->select('lc.category_id, lc.category_name,
+					(SELECT COUNT(*) FROM listings l
+					  WHERE l.category_id = lc.category_id
+					    AND (l.is_deleted IS NULL OR l.is_deleted = 0)) AS listing_count', FALSE)
+				->from('listing_categories lc')
+				->order_by('lc.category_name', 'ASC')
+				->get()
+				->result();
+		}
+
 		public function getDuplicateCategoryGroups()
 		{
 			if (!$this->db->table_exists('listing_categories')) return array();
@@ -1481,31 +1503,58 @@
 			Delete Video Category Information
 			====================================*/
 
+		/**
+		 * Delete a video category. Its videos are kept, moved to "no
+		 * category" (NULL, or 0 where the column is NOT NULL).
+		 *
+		 * @return int|false how many videos were uncategorised, FALSE if no
+		 *                   such category or the delete failed
+		 */
 		public function deleteVideoCategory($slug)
 		{
 			$data = $this->db->select('*')->from('video_categories')->where('category_slug', $slug)->get()->row();
-			$img = '';
-			if ($data->category_image) {
-				$image_link = './' . $data->category_image;
-
-				if (file_exists($image_link)) {
-					$img = $image_link;
-				} else {
-					$img = '';
-				}
-			}
-
-			if ($this->db->where('category_slug', $slug)->delete('video_categories')) {
-				if ($img != '') {
-					unlink($img);
-					return true;
-				} else {
-					return true;
-				}
-			} else {
+			if (!$data) {
 				return false;
 			}
+
+			$moved = (int) $this->db->where('video_category_id', (int) $data->category_id)->count_all_results('video');
+			if ($moved > 0) {
+				// Decide NULL vs 0 BEFORE writing. Trying NULL and falling back on
+				// the error does not work on PHP 8.1+: mysqli throws, and CI 3.1.11
+				// lets that escape as an HTTP 500 whatever db_debug says.
+				$nullable = $this->db->query(
+					'SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS
+					  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+					array($this->db->dbprefix('video'), 'video_category_id')
+				)->row();
+				$none = ($nullable && strtoupper((string) $nullable->IS_NULLABLE) === 'YES') ? NULL : 0;
+				$this->db->where('video_category_id', (int) $data->category_id)->update('video', array('video_category_id' => $none));
+			}
+
+			if (!$this->db->where('category_id', (int) $data->category_id)->delete('video_categories')) {
+				return false;
+			}
+
+			if (!empty($data->category_image) && file_exists('./' . $data->category_image)) {
+				@unlink('./' . $data->category_image);
+			}
+
+			return $moved;
 		}
+
+		/** A video_categories.category_slug no other category has. */
+		public function uniqueVideoCategorySlug($name, $except_id = 0)
+		{
+			$base = function_exists('pearland_slug') ? pearland_slug((string) $name) : '';
+			if ($base === '') $base = 'category';
+
+			$slug = $base;
+			for ($n = 2; $this->db->where('category_slug', $slug)->where('category_id !=', (int) $except_id)->count_all_results('video_categories') > 0; $n++) {
+				$slug = $base . '-' . $n;
+			}
+			return $slug;
+		}
+
 		public function getVideo($limit, $offset)
 		{
 			return $this->db->select('video.*, user.name, categories.category_name')
@@ -2614,8 +2663,11 @@
 				// one signal that separates a live customer from a leftover
 				// test row in a list of business-shaped account names.
 				return $this->db
-					->select('u.user_id, u.name, u.email_id,
-						(SELECT COUNT(*) FROM `listings` l
+					->select('u.user_id, u.name, u.email_id, '
+						// Suspended accounts stay in the list (a record they own
+						// must still show its owner) but are labelled.
+						. ($this->db->field_exists('banned', 'user') ? 'u.banned, ' : '0 AS banned, ')
+						. '(SELECT COUNT(*) FROM `listings` l
 						  WHERE l.user_id = u.user_id AND l.is_deleted = 0) AS listing_count', false)
 					->from('user u')
 					->where("(u.name IS NOT NULL AND u.name != '')", null, false)
@@ -2659,8 +2711,10 @@
 			$verified = $this->db->field_exists('email_verified', 'user')
 				? 'u.email_verified' : 'NULL';
 
+			$banned = $this->db->field_exists('banned', 'user') ? 'u.banned' : '0';
+
 			$sql = "SELECT u.user_id, u.name, u.email_id, u.mobile_number, u.user_created,
-					{$verified} AS email_verified,
+					{$verified} AS email_verified, {$banned} AS banned,
 					(SELECT COUNT(*) FROM `listings` l
 					  WHERE l.user_id = u.user_id AND l.is_deleted = 0) AS listing_count,
 					(SELECT GROUP_CONCAT(l.listing_name ORDER BY l.listing_id SEPARATOR ', ')
@@ -2672,6 +2726,134 @@
 				LIMIT " . (int) $offset . ", " . (int) $limit;
 
 			return $this->db->query($sql, $bind)->result();
+		}
+
+		/**
+		 * Suspend (1) or restore (0) a member. Usermodel::login() refuses a
+		 * suspended account and User::__construct() ends a session that is
+		 * already open, so it takes effect on the member's next click.
+		 */
+		public function setUserBanned($user_id, $banned)
+		{
+			if (!$this->db->field_exists('banned', 'user')) return false;
+			return $this->db->where('user_id', (int) $user_id)
+				->update('user', array('banned' => $banned ? 1 : 0));
+		}
+
+		/**
+		 * Everything a member owns, by kind — the guard on deleting one.
+		 * A member who owns anything is suspended, not deleted: deleting them
+		 * would leave listings, posts and payments pointing at nobody.
+		 *
+		 * @return array label => count, only the non-zero ones
+		 */
+		public function userOwnership($user_id)
+		{
+			$user_id = (int) $user_id;
+			$checks = array(
+				'listings'      => array('listings', 'user_id'),
+				'events'        => array('events', 'user_id'),
+				'blog posts'    => array('blogs', 'user_id'),
+				'news articles' => array('news', 'user_id'),
+				'videos'        => array('video', 'user_id'),
+				'products'      => array('products', 'user_id'),
+				'classifieds'   => array('classifieds', 'user_id'),
+				'houses'        => array('house', 'user_id'),
+				'rentals'       => array('rental', 'user_id'),
+				'deals'         => array('coupons', 'coupon_user_id'),
+				'subscriptions' => array('subscriptions', 'user_id'),
+				'payments'      => array('transactions', 'user_id'),
+				'claims'        => array('claim_listings', 'user_id'),
+			);
+			$owned = array();
+			foreach ($checks as $label => $c) {
+				if (!$this->db->table_exists($c[0]) || !$this->db->field_exists($c[1], $c[0])) continue;
+				$n = (int) $this->db->where($c[1], $user_id)->count_all_results($c[0]);
+				if ($n > 0) $owned[$label] = $n;
+			}
+			return $owned;
+		}
+
+		/** Delete a member who owns nothing. @return bool */
+		public function deleteEmptyUser($user_id)
+		{
+			$user_id = (int) $user_id;
+			if ($user_id < 1 || $this->userOwnership($user_id)) return false;
+
+			foreach (array('user_usage_tracking', 'payment_cards') as $t) {
+				if ($this->db->table_exists($t) && $this->db->field_exists('user_id', $t)) {
+					$this->db->where('user_id', $user_id)->delete($t);
+				}
+			}
+			return $this->db->where('user_id', $user_id)->delete('user');
+		}
+
+		/*
+		 * Coupons (admin). The table predates the repo and its columns vary,
+		 * so these stick to the columns User::add_coupon writes.
+		 */
+		private function couponAdminSearch($q)
+		{
+			$q = trim((string) $q);
+			if ($q === '') return;
+			$this->db->group_start()
+				->like('c.coupon_name', $q)
+				->or_like('c.coupon_code', $q)
+				->or_like('u.name', $q)
+				->or_like('u.email_id', $q)
+				->group_end();
+		}
+
+		public function getCouponsAdmin($limit, $offset, $q = '')
+		{
+			if (!$this->db->table_exists('coupons')) return array();
+			$this->db->select('c.*, u.name AS owner_name, u.email_id AS owner_email,
+				(SELECT l.listing_name FROM listings l
+				  WHERE l.user_id = c.coupon_user_id AND (l.is_deleted IS NULL OR l.is_deleted = 0)
+				  ORDER BY l.listing_id LIMIT 1) AS listing_name', FALSE)
+				->from('coupons c')
+				->join('user u', 'u.user_id = c.coupon_user_id', 'left');
+			$this->couponAdminSearch($q);
+			return $this->db->order_by('c.coupon_id', 'DESC')
+				->limit((int) $limit, (int) $offset)
+				->get()->result();
+		}
+
+		public function countCouponsAdmin($q = '')
+		{
+			if (!$this->db->table_exists('coupons')) return 0;
+			$this->db->from('coupons c')->join('user u', 'u.user_id = c.coupon_user_id', 'left');
+			$this->couponAdminSearch($q);
+			return (int) $this->db->count_all_results();
+		}
+
+		public function getCouponAdmin($coupon_id)
+		{
+			if (!$this->db->table_exists('coupons')) return NULL;
+			return $this->db->where('coupon_id', (int) $coupon_id)->limit(1)->get('coupons')->row();
+		}
+
+		public function setCouponStatus($coupon_id, $on)
+		{
+			return $this->db->where('coupon_id', (int) $coupon_id)
+				->update('coupons', array('coupon_status' => $on ? 1 : 0));
+		}
+
+		public function deleteCouponAdmin($coupon_id)
+		{
+			$row = $this->getCouponAdmin($coupon_id);
+			if (!$row) return false;
+			if (!$this->db->where('coupon_id', (int) $coupon_id)->delete('coupons')) return false;
+
+			if (!empty($row->coupon_photo)) {
+				$base = FCPATH . ltrim($row->coupon_photo, '/');
+				foreach (array($base,
+					preg_replace('/\.[a-z0-9]+$/i', '_thumb.jpg', $base),
+					preg_replace('/\.[a-z0-9]+$/i', '_medium.jpg', $base)) as $f) {
+					if ($f && is_file($f)) @unlink($f);
+				}
+			}
+			return true;
 		}
 
 		/** Row count for getUserDirectory(), for the pager. */
@@ -2915,18 +3097,106 @@
 			return $this->db->select('*')->from('plans')->where('id', $id)->get()->row();
 		}
 
+		/** Every plan, active or not, for the admin screen. */
+		public function getAllPricingPlansAdmin()
+		{
+			return $this->db->from('plans')
+				->order_by('is_active', 'DESC')
+				->order_by('sort_order', 'ASC')
+				->order_by('id', 'ASC')
+				->get()->result();
+		}
+
+		/** @return int|false the new plan id */
 		public function addPricingPlan($data)
 		{
-			if ($this->db->insert('plans', $data)) {
-				return true;
-			} else {
-				return false;
+			foreach (array_keys($data) as $col) {
+				if (!$this->db->field_exists($col, 'plans')) unset($data[$col]);
 			}
+			if ($this->db->insert('plans', $data)) {
+				return (int) $this->db->insert_id();
+			}
+			return false;
+		}
+
+		/** A plans.slug no other plan has: `name` → `name`, `name-2`, `name-3`… */
+		public function uniquePlanSlug($source)
+		{
+			$base = function_exists('pearland_slug') ? pearland_slug((string) $source) : '';
+			if ($base === '') $base = strtolower(trim(preg_replace('/[^a-z0-9]+/i', '-', (string) $source), '-'));
+			if ($base === '') $base = 'plan';
+			$base = substr($base, 0, 90);
+
+			if (!$this->db->field_exists('slug', 'plans')) return $base;
+
+			$slug = $base;
+			for ($n = 2; $this->db->where('slug', $slug)->count_all_results('plans') > 0; $n++) {
+				$slug = $base . '-' . $n;
+			}
+			return $slug;
+		}
+
+		public function nextPlanSortOrder()
+		{
+			$row = $this->db->select_max('sort_order', 'm')->get('plans')->row();
+			return ($row && $row->m !== NULL) ? ((int) $row->m + 1) : 1;
+		}
+
+		/**
+		 * Make the plan's base-term plan_durations row (the one whose length
+		 * equals plans.duration_days) carry plans.price, creating it if the
+		 * plan has none.
+		 *
+		 * The two stores used to drift: /pricing-plan prints plans.price, but
+		 * the checkout charges the matching plan_durations row when one
+		 * exists — so editing either one alone put two prices on the site.
+		 */
+		public function syncPlanBaseTerm($plan_id)
+		{
+			if (!$this->db->table_exists('plan_durations')) return false;
+			$plan = $this->getPricingPlan((int) $plan_id);
+			if (!$plan) return false;
+
+			$days = (int) $plan->duration_days > 0 ? (int) $plan->duration_days : 30;
+			$row  = $this->db->where('plan_id', (int) $plan->id)
+				->where('duration_days', $days)
+				->order_by('id', 'ASC')->limit(1)
+				->get('plan_durations')->row();
+
+			if ($row) {
+				return $this->updatePricingDuration($row->id, (float) $plan->price, array(
+					'currency'  => (string) $plan->currency,
+					'is_active' => 1,
+				));
+			}
+
+			$months = $days >= 28 ? (int) round($days / 30) : 0;
+			return (bool) $this->addPlanDuration((int) $plan->id, $months, $days, (float) $plan->price, (string) ($plan->currency ?: 'USD'));
+		}
+
+		/** The reverse: a base-term row was re-priced, so re-price the plan. */
+		public function syncPlanPriceFromTerm($term)
+		{
+			if (!$term || empty($term->plan_id)) return false;
+			$plan = $this->getPricingPlan((int) $term->plan_id);
+			if (!$plan) return false;
+
+			$days = (int) $plan->duration_days > 0 ? (int) $plan->duration_days : 30;
+			if ((int) $term->duration_days !== $days) return false;
+
+			return $this->updatePricingPlan((int) $plan->id, array(
+				'price'      => round((float) $term->price, 2),
+				'updated_at' => date('Y-m-d H:i:s'),
+			));
 		}
 
 		public function updatePricingPlan($id, $data)
 		{
-			$this->db->where('id', $id);
+			foreach (array_keys($data) as $col) {
+				if (!$this->db->field_exists($col, 'plans')) unset($data[$col]);
+			}
+			if (empty($data)) return false;
+			$this->db->where('id', (int) $id);
 			if ($this->db->update('plans', $data)) {
 				return true;
 			} else {

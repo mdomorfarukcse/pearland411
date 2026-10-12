@@ -59,6 +59,7 @@ $__foot_tel   = preg_replace('/[^0-9+]/', '', $__foot_phone);
 $__foot_events = site_setting('service_events_enabled', '1') !== '0';
 $__foot_news   = site_setting('service_news_enabled',   '1') !== '0';
 $__foot_videos = site_setting('service_videos_enabled', '1') !== '0';
+$__foot_blog   = site_setting('service_blog_enabled',   '1') !== '0';
 
 $__foot_socials = array(
 	'facebook'  => array('Facebook',  external_url(site_setting('social_facebook_url', '')), '<path d="M14 8.5h2.5V5.4A32 32 0 0 0 13.9 5C11.4 5 9.7 6.5 9.7 9.3v2.2H7v3.4h2.7V23h3.4v-8.1h2.7l.4-3.4h-3.1V9.6c0-1 .3-1.1 1.9-1.1z"/>'),
@@ -107,6 +108,7 @@ foreach ($__foot_socials as $__row) { if ($__row[1] !== '') { $__foot_social_any
 				<ul>
 					<?php if ($__foot_events): ?><li><a href="<?= base_url('event') ?>">Events calendar</a></li><?php endif; ?>
 					<?php if ($__foot_news):   ?><li><a href="<?= base_url('news') ?>">Local news</a></li><?php endif; ?>
+					<?php if ($__foot_blog):   ?><li><a href="<?= base_url('all-blog') ?>">Blog</a></li><?php endif; ?>
 					<li><a href="<?= base_url('coupons') ?>">Deals &amp; coupons</a></li>
 					<?php if ($__foot_videos): ?><li><a href="<?= base_url('videos') ?>">Videos</a></li><?php endif; ?>
 					<li><a href="<?= base_url('all_listing') ?>">Business directory</a></li>
@@ -119,7 +121,7 @@ foreach ($__foot_socials as $__row) { if ($__row[1] !== '') { $__foot_social_any
 				<ul>
 					<li><a href="<?= base_url('register') ?>">List your business free</a></li>
 					<li><a href="<?= base_url('pricing-plan') ?>">Featured placements</a></li>
-					<li><a href="<?= base_url('post-your-ads') ?>">Advertising packages</a></li>
+					<li><a href="<?= base_url('pricing-plan#pp-site-wide-banners') ?>">Advertising packages</a></li>
 					<li><a href="<?= base_url('services') ?>">Website services</a></li>
 					<li><a href="<?= base_url('request-quote') ?>">Banner &amp; ad design</a></li>
 				</ul>

@@ -143,7 +143,10 @@
 	<script src="<?= base_url('assets/js/select-opt.js') ?>"></script>
 	<script src="<?= base_url('assets/js/custom.js') ?>"></script>
 	<script src="<?= base_url() ?>assets/js/jquery.validate.min.js"></script>
-	<script src="<?= base_url() ?>assets/js/custom_validation.js"></script>
+	<?php // Versioned by mtime like form-validate.js below: this file changed (the
+	      // stale "Coupon Photo is Required" rule was removed), and without ?v= a
+	      // returning visitor's cached copy kept blocking photo-less deals. ?>
+	<script src="<?= base_url('assets/js/custom_validation.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/custom_validation.js') ?: 1 ?>"></script>
 	<script src="https://cdn.ckeditor.com/4.16.1/standard/ckeditor.js"></script>
 	<!--DataTable-->
 	<script src="//cdn.datatables.net/1.10.24/js/jquery.dataTables.min.js"></script>
@@ -197,7 +200,10 @@
 	<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 	<script>
 		$(document).ready(function() {
-			$('select').select2({
+			// `no-select2` opts a select out (admin/footer.php has the same
+			// rule): Select2 only fires jQuery events, so a page script that
+			// listens with addEventListener('change') never hears the change.
+			$('select:not(.no-select2)').select2({
 				width: '100%',
 				minimumResultsForSearch: 0 // always show search box
 			});

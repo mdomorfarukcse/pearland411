@@ -72,7 +72,7 @@ $fresh_since = strtotime('-7 days');
 			</p>
 
 			<div class="p411-hero__stats">
-				<div><b><?= number_format($total_classifieds) ?></b>live advert<?= $total_classifieds === 1 ? '' : 's' ?></div>
+				<div><b><?= number_format($total_classifieds) ?></b>live classified<?= $total_classifieds === 1 ? '' : 's' ?></div>
 				<?php if (!empty($classifieds_categories)): ?>
 					<div><b><?= number_format(count($classifieds_categories)) ?></b>categories</div>
 				<?php endif; ?>
@@ -140,7 +140,7 @@ $fresh_since = strtotime('-7 days');
 					<div class="p411-toolbar">
 						<div class="p411-toolbar__count">
 							Showing <b><?= number_format($showing_from) ?>&ndash;<?= number_format($showing_to) ?></b>
-							of <b><?= number_format($total_classifieds) ?></b> advert<?= $total_classifieds === 1 ? '' : 's' ?>
+							of <b><?= number_format($total_classifieds) ?></b> classified<?= $total_classifieds === 1 ? '' : 's' ?>
 							<span class="p411-toolbar__meta">
 								Newest first
 								<?php if ($total_pages > 1): ?>
@@ -149,7 +149,7 @@ $fresh_since = strtotime('-7 days');
 							</span>
 						</div>
 						<div class="p411-toolbar__right">
-							<a class="p411-btn p411-btn--sm p411-btn--ghost" href="<?= e_url($cl_post_url) ?>">Post an advert</a>
+							<a class="p411-btn p411-btn--sm p411-btn--ghost" href="<?= e_url($cl_post_url) ?>">Post a Free Classified</a>
 						</div>
 					</div>
 
@@ -229,7 +229,7 @@ $fresh_since = strtotime('-7 days');
 						<?php if ($search_query !== ''): ?>
 							<h3>Nothing matches &ldquo;<?= e($search_query) ?>&rdquo;</h3>
 							<p>
-								No live advert mentions that. Try a shorter word, or browse everything
+								No live classified mentions that. Try a shorter word, or browse everything
 								that is posted at the moment.
 							</p>
 							<div class="p411-empty__actions">
@@ -243,7 +243,7 @@ $fresh_since = strtotime('-7 days');
 								Yours would be the first &mdash; and it is free to post.
 							</p>
 							<div class="p411-empty__actions">
-								<a class="p411-btn" href="<?= e_url($cl_post_url) ?>">Post the first advert</a>
+								<a class="p411-btn" href="<?= e_url($cl_post_url) ?>">Post Your First Classified</a>
 								<a class="p411-btn p411-btn--ghost" href="<?= e_url(base_url('all_listing')) ?>">Browse the directory</a>
 							</div>
 						<?php endif; ?>
@@ -293,7 +293,7 @@ $fresh_since = strtotime('-7 days');
 				$slot_fallback_partial = 'banner_design_promo.php';
 				include APPPATH . 'views/partials/ad_slot.php'; ?>
 
-				<!-- Post an advert -->
+				<!-- Post a free classified -->
 				<div class="p411-card">
 					<div class="p411-card__head">
 						<h2>Got something to sell?</h2>
@@ -302,7 +302,7 @@ $fresh_since = strtotime('-7 days');
 						Post it free and it appears here and in search &mdash; with your photo, your description
 						and a way for buyers to reach you.
 					</p>
-					<a class="p411-btn p411-btn--block" href="<?= e_url($cl_post_url) ?>">Post an advert &mdash; free</a>
+					<a class="p411-btn p411-btn--block" href="<?= e_url($cl_post_url) ?>">Post a Free Classified</a>
 					<a class="p411-btn p411-btn--block p411-btn--ghost" style="margin-top:8px;" href="<?= e_url(base_url('coupons')) ?>">See local deals instead</a>
 				</div>
 
@@ -352,7 +352,7 @@ $fresh_since = strtotime('-7 days');
 				</div>
 			</div>
 			<div class="p411-owner__cta">
-				<a class="p411-btn p411-btn--lg" href="<?= e_url($cl_post_url) ?>">Post an advert &mdash; free</a>
+				<a class="p411-btn p411-btn--lg" href="<?= e_url($cl_post_url) ?>">Post a Free Classified</a>
 				<a class="p411-btn p411-btn--lg p411-btn--ghost" href="<?= e_url(base_url('register')) ?>">List my business</a>
 			</div>
 		</div>

@@ -2463,6 +2463,27 @@ class Usermodel extends CI_Model
 		return $query;
 	}
 
+	/**
+	 * How many rows of $table this member owns — the "Used" figure on the
+	 * dashboard. Listings in the Trash are not counted.
+	 */
+	public function countOwnedContent($table, $user_id)
+	{
+		$user_id = (int) $user_id;
+		if ($user_id <= 0 || !in_array($table, array('listings', 'events', 'blogs'), TRUE)) return 0;
+
+		$this->db->from($table)->where('user_id', $user_id);
+		if ($table === 'listings') {
+			$this->db->group_start()->where('is_deleted IS NULL', NULL, FALSE)->or_where('is_deleted', 0)->group_end();
+		}
+		return (int) $this->db->count_all_results();
+	}
+
+	/**
+	 * @deprecated Unscoped: no WHERE on the owner, so the member dashboard
+	 * showed the first ten events and blogs on the whole SITE as the
+	 * member's own. Use getAllEvent() / getAllBlogs() with a user id.
+	 */
 	public function dashboardInfo($tableName, $status = NULL, $isDeleted = NULL, $limit = NULL)
 	{
 		$limiter = '';
@@ -2489,6 +2510,82 @@ class Usermodel extends CI_Model
 			->get()->result();
 	}
 
+	/**
+	 * Scope a query on `enquiries` to the leads ONE member may see: those
+	 * addressed to them, plus — where the column exists — any about a
+	 * listing they own (rows saved before add_enquiry derived the receiver
+	 * server-side carry receiving_user_id NULL/0).
+	 */
+	private function applyEnquiryReceiverScope($user_id)
+	{
+		$user_id = (int) $user_id;
+		$this->db->group_start()->where('receiving_user_id', $user_id);
+		if ($this->db->field_exists('listing_id', 'enquiries')) {
+			$this->db->or_where(
+				'listing_id IN (SELECT listing_id FROM ' . $this->db->dbprefix('listings')
+				. ' WHERE user_id = ' . $user_id . ')',
+				NULL,
+				FALSE
+			);
+		}
+		$this->db->group_end();
+	}
+
+	/** A member's own leads, newest first. Replaces getAllEnquiries() on /user/enquiries. */
+	public function getEnquiriesForReceiver($user_id, $limit = NULL, $offset = 0)
+	{
+		if ((int) $user_id <= 0) return array();
+
+		$this->db->from('enquiries');
+		$this->applyEnquiryReceiverScope($user_id);
+		$this->db->order_by('enquiry_created_at', 'DESC')->order_by('enquiry_id', 'DESC');
+		if ($limit !== NULL) $this->db->limit((int) $limit, (int) $offset);
+
+		return $this->db->get()->result();
+	}
+
+	public function countEnquiriesForReceiver($user_id)
+	{
+		if ((int) $user_id <= 0) return 0;
+
+		$this->db->from('enquiries');
+		$this->applyEnquiryReceiverScope($user_id);
+
+		return (int) $this->db->count_all_results();
+	}
+
+	/** One enquiry, but only if this member may see it (same scope as the list). */
+	public function getEnquiryForReceiver($enquiry_id, $user_id)
+	{
+		if ((int) $user_id <= 0) return NULL;
+
+		$this->db->from('enquiries')->where('enquiry_id', (int) $enquiry_id);
+		$this->applyEnquiryReceiverScope($user_id);
+
+		return $this->db->limit(1)->get()->row();
+	}
+
+	/**
+	 * Every enquiry on the site. ADMIN ONLY — the member page used this
+	 * ("showing all for now"), which showed every member every other
+	 * business's leads, names, emails and phone numbers included.
+	 */
+	/**
+	 * SQL for "the name printed on this post": the byline (migration 0035)
+	 * when one was typed, else the account's name. Falls back to the plain
+	 * account name on an install without the column.
+	 */
+	private function bylineSelect($table, $column)
+	{
+		static $has = array();
+		$key = $table . '.' . $column;
+		if (!isset($has[$key])) $has[$key] = $this->db->field_exists($column, $table);
+
+		return $has[$key]
+			? 'COALESCE(NULLIF(TRIM(' . $table . '.' . $column . "), ''), user.name)"
+			: 'user.name';
+	}
+
 	public function getAllEnquiries()
 	{
 		return $this->db->select('*')
@@ -2497,13 +2594,78 @@ class Usermodel extends CI_Model
 			->get()->result();
 	}
 
+	/**
+	 * Insert an enquiry, fitted to the columns this install actually has.
+	 *
+	 * `enquiries` predates the repo's migrations and is not defined in it, so
+	 * its columns vary by install. add_enquiry() writes up to eight
+	 * content-id columns (news_id, rental_id, video_id…); one missing column
+	 * failed the whole insert and the visitor was told "Something went
+	 * wrong". Unknown keys are dropped, and a NULL bound for a NOT NULL
+	 * column without a default (an anonymous sender, a lead with no owner)
+	 * becomes 0 / '' instead of a strict-mode error.
+	 *
+	 * @return int|false the new enquiry_id (TRUE-ish), or FALSE
+	 */
 	public function addEnquiry($data)
 	{
-		if ($this->db->insert('enquiries', $data)) {
-			return true;
-		} else {
+		$cols = $this->enquiryColumns();
+		if ($cols) {
+			$payload = array();
+			foreach ($data as $key => $value) {
+				if (!isset($cols[$key])) continue;
+				if ($value === NULL && !$cols[$key]['nullable'] && $cols[$key]['default'] === NULL) {
+					$value = $cols[$key]['numeric'] ? 0 : '';
+				}
+				$payload[$key] = $value;
+			}
+			$data = $payload;
+		}
+
+		// try/catch because on PHP 8.1+ mysqli throws instead of returning
+		// FALSE (CI 3.1.11 predates that), and a lead that cannot be saved must
+		// reach the caller's "could not send" path, not a 500 page.
+		try {
+			$ok = !empty($data) && $this->db->insert('enquiries', $data);
+		} catch (Exception $e) {
+			$ok = false;
+			log_message('error', 'addEnquiry failed: ' . $e->getMessage());
+		}
+		if (!$ok) {
+			$err = $this->db->error();
+			log_message('error', 'addEnquiry failed: ' . (isset($err['message']) ? $err['message'] : 'unknown error'));
 			return false;
 		}
+
+		$id = (int) $this->db->insert_id();
+		return $id > 0 ? $id : true;
+	}
+
+	/**
+	 * name => [nullable, default, numeric] for `enquiries`, or array() when
+	 * the column list cannot be read (the insert then goes through as given).
+	 */
+	private function enquiryColumns()
+	{
+		static $cols = NULL;
+		if ($cols !== NULL) return $cols;
+
+		$cols = array();
+		try {
+			$q = $this->db->query('SHOW COLUMNS FROM ' . $this->db->protect_identifiers('enquiries', TRUE));
+		} catch (Exception $e) {
+			$q = FALSE;   // PHP 8.1+ throws where older PHP returned FALSE
+		}
+		if ($q) {
+			foreach ($q->result_array() as $c) {
+				$cols[$c['Field']] = array(
+					'nullable' => strtoupper((string) $c['Null']) === 'YES',
+					'default'  => $c['Default'],
+					'numeric'  => (bool) preg_match('/int|decimal|float|double|bit/i', (string) $c['Type']),
+				);
+			}
+		}
+		return $cols;
 	}
 
 	public function getEnquiryById($enquiry_id, $receiving_user_id)
@@ -2530,9 +2692,10 @@ class Usermodel extends CI_Model
 			->get()->row();
 	}
 
+	/** Unscoped delete by id. ADMIN ONLY — members go through getEnquiryForReceiver() first. */
 	public function deleteEnquirySimple($enquiry_id)
 	{
-		$this->db->where('enquiry_id', $enquiry_id);
+		$this->db->where('enquiry_id', (int) $enquiry_id);
 		$result = $this->db->delete('enquiries');
 
 		// Log the database error if delete fails
@@ -4303,7 +4466,7 @@ class Usermodel extends CI_Model
 		$terms = $this->searchTerms($search_term);
 		if (empty($terms)) return array();
 
-		$this->db->select('news.*, user.name as author_name');
+		$this->db->select('news.*, ' . $this->bylineSelect('news', 'news_byline') . ' as author_name', FALSE);
 		$this->db->from('news');
 		$this->db->join('user', 'news.user_id = user.user_id', 'left');
 		$this->db->where('news.news_status', 1);
@@ -4638,7 +4801,7 @@ class Usermodel extends CI_Model
 	{
 		if (empty($query)) return array();
 
-		$this->db->select('news.*, user.name as author_name');
+		$this->db->select('news.*, ' . $this->bylineSelect('news', 'news_byline') . ' as author_name', FALSE);
 		$this->db->from('news');
 		$this->db->join('user', 'news.user_id = user.user_id', 'left');
 		$this->db->where('news.news_status', 1);
@@ -4693,7 +4856,7 @@ class Usermodel extends CI_Model
 	{
 		if (empty($query)) return array();
 
-		$this->db->select('blogs.*, user.name as author_name');
+		$this->db->select('blogs.*, ' . $this->bylineSelect('blogs', 'blog_byline') . ' as author_name', FALSE);
 		$this->db->from('blogs');
 		$this->db->join('user', 'blogs.user_id = user.user_id', 'left');
 		$this->db->where('blogs.blog_status', 1);
@@ -5117,21 +5280,16 @@ class Usermodel extends CI_Model
 	// Add new review
 	public function addReview($data)
 	{
-		// Debug: Log the data being inserted
-		error_log('Inserting review data: ' . print_r($data, true));
-
+		// The debug error_log() calls that were here wrote every reviewer's
+		// email and phone number into the server log.
 		if ($this->db->insert('listing_reviews', $data)) {
 			$insert_id = $this->db->insert_id();
-			error_log('Review inserted successfully with ID: ' . $insert_id);
-
-			// Update listing average rating
 			$this->updateListingRating($data['listing_id']);
 			return $insert_id;
-		} else {
-			// Log database error
-			error_log('Database error: ' . $this->db->error()['message']);
-			return false;
 		}
+
+		log_message('error', 'addReview failed: ' . $this->db->error()['message']);
+		return false;
 	}
 
 	// Get reviews for a listing
@@ -5154,28 +5312,33 @@ class Usermodel extends CI_Model
 	// Update listing rating calculation
 	public function updateListingRating($listing_id)
 	{
-		// Calculate average rating
+		// The cache columns predate the repo's migrations and are not on
+		// every install. Writing a missing column failed the UPDATE — after
+		// the review had been saved — which is one way a submitted review
+		// came back as "this page isn't working" (db_debug) or vanished.
+		// The listing page derives its figures from the reviews themselves
+		// (getReviewStats), so a missing cache costs nothing.
+		$update_data = array();
+		$has_avg   = $this->db->field_exists('average_rating', 'listings');
+		$has_total = $this->db->field_exists('total_reviews', 'listings');
+		if (!$has_avg && !$has_total) {
+			return true;
+		}
+
 		$avg_query = $this->db->select('AVG(rating) as avg_rating, COUNT(*) as total_reviews')
 			->from('listing_reviews')
-			->where('listing_id', $listing_id)
+			->where('listing_id', (int) $listing_id)
 			->where('review_status', 1)
 			->get()->row();
 
-		// Debug: Log the calculated values
-		error_log('Listing ID: ' . $listing_id . ' - Avg Rating: ' . $avg_query->avg_rating . ' - Total Reviews: ' . $avg_query->total_reviews);
+		if ($has_avg) {
+			$update_data['average_rating'] = ($avg_query && $avg_query->avg_rating) ? round($avg_query->avg_rating, 1) : 0;
+		}
+		if ($has_total) {
+			$update_data['total_reviews'] = ($avg_query && $avg_query->total_reviews) ? (int) $avg_query->total_reviews : 0;
+		}
 
-		// Update listings table with proper handling of NULL values
-		$update_data = [
-			'average_rating' => $avg_query->avg_rating ? round($avg_query->avg_rating, 1) : 0,
-			'total_reviews' => $avg_query->total_reviews ? $avg_query->total_reviews : 0
-		];
-
-		$result = $this->db->where('listing_id', $listing_id)->update('listings', $update_data);
-
-		// Debug: Log the update result
-		error_log('Update result for listing ' . $listing_id . ': ' . ($result ? 'SUCCESS' : 'FAILED'));
-
-		return $result;
+		return $this->db->where('listing_id', (int) $listing_id)->update('listings', $update_data);
 	}
 
 	// Check if user already reviewed
@@ -5978,6 +6141,7 @@ class Usermodel extends CI_Model
 					'helcim_transaction_id' => $helcim_txn_id,
 					'helcim_approval_code'  => $approval_code,
 					'duration_id'           => $duration_id,
+					'target_category_id'    => !empty($it['target_category_id']) ? (int) $it['target_category_id'] : null,
 					'term_days'             => $term_days ?: null,
 					'expires_at'            => $term_days
 						? date('Y-m-d H:i:s', strtotime($now . ' +' . $term_days . ' days'))
@@ -5985,7 +6149,8 @@ class Usermodel extends CI_Model
 				);
 				// term_days/expires_at/duration_id arrive with migration 0016;
 				// drop them on databases that have not run it yet.
-				foreach (array('duration_id', 'term_days', 'expires_at') as $col) {
+				// target_category_id arrives with 0033.
+				foreach (array('duration_id', 'term_days', 'expires_at', 'target_category_id') as $col) {
 					if (!$this->db->field_exists($col, 'transactions')) unset($row[$col]);
 				}
 				$this->db->insert('transactions', $row);
@@ -6430,6 +6595,29 @@ class Usermodel extends CI_Model
 		}
 
 		return $out;
+	}
+
+	/**
+	 * One owner's live deals, for the "Current deals" card on their listing.
+	 * Coupons are posted by an account, not a listing, so every business the
+	 * account owns shows the same offers — the same rule /coupons uses.
+	 */
+	public function getActiveCouponsByUser($user_id, $limit = 3)
+	{
+		$user_id = (int) $user_id;
+		if ($user_id <= 0 || !$this->db->table_exists('coupons')) return array();
+
+		$today = date('Y-m-d');
+		return $this->db
+			->from('coupons')
+			->where('coupon_user_id', $user_id)
+			->where('coupon_status', 1)
+			->where('coupon_start_date <=', $today)
+			->where('coupon_end_date >=', $today)
+			->order_by('coupon_end_date', 'ASC')
+			->limit(max(1, (int) $limit))
+			->get()
+			->result();
 	}
 
 	public function getCouponById($id)
