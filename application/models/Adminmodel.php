@@ -1519,10 +1519,16 @@
 
 			$moved = (int) $this->db->where('video_category_id', (int) $data->category_id)->count_all_results('video');
 			if ($moved > 0) {
-				$this->db->where('video_category_id', (int) $data->category_id)->update('video', array('video_category_id' => NULL));
-				if ($this->db->error()['code']) {
-					$this->db->where('video_category_id', (int) $data->category_id)->update('video', array('video_category_id' => 0));
-				}
+				// Decide NULL vs 0 BEFORE writing. Trying NULL and falling back on
+				// the error does not work on PHP 8.1+: mysqli throws, and CI 3.1.11
+				// lets that escape as an HTTP 500 whatever db_debug says.
+				$nullable = $this->db->query(
+					'SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS
+					  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+					array($this->db->dbprefix('video'), 'video_category_id')
+				)->row();
+				$none = ($nullable && strtoupper((string) $nullable->IS_NULLABLE) === 'YES') ? NULL : 0;
+				$this->db->where('video_category_id', (int) $data->category_id)->update('video', array('video_category_id' => $none));
 			}
 
 			if (!$this->db->where('category_id', (int) $data->category_id)->delete('video_categories')) {

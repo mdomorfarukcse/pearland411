@@ -834,15 +834,28 @@ if (!function_exists('event_time_range')) {
         }
 
         // Otherwise the first single number that is unmistakably a time.
+        // One with am/pm wins ("Doors 6:30, show 7:30pm" → 7:30 pm).
         if (!$times && preg_match_all('/' . $T . '/u', $text, $m, PREG_SET_ORDER)) {
             foreach ($m as $hit) {
                 $t = $mk($hit[1], $hit[2] ?? '', $hit[3] ?? '');
                 if (!$qualified($t) || !$valid($t)) continue;   // a bare number, or nonsense
-                $times = array($t);
-                break;
+                if (!$times) $times = array($t);
+                if ($t['mer'] !== '') { $times = array($t); break; }
             }
         }
         if (!$times) return null;
+
+        // No am/pm anywhere and every hour under 12 ("7:00", "6:30 - 9:00"):
+        // morning or evening cannot be told apart, and guessing put a 7 PM
+        // concert in the calendar at 7 AM. Fall back to the all-day entry.
+        // A 24-hour time ("18:00", "12:30") is unambiguous and still counts.
+        $has_mer = false;
+        $max_h   = 0;
+        foreach ($times as $t) {
+            if ($t['mer'] !== '') $has_mer = true;
+            $max_h = max($max_h, $t['h']);
+        }
+        if (!$has_mer && $max_h < 12) return null;
 
         // "4 - 9 pm": the start borrows the end's am/pm.
         if (count($times) === 2 && $times[0]['mer'] === '' && $times[1]['mer'] !== '' && $times[0]['h'] <= 12) {

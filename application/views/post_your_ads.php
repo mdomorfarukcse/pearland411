@@ -36,7 +36,7 @@
 						<h4>Reach Pearland-area customers</h4>
 						<p>
 							Display ads on the homepage, listing pages and category pages,
-							sold in terms of 3, 6, 12 or 24 months.
+							sold by the month, or for 3, 6, 12 or 24 months.
 						</p>
 						<p>
 							<a class="btn btn-primary" href="<?= e_url(base_url('pricing-plan')) ?>">Buy online &rarr; see packages &amp; prices</a>

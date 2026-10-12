@@ -7115,13 +7115,21 @@ class User extends CI_Controller
 			->limit(1)
 			->get('listing_reviews')->row();
 
-		if ($existing) {
-			$ok = $this->db->where('review_id', (int) $existing->review_id)->update('listing_reviews', $data);
-			$success_msg = 'Your review has been updated. You can only leave one review per business, so this replaces your earlier one.';
-		} else {
-			$data['created_at'] = date('Y-m-d H:i:s');
-			$ok = $this->db->insert('listing_reviews', $data);
-			$success_msg = 'Thank you! Your review has been submitted successfully.';
+		// try/catch: on PHP 8.1+ a failed write throws (e.g. a double click
+		// racing the 0034 unique key) instead of returning FALSE, and CI 3.1.11
+		// would show it as a 500 page instead of the message below.
+		try {
+			if ($existing) {
+				$ok = $this->db->where('review_id', (int) $existing->review_id)->update('listing_reviews', $data);
+				$success_msg = 'Your review has been updated. You can only leave one review per business, so this replaces your earlier one.';
+			} else {
+				$data['created_at'] = date('Y-m-d H:i:s');
+				$ok = $this->db->insert('listing_reviews', $data);
+				$success_msg = 'Thank you! Your review has been submitted successfully.';
+			}
+		} catch (Exception $e) {
+			$ok = FALSE;
+			log_message('error', 'submit_review: ' . $e->getMessage());
 		}
 
 		if (!$ok) {

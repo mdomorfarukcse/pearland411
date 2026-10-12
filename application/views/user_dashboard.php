@@ -24,13 +24,6 @@ $listing_used = isset($dashboard_used['listing']) ? (int) $dashboard_used['listi
 $event_used   = isset($dashboard_used['event'])   ? (int) $dashboard_used['event']   : count($allEventsArr);
 $blog_used    = isset($dashboard_used['blog'])    ? (int) $dashboard_used['blog']    : count($allBlogsArr);
 
-// -1 and 0 both mean "unlimited" — the rule Usermodel::canUserAddContent()
-// enforces. The tiles printed a bare 0 for a 0 limit, which read as
-// "you may post none" beside a Used figure above it.
-$limit_label = function ($limit) {
-	return ($limit === -1 || $limit === 0) ? '&infin;' : (string) (int) $limit;
-};
-
 // Who to greet. This was the literal "Welcom back, User Test".
 $dash_name = (isset($user) && is_object($user) && !empty($user->name)) ? (string) $user->name : '';
 
@@ -90,23 +83,14 @@ if (!function_exists('createSafeSlug')) {
 
 			<li>
 
-				<div> <b><?= $limit_label($listing_limit) ?></b>
+				<?php // Counts only. The plan limits are internal (tracker R192:
+				      // "should not be displayed on the user-facing dashboard"); the
+				      // add screens still enforce them and say so when one is reached. ?>
+				<div> <b><?= (int) $listing_used ?></b>
 
-					<h4>Listings Limit</h4>
+					<h4>Your Listings</h4>
 
-					<p>Used: <?= (int)$listing_used ?></p> <a href="#">&nbsp;</a>
-
-				</div>
-
-			</li>
-
-			<li>
-
-				<div> <b><?= $limit_label($event_limit) ?></b>
-
-					<h4>Events Limit</h4>
-
-					<p>Used: <?= (int)$event_used ?></p> <a href="#">&nbsp;</a>
+					<p>&nbsp;</p> <a href="<?= base_url('user-listing') ?>">&nbsp;</a>
 
 				</div>
 
@@ -114,11 +98,23 @@ if (!function_exists('createSafeSlug')) {
 
 			<li>
 
-				<div> <b><?= $limit_label($blog_limit) ?></b>
+				<div> <b><?= (int) $event_used ?></b>
 
-					<h4>Blog Posts Limit</h4>
+					<h4>Your Events</h4>
 
-					<p>Used: <?= (int)$blog_used ?></p> <a href="#">&nbsp;</a>
+					<p>&nbsp;</p> <a href="<?= base_url('user-events') ?>">&nbsp;</a>
+
+				</div>
+
+			</li>
+
+			<li>
+
+				<div> <b><?= (int) $blog_used ?></b>
+
+					<h4>Your Blog Posts</h4>
+
+					<p>&nbsp;</p> <a href="<?= base_url('blog-list') ?>">&nbsp;</a>
 
 				</div>
 

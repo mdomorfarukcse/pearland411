@@ -129,6 +129,25 @@ pricing and moderation paths were exercised end-to-end against a local database.
   page; admin enquiries linked in the menu; `merge_listing_category` reports failures as
   errors; "Merge any two categories" picker (#12).
 
+### Follow-up (2026-10-12) — checked against the main tracker spreadsheet
+
+- **Member dashboard limits are hidden** (tracker row R192, Angel: "internal limits …
+  should not be displayed on the user-facing dashboard"). The tiles now show only how
+  many listings, events and blog posts the member has, linking to each list; the add
+  screens still enforce the plan limits.
+- **PHP 8.1+ safety.** This is CodeIgniter 3.1.11, which predates PHP 8.1 making mysqli
+  throw on a failed query, so a failure surfaces as HTTP 500 whatever `db_debug` says.
+  The video-category delete now reads the column's nullability before writing instead
+  of trying NULL and falling back on the error; `addEnquiry()`, its column probe and the
+  review save catch the exception and take their normal failure path. Verified in
+  production mode on PHP 8.3.
+- **Add to Calendar** no longer guesses morning for a time with no am/pm ("7:00",
+  "6:30 - 9:00" → all-day entry); a time that does carry am/pm wins ("Doors 6:30, show
+  7:30pm" → 7:30 pm).
+- `assets/js/custom_validation.js` is now versioned by mtime in `footer.php`, so
+  returning visitors stop running the cached copy with the old "Coupon Photo is
+  Required" rule. `/post-your-ads` copy includes the 1-month term.
+
 ### Needs an operator / the client (no code can do these)
 
 - Run 0024, 0027, 0031 (both), 0032 and **0033–0035** on live.

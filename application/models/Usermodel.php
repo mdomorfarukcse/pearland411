@@ -2622,7 +2622,16 @@ class Usermodel extends CI_Model
 			$data = $payload;
 		}
 
-		if (empty($data) || !$this->db->insert('enquiries', $data)) {
+		// try/catch because on PHP 8.1+ mysqli throws instead of returning
+		// FALSE (CI 3.1.11 predates that), and a lead that cannot be saved must
+		// reach the caller's "could not send" path, not a 500 page.
+		try {
+			$ok = !empty($data) && $this->db->insert('enquiries', $data);
+		} catch (Exception $e) {
+			$ok = false;
+			log_message('error', 'addEnquiry failed: ' . $e->getMessage());
+		}
+		if (!$ok) {
 			$err = $this->db->error();
 			log_message('error', 'addEnquiry failed: ' . (isset($err['message']) ? $err['message'] : 'unknown error'));
 			return false;
@@ -2642,7 +2651,11 @@ class Usermodel extends CI_Model
 		if ($cols !== NULL) return $cols;
 
 		$cols = array();
-		$q = $this->db->query('SHOW COLUMNS FROM ' . $this->db->protect_identifiers('enquiries', TRUE));
+		try {
+			$q = $this->db->query('SHOW COLUMNS FROM ' . $this->db->protect_identifiers('enquiries', TRUE));
+		} catch (Exception $e) {
+			$q = FALSE;   // PHP 8.1+ throws where older PHP returned FALSE
+		}
 		if ($q) {
 			foreach ($q->result_array() as $c) {
 				$cols[$c['Field']] = array(
