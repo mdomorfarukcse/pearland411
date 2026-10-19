@@ -356,6 +356,7 @@ class Admin extends CI_Controller
 			'billing', 'billing_customer', 'billing_card_init', 'billing_card_save',
 			'billing_charge', 'billing_card_delete', 'billing_recurring_save',
 			'current_ads', 'create_ads', 'ads_edit', 'ads_delete',
+			'listing_banner_add', 'listing_banner_remove',
 			'ads_price', 'create_ads_price', 'ads_price_edit',
 			'ads_request', 'ads_history', 'ads_history_delete', 'approveAdStatus',
 			// Shows the SMTP username and raw SMTP transcripts, and can send
@@ -686,6 +687,10 @@ class Admin extends CI_Controller
 			// ceiling rather than a plan entitlement. Defaults to 10 — see
 			// User::couponCap().
 			'coupon_max_per_member',
+			// Customer billing terms: the renewal reminder's lead time
+			// (Cli::send_renewal_reminders) and the refund policy's request
+			// window and optional extra wording (partials/refund_policy.php).
+			'renewal_reminder_days', 'refund_request_days', 'refund_policy_extra',
 		);
 
 		if ($this->input->method() === 'post') {
@@ -1640,8 +1645,8 @@ class Admin extends CI_Controller
 				$info = array(
 					'user_id' => $this->input->post('user_id'),
 					'listing_name' => $this->input->post('listing_name'),
-					'featured_listing' => $this->input->post('featured_listing'),
-					'spotlight_listing' => $this->input->post('spotlight_listing'),
+					'featured_listing' => ($this->input->post('featured_listing') ? 1 : 0),
+					'spotlight_listing' => ($this->input->post('spotlight_listing') ? 1 : 0),
 					'category_id' => $this->input->post('category_id'),
 					// First of the selected sub-categories. The full set goes into
 					// listing_sub_category_map after the write; this column is kept
@@ -1690,6 +1695,9 @@ class Admin extends CI_Controller
 					$info['listing_image'] = uploadWithoutResize($img_info);
 				}
 
+				$cover_notes = array();
+				$this->applyListingCover($info, $cover_notes);
+
 				// Handle Gallery Images Upload
 				if ($_FILES && isset($_FILES['listing_image_gallery']['name'][0]) && !empty($_FILES['listing_image_gallery']['name'][0])) {
 					$gallery_images = [];
@@ -1726,7 +1734,8 @@ class Admin extends CI_Controller
 
 				if ($this->adminmodel->addListing($info)) {
 					$this->adminmodel->saveListingSubCategories($this->db->insert_id(), $this->postedSubCategoryIds());
-					$this->session->set_flashdata('message', 'Listing added successfully.');
+					$this->session->set_flashdata($cover_notes ? 'error' : 'message',
+						'Listing added successfully.' . ($cover_notes ? ' ' . implode(' ', $cover_notes) : ''));
 					redirect('admin/all_listings', 'refresh');
 				} else {
 					// Say why. This used to redirect with no flashdata at all, so a
@@ -2188,6 +2197,36 @@ class Admin extends CI_Controller
 
 	/*Edit Listing*/
 
+	/**
+	 * The listing's header banner — `listings.cover_image`, the wide picture
+	 * behind the business name at the top of /listing-details.
+	 *
+	 * Neither admin listing form had a field for it (tracker: "no option to
+	 * add … header banner in Business Listings"), so every business the team
+	 * entered showed the stock background. Upload first; only a successful
+	 * upload replaces the stored one, and a refusal is reported in $notes.
+	 */
+	private function applyListingCover(array &$info, array &$notes, $current = '')
+	{
+		if (!$this->db->field_exists('cover_image', 'listings')) return;
+
+		if ($current !== '' && $this->input->post('remove_cover_image')) {
+			$info['cover_image'] = NULL;
+		}
+		if (!empty($_FILES['cover_image']['name'])) {
+			$new = uploadWithoutResize(array(
+				'upload_path' => 'images/listings',
+				'quality'     => '60%',
+				'image_name'  => 'cover_image',
+			));
+			if ($new) {
+				$info['cover_image'] = $new;
+			} else {
+				$notes[] = 'The header banner was not changed: ' . (upload_last_error() ?: 'the file could not be read.');
+			}
+		}
+	}
+
 	public function edit_listing($slug)
 	{
 		$data['categories']  = $this->usermodel->getAllValues('listing_categories');
@@ -2213,6 +2252,14 @@ class Admin extends CI_Controller
 		// Every sub-category attached to this listing (migration 0023).
 		$data['listing_sub_categories'] = $this->adminmodel->listingSubCategoryIds($data['listing']->listing_id);
 
+		// Category banners sold to this business — booked from here, below the
+		// form (listing_banner_add). Ad sales stay super-admin only.
+		$__admin = $this->session->userdata('logged_admin');
+		$data['can_book_banners'] = is_array($__admin) && ($__admin['role'] ?? 'editor') === 'super_admin';
+		$data['banner_zones']     = $this->adminmodel->getCategoryBannerZones();
+		$data['listing_banners']  = $this->adminmodel->getListingCategoryAds($data['listing']->listing_id);
+		$data['banner_tracking']  = $this->db->field_exists('listing_id', 'ads');
+
 		if ($this->form_validation->run('admin_listing_scratch') == FALSE) {
 			$this->load->view('admin/header', $data);
 			$this->load->view('admin/edit_listings');
@@ -2222,8 +2269,8 @@ class Admin extends CI_Controller
 			$info = array(
 				'user_id' => $this->input->post('user_id'),
 				'listing_name' => $this->input->post('listing_name'),
-				'featured_listing' => $this->input->post('featured_listing'),
-				'spotlight_listing' => $this->input->post('spotlight_listing'),
+				'featured_listing' => ($this->input->post('featured_listing') ? 1 : 0),
+				'spotlight_listing' => ($this->input->post('spotlight_listing') ? 1 : 0),
 				'category_id' => $this->input->post('category_id'),
 				// First of the selected sub-categories. The full set goes into
 					// listing_sub_category_map after the write; this column is kept
@@ -2275,6 +2322,8 @@ class Admin extends CI_Controller
 					$upload_notes[] = 'The logo was not changed: ' . (upload_last_error() ?: 'the file could not be read.');
 				}
 			}
+
+			$this->applyListingCover($info, $upload_notes, (string) ($data['listing']->cover_image ?? ''));
 
 			// Gallery: keep what is already there, drop what was ticked for
 			// removal, append what was just uploaded.
@@ -2341,6 +2390,113 @@ class Admin extends CI_Controller
 				redirect('admin/edit-listing/' . rawurlencode((string) $slug));
 			}
 		}
+	}
+
+	/*====================
+		Category banners for one business (POST, super-admin)
+	=====================*/
+	/**
+	 * Book a category-specific banner for a business from its own edit screen.
+	 *
+	 * Tracker: "No option to add category-specific banners and header banner in
+	 * Business Listings". The banners are sold on /pricing-plan (Category
+	 * Specific Banners, including the Category Header Banner), but placing one
+	 * meant leaving the business for /admin/create-ads, picking the customer
+	 * from every account on the site and re-typing the category, with cost
+	 * fields to fill by hand. This takes the zone, the category (the
+	 * business's own by default), the artwork, a link and the dates; prices it
+	 * from the package; and records which business it was sold to
+	 * (ads.listing_id, migration 0036), so the screen can list it afterwards.
+	 */
+	public function listing_banner_add($listing_id)
+	{
+		$listing = $this->db->where('listing_id', (int) $listing_id)->get('listings')->row();
+		if (!$listing || $this->input->method() !== 'post') {
+			redirect('admin/all_listings');
+			return;
+		}
+		$back = 'admin/edit-listing/' . rawurlencode((string) $listing->listing_slug) . '#banners';
+
+		$zones = array();
+		foreach ($this->adminmodel->getCategoryBannerZones() as $z) $zones[(int) $z->id] = $z;
+		$zone        = $zones[(int) $this->input->post('ads_price_id')] ?? NULL;
+		$category_id = (int) $this->input->post('category_id');
+		$category    = $category_id ? $this->db->where('category_id', $category_id)->get('listing_categories')->row() : NULL;
+		$start_ts    = strtotime((string) $this->input->post('ad_start_date'));
+		$end_ts      = strtotime((string) $this->input->post('ad_end_date'));
+
+		$problems = array();
+		if (!$zone)     $problems[] = 'choose a banner position';
+		if (!$category) $problems[] = 'choose the category it runs in';
+		if (!$start_ts || !$end_ts || $end_ts < $start_ts) $problems[] = 'give a start date and an end date on or after it';
+		if (empty($_FILES['ad_photo']['name'])) $problems[] = 'attach the banner artwork';
+		if ($problems) {
+			$this->session->set_flashdata('banner_error', 'Banner not booked: ' . implode('; ', $problems) . '.');
+			redirect($back);
+			return;
+		}
+
+		$photo = uploadAndResize(array('upload_path' => 'images/ads/main', 'quality' => '60%', 'image_name' => 'ad_photo'));
+		if (!$photo) {
+			$this->session->set_flashdata('banner_error', 'Banner not booked: the artwork was refused — ' . (upload_last_error() ?: 'the file could not be read.'));
+			redirect($back);
+			return;
+		}
+
+		// The business's own page unless another address was given.
+		$link = external_url($this->input->post('ad_link'));
+		if ($link === '') $link = base_url('listing-details/' . rawurlencode((string) $listing->listing_slug));
+
+		// Priced from the package: its price buys duration_days, so a booking
+		// for exactly that term costs exactly the package price.
+		$term    = max(1, (int) $zone->duration_days ?: 30);
+		$days    = (int) floor(($end_ts - $start_ts) / 86400) + 1;
+		$per_day = round((float) $zone->price / $term, 2);
+		$total   = round((float) $zone->price * $days / $term, 2);
+
+		$ok = db_safe_insert('ads', array(
+			'u_id'            => (int) $listing->user_id,
+			'listing_id'      => (int) $listing->listing_id,
+			'ads_price_id'    => (int) $zone->id,
+			'category_id'     => (int) $category->category_id,
+			'ad_photo'        => $photo,
+			'ad_link'         => $link,
+			'ad_start_date'   => date('Y-m-d 00:00:00', $start_ts),
+			'ad_end_date'     => date('Y-m-d 23:59:59', $end_ts),
+			'ad_status'       => 1,
+			'ad_total_days'   => $days,
+			'ad_cost_per_day' => $per_day,
+			'ad_total_cost'   => $total,
+			'created_at'      => date('Y-m-d H:i:s'),
+		));
+
+		if ($ok) {
+			$this->session->set_flashdata('banner_message', '"' . $zone->name . '" booked for ' . $listing->listing_name . ' in '
+				. $category->category_name . ', ' . date('M j, Y', $start_ts) . ' – ' . date('M j, Y', $end_ts) . '.');
+		} else {
+			@unlink(FCPATH . $photo);
+			$this->session->set_flashdata('banner_error', 'Banner not booked: ' . db_safe_last_error());
+		}
+		redirect($back);
+	}
+
+	/** Remove a category banner booked for a business (POST, super-admin). */
+	public function listing_banner_remove($ad_id)
+	{
+		$ad = $this->db->where('id', (int) $ad_id)->get('ads')->row();
+		$listing = ($ad && !empty($ad->listing_id))
+			? $this->db->where('listing_id', (int) $ad->listing_id)->get('listings')->row()
+			: NULL;
+		if (!$ad || !$listing || $this->input->method() !== 'post') {
+			redirect('admin/all_listings');
+			return;
+		}
+		if ($this->adminmodel->deleteAds((int) $ad->id)) {
+			$this->session->set_flashdata('banner_message', 'Banner removed from ' . $listing->listing_name . '.');
+		} else {
+			$this->session->set_flashdata('banner_error', 'Could not remove that banner.');
+		}
+		redirect('admin/edit-listing/' . rawurlencode((string) $listing->listing_slug) . '#banners');
 	}
 
 	/*listing Preview */
@@ -3604,7 +3760,9 @@ class Admin extends CI_Controller
 				'news_seo_title'  	=> $this->input->post('news_seo_title'),
 				'news_seo_description' => $this->input->post('news_seo_description'),
 				'news_seo_keywords' => $this->input->post('news_seo_keywords'),
-				'featured_news'  	=> $this->input->post('featured_news'),
+				// 0/1, never NULL: an unticked box posts nothing, and the live
+				// column is NOT NULL — that NULL was the 500 on "add news".
+				'featured_news'  	=> $this->input->post('featured_news') ? 1 : 0,
 				'news_slug'			=> $news_slug
 			);
 			$this->applyByline($info, 'news', 'news_byline');
@@ -3632,14 +3790,16 @@ class Admin extends CI_Controller
 				}
 			}
 
-			if ($this->adminmodel->add('news', $info)) {
+			// db_safe_insert(): fitted to the live table and never a 500 — see
+			// application/helpers/db_safe_helper.php.
+			if (db_safe_insert('news', $info)) {
 				$this->session->set_flashdata(
 					$upload_note === '' ? 'message' : 'error',
 					'Successfully Added News!!' . $upload_note
 				);
 				redirect('admin/news-list');
 			} else {
-				$this->session->set_flashdata('error', 'Could not save the news article. ' . $this->adminmodel->lastDbError());
+				$this->session->set_flashdata('error', 'Could not save the news article: ' . db_safe_last_error());
 				// Redirect, don't fall through. These branches used to set the
 				// message and then end the request with no view loaded at all —
 				// a blank white page, nothing saved, no explanation.
@@ -3678,7 +3838,7 @@ class Admin extends CI_Controller
 				'news_seo_title'  => $this->input->post('news_seo_title'),
 				'news_seo_description'  => $this->input->post('news_seo_description'),
 				'news_seo_keywords'  => $this->input->post('news_seo_keywords'),
-				'featured_news'  => $this->input->post('featured_news')
+				'featured_news'  => $this->input->post('featured_news') ? 1 : 0
 			);
 			$this->applyByline($info, 'news', 'news_byline');
 
@@ -3715,14 +3875,14 @@ class Admin extends CI_Controller
 				$info['news_image'] = $old_image;
 			}
 
-			if ($this->adminmodel->update($slug, $info, 'news_slug', 'news')) {
+			if (db_safe_update('news', $info, array('news_slug' => $slug))) {
 				$this->session->set_flashdata(
 					$upload_note === '' ? 'message' : 'error',
 					'Successfully Updated News!!' . $upload_note
 				);
 				redirect('admin/news-list', 'refresh');
 			} else {
-				$this->session->set_flashdata('error', 'Sorry, Update News Failed!!');
+				$this->session->set_flashdata('error', 'Sorry, Update News Failed: ' . db_safe_last_error());
 				// The slash was missing, so a failed save redirected to
 				// "admin/edit-news<slug>" — a 404 instead of the form.
 				redirect('admin/edit-news/' . $slug, 'refresh');
@@ -4166,7 +4326,7 @@ class Admin extends CI_Controller
 				'user_id'			=> $this->input->post('user_id'),
 				'video_title'    		=> $this->input->post('video_title'),
 				'video_code'    		=> $this->input->post('video_code'),
-				'featured_video'    		=> $this->input->post('featured_video'),
+				'featured_video'    		=> $this->input->post('featured_video') ? 1 : 0,
 				'video_description'  => $this->input->post('video_description'),
 				'video_category_id'  => $this->input->post('video_category_id'),
 				'video_seo_title'  => $this->input->post('video_seo_title'),
@@ -4192,11 +4352,11 @@ class Admin extends CI_Controller
 				}
 			}
 
-			if ($this->adminmodel->add('video', $info)) {
+			if (db_safe_insert('video', $info)) {
 				$this->session->set_flashdata($upload_note === '' ? 'message' : 'error', 'Successfully Added Video!!' . $upload_note);
 				redirect('admin/video-list');
 			} else {
-				$this->session->set_flashdata('error', 'Could not save the video. ' . $this->adminmodel->lastDbError());
+				$this->session->set_flashdata('error', 'Could not save the video: ' . db_safe_last_error());
 				// Redirect, don't fall through. These branches used to set the
 				// message and then end the request with no view loaded at all —
 				// a blank white page, nothing saved, no explanation.
@@ -4230,7 +4390,7 @@ class Admin extends CI_Controller
 				'user_id'			=> $this->input->post('user_id'),
 				'video_title'    		=> $this->input->post('video_title'),
 				'video_code'    		=> $this->input->post('video_code'),
-				'featured_video'    		=> $this->input->post('featured_video'),
+				'featured_video'    		=> $this->input->post('featured_video') ? 1 : 0,
 				'video_description'  => $this->input->post('video_description'),
 				'video_category_id'  => $this->input->post('video_category_id'),
 				'video_seo_title'  => $this->input->post('video_seo_title'),
@@ -4261,11 +4421,11 @@ class Admin extends CI_Controller
 				}
 			}
 
-			if ($this->adminmodel->update($slug, $info, 'video_slug', 'video')) {
+			if (db_safe_update('video', $info, array('video_slug' => $slug))) {
 				$this->session->set_flashdata($upload_note === '' ? 'message' : 'error', 'Successfully Updated Video!!' . $upload_note);
 				redirect('admin/video-list', 'refresh');
 			} else {
-				$this->session->set_flashdata('error', 'Sorry, Update Video Failed!! ' . $this->adminmodel->lastDbError());
+				$this->session->set_flashdata('error', 'Sorry, Update Video Failed: ' . db_safe_last_error());
 				// The slash was missing ('admin/edit-video' . $slug), so a
 				// failed save redirected to a URL that does not exist.
 				redirect('admin/edit-video/' . rawurlencode($slug), 'refresh');
@@ -4561,8 +4721,8 @@ class Admin extends CI_Controller
 				'classifieds_title'    		  => $this->input->post('classifieds_title'),
 				'classifieds_price'    		  => $this->input->post('classifieds_price'),
 				'classifieds_category_id'	  => $this->input->post('classifieds_category_id'),
-				'featured_classifieds'  	  => $this->input->post('featured_classifieds'),
-				'spotlight_classifieds'  	  => $this->input->post('spotlight_classifieds'),
+				'featured_classifieds'  	  => ($this->input->post('featured_classifieds') ? 1 : 0),
+				'spotlight_classifieds'  	  => ($this->input->post('spotlight_classifieds') ? 1 : 0),
 				'display_contact'  	  		  => $this->input->post('display_contact'),
 				'classifieds_description'	  => $this->input->post('classifieds_description'),
 				'classifieds_seo_title' 	  => $this->input->post('classifieds_seo_title'),
@@ -4613,8 +4773,8 @@ class Admin extends CI_Controller
 				'classifieds_title'    		  => $this->input->post('classifieds_title'),
 				'classifieds_price'    		  => $this->input->post('classifieds_price'),
 				'classifieds_category_id'	  => $this->input->post('classifieds_category_id'),
-				'featured_classifieds'  	  => $this->input->post('featured_classifieds'),
-				'spotlight_classifieds'  	  => $this->input->post('spotlight_classifieds'),
+				'featured_classifieds'  	  => ($this->input->post('featured_classifieds') ? 1 : 0),
+				'spotlight_classifieds'  	  => ($this->input->post('spotlight_classifieds') ? 1 : 0),
 				'display_contact'  	  		  => $this->input->post('display_contact'),
 				'classifieds_description'	  => $this->input->post('classifieds_description'),
 				'classifieds_seo_title' 	  => $this->input->post('classifieds_seo_title'),
@@ -4828,8 +4988,8 @@ class Admin extends CI_Controller
 				'marketplace_title'    		  => $this->input->post('marketplace_title'),
 				'marketplace_price'    		  => $this->input->post('marketplace_price'),
 				'marketplace_category_id'	  => $this->input->post('marketplace_category_id'),
-				'featured_marketplace'  	  => $this->input->post('featured_marketplace'),
-				'spotlight_marketplace'  	  => $this->input->post('spotlight_marketplace'),
+				'featured_marketplace'  	  => ($this->input->post('featured_marketplace') ? 1 : 0),
+				'spotlight_marketplace'  	  => ($this->input->post('spotlight_marketplace') ? 1 : 0),
 				'display_contact'  	  		  => $this->input->post('display_contact'),
 				'marketplace_description'	  => $this->input->post('marketplace_description'),
 				'marketplace_seo_title' 	  => $this->input->post('marketplace_seo_title'),
@@ -4875,8 +5035,8 @@ class Admin extends CI_Controller
 				'marketplace_title'    		  => $this->input->post('marketplace_title'),
 				'marketplace_price'    		  => $this->input->post('marketplace_price'),
 				'marketplace_category_id'	  => $this->input->post('marketplace_category_id'),
-				'featured_marketplace'  	  => $this->input->post('featured_marketplace'),
-				'spotlight_marketplace'  	  => $this->input->post('spotlight_marketplace'),
+				'featured_marketplace'  	  => ($this->input->post('featured_marketplace') ? 1 : 0),
+				'spotlight_marketplace'  	  => ($this->input->post('spotlight_marketplace') ? 1 : 0),
 				'display_contact'  	  		  => $this->input->post('display_contact'),
 				'marketplace_description'	  => $this->input->post('marketplace_description'),
 				'marketplace_seo_title' 	  => $this->input->post('marketplace_seo_title'),
@@ -5495,7 +5655,7 @@ class Admin extends CI_Controller
 				'event_mobile'      => $this->input->post('event_mobile'),
 				'event_email'       => $this->input->post('event_email'),
 				'event_website'     => $this->input->post('event_website'),
-				'isenquiry'         => $this->input->post('isenquiry'),
+				'isenquiry'         => ($this->input->post('isenquiry') ? 1 : 0),
 				'event_status'      => 1,
 				'event_slug'		=> $event_slug
 			);
@@ -5931,6 +6091,16 @@ class Admin extends CI_Controller
 			return;
 		}
 
+		// The business's enquiries go with it — the ones sent before the claim
+		// were addressed to the previous owner (usually a data-entry login) and
+		// stayed on the admin side only.
+		$moved = $this->usermodel->moveListingEnquiries(
+			(int) $listing->listing_id,
+			(int) $claim->enquiry_sender_id,
+			(int) $listing->user_id,
+			(string) $listing->listing_name
+		);
+
 		// Notify the claimant.
 		if (!empty($claim->enquiry_email)) {
 			$this->load->library('mailer');
@@ -5940,11 +6110,16 @@ class Admin extends CI_Controller
 				. '<p>The listing is now linked to your account. Sign in and visit '
 				. '<a href="' . base_url('user/dashboard') . '">your dashboard</a> '
 				. 'to edit photos, hours, and contact information.</p>'
+				. '<p>Enquiries and quote requests for this business now come to you: they are on your dashboard and at '
+				. '<a href="' . base_url('user/enquiries') . '">Lead enquiry</a>'
+				. ($moved > 0 ? ', including the ' . (int) $moved . ' sent before your claim was approved' : '')
+				. ', and new ones are emailed to you.</p>'
 				. '<p>Public page: <a href="' . $listing_url . '">' . $listing_url . '</a></p>';
 			$this->mailer->send($claim->enquiry_email, 'Your listing claim was approved', $body);
 		}
 
-		$this->session->set_flashdata('message', 'Claim approved and listing transferred.');
+		$this->session->set_flashdata('message', 'Claim approved and listing transferred.'
+			. ($moved > 0 ? ' ' . (int) $moved . ' earlier enquir' . ($moved === 1 ? 'y' : 'ies') . ' moved to the new owner.' : ''));
 		redirect('admin/claimed-listings');
 	}
 
@@ -6049,8 +6224,8 @@ class Admin extends CI_Controller
 				'u_id'            => $this->input->post('user_id'),
 				'ads_price_id'    => $this->input->post('ads_price_id'),
 				'category_id'     => $ad_category,
-				'ad_start_date'   => date('Y-m-d h:i:s', strtotime($this->input->post('ad_start_date'))),
-				'ad_end_date'     => date('Y-m-d h:i:s', strtotime($this->input->post('ad_end_date'))),
+				'ad_start_date'   => date('Y-m-d 00:00:00', strtotime($this->input->post('ad_start_date'))),
+				'ad_end_date'     => date('Y-m-d 23:59:59', strtotime($this->input->post('ad_end_date'))), // whole days: 'h' made these noon
 				'ad_link'         => $this->input->post('ad_link'),
 				'ad_total_days'   => $this->input->post('ad_total_days'),
 				'ad_cost_per_day' => $this->input->post('ad_cost_per_day'),
@@ -6107,8 +6282,8 @@ class Admin extends CI_Controller
 			$info = array(
 				'u_id'            => $this->input->post('user_id'),
 				'ads_price_id'    => $this->input->post('ads_price_id'),
-				'ad_start_date'   => date('Y-m-d h:i:s', strtotime($this->input->post('ad_start_date'))),
-				'ad_end_date'     => date('Y-m-d h:i:s', strtotime($this->input->post('ad_end_date'))),
+				'ad_start_date'   => date('Y-m-d 00:00:00', strtotime($this->input->post('ad_start_date'))),
+				'ad_end_date'     => date('Y-m-d 23:59:59', strtotime($this->input->post('ad_end_date'))), // whole days: 'h' made these noon
 				'ad_link'         => $this->input->post('ad_link'),
 				'ad_total_days'   => $this->input->post('ad_total_days'),
 				'ad_cost_per_day' => $this->input->post('ad_cost_per_day'),
@@ -6539,6 +6714,13 @@ class Admin extends CI_Controller
 		$sort = $this->input->post('sort_order');
 		if ($sort !== NULL && $sort !== '' && is_numeric($sort)) {
 			$row['sort_order'] = (int) $sort;
+		}
+
+		// Videos a listing on this plan may show (migration 0036). Only
+		// written once the column exists: before it, writing it would fail
+		// the whole save.
+		if ($this->db->field_exists('listing_video_limit', 'plans')) {
+			$row['listing_video_limit'] = max(-1, $int('listing_video_limit', 1));
 		}
 
 		return $row;

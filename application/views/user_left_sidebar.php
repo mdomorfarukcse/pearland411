@@ -95,6 +95,10 @@
 					<li>
 						<a href="<?= base_url() ?>user-listing" class=""><img src="<?= base_url() ?>assets/images/icon/shop.png" alt="" />Listings</a>
 					</li>
+					<?php // Claims the member has sent and where each stands (User::my_claims). ?>
+					<li>
+						<a href="<?= base_url('user/my-claims'); ?>" class=""><img src="<?= base_url() ?>assets/images/icon/tick.png" alt="" />My claims</a>
+					</li>
 					<!-- <li>
 						<a href="<?= base_url() ?>user/user_listing_reviews" class=""><img src="<?= base_url() ?>assets/images/icon/tick.png" alt="" />Listing Reviews</a>
 					</li> -->

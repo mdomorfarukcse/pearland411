@@ -124,6 +124,44 @@ if (!function_exists('createSafeSlug')) {
 
 	</div>
 
+	<?php
+	// The member's leads — quote requests and messages about their businesses,
+	// including those sent before a claim was approved (they follow the
+	// listing; see Usermodel::applyEnquiryReceiverScope()).
+	$dash_enq       = (isset($recent_enquiries) && is_array($recent_enquiries)) ? $recent_enquiries : array();
+	$dash_enq_total = isset($enquiry_total) ? (int) $enquiry_total : 0;
+	?>
+	<div class="ud-cen-s2" id="dashboard-enquiries">
+		<h2>Enquiries &amp; quote requests<?= $dash_enq_total ? ' (' . $dash_enq_total . ')' : '' ?></h2>
+		<a href="<?= e_url(base_url('user/enquiries')) ?>" class="db-tit-btn">View all</a>
+		<?php if (!$dash_enq): ?>
+			<p style="margin:14px 0 0;color:#5A6072;">
+				No enquiries yet. When a customer presses <strong>Get a quote</strong> on one of your listings it appears here,
+				and we email it to you.
+			</p>
+		<?php else: ?>
+			<table class="responsive-table bordered">
+				<thead>
+					<tr><th>From</th><th>About</th><th>Message</th><th>Received</th></tr>
+				</thead>
+				<tbody>
+					<?php foreach ($dash_enq as $q): ?>
+						<tr>
+							<td>
+								<strong><?= e($q->enquiry_name ?? '') ?></strong>
+								<?php if (!empty($q->enquiry_email)): ?><br><a href="mailto:<?= e_attr($q->enquiry_email) ?>"><?= e($q->enquiry_email) ?></a><?php endif; ?>
+								<?php if (!empty($q->enquiry_mobile)): ?><br><a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $q->enquiry_mobile)) ?>"><?= e($q->enquiry_mobile) ?></a><?php endif; ?>
+							</td>
+							<td><?= e($q->enquiry_source ?? '') ?></td>
+							<td style="max-width:280px;"><?= e(mb_strimwidth((string) ($q->enquiry_message ?? ''), 0, 140, '…')) ?></td>
+							<td><?= e(us_date($q->enquiry_created_at ?? '')) ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		<?php endif; ?>
+	</div>
+
 	<!-- START -->
 
 	<!--<div class="ud-cen-s3 ud-cen-s4">-->

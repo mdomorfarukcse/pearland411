@@ -198,7 +198,9 @@ $c_err = $this->session->flashdata('contact_error');
 						<h2>Want to advertise?</h2>
 					</div>
 					<p class="p411-form__hint">
-						Listing your business is free. Banners, featured placement and video start at $20 a month &mdash;
+						<?php $p411_from = ad_price_from(); ?>
+						Listing your business is free. Banners, featured placement and video
+						<?= $p411_from !== '' ? 'start at ' . e($p411_from) . ' a month' : 'are available' ?> &mdash;
 						and we'll happily set the whole thing up over the phone.
 					</p>
 					<a class="p411-btn p411-btn--block" href="<?= e_url(base_url('pricing-plan')) ?>">See packages &amp; prices</a>

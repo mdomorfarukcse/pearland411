@@ -17,8 +17,16 @@
 			<p><?= e($this->session->flashdata('error')) ?></p>
 		</div>
 	<?php } ?>
+	<?php // The add-listing gate's message (plan limit reached). It was set and never printed. ?>
+	<?php if ($this->session->flashdata('error_message')) { ?>
+		<div class="log-err">
+			<p><?= e($this->session->flashdata('error_message')) ?></p>
+		</div>
+	<?php } ?>
 
 	<div class="ud-cen-s2">
+
+		<?php include APPPATH . 'views/partials/listing_tabs.php'; ?>
 
 		<h2>Listing Details</h2>
 
@@ -65,26 +73,25 @@
 			// For premium/unlimited plans: limit = 0 or -1 means unlimited
 			$is_unlimited = ($limit === -1 || $limit === 0);
 
-			// Determine what to display: non-subscribed users see no data; subscribed users use pagination data
-			if ($has_subscription) {
-				if ($is_unlimited) {
-					$displayList = $userListings;
-				} else {
-					$displayList = array_slice($userListings, 0, max(0, $limit));
-				}
-			} else {
-				$displayList = [];
-			}
+			// Every listing the member owns is shown. This used to show nothing
+			// at all without a paid subscription — so a member who had CLAIMED a
+			// business (the free tier) could not see it — and to hide any listing
+			// past the plan's limit. The plan limits how many listings can be
+			// ADDED, never which of your own businesses you may see.
+			$displayList = $userListings;
 
 			// Pagination + usage: use total_rows from pagination for accurate count
 			$per_page = isset($per_page) ? (int)$per_page : 10;
 
 			// Get total count from pagination config (not paginated display list)
-			$total_available = $has_subscription ? (isset($total_rows) ? (int)$total_rows : count($displayList)) : 0;
-			$used_count = $has_subscription ? $total_available : 0;
+			$total_available = isset($total_rows) ? (int)$total_rows : count($displayList);
+			$used_count = $total_available;
 
-			// Gating: non-subscribed OR reached limit (for limited plans only)
-			$limit_reached = (!$has_subscription) || (!$is_unlimited && $used_count >= $limit);
+			// Gating: no plan and no free plan to start on, OR reached limit (limited plans only)
+			$free_plan_available = !empty($free_plan_available);
+			$limit_reached = $has_subscription
+				? (!$is_unlimited && $used_count >= $limit)
+				: !$free_plan_available;
 			$percent = (!$is_unlimited && $limit > 0) ? min(100, round(($used_count / max(1, $limit)) * 100)) : 0;
 			?>
 
@@ -97,8 +104,13 @@
 							</svg>
 						</div>
 						<div style="flex:1;min-width:220px;">
-							<div style="font-weight:600;color:#2c3e50;">Premium access required</div>
-							<div style="font-size:13px;color:#6c757d;">Subscribe to unlock <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?> limits and more features.</div>
+							<?php if ($free_plan_available): ?>
+								<div style="font-weight:600;color:#2c3e50;">You are not on a plan yet</div>
+								<div style="font-size:13px;color:#6c757d;">Your next listing starts on the free Basic plan. Upgrade for a logo, photos, video and a map.</div>
+							<?php else: ?>
+								<div style="font-weight:600;color:#2c3e50;">Choose a plan to add a listing</div>
+								<div style="font-size:13px;color:#6c757d;">Pick a plan to add your business, or claim an existing listing for free.</div>
+							<?php endif; ?>
 						</div>
 						<a href="<?= site_url('pricing-plan') ?>" class="btn btn-primary btn-sm">View plans</a>
 					</div>
@@ -156,7 +168,7 @@
 			</script>
 			<!-- End Subscription Details -->
 
-			<?php if ($has_subscription): ?>
+			<?php if (true): // always — see the note on $displayList above ?>
 				<table class="table bordered" id="listingTable">
 
 					<thead>
@@ -191,11 +203,6 @@
 
 							$rendered = 0;
 							foreach ($displayList as $value) {
-								// Enforce plan limit across pagination using global index (skip for unlimited plans)
-								if (!$is_unlimited && $limit > 0 && $i > $limit) {
-									$i++;
-									continue;
-								}
 
 						?>
 
@@ -221,7 +228,8 @@
 
 									<td>
 
-										<span class="db-list-ststus"><?= $value->listing_status == 1 ? 'Active' : 'In-active'; ?></span>
+										<?php // Unpublished = submitted and not live yet (or switched off by staff). ?>
+										<span class="db-list-ststus"><?= (int) $value->listing_status === 1 ? 'Live' : 'Not published yet'; ?></span>
 
 									</td>
 
@@ -237,11 +245,6 @@
 
 								$i++;
 								$rendered++;
-
-								// Stop showing more listings if we hit the plan limit (skip for unlimited plans)
-								if (!$is_unlimited && $limit > 0 && $rendered >= $limit) {
-									break;
-								}
 							}
 							if ($rendered === 0) { ?>
 								<tr>

@@ -1911,6 +1911,65 @@ class Usermodel extends CI_Model
 
 
 
+	/**
+	 * A member's listings that exist but are not public yet — added through
+	 * the wizard and waiting for approval, or switched off. getListingById()
+	 * only returns published ones, so screens that said "add a listing first"
+	 * told members to add what they had already added.
+	 */
+	public function getUnpublishedListingsForUser($user_id)
+	{
+		return $this->db->select('listing_id, listing_name, listing_slug, listing_status, created_at')
+			->from('listings')
+			->where('user_id', (int) $user_id)
+			->where('is_deleted', 0)
+			->where('listing_status !=', 1)
+			->order_by('created_at', 'DESC')
+			->get()->result();
+	}
+
+	/**
+	 * A listing slug no other listing holds — the same rule as the admin's
+	 * Admin::makeUniqueListingSlug(). The member wizard used the bare name, so
+	 * a second business with an existing name collided: where listing_slug is
+	 * unique the insert failed, and where it is not, two businesses shared one
+	 * URL (and the delete/restore paths that key on it).
+	 */
+	public function uniqueListingSlug($name)
+	{
+		$base = trim(preg_replace('/[^A-Za-z0-9-]+/', '-', (string) $name), '-');
+		if ($base === '') $base = 'listing';
+		$slug = $base;
+		for ($n = 2; $this->db->where('listing_slug', $slug)->count_all_results('listings') > 0; $n++) {
+			$slug = $base . '-' . $n;
+		}
+		return $slug;
+	}
+
+	/**
+	 * Every listing a member owns that is not in the trash — published or
+	 * not — for their own My Listings screen. The public filter
+	 * (getListingById) hid a just-submitted or switched-off listing from its
+	 * own owner.
+	 */
+	public function getOwnerListings($user_id, $limit = NULL, $offset = NULL)
+	{
+		return $this->db->select('*')->from('listings')
+			->where('user_id', (int) $user_id)
+			->where('is_deleted', 0)
+			->order_by('created_at', 'DESC')
+			->limit($limit, $offset)
+			->get()->result();
+	}
+
+	public function countOwnerListings($user_id)
+	{
+		return (int) $this->db->from('listings')
+			->where('user_id', (int) $user_id)
+			->where('is_deleted', 0)
+			->count_all_results();
+	}
+
 	public function getListingById($id = NULL, $limit = NULL, $offset = NULL)
 	{
 		return $data = $this->db->select('*')->from('listings')
@@ -2519,16 +2578,53 @@ class Usermodel extends CI_Model
 	private function applyEnquiryReceiverScope($user_id)
 	{
 		$user_id = (int) $user_id;
-		$this->db->group_start()->where('receiving_user_id', $user_id);
-		if ($this->db->field_exists('listing_id', 'enquiries')) {
-			$this->db->or_where(
-				'listing_id IN (SELECT listing_id FROM ' . $this->db->dbprefix('listings')
-				. ' WHERE user_id = ' . $user_id . ')',
-				NULL,
-				FALSE
-			);
+		if (!$this->db->field_exists('listing_id', 'enquiries')) {
+			$this->db->where('receiving_user_id', $user_id);
+			return;
 		}
-		$this->db->group_end();
+		// A listing's enquiries belong to whoever owns the listing NOW. Before,
+		// receiving_user_id (fixed when the enquiry was sent) also counted for
+		// listing leads, so after a claim was approved the business's earlier
+		// enquiries stayed with the data-entry login that used to own it —
+		// tracker: "once they claim the listing, all the inquiries … should be
+		// on their dashboards". Enquiries about anything else (an event, a
+		// post) have no listing and still go by receiving_user_id.
+		$listings = $this->db->dbprefix('listings');
+		$this->db->group_start()
+			->where('listing_id IN (SELECT listing_id FROM ' . $listings . ' WHERE user_id = ' . $user_id . ')', NULL, FALSE)
+			->or_group_start()
+				->group_start()
+					->where('listing_id IS NULL', NULL, FALSE)
+					->or_where('listing_id', 0)
+				->group_end()
+				->where('receiving_user_id', $user_id)
+			->group_end()
+		->group_end();
+	}
+
+	/**
+	 * Point a listing's enquiries at its new owner — called when a claim is
+	 * approved (Admin::claim_approve), so receiving_user_id agrees with who
+	 * can see them. Legacy rows filed with no listing_id but the business's
+	 * name, addressed to the previous owner, move too.
+	 *
+	 * @return int rows moved
+	 */
+	public function moveListingEnquiries($listing_id, $new_owner_id, $previous_owner_id = 0, $listing_name = '')
+	{
+		if (!$this->db->field_exists('listing_id', 'enquiries')) return 0;
+		$this->db->where('listing_id', (int) $listing_id)
+			->update('enquiries', array('receiving_user_id' => (int) $new_owner_id));
+		$moved = (int) $this->db->affected_rows();
+
+		if ($listing_name !== '' && $this->db->field_exists('enquiry_source', 'enquiries')) {
+			$this->db->group_start()->where('listing_id IS NULL', NULL, FALSE)->or_where('listing_id', 0)->group_end()
+				->where('enquiry_source', $listing_name)
+				->where('receiving_user_id', (int) $previous_owner_id)
+				->update('enquiries', array('listing_id' => (int) $listing_id, 'receiving_user_id' => (int) $new_owner_id));
+			$moved += (int) $this->db->affected_rows();
+		}
+		return $moved;
 	}
 
 	/** A member's own leads, newest first. Replaces getAllEnquiries() on /user/enquiries. */
@@ -2544,14 +2640,31 @@ class Usermodel extends CI_Model
 		return $this->db->get()->result();
 	}
 
-	public function countEnquiriesForReceiver($user_id)
+	public function countEnquiriesForReceiver($user_id, $since = NULL)
 	{
 		if ((int) $user_id <= 0) return 0;
 
 		$this->db->from('enquiries');
 		$this->applyEnquiryReceiverScope($user_id);
+		if ($since !== NULL && $this->db->field_exists('enquiry_created_at', 'enquiries')) {
+			$this->db->where('enquiry_created_at >=', $since);
+		}
 
 		return (int) $this->db->count_all_results();
+	}
+
+	/**
+	 * Total page views across what a member owns, for the dashboard's report
+	 * panel — which used to print the hard-coded figures "00" and "02".
+	 * 0 when the table has no views column.
+	 */
+	public function sumOwnedViews($table, $user_id)
+	{
+		if (!$this->db->table_exists($table) || !$this->db->field_exists('views', $table)) return 0;
+		$this->db->select_sum('views', 'v')->from($table)->where('user_id', (int) $user_id);
+		if ($this->db->field_exists('is_deleted', $table)) $this->db->where('is_deleted', 0);
+		$row = $this->db->get()->row();
+		return $row ? (int) $row->v : 0;
 	}
 
 	/** One enquiry, but only if this member may see it (same scope as the list). */
@@ -2609,63 +2722,11 @@ class Usermodel extends CI_Model
 	 */
 	public function addEnquiry($data)
 	{
-		$cols = $this->enquiryColumns();
-		if ($cols) {
-			$payload = array();
-			foreach ($data as $key => $value) {
-				if (!isset($cols[$key])) continue;
-				if ($value === NULL && !$cols[$key]['nullable'] && $cols[$key]['default'] === NULL) {
-					$value = $cols[$key]['numeric'] ? 0 : '';
-				}
-				$payload[$key] = $value;
-			}
-			$data = $payload;
-		}
-
-		// try/catch because on PHP 8.1+ mysqli throws instead of returning
-		// FALSE (CI 3.1.11 predates that), and a lead that cannot be saved must
-		// reach the caller's "could not send" path, not a 500 page.
-		try {
-			$ok = !empty($data) && $this->db->insert('enquiries', $data);
-		} catch (Exception $e) {
-			$ok = false;
-			log_message('error', 'addEnquiry failed: ' . $e->getMessage());
-		}
-		if (!$ok) {
-			$err = $this->db->error();
-			log_message('error', 'addEnquiry failed: ' . (isset($err['message']) ? $err['message'] : 'unknown error'));
-			return false;
-		}
-
-		$id = (int) $this->db->insert_id();
-		return $id > 0 ? $id : true;
-	}
-
-	/**
-	 * name => [nullable, default, numeric] for `enquiries`, or array() when
-	 * the column list cannot be read (the insert then goes through as given).
-	 */
-	private function enquiryColumns()
-	{
-		static $cols = NULL;
-		if ($cols !== NULL) return $cols;
-
-		$cols = array();
-		try {
-			$q = $this->db->query('SHOW COLUMNS FROM ' . $this->db->protect_identifiers('enquiries', TRUE));
-		} catch (Exception $e) {
-			$q = FALSE;   // PHP 8.1+ throws where older PHP returned FALSE
-		}
-		if ($q) {
-			foreach ($q->result_array() as $c) {
-				$cols[$c['Field']] = array(
-					'nullable' => strtoupper((string) $c['Null']) === 'YES',
-					'default'  => $c['Default'],
-					'numeric'  => (bool) preg_match('/int|decimal|float|double|bit/i', (string) $c['Type']),
-				);
-			}
-		}
-		return $cols;
+		// The fitting and the try/catch live in db_safe_insert() now
+		// (application/helpers/db_safe_helper.php) — this was the first copy of
+		// that rule. A lead that cannot be saved still reaches the caller's
+		// "could not send" path, never a 500.
+		return db_safe_insert('enquiries', $data);
 	}
 
 	public function getEnquiryById($enquiry_id, $receiving_user_id)
@@ -2713,6 +2774,33 @@ class Usermodel extends CI_Model
 			return (int) $this->db->insert_id();
 		}
 		return false;
+	}
+
+	/**
+	 * The listings a member has asked to claim, newest first, with each
+	 * claim's state — for /user/my-claims. claim_status: 0 pending review,
+	 * 1 approved (the listing was transferred to them), 2 not approved
+	 * (Admin::claim_reject). Only the latest claim per listing is returned:
+	 * a member whose claim was turned down may submit a fresh one.
+	 *
+	 * @param  string|null $only 'pending' | 'approved' | 'rejected'
+	 */
+	public function getClaimsByUser($user_id, $only = NULL)
+	{
+		$map = array('pending' => 0, 'approved' => 1, 'rejected' => 2);
+
+		$this->db->select('c.*, l.listing_name, l.listing_slug, l.listing_status, l.user_id AS listing_owner_id, l.is_deleted')
+			->from('claim_listings c')
+			->join('listings l', 'l.listing_id = c.listing_id', 'left')
+			->where('c.enquiry_sender_id', (int) $user_id)
+			// Latest claim per listing only.
+			->where('c.claim_listing_id = (SELECT MAX(c2.claim_listing_id) FROM ' . $this->db->protect_identifiers('claim_listings', TRUE)
+				. ' c2 WHERE c2.listing_id = c.listing_id AND c2.enquiry_sender_id = c.enquiry_sender_id)', NULL, FALSE)
+			->order_by('c.claim_listing_id', 'DESC');
+		if ($only !== NULL && isset($map[$only])) {
+			$this->db->where('c.claim_status', $map[$only]);
+		}
+		return $this->db->get()->result();
 	}
 
 	public function getClaimById($claim_id)
@@ -6246,6 +6334,55 @@ class Usermodel extends CI_Model
 	}
 
 	/**
+	 * Auto-renewing subscriptions that will be charged within $days and whose
+	 * customer has not yet been told about THIS charge. Keyed on
+	 * `renewal_reminded_for` (migration 0036) = the next_billing_date the
+	 * reminder was sent for, so a nightly run reminds once per charge and a
+	 * retry or the next term reminds afresh. Empty until 0036 has run.
+	 */
+	public function getSubscriptionsDueForReminder($days = 3, $limit = 200)
+	{
+		if (!$this->db->field_exists('renewal_reminded_for', 'subscriptions')) return array();
+
+		return $this->db->select('*')
+			->from('subscriptions')
+			->where('auto_renew', 1)
+			->where('status', 'active')
+			->where('next_billing_date IS NOT NULL', null, false)
+			->where('next_billing_date >', date('Y-m-d H:i:s'))
+			->where('next_billing_date <=', date('Y-m-d H:i:s', strtotime('+' . max(1, (int) $days) . ' days')))
+			->group_start()
+				->where('renewal_reminded_for IS NULL', null, false)
+				->or_where('renewal_reminded_for <> next_billing_date', null, false)
+			->group_end()
+			->limit($limit)
+			->get()->result();
+	}
+
+	public function markRenewalReminded($subscription)
+	{
+		if (!$this->db->field_exists('renewal_reminded_for', 'subscriptions')) return false;
+		return $this->db->where('id', (int) $subscription->id)
+			->update('subscriptions', array('renewal_reminded_for' => $subscription->next_billing_date));
+	}
+
+	/** "Visa ending 4242" for the card renewals charge, or '' when unknown. */
+	public function vaultedCardLabel($user_id)
+	{
+		$row = $this->db->select('*')
+			->from('payment_cards')
+			->where('user_id', (int) $user_id)
+			->where('helcim_card_token IS NOT NULL', null, false)
+			// Same order as getVaultedCardToken(): the card it names is the
+			// card that will actually be charged.
+			->order_by('is_default', 'DESC')->order_by('id', 'DESC')
+			->limit(1)->get()->row();
+		if (!$row || empty($row->card_last4) || $row->card_last4 === '0000') return '';
+		$brand = !empty($row->card_brand) ? $row->card_brand : 'Card';
+		return $brand . ' ending ' . $row->card_last4;
+	}
+
+	/**
 	 * Record a successful renewal: extend the term, log the transaction,
 	 * apply any scheduled downgrade, and reset the dunning counters.
 	 */
@@ -6862,6 +6999,12 @@ class Usermodel extends CI_Model
 			->where_in('ap.slot_key', $slot_keys);
 
 		if ($has_ads) {
+			// Untargeted bookings only. This cache answers getAdForSlot() calls
+			// with no category, whose own query has always excluded
+			// category-targeted ads — without the same filter here, a banner
+			// sold for one category (Restaurants) ran on the homepage and every
+			// other primed page as well.
+			$untargeted = $this->db->field_exists('category_id', 'ads') ? ' AND a.category_id IS NULL' : '';
 			$this->db
 				->select('a.id, a.ad_photo, a.ad_link')
 				->join(
@@ -6869,7 +7012,8 @@ class Usermodel extends CI_Model
 					'a.ads_price_id = ap.id'
 						. ' AND a.ad_status = 1'
 						. ' AND a.ad_start_date <= ' . $this->db->escape($today)
-						. ' AND a.ad_end_date   >= ' . $this->db->escape($today),
+						. ' AND a.ad_end_date   >= ' . $this->db->escape($today)
+						. $untargeted,
 					'left'
 				);
 		}
@@ -6933,6 +7077,28 @@ class Usermodel extends CI_Model
 			->limit(1)
 			->get()
 			->row();
+	}
+
+	/**
+	 * slot_key => size ("300x250") for every ad zone, so a package card can
+	 * show the dimensions the zone really renders at. A plan's slug is its
+	 * zone's slot_key.
+	 */
+	public function getAdZoneSizes()
+	{
+		if (!$this->db->table_exists('ads_prices')) return array();
+		if (!$this->db->field_exists('slot_key', 'ads_prices')) return array();
+
+		$out = array();
+		$rows = $this->db->select('slot_key, size')->from('ads_prices')
+			->where('slot_key IS NOT NULL', null, false)->where('slot_key !=', '')
+			->get()->result();
+		foreach ($rows as $r) {
+			if (!isset($out[$r->slot_key]) && trim((string) $r->size) !== '') {
+				$out[$r->slot_key] = trim((string) $r->size);
+			}
+		}
+		return $out;
 	}
 
 	/**

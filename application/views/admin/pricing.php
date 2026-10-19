@@ -502,6 +502,18 @@
                                 <div class="form-group">
                                     <label for="photoLimit">Photo Limit</label>
                                     <input type="number" class="form-control" name="photo_limit" id="photoLimit" placeholder="Gallery photos (-1 unlimited, 0 none)">
+                                    <small class="form-text text-muted">Gallery photos on one listing. The logo comes with &ldquo;Can upload photos&rdquo;.</small>
+                                </div>
+                            </div>
+                            <?php // Migration 0036. How many YouTube links a listing on this plan
+                                  // may show, when "Allow video" is ticked (tracker: "each
+                                  // membership plan should have its own upload limits for
+                                  // photos and videos"). ?>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="listingVideoLimit">Listing Video Limit</label>
+                                    <input type="number" class="form-control" name="listing_video_limit" id="listingVideoLimit" min="-1" placeholder="YouTube videos (-1 unlimited)">
+                                    <small class="form-text text-muted">Videos on one listing when &ldquo;Allow video&rdquo; is ticked. -1 = unlimited.</small>
                                 </div>
                             </div>
                         </div>
@@ -544,14 +556,19 @@
                         </div>
                     </div>
 
-
-
+                    <?php // The footer has to sit INSIDE .modal-content. A stray </div>
+                          // here closed .modal-content first, which put the footer
+                          // under .modal-dialog — and Bootstrap gives that
+                          // `pointer-events: none` (only .modal-content turns them
+                          // back on). So "Save Plan" was drawn on screen but no click
+                          // ever reached it: a plan could be opened and edited, never
+                          // saved. That is the "still can't edit the pricing" report. ?>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-primary">Save Plan</button>
+                    </div>
+                </form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                <button type="submit" class="btn btn-primary">Save Plan</button>
-            </div>
-            </form>
         </div>
     </div>
 
@@ -639,6 +656,7 @@ function ppAdminReady(fn) {
 
                         // Field-level listing capabilities (freemium editing)
                         $('#photoLimit').val(response.photo_limit || 0);
+                        $('#listingVideoLimit').val(response.listing_video_limit !== undefined && response.listing_video_limit !== null ? response.listing_video_limit : 1);
                         $('#canPhotos').prop('checked', response.can_photos == 1);
                         $('#canMap').prop('checked', response.can_map == 1);
                         $('#canServices').prop('checked', response.can_services == 1);

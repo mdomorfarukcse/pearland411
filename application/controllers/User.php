@@ -334,14 +334,34 @@ class User extends CI_Controller
 	 */
 	private function listingCapabilities($owner_id)
 	{
-		$sub = $this->usermodel->getUserSubscription((int) $owner_id);
+		return $this->capabilitiesFromPlan($this->usermodel->getUserSubscription((int) $owner_id));
+	}
+
+	/**
+	 * What a listing on $plan may carry — a plans row, or a subscription row
+	 * joined to its plan (getUserSubscription). NULL = no plan: nothing beyond
+	 * the basics. Limits: -1 unlimited, 0 none, N up to N.
+	 *
+	 * Basic (the free tier) has can_photos and allow_video off, so it gets no
+	 * logo, no gallery and no video (tracker: "For Basic Listing, we should
+	 * limit the ability … to put logos, multiple images, and videos"). Each
+	 * paid plan's photo_limit and listing_video_limit (migration 0036) cap how
+	 * many it may have — set per plan at /admin/pricing.
+	 */
+	private function capabilitiesFromPlan($plan)
+	{
+		$can_video = (bool) ($plan && !empty($plan->allow_video));
 		return array(
-			'can_photos'        => (bool) ($sub && !empty($sub->can_photos)),
-			'photo_limit'       => (int)  ($sub && isset($sub->photo_limit) ? $sub->photo_limit : 0),
-			'can_map'           => (bool) ($sub && !empty($sub->can_map)),
-			'can_services'      => (bool) ($sub && !empty($sub->can_services)),
-			'can_video'         => (bool) ($sub && !empty($sub->allow_video)),
-			'can_extra_details' => (bool) ($sub && !empty($sub->can_extra_details)),
+			'can_photos'        => (bool) ($plan && !empty($plan->can_photos)),
+			'photo_limit'       => (int)  ($plan && isset($plan->photo_limit) ? $plan->photo_limit : 0),
+			'can_map'           => (bool) ($plan && !empty($plan->can_map)),
+			'can_services'      => (bool) ($plan && !empty($plan->can_services)),
+			'can_video'         => $can_video,
+			// Before 0036 there was no video cap at all; keep it that way until
+			// the column exists, rather than silently cutting videos down.
+			'video_limit'       => !$can_video ? 0 : (int) ($plan && isset($plan->listing_video_limit) ? $plan->listing_video_limit : -1),
+			'can_extra_details' => (bool) ($plan && !empty($plan->can_extra_details)),
+			'plan_name'         => $plan && !empty($plan->name) ? (string) $plan->name : '',
 		);
 	}
 
@@ -3036,7 +3056,14 @@ class User extends CI_Controller
 		}
 
 		$uid = (int) $data['logged_id'];
-		$data['AllListings'] = $this->usermodel->getListingById($uid, 10, NULL);
+		// Owned listings, published or not — the member's own screen.
+		$data['AllListings'] = $this->usermodel->getOwnerListings($uid, 10, NULL);
+
+		// The member's leads, on the dashboard itself. Nothing here showed an
+		// enquiry: a claimed business's quote requests could only be found
+		// from the sidebar's "Lead enquiry" link, or by the admin team.
+		$data['recent_enquiries'] = $uid ? $this->usermodel->getEnquiriesForReceiver($uid, 5, 0) : array();
+		$data['enquiry_total']    = $uid ? $this->usermodel->countEnquiriesForReceiver($uid) : 0;
 
 		// This member's own events and blog posts. Both used to come from
 		// dashboardInfo(), which had no WHERE at all, so every member saw the
@@ -4095,26 +4122,39 @@ class User extends CI_Controller
 			redirect('user/login');
 			return;
 		}
-		$session = $this->session->userdata('logged_user');
-		$logged_id = $session['logged_id'];
+		$this->renderListingWizard();
+	}
 
-		// Get all listings for this user for duplicate option
-		$listings = $this->usermodel->getListingById($logged_id);
-		$data = array();
-		$data['listings'] = array();
-		if ($listings) {
-			foreach ($listings as $l) {
-				$data['listings'][] = array(
-					'listing_id' => $l->listing_id,
-					'listing_name' => $l->listing_name
-				);
-			}
-		}
+	/**
+	 * The add-a-listing wizard (views/add_new_listing_start.php), with what
+	 * the member's plan lets the listing carry.
+	 *
+	 * A member with no plan yet is shown the free Basic plan's allowance —
+	 * submitting starts them on it (add_listing_scratch) — instead of being
+	 * let through three steps and turned away at the end, which is what
+	 * happened before: canUserAddContent() refused the POST and every field
+	 * they had typed was lost.
+	 *
+	 * @param array $extra error / old / notes for a re-render after a refused POST
+	 */
+	private function renderListingWizard(array $extra = array())
+	{
+		$session   = (array) $this->session->userdata('logged_user');
+		$logged_id = isset($session['logged_id']) ? (int) $session['logged_id'] : 0;
 
-		// Add categories for the form
+		$data = $extra;
 		$data['categories'] = $this->usermodel->getAllValues('listing_categories');
 
-		$this->load->view('header');
+		$sub = $this->usermodel->getUserSubscription($logged_id);
+		$free = $sub ? NULL : $this->freeListingPlan();
+		$data['caps']        = $this->capabilitiesFromPlan($sub ? $sub : $free);
+		$data['has_plan']    = (bool) $sub;
+		$data['free_plan']   = $free;
+		$data['can_add']     = $sub ? $this->usermodel->canUserAddContent($logged_id, 'listing') : (bool) $free;
+		$data['page_css']    = array('assets/admin/css/media-preview.css');
+		$data['title']       = 'Add your business';
+
+		$this->load->view('header', $data);
 		$this->load->view('add_new_listing_start', $data);
 		$this->load->view('footer');
 	}
@@ -4172,11 +4212,18 @@ class User extends CI_Controller
 			$data['current_listing_count'] = 0;
 		}
 
-		// Pagination config (optional, for future use)
+		// No plan yet is not "no listings": the wizard starts a member on the
+		// free Basic plan (User::add_listing_scratch), so the Add button stays
+		// live whenever such a plan exists.
+		$data['free_plan_available'] = !$data['has_subscription'] && (bool) $this->freeListingPlan();
+
+		// Pagination config. Every listing the member owns, published or not:
+		// counting only published ones hid a just-submitted business from its
+		// own owner.
 		$config = [
 			'base_url' => base_url('user/user-listing'),
 			'per_page' => 10,
-			'total_rows' => count($this->usermodel->getListingById($data['logged_id'], null, null)),
+			'total_rows' => $this->usermodel->countOwnerListings($data['logged_id']),
 			'uri_segment' => 3,
 		];
 		$config['full_tag_open'] = '<ul class="pagination">';
@@ -4199,8 +4246,10 @@ class User extends CI_Controller
 		$this->pagination->initialize($config);
 		$page = (int) ($this->uri->segment(3)) ? (int) ($this->uri->segment(3)) : 0;
 
-		// Listings for this user
-		$data['AllListings'] = $this->usermodel->getListingById($data['logged_id'], $config['per_page'], $page);
+		// Listings for this user — published, waiting for approval or switched off.
+		$data['AllListings'] = $this->usermodel->getOwnerListings($data['logged_id'], $config['per_page'], $page);
+		$data['tab_counts']  = $this->listingTabCounts($data['logged_id']);
+		$data['active_tab']  = 'listings';
 		// Add views count for each listing
 		if (!empty($data['AllListings'])) {
 			foreach ($data['AllListings'] as $key => $listing) {
@@ -4230,252 +4279,253 @@ class User extends CI_Controller
 	}
 
 	/*====================
-		Add New Listing
+		Add New Listing (POST from the wizard)
 	=====================*/
+	/**
+	 * Save a listing submitted from /user/add_new_listing_start.
+	 *
+	 * Tracker: "After submitting a new business listing, the workflow returns to
+	 * Step 1 without displaying a clear submission confirmation or status
+	 * update. No confirmation email was received." What used to happen:
+	 *   - the slug was the name with no uniqueness pass, so a second business
+	 *     of the same name failed the insert where the column is unique;
+	 *   - any failure redirected back to an EMPTY Step 1 with an `error` flash
+	 *     the page never printed — while the page did print "DEBUG: POST data
+	 *     received" and "SUCCESS: Form submission detected";
+	 *   - a member with no plan was bounced to My Listings with a message that
+	 *     page never printed either, after filling in all three steps;
+	 *   - success said "Listing Added Successfully." on a page that hid the
+	 *     listing from members without a paid plan, and nothing was emailed.
+	 * Now: a refused submission re-renders the wizard with the reason and what
+	 * they typed; success goes to a confirmation page (listing_submitted) and
+	 * emails the member and the office.
+	 */
 	public function add_listing_scratch()
 	{
-		// Check if user is logged in
-		$logged_id = NULL;
-		if ($this->session->userdata('logged_user')) {
-			$session = $this->session->userdata('logged_user');
-			$logged_id = $session['logged_id'];
-		}
+		$session   = (array) $this->session->userdata('logged_user');
+		$logged_id = isset($session['logged_id']) ? (int) $session['logged_id'] : 0;
 
-		// Check subscription limits before allowing to add listing
-		if (!$this->usermodel->canUserAddContent($logged_id, 'listing')) {
-			$this->session->set_flashdata('error_message', 'You have reached your listing limit. Please upgrade your plan to add more listings.');
-			redirect('user/user-listing');
+		if ($this->input->method() !== 'post' || $this->input->post('listing_name') === NULL) {
+			$this->renderListingWizard();
 			return;
 		}
 
-		$data['categories'] = $this->usermodel->getAllValues('listing_categories');
+		$old = $this->input->post(NULL, TRUE);
+		$listing_name    = trim((string) $this->input->post('listing_name'));
+		$category_id     = (int) $this->input->post('category_id');
+		$listing_address = trim((string) $this->input->post('listing_address'));
+		$listing_email   = trim((string) $this->input->post('listing_email'));
 
-		// Debug: Always show if POST data exists
-		if ($_POST) {
-			$data['debug_message'] = "POST data received. Keys: " . implode(', ', array_keys($_POST)) . " | User ID: " . ($logged_id ? $logged_id : 'NULL');
+		$errors = array();
+		if ($listing_name === '') $errors[] = 'Enter the name of your business.';
+		elseif (mb_strlen($listing_name) > 150) $errors[] = 'The business name is too long (150 characters at most).';
+		$category = $category_id ? $this->db->where('category_id', $category_id)->get('listing_categories')->row() : NULL;
+		if (!$category) $errors[] = 'Choose a category.';
+		if ($listing_address === '') $errors[] = 'Enter the business address.';
+		if ($listing_email !== '' && !filter_var($listing_email, FILTER_VALIDATE_EMAIL)) $errors[] = 'The business email address does not look right.';
+		if ($errors) {
+			$this->renderListingWizard(array('errors' => $errors, 'old' => $old));
+			return;
 		}
 
-		// Check for form submission - since POST data exists with form fields, it's a form submission
-		if ($_POST && (isset($_POST['listing_name']) || isset($_POST['category_id']))) {
-
-			// Force show success message for testing
-			$data['success_debug'] = "Form submission detected successfully!";
-
-			// Form submitted, validate required fields
-			$listing_name = $this->input->post('listing_name');
-			$category_id = $this->input->post('category_id');
-			$listing_address = $this->input->post('listing_address');
-
-			// Debug: Check if form data is being received
-			if (empty($listing_name) && empty($category_id) && empty($listing_address)) {
-				$data['error'] = 'No form data received. Form data: ' . json_encode($post_data);
-				$this->load->view('header', $data);
-				$this->load->view('add_new_listing_start', $data);
-				$this->load->view('footer');
+		// A plan: the one they have, or the free Basic plan, started now.
+		$sub = $this->usermodel->getUserSubscription($logged_id);
+		$plan_note = '';
+		if (!$sub) {
+			$free = $this->freeListingPlan();
+			if (!$free || !$this->usermodel->activateFreePlan($logged_id, (int) $free->id)) {
+				$this->renderListingWizard(array('old' => $old, 'errors' => array(
+					'Choose a plan before adding a business — see our packages, or claim your business if it is already listed.',
+				)));
 				return;
 			}
-
-			if (empty($listing_name) || empty($category_id) || empty($listing_address)) {
-				$data['error'] = 'Please fill in all required fields (Listing Name, Category, Address)';
-				$this->load->view('header', $data);
-				$this->load->view('add_new_listing_start', $data);
-				$this->load->view('footer');
-			} else {
-				// Form validation passed, process the listing
-				$listing_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('listing_name'));
-
-				// Check if user is logged in properly
-				if (!$logged_id) {
-					$data['error'] = 'User not logged in properly. Please login again.';
-					$this->load->view('header', $data);
-					$this->load->view('add_new_listing_start', $data);
-					$this->load->view('footer');
-					return;
-				}
-
-				// First try with minimal required fields only
-				$info = array(
-					'user_id'			=> intval($logged_id),
-					'listing_name'		=> trim($listing_name),
-					'category_id'		=> intval($category_id),
-					'listing_address'	=> trim($listing_address),
-					'listing_slug' 		=> trim($listing_slug),
-					// listing_status is an INT column. This wrote the string
-					// 'Active', which MySQL coerced to 0 — i.e. unpublished —
-					// so every business submitted through this form was
-					// invisible. 1 = published; see
-					// Usermodel::applyPublishedListingFilter().
-					'listing_status' 	=> 1
-				);
-
-				// Add optional fields if they exist
-				if ($this->input->post('sub_category_id')) {
-					$info['sub_category_id'] = $this->input->post('sub_category_id');
-				}
-				if ($this->input->post('listing_mobile')) {
-					$info['listing_mobile'] = $this->input->post('listing_mobile');
-				}
-				if ($this->input->post('listing_email')) {
-					$info['listing_email'] = $this->input->post('listing_email');
-				}
-				if ($this->input->post('listing_description')) {
-					$info['listing_description'] = $this->input->post('listing_description');
-				}
-				if ($this->input->post('service_locations')) {
-					$info['service_locations'] = $this->input->post('service_locations');
-				}
-				if ($this->input->post('service_offered')) {
-					$info['service_offered'] = $this->input->post('service_offered');
-				}
-				if ($this->input->post('listing_whatsapp')) {
-					$info['listing_whatsapp'] = $this->input->post('listing_whatsapp');
-				}
-				if ($this->input->post('display_phone')) {
-					$info['display_phone'] = $this->input->post('display_phone');
-				}
-				if ($this->input->post('display_address')) {
-					$info['display_address'] = $this->input->post('display_address');
-				}
-				if ($this->input->post('county_name')) {
-					$info['county_name'] = $this->input->post('county_name');
-				}
-				if ($this->input->post('postal_code')) {
-					$info['postal_code'] = $this->input->post('postal_code');
-				}
-				if ($this->input->post('listing_lat')) {
-					$info['listing_lat'] = $this->input->post('listing_lat');
-				}
-				if ($this->input->post('listing_lng')) {
-					$info['listing_lng'] = $this->input->post('listing_lng');
-				}
-				if ($this->input->post('listing_website')) {
-					$info['listing_website'] = $this->input->post('listing_website');
-				}
-				if ($this->input->post('listing_video')) {
-					$info['listing_video'] = $this->input->post('listing_video');
-				}
-				if ($this->input->post('listing_seo_title')) {
-					$info['listing_seo_title'] = $this->input->post('listing_seo_title');
-				}
-				if ($this->input->post('listing_seo_keywords')) {
-					$info['listing_seo_keywords'] = $this->input->post('listing_seo_keywords');
-				}
-				if ($this->input->post('listing_seo_description')) {
-					$info['listing_seo_description'] = $this->input->post('listing_seo_description');
-				}
-
-				if (!empty($_FILES['listing_profile_image']['name'])) {
-					$img_info = [
-						'upload_path' => 'images/listings',
-						'quality'     => '60%',
-						'height'      => 500,
-						'width'       => 500,
-						'image_name'  => 'listing_profile_image'
-					];
-
-					// Never write NULL over a stored logo because an upload failed.
-					$new_logo = uploadAndResize($img_info);
-					if ($new_logo) {
-						$info['listing_image'] = $new_logo;
-					}
-				}
-
-				// Handle Gallery Images Upload for User
-				if ($_FILES && isset($_FILES['listing_image_gallery']['name'][0]) && !empty($_FILES['listing_image_gallery']['name'][0])) {
-					$gallery_images = [];
-					$files_count = count($_FILES['listing_image_gallery']['name']);
-
-					// Debug: Log gallery upload attempt
-					error_log("USER Gallery upload attempt - Files count: " . $files_count);
-
-					for ($i = 0; $i < $files_count; $i++) {
-						if (!empty($_FILES['listing_image_gallery']['name'][$i])) {
-							// Debug: Log each file
-							error_log("USER Processing gallery file: " . $_FILES['listing_image_gallery']['name'][$i]);
-
-							// Create temporary file array for each image
-							$_FILES['gallery_temp'] = array(
-								'name' => $_FILES['listing_image_gallery']['name'][$i],
-								'type' => $_FILES['listing_image_gallery']['type'][$i],
-								'tmp_name' => $_FILES['listing_image_gallery']['tmp_name'][$i],
-								'error' => $_FILES['listing_image_gallery']['error'][$i],
-								'size' => $_FILES['listing_image_gallery']['size'][$i]
-							);
-
-							// Use same path as logo image - images/listings
-							$gallery_img_info = [
-								'upload_path' => 'images/listings',
-								'quality'     => '60%',
-								'image_name'  => 'gallery_temp'
-							];
-							$uploaded_image = uploadWithoutResize($gallery_img_info);
-							if ($uploaded_image) {
-								// Store path with assets prefix like logo image
-								$gallery_images[] = 'assets/images/listings/' . basename($uploaded_image);
-								error_log("USER Gallery image uploaded: " . $uploaded_image);
-							} else {
-								error_log("USER Gallery image upload failed for: " . $_FILES['listing_image_gallery']['name'][$i]);
-							}
-						}
-					}
-					if (!empty($gallery_images)) {
-						$info['listing_image_gallery'] = json_encode($gallery_images);
-						error_log("USER Gallery images stored in DB: " . $info['listing_image_gallery']);
-					} else {
-						error_log("USER No gallery images to store");
-					}
-				} else {
-					error_log("USER No gallery files detected in upload");
-				}
-
-				// Debug: Show data being inserted with full info array
-				$service_locations_debug = $this->input->post('service_locations') ? 'Present: "' . $this->input->post('service_locations') . '"' : 'MISSING';
-				$service_offered_debug = $this->input->post('service_offered') ? 'Present: "' . $this->input->post('service_offered') . '"' : 'MISSING';
-
-				$data['insert_debug'] = "SERVICE FIELDS DEBUG - service_locations: " . $service_locations_debug . " | service_offered: " . $service_offered_debug . "<br><br>Full data: " . json_encode($info, JSON_PRETTY_PRINT);
-
-				// Use direct database insert to avoid model method issues
-				$add_result = false;
-				$error_msg = '';
-
-				try {
-					// Direct database insert
-					$this->db->insert('listings', $info);
-					$add_result = $this->db->affected_rows() > 0;
-
-					if ($add_result) {
-						$error_msg = "SUCCESS: Listing inserted with ID " . $this->db->insert_id();
-					} else {
-						$db_error = $this->db->error();
-						$error_msg = "INSERT FAILED - Affected rows: " . $this->db->affected_rows() .
-							". DB Error: " . $db_error['message'] .
-							". Last Query: " . $this->db->last_query();
-					}
-				} catch (Exception $e) {
-					$error_msg = "EXCEPTION: " . $e->getMessage();
-				}
-
-				$data['db_debug'] = $error_msg;
-
-				if ($add_result) {
-					// Update usage tracking after successful addition
-					if (method_exists($this->usermodel, 'updateUserUsage')) {
-						$this->usermodel->updateUserUsage($logged_id, 'listing');
-					}
-
-					$this->session->set_flashdata('message', 'Listing Added Successfully.');
-					redirect('user/user-listing', 'refresh');
-				} else {
-					$this->session->set_flashdata('error', 'Failed to add listing. Please check your data and try again.');
-					redirect('user/add-listing-scratch', 'refresh');
-				}
-			}
-		} else {
-			// Initial page load - show the form
-			$this->load->view('header', $data);
-			$this->load->view('add_new_listing_start', $data);
-			$this->load->view('footer');
+			$sub = $this->usermodel->getUserSubscription($logged_id);
+			$plan_note = 'You are on the free ' . $free->name . ' plan.';
+		} elseif (!$this->usermodel->canUserAddContent($logged_id, 'listing')) {
+			$this->renderListingWizard(array('old' => $old, 'errors' => array(
+				'Your ' . $sub->name . ' plan does not allow another listing. Upgrade your plan to add more businesses.',
+			)));
+			return;
 		}
+		$caps  = $this->capabilitiesFromPlan($sub);
+		$notes = array();
+
+		$post = function ($k) { return trim((string) $this->input->post($k)); };
+		$sub_category_id = (int) $this->input->post('sub_category_id');
+		$info = array(
+			'user_id'             => $logged_id,
+			'listing_name'        => $listing_name,
+			'category_id'         => $category_id,
+			'sub_category_id'     => $sub_category_id ?: NULL,
+			'listing_address'     => $listing_address,
+			'listing_mobile'      => $post('listing_mobile'),
+			'listing_whatsapp'    => $post('listing_whatsapp'),
+			'display_phone'       => $this->input->post('display_phone') === '0' ? 0 : 1,
+			'display_address'     => $this->input->post('display_address') === '0' ? 0 : 1,
+			'listing_email'       => $listing_email,
+			'listing_website'     => $post('listing_website'),
+			'county_name'         => $post('county_name'),
+			'postal_code'         => $post('postal_code'),
+			'listing_description' => (string) $this->input->post('listing_description'),
+			'service_locations'   => $post('service_locations'),
+			'listing_slug'        => $this->usermodel->uniqueListingSlug($listing_name),
+			// Published straight away: 1 = public (Usermodel::applyPublishedListingFilter).
+			'listing_status'      => 1,
+			'is_deleted'          => 0,
+			'created_at'          => date('Y-m-d H:i:s'),
+		);
+
+		// Plan gating — the same rules as User::edit_listing, so a Basic
+		// listing cannot be given at creation what it could not be edited to.
+		if ($caps['can_map']) {
+			$info['listing_lat'] = $post('listing_lat');
+			$info['listing_lng'] = $post('listing_lng');
+			if ($info['listing_lat'] !== '' && $info['listing_lng'] !== '') {
+				$info['google_map'] = 'https://maps.google.com/maps?q=' . rawurlencode($info['listing_lat'] . ',' . $info['listing_lng']) . '&output=embed';
+			}
+		}
+		if ($caps['can_services'])      $info['service_offered'] = $post('service_offered');
+		if ($caps['can_extra_details']) {
+			$info['listing_seo_title']       = $post('listing_seo_title');
+			$info['listing_seo_keywords']    = $post('listing_seo_keywords');
+			$info['listing_seo_description'] = $post('listing_seo_description');
+		}
+
+		$videos = listing_video_urls($this->input->post('listing_video'));
+		if ($videos && !$caps['can_video']) {
+			$notes[] = 'Videos are not included in your plan, so the video link was not added.';
+		} elseif ($videos) {
+			if ($caps['video_limit'] >= 0 && count($videos) > $caps['video_limit']) {
+				$notes[] = 'Your plan includes ' . (int) $caps['video_limit'] . ' video' . ($caps['video_limit'] === 1 ? '' : 's')
+					. ($caps['video_limit'] === 1 ? '; only the first link was added.' : '; only the first ' . (int) $caps['video_limit'] . ' links were added.');
+				$videos = array_slice($videos, 0, max(0, $caps['video_limit']));
+			}
+			if ($videos) $info['listing_video'] = implode(', ', $videos);
+		}
+
+		// Media, uploaded last so nothing is written to disk for a refused form.
+		$uploaded = array();
+		if (!empty($_FILES['listing_profile_image']['name'])) {
+			if (!$caps['can_photos']) {
+				$notes[] = 'A logo is not included in your plan, so it was not added.';
+			} else {
+				$logo = uploadAndResize(array('upload_path' => 'images/listings', 'quality' => '60%', 'height' => 500, 'width' => 500, 'image_name' => 'listing_profile_image'));
+				if ($logo) { $info['listing_image'] = $logo; $uploaded[] = $logo; }
+				else $notes[] = 'Your logo was not added: ' . (upload_last_error() ?: 'the file could not be read.');
+			}
+		}
+		$gallery_files = (isset($_FILES['listing_image_gallery']['name']) && is_array($_FILES['listing_image_gallery']['name']))
+			? array_values(array_filter($_FILES['listing_image_gallery']['name'], 'strlen')) : array();
+		if ($gallery_files) {
+			$room = !$caps['can_photos'] ? 0 : ($caps['photo_limit'] < 0 ? PHP_INT_MAX : (int) $caps['photo_limit']);
+			if ($room === 0) {
+				$notes[] = 'Gallery photos are not included in your plan, so they were not added.';
+			} else {
+				$gallery = array();
+				foreach ($_FILES['listing_image_gallery']['name'] as $i => $fname) {
+					if ($fname === '' || $fname === NULL) continue;
+					if (count($gallery) >= $room) {
+						$notes[] = 'Your plan includes ' . (int) $caps['photo_limit'] . ' gallery photo' . ($caps['photo_limit'] === 1 ? '' : 's')
+							. '; the rest were not added.';
+						break;
+					}
+					$_FILES['gallery_temp'] = array(
+						'name'     => $fname,
+						'type'     => $_FILES['listing_image_gallery']['type'][$i],
+						'tmp_name' => $_FILES['listing_image_gallery']['tmp_name'][$i],
+						'error'    => $_FILES['listing_image_gallery']['error'][$i],
+						'size'     => $_FILES['listing_image_gallery']['size'][$i],
+					);
+					$img = uploadWithoutResize(array('upload_path' => 'images/listings', 'quality' => '60%', 'image_name' => 'gallery_temp'));
+					if ($img) { $gallery[] = 'assets/images/listings/' . basename($img); $uploaded[] = $img; }
+					else $notes[] = 'Photo "' . $fname . '" was not added: ' . (upload_last_error() ?: 'the file could not be read.');
+				}
+				if ($gallery) $info['listing_image_gallery'] = json_encode($gallery);
+			}
+		}
+
+		$listing_id = db_safe_insert('listings', $info);
+		if (!$listing_id || $listing_id === TRUE) {
+			foreach ($uploaded as $f) { if (is_file(FCPATH . $f)) @unlink(FCPATH . $f); }
+			log_message('error', 'Member listing insert failed: ' . db_safe_last_error());
+			$this->renderListingWizard(array('old' => $old, 'errors' => array(
+				'We could not save your listing just now. Please try again — and if it keeps happening, contact us with this message: ' . db_safe_last_error(),
+			)));
+			return;
+		}
+
+		if ($sub_category_id) $this->adminmodel->saveListingSubCategories((int) $listing_id, array($sub_category_id));
+		$this->usermodel->updateUserUsage($logged_id, 'listing');
+		$emailed = $this->notifyListingSubmitted((int) $listing_id, $session);
+
+		$this->session->set_flashdata('listing_submitted', array(
+			'notes'   => $notes,
+			'plan'    => $plan_note,
+			'emailed' => $emailed,
+		));
+		redirect('user/listing-submitted/' . (int) $listing_id);
+	}
+
+	/**
+	 * /user/listing-submitted/<id> — the confirmation after the wizard: the
+	 * business is saved, where it is, what the plan includes and what to do
+	 * next. Owner only.
+	 */
+	public function listing_submitted($listing_id = 0)
+	{
+		$listing = $this->db->where('listing_id', (int) $listing_id)->where('is_deleted', 0)->get('listings')->row();
+		if (!$this->requireOwnedListing($listing)) return;
+
+		$data = array();
+		$data['listing']  = $listing;
+		$data['category'] = $this->db->where('category_id', (int) $listing->category_id)->get('listing_categories')->row();
+		$data['caps']     = $this->listingCapabilities((int) $listing->user_id);
+		$data['flash']    = (array) $this->session->flashdata('listing_submitted');
+		$data['title']    = 'Listing submitted';
+
+		$this->load->view('header', $data);
+		$this->load->view('user_left_sidebar', $data);
+		$this->load->view('listing_submitted', $data);
+		$this->load->view('user_right_sidebar', $data);
+		$this->load->view('footer');
+	}
+
+	/**
+	 * Email the member their confirmation and the office a heads-up for a new
+	 * listing. Returns whether the member's copy was handed to the mailer.
+	 */
+	private function notifyListingSubmitted($listing_id, array $session)
+	{
+		$listing = $this->db->where('listing_id', (int) $listing_id)->get('listings')->row();
+		if (!$listing) return FALSE;
+		$this->load->library('mailer');
+		$url   = base_url('listing-details/' . rawurlencode((string) $listing->listing_slug));
+		$esc   = function ($v) { return html_escape((string) $v); };
+		$owner = $this->db->select('name, email_id')->where('user_id', (int) $listing->user_id)->get('user')->row();
+		$sent  = FALSE;
+
+		if ($owner && filter_var((string) $owner->email_id, FILTER_VALIDATE_EMAIL)) {
+			$body = '<p>Hi ' . $esc($owner->name) . ',</p>'
+				. '<p>Thanks for adding <strong>' . $esc($listing->listing_name) . '</strong> to Pearland411. It is live in the directory now:</p>'
+				. '<p><a href="' . $url . '">' . $url . '</a></p>'
+				. '<p>You can change it any time from <a href="' . base_url('user-listing') . '">My Listings</a>. '
+				. 'Customers who press <em>Get a quote</em> on it reach you by email and on <a href="' . base_url('user/dashboard') . '">your dashboard</a>.</p>'
+				. '<p>Want photos, a video, a map or featured placement? See <a href="' . base_url('pricing-plan') . '">our packages</a>.</p>';
+			$sent = $this->mailer->send($owner->email_id, 'Your listing is live: ' . $listing->listing_name,
+				$this->mailer->render('Your listing has been submitted', $body), NULL, array('log_type' => 'listing_submitted'));
+		}
+
+		$office = form_recipient_email();
+		if ($office !== '') {
+			$body = '<p>A member added a business through the website.</p><ul>'
+				. '<li>Business: <a href="' . $url . '">' . $esc($listing->listing_name) . '</a></li>'
+				. '<li>Member: ' . $esc($owner ? $owner->name . ' (' . $owner->email_id . ')' : 'account #' . $listing->user_id) . '</li>'
+				. '<li>Address: ' . $esc($listing->listing_address) . '</li></ul>'
+				. '<p>It is published. Review or edit it at <a href="' . base_url('admin/edit-listing/' . rawurlencode((string) $listing->listing_slug)) . '">admin</a>.</p>';
+			$this->mailer->send($office, '[Pearland411] New listing — ' . $listing->listing_name,
+				$this->mailer->render('New listing added', $body), NULL, array('log_type' => 'listing_submitted'));
+		}
+		return (bool) $sent;
 	}
 
 
@@ -4638,6 +4688,19 @@ class User extends CI_Controller
 				if (!$caps['can_video'])         { unset($info['listing_video']); }
 				if (!$caps['can_extra_details']) { unset($info['listing_seo_title'], $info['listing_seo_keywords'], $info['listing_seo_description']); }
 
+				// The plan's video allowance (migration 0036). Links are stored
+				// comma-separated, whichever way they were typed.
+				$gallery_notes = array();
+				if (isset($info['listing_video'])) {
+					$__videos = listing_video_urls($info['listing_video']);
+					if ($caps['video_limit'] >= 0 && count($__videos) > $caps['video_limit']) {
+						$gallery_notes[] = 'Your plan includes ' . (int) $caps['video_limit'] . ' video' . ($caps['video_limit'] === 1 ? '' : 's')
+							. ($caps['video_limit'] === 1 ? '; only the first link was kept.' : '; only the first ' . (int) $caps['video_limit'] . ' links were kept.');
+						$__videos = array_slice($__videos, 0, max(0, $caps['video_limit']));
+					}
+					$info['listing_video'] = implode(', ', $__videos);
+				}
+
 				// Only a successful upload replaces the logo. A refused file used
 				// to be written as NULL over the stored logo.
 				$logo_note = '';
@@ -4685,7 +4748,13 @@ class User extends CI_Controller
 					if ($caps['photo_limit'] >= 0) {
 						$slots_left = (int) $caps['photo_limit'] - count($kept_gallery);
 						if ($slots_left < 0) { $slots_left = 0; }
-						if ($files_count > $slots_left) { $files_count = $slots_left; }
+						if ($files_count > $slots_left) {
+							// Said nothing before: the extra photos just vanished.
+							$gallery_notes[] = 'Your plan includes ' . (int) $caps['photo_limit'] . ' gallery photo'
+								. ((int) $caps['photo_limit'] === 1 ? '' : 's') . '; '
+								. ($files_count - $slots_left) . ' of the new photo' . (($files_count - $slots_left) === 1 ? ' was' : 's were') . ' not added.';
+							$files_count = $slots_left;
+						}
 					}
 
 					// Debug: Log gallery upload attempt
@@ -5673,7 +5742,8 @@ class User extends CI_Controller
 
 			// Handle image upload
 			$news_image = '';
-			if ($_FILES && $_FILES['news_image']['name']) {
+			$upload_note = '';
+			if (!empty($_FILES['news_image']['name'])) {
 				$img_info = [
 					'upload_path' => 'images/news',
 					'quality'     => '60%',
@@ -5681,7 +5751,10 @@ class User extends CI_Controller
 					'width'       => 500,
 					'image_name'  => 'news_image'
 				];
-				$news_image = uploadAndResize($img_info);
+				$news_image = (string) uploadAndResize($img_info);
+				if ($news_image === '') {
+					$upload_note = ' The picture was not saved: ' . (upload_last_error() ?: 'the file could not be read.');
+				}
 			}
 
 			// Prepare news data
@@ -5701,12 +5774,13 @@ class User extends CI_Controller
 				'created_at' => date('Y-m-d H:i:s')
 			);
 
-			// Insert news
-			if ($this->db->insert('news', $news_data)) {
-				$this->session->set_flashdata('message', 'News post added successfully!');
+			// Insert news — fitted to the live table, so a NOT NULL column is
+			// a message rather than a 500 (application/helpers/db_safe_helper.php).
+			if (db_safe_insert('news', $news_data)) {
+				$this->session->set_flashdata('message', 'News post added successfully!' . $upload_note);
 				redirect('user/user-news');
 			} else {
-				$this->session->set_flashdata('message', 'Failed to add news post.');
+				$this->session->set_flashdata('message', 'Failed to add news post: ' . db_safe_last_error());
 				redirect('user/user-add-news');
 			}
 		}
@@ -5756,7 +5830,8 @@ class User extends CI_Controller
 		if (isset($_POST['news_submit'])) {
 			// Handle image upload
 			$news_image = $news->news_image; // Keep existing image by default
-			if ($_FILES && $_FILES['news_image']['name']) {
+			$upload_note = '';
+			if (!empty($_FILES['news_image']['name'])) {
 				$img_info = [
 					'upload_path' => 'images/news',
 					'quality'     => '60%',
@@ -5764,11 +5839,19 @@ class User extends CI_Controller
 					'width'       => 500,
 					'image_name'  => 'news_image'
 				];
-				$news_image = uploadAndResize($img_info);
+				$new_image = uploadAndResize($img_info);
 
-				// Delete old image if new one uploaded
-				if (!empty($news->news_image) && file_exists('./' . $news->news_image)) {
-					unlink('./' . $news->news_image);
+				// Replace — and only then delete the old file — when the upload
+				// succeeded. This unlinked the old picture first and stored NULL
+				// whenever the upload was refused, as edit_video() used to.
+				if ($new_image) {
+					if (!empty($news->news_image) && $news->news_image !== $new_image && file_exists('./' . $news->news_image)) {
+						@unlink('./' . $news->news_image);
+					}
+					$news_image = $new_image;
+				} else {
+					$upload_note = ' The new picture was not saved: ' . (upload_last_error() ?: 'the file could not be read.')
+						. ' The previous one was kept.';
 				}
 			}
 
@@ -5785,13 +5868,13 @@ class User extends CI_Controller
 			);
 
 			// Update news
-			$update_result = $this->usermodel->update($news->news_id, $update_data, 'news_id', 'news');
+			$update_result = db_safe_update('news', $update_data, array('news_id' => $news->news_id));
 
 			if ($update_result) {
-				$this->session->set_flashdata('message', 'News updated successfully!');
+				$this->session->set_flashdata('message', 'News updated successfully!' . $upload_note);
 				redirect('user/user-news');
 			} else {
-				$this->session->set_flashdata('message', 'Failed to update news.');
+				$this->session->set_flashdata('message', 'Failed to update news: ' . db_safe_last_error());
 			}
 		}
 
@@ -5965,12 +6048,13 @@ class User extends CI_Controller
 				'created_at' => date('Y-m-d H:i:s')
 			);
 
-			// Insert video
-			if ($this->db->insert('video', $video_data)) {
+			// Insert video — fitted to the live table (db_safe_helper.php), so a
+			// NOT NULL column is a message rather than a 500.
+			if (db_safe_insert('video', $video_data)) {
 				$this->session->set_flashdata('message', 'Video added successfully!' . $upload_note);
 				redirect('user/video-list');
 			} else {
-				$this->session->set_flashdata('message', 'Failed to add video.');
+				$this->session->set_flashdata('message', 'Failed to add video: ' . db_safe_last_error());
 				redirect('user/add-video');
 			}
 		}
@@ -6054,11 +6138,11 @@ class User extends CI_Controller
 			);
 
 			// Update video
-			if ($this->db->where('video_slug', $video_slug)->update('video', $video_data)) {
+			if (db_safe_update('video', $video_data, array('video_slug' => $video_slug))) {
 				$this->session->set_flashdata('message', 'Video updated successfully!' . $upload_note);
 				redirect('user/video-list');
 			} else {
-				$this->session->set_flashdata('message', 'Failed to update video.');
+				$this->session->set_flashdata('message', 'Failed to update video: ' . db_safe_last_error());
 				redirect('user/edit-video/' . $video_slug);
 			}
 		}
@@ -7506,7 +7590,8 @@ class User extends CI_Controller
 					// Try to get listing slug
 					$listing = $this->db->get_where('listings', array('listing_slug' => $identifier))->row();
 					if ($listing) {
-						return base_url('user/listing_details/' . $identifier);
+						// The canonical page, not /user/listing_details/<slug>.
+						return base_url('listing-details/' . rawurlencode((string) $identifier));
 					}
 				}
 				return base_url('all_listing');
@@ -7746,6 +7831,8 @@ class User extends CI_Controller
 
 		// Get all active plans ordered by sort_order
 		$data['plans'] = $this->usermodel->getActivePlans();
+		// slot_key => "300x250": each banner card states its real size.
+		$data['zone_sizes'] = $this->usermodel->getAdZoneSizes();
 
 		// Get user subscription info (if logged in)
 		$data['user_subscription'] = null;
@@ -7800,19 +7887,7 @@ class User extends CI_Controller
 		$plan_id = (int) $this->input->post('plan_id');
 		$plan    = $plan_id ? $this->usermodel->getPlanByIdForPricing($plan_id) : null;
 
-		// Only ever hand out an active, genuinely free plan this way: a price
-		// that is SET to 0 (a NULL price is a half-configured plan, and
-		// (float) NULL is 0 — that is how a paid tier could be had for
-		// nothing), a business-listing tier, and no paid term on it.
-		$paid_term = FALSE;
-		if ($plan) {
-			foreach ($this->usermodel->getPlanDurations((int) $plan->id) as $__d) {
-				if ((float) $__d->price > 0) { $paid_term = TRUE; break; }
-			}
-		}
-		if (!$plan || $plan->price === NULL || $plan->price === '' || (float) $plan->price > 0
-			|| (isset($plan->category) && $plan->category !== '' && $plan->category !== 'business-listing')
-			|| $paid_term) {
+		if (!$this->isFreeListingPlan($plan)) {
 			$this->session->set_flashdata('message', 'That plan is not available for free signup.');
 			redirect('pricing-plan');
 			return;
@@ -7833,6 +7908,31 @@ class User extends CI_Controller
 			$this->session->set_flashdata('message', 'We could not start your free plan. Please try again.');
 			redirect('pricing-plan');
 		}
+	}
+
+	/**
+	 * May this plan be handed out for nothing? Only an active, genuinely free
+	 * plan: a price that is SET to 0 (a NULL price is a half-configured plan,
+	 * and (float) NULL is 0 — that is how a paid tier could be had for
+	 * nothing), a business-listing tier, and no paid term on it.
+	 */
+	private function isFreeListingPlan($plan)
+	{
+		if (!$plan || $plan->price === NULL || $plan->price === '' || (float) $plan->price > 0) return FALSE;
+		if (isset($plan->category) && $plan->category !== '' && $plan->category !== 'business-listing') return FALSE;
+		foreach ($this->usermodel->getPlanDurations((int) $plan->id) as $__d) {
+			if ((float) $__d->price > 0) return FALSE;
+		}
+		return TRUE;
+	}
+
+	/** The free business-listing plan (Basic), or NULL when none is on sale. */
+	private function freeListingPlan()
+	{
+		foreach ((array) $this->usermodel->getActivePlans() as $plan) {
+			if ($this->isFreeListingPlan($plan)) return $plan;
+		}
+		return NULL;
 	}
 
 	/**
@@ -9092,6 +9192,43 @@ class User extends CI_Controller
 		$this->load->view('footer');
 	}
 
+	/**
+	 * /user/my-claims — the businesses this member has asked to claim, and
+	 * where each request stands: pending review, approved, or not approved.
+	 *
+	 * Tracker: "Can we add a 'My Claims' tab where business owners can view
+	 * the businesses they have requested to claim and see the current status
+	 * of each claim". Nothing showed a claim after it was sent: the listing
+	 * page said "submitted", and the only other news was an email.
+	 */
+	public function my_claims()
+	{
+		$session   = (array) $this->session->userdata('logged_user');
+		$logged_id = isset($session['logged_id']) ? (int) $session['logged_id'] : 0;
+
+		$data = array();
+		$data['logged_id']   = $logged_id;
+		$data['claims']      = $this->usermodel->getClaimsByUser($logged_id);
+		$data['tab_counts']  = $this->listingTabCounts($logged_id, count($data['claims']));
+		$data['active_tab']  = 'claims';
+		$data['title']       = 'My claims';
+
+		$this->load->view('header', $data);
+		$this->load->view('user_left_sidebar', $data);
+		$this->load->view('user_claims', $data);
+		$this->load->view('user_right_sidebar', $data);
+		$this->load->view('footer');
+	}
+
+	/** Counts for the My listings / My claims tabs (views/partials/listing_tabs.php). */
+	private function listingTabCounts($user_id, $claims = NULL)
+	{
+		return array(
+			'listings' => (int) $this->usermodel->countOwnerListings($user_id),
+			'claims'   => $claims !== NULL ? (int) $claims : count($this->usermodel->getClaimsByUser($user_id)),
+		);
+	}
+
 	/*=========================
 		Member coupons (the other half of /coupons)
 
@@ -9124,6 +9261,11 @@ class User extends CI_Controller
 		$data['logged_id'] = $logged_id;
 		$data['coupons']   = $this->usermodel->getCouponsByUser($logged_id);
 		$data['listings']  = $this->usermodel->getListingById($logged_id, NULL, NULL);
+		// For the "you need a published listing first" guide: what they have
+		// that is not live yet, so the page can say "waiting for approval"
+		// rather than "add a listing".
+		$data['pending_listings'] = $data['listings'] ? array() : $this->usermodel->getUnpublishedListingsForUser($logged_id);
+		$data['pending_claims']   = $data['listings'] ? array() : $this->usermodel->getClaimsByUser($logged_id, 'pending');
 		$data['live_count'] = $this->usermodel->countCouponsByUser($logged_id, TRUE);
 		$data['coupon_cap'] = $this->couponCap();
 		$data['title']     = 'My deals & coupons';
@@ -9418,19 +9560,24 @@ class User extends CI_Controller
 		$session = $this->session->userdata('logged_user');
 		$user_id = (int) $session['logged_id'];
 
-		// One claim per (listing, user) makes sense — don't let people
-		// spam a listing they already claimed.
+		// One open claim per (listing, user) — don't let people spam a listing
+		// they already claimed. A claim that was NOT approved (status 2) does
+		// not block a new one: the rejection email asks for more proof, and
+		// this check used to refuse it forever while calling the rejected
+		// claim "pending review".
 		$existing = $this->db
 			->where('listing_id',         (int) $listing->listing_id)
 			->where('enquiry_sender_id',  $user_id)
+			->order_by('claim_listing_id', 'DESC')
 			->limit(1)
 			->get('claim_listings')
 			->row();
-		if ($existing) {
+		if ($existing && (int) $existing->claim_status !== 2) {
 			$this->session->set_flashdata(
 				'claim_message',
 				'You have already submitted a claim for this listing — status: ' .
-				((int) $existing->claim_status === 1 ? 'approved' : 'pending review') . '.'
+				((int) $existing->claim_status === 1 ? 'approved' : 'pending review') . '. '
+				. 'You can follow it under My Listings → My claims.'
 			);
 			redirect('listing-details/' . rawurlencode($slug));
 			return;
@@ -9514,7 +9661,8 @@ class User extends CI_Controller
 			}
 
 			$this->session->set_flashdata('claim_message',
-				'Thanks! Your claim has been submitted. We will email you when an administrator reviews it.');
+				'Thanks! Your claim has been submitted. We will email you when an administrator reviews it — '
+				. 'you can follow its status under My Listings → My claims.');
 			redirect('listing-details/' . rawurlencode($slug));
 			return;
 		}

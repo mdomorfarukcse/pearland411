@@ -146,65 +146,53 @@
 
 	</div>
 
+	<?php
+	// Real figures. This panel was static HTML — "00" leads, "02" listing
+	// views, "01" blog views — the same for every member, so an owner whose
+	// business had enquiries was told it had none. Enquiries are this week's
+	// (the same scope as /user/enquiries, so a claimed listing's leads count);
+	// views are lifetime totals, since no per-week view history is stored.
+	$rep_ci  = get_instance();
+	$rep_uid = 0;
+	if ($this->session->userdata('logged_user')) {
+		$rep_sess = $this->session->userdata('logged_user');
+		$rep_uid  = (int) ($rep_sess['logged_id'] ?? 0);
+	}
+	$rep_rows = array();
+	if ($rep_uid) {
+		$rep_rows[] = array('Enquiries', $rep_ci->usermodel->countEnquiriesForReceiver($rep_uid, date('Y-m-d H:i:s', strtotime('-7 days'))), 'This week', base_url('user/enquiries'));
+		$rep_rows[] = array('Views', $rep_ci->usermodel->sumOwnedViews('listings', $rep_uid), 'Listings', base_url('user-listing'));
+		if (site_setting('service_events_enabled', '1') !== '0') {
+			$rep_rows[] = array('Views', $rep_ci->usermodel->sumOwnedViews('events', $rep_uid), 'Events', base_url('user-events'));
+		}
+		if (site_setting('service_blogs_enabled', '1') !== '0') {
+			$rep_rows[] = array('Views', $rep_ci->usermodel->sumOwnedViews('blogs', $rep_uid), 'Blogs', base_url('blog-list'));
+		}
+	}
+	?>
+	<?php if ($rep_rows): ?>
 	<div class="ud-rhs-pay ud-rhs-repo">
 
 		<div class="ud-rhs-pay-inn">
 
-			<h3>Last week report</h3>
+			<h3>Your report</h3>
 
 			<ul>
+				<?php foreach ($rep_rows as $rep): ?>
+				<li> <span class="view"><?= e($rep[0]) ?></span>
 
-				<li> <span class="view">Enquiry</span>
+					<span class="cout"><a href="<?= e_url($rep[3]) ?>" style="color:inherit;"><?= str_pad((string) (int) $rep[1], 2, '0', STR_PAD_LEFT) ?></a></span>
 
-					<span class="cout">00</span>
-
-					<span class="name">Leads</span>
-
-				</li>
-
-				<li> <span class="view">Views</span>
-
-					<span class="cout">02</span>
-
-					<span class="name">Listings</span>
+					<span class="name"><?= e($rep[2]) ?></span>
 
 				</li>
-
-				<li> <span class="view">Views</span>
-
-					<span class="cout">00</span>
-
-					<span class="name">Events</span>
-
-				</li>
-
-				<li> <span class="view">Views</span>
-
-					<span class="cout">01</span>
-
-					<span class="name">Blogs</span>
-
-				</li>
-
-				<li> <span class="view">Views</span>
-
-					<span class="cout">00</span>
-
-					<span class="name">Products</span>
-
-				</li>
-
-				<li> <span class="cout">00</span>
-
-					<span class="name">Messages</span>
-
-				</li>
-
+				<?php endforeach; ?>
 			</ul>
 
 		</div>
 
 	</div>
+	<?php endif; ?>
 
 	<!--    <div class="ud-rhs-sec-2">-->
 

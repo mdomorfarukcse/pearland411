@@ -44,9 +44,17 @@ if (!empty($cart['items'])) {
 $isLoggedIn = !empty($is_logged_in);
 
 /** Bullet list for a card: limits for listing/special tiers, placement details otherwise. */
-function pp_features($plan, $cat)
+function pp_features($plan, $cat, $size = '')
 {
     $f = array();
+    // The zone's real pixel size, from ads_prices (Usermodel::getAdZoneSizes),
+    // not the free-text description — which called three 300x250 boxes
+    // "900x100" and left a 295x600 skyscraper reading like the same product
+    // as a right-side banner (tracker: skyscraper vs right side banner).
+    if ($size !== '' && preg_match('/^(\d+)\s*x\s*(\d+)$/i', $size, $m)) {
+        $f[] = $m[1] . ' × ' . $m[2] . ' px'
+            . ((int) $m[2] > (int) $m[1] * 1.5 ? ' tall skyscraper' : ((int) $m[1] >= 600 ? ' wide banner' : ' box banner'));
+    }
     if (in_array($cat, array('business-listing', 'special'))) {
         $map = array(
             'listing_limit' => 'Listing', 'product_limit' => 'Product', 'event_limit' => 'Event',
@@ -59,6 +67,19 @@ function pp_features($plan, $cat)
             if ($v === 0) continue;
             $f[] = ($v === -1 ? 'Unlimited' : $v) . ' ' . $label . ($v === 1 ? '' : 's');
         }
+        // What the listing itself may carry — the same flags and limits the
+        // add/edit forms enforce (User::capabilitiesFromPlan), so the card and
+        // the form cannot disagree about whether a plan includes photos.
+        if (!empty($plan->can_photos)) {
+            $pl = isset($plan->photo_limit) ? (int) $plan->photo_limit : 0;
+            $f[] = 'Logo' . ($pl < 0 ? ' + unlimited photos' : ($pl > 0 ? ' + ' . $pl . ' photo' . ($pl === 1 ? '' : 's') : ''));
+        }
+        if (!empty($plan->allow_video)) {
+            $vl = isset($plan->listing_video_limit) ? (int) $plan->listing_video_limit : -1;
+            $f[] = ($vl < 0 ? 'Unlimited videos' : $vl . ' video' . ($vl === 1 ? '' : 's')) . ' on your listing';
+        }
+        if (!empty($plan->can_map))      $f[] = 'Map on your listing';
+        if (!empty($plan->can_services)) $f[] = 'Services offered';
         if (!empty($plan->featured_listing))  $f[] = 'Featured placement';
         if (!empty($plan->priority_support))  $f[] = 'Priority support';
         if (!empty($plan->analytics_access))  $f[] = 'Analytics dashboard';
@@ -196,6 +217,14 @@ function pp_features($plan, $cat)
                 <a href="#talk-to-us">ask us to call you back</a>.
             </p>
         <?php endif; ?>
+        <?php // How the card is charged, said once for the whole catalogue as well as
+              // on every card (tracker: "is it one time only or a recurring charge
+              // on the card every month?"). ?>
+        <p class="pp-callus" style="font-size:14px;">
+            Banners, videos and add-ons are a <strong>one-time charge</strong> &mdash; they run for the term you buy and never renew.
+            Business listings renew only if you switch on auto-renew, and we email you before every renewal charge.
+            <a href="<?= e_url(base_url('terms-of-use')) ?>#refunds">Refund &amp; cancellation policy</a>
+        </p>
     </div>
 
     <div class="pp-wrap">
@@ -266,7 +295,7 @@ function pp_features($plan, $cat)
                         $isFree   = $price <= 0;
                         $inCart   = in_array((int) $plan->id, $cartIds);
                         $isOwned  = (isset($user_subscription) && $user_subscription && (int) $user_subscription->plan_id === (int) $plan->id);
-                        $feats    = pp_features($plan, $catKey);
+                        $feats    = pp_features($plan, $catKey, isset($plan->slug, $zone_sizes[$plan->slug]) ? $zone_sizes[$plan->slug] : '');
                         // Every card says whether it renews. Non-listing cards
                         // used to hard-code "one-time" and the special package
                         // read "per month" — though nothing but a listing tier

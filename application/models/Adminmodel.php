@@ -2990,6 +2990,42 @@
 		/*==================
           ADS
           ==================*/
+		/**
+		 * The zones a business can be sold inside ONE category — the
+		 * "Category Specific Banners" section of /pricing-plan — with the
+		 * package price each is sold at. A zone is an ads_prices row whose
+		 * slot_key is the slug of a `category-banners` plan.
+		 */
+		public function getCategoryBannerZones()
+		{
+			if (!$this->db->field_exists('slot_key', 'ads_prices')) return array();
+			try {
+				return $this->db
+					->select('ap.id, ap.name, ap.size, ap.slot_key, p.name AS plan_name, p.price, p.duration_days')
+					->from('ads_prices ap')
+					->join('plans p', 'p.slug = ap.slot_key', 'inner')
+					->where('p.category', 'category-banners')
+					->order_by('p.sort_order', 'ASC')
+					->get()->result();
+			} catch (Exception $e) {
+				return array();
+			}
+		}
+
+		/** Category banners booked for one business (ads.listing_id, migration 0036). */
+		public function getListingCategoryAds($listing_id)
+		{
+			if (!$this->db->field_exists('listing_id', 'ads')) return array();
+			return $this->db
+				->select('a.*, ap.name AS zone_name, ap.size, ap.slot_key, lc.category_name')
+				->from('ads a')
+				->join('ads_prices ap', 'ap.id = a.ads_price_id', 'left')
+				->join('listing_categories lc', 'lc.category_id = a.category_id', 'left')
+				->where('a.listing_id', (int) $listing_id)
+				->order_by('a.ad_end_date', 'DESC')
+				->get()->result();
+		}
+
 		public function getAllAds()
 		{
 			// The category join MUST be LEFT. CodeIgniter's join() defaults to
@@ -2999,7 +3035,10 @@
 			$data =  $this->db->select('ads.*,u.name as username,u.profile_image as user_image,u.user_created as user_join,ap.name as ads_price_name,lc.category_name as ad_category_name')
 				->from('ads')
 				->where('ads.ad_status', 1)
-				->join('user as u', 'ads.u_id = u.user_id')
+				// LEFT: a banner booked from Business Listings for a business
+				// nobody has claimed yet has no account (u_id 0), and an inner
+				// join hid it from this list while it ran on the site.
+				->join('user as u', 'ads.u_id = u.user_id', 'left')
 				->join('ads_prices as ap', 'ads.ads_price_id = ap.id')
 				->join('listing_categories as lc', 'lc.category_id = ads.category_id', 'left')
 				->get()->result();

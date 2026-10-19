@@ -41,12 +41,41 @@ $today      = date('Y-m-d');
 			<?php endif; ?>
 		</p>
 
-		<?php if (empty($listings)): ?>
-			<div class="alert alert-warning">
+		<?php if (empty($listings)):
+			// Tracker: "guide users without published listings to create or
+			// publish one first". Say what is missing for THIS member — nothing
+			// yet, a listing waiting for approval, or a claim under review —
+			// and give them the button for the next step.
+			$pending_listings = (isset($pending_listings) && is_array($pending_listings)) ? $pending_listings : array();
+			$pending_claims   = (isset($pending_claims)   && is_array($pending_claims))   ? $pending_claims   : array();
+		?>
+			<div class="alert alert-warning" style="padding:18px 20px;">
+				<p style="margin:0 0 10px;font-weight:600;">Before you can post a deal, you need a published business listing.</p>
+				<p style="margin:0 0 12px;">A deal is shown on the business it belongs to, so shoppers know whose offer it is.</p>
+
+				<?php if ($pending_listings): ?>
+					<p style="margin:0 0 6px;">Not published yet:</p>
+					<ul style="margin:0 0 12px 18px;list-style:disc;">
+						<?php foreach ($pending_listings as $pl): ?>
+							<li><?= e($pl->listing_name) ?> &mdash; you can post a deal as soon as it is published.</li>
+						<?php endforeach; ?>
+					</ul>
+				<?php endif; ?>
+				<?php if ($pending_claims): ?>
+					<p style="margin:0 0 6px;">Claims under review:</p>
+					<ul style="margin:0 0 12px 18px;list-style:disc;">
+						<?php foreach ($pending_claims as $pc): ?>
+							<li><?= e($pc->listing_name ?: $pc->enquiry_source) ?> &mdash; once your claim is approved the listing is yours and you can post deals for it.</li>
+						<?php endforeach; ?>
+					</ul>
+				<?php endif; ?>
+
 				<p style="margin:0;">
-					A deal is posted against one of your businesses, so you need a published listing first.
-					<a href="<?= e_url(base_url('user-listing')) ?>">Your listings</a> &middot;
-					<a href="<?= e_url(base_url('all_listing')) ?>">find and claim your business</a>
+					<a href="<?= e_url(base_url('user/add_new_listing_start')) ?>" class="btn btn-primary btn-sm" style="margin:4px 8px 4px 0;">Add your business</a>
+					<a href="<?= e_url(base_url('all-listing')) ?>" class="btn btn-outline-primary btn-sm" style="margin:4px 8px 4px 0;">Find &amp; claim your business</a>
+					<?php if ($pending_claims): ?>
+						<a href="<?= e_url(base_url('user/my-claims')) ?>" class="btn btn-link btn-sm" style="margin:4px 0;">My claims</a>
+					<?php endif; ?>
 				</p>
 			</div>
 		<?php endif; ?>

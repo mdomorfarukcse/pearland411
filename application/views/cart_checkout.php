@@ -175,10 +175,13 @@ function cc_cat_label($c)
                         <input type="checkbox" id="cco-auto-renew" name="auto_renew" value="1">
                         <span>
                             <strong>Renew automatically</strong> at the end of each term so your listing
-                            never lapses. We'll save your card securely with Helcim — cancel anytime from
+                            never lapses. We'll save your card securely with Helcim and charge it again at
+                            each renewal; we email you <?= (int) site_setting('renewal_reminder_days', 3) ?> days
+                            before every charge and send a receipt after it. Cancel anytime from
                             <a href="<?= base_url('user/my-account') ?>">your account</a>.
                             This applies to your business listing only: banners, videos and add-ons
-                            run for the term you chose and then end.
+                            are a one-time charge and simply end.
+                            <a href="<?= base_url('terms-of-use') ?>#refunds">Refund &amp; cancellation policy</a>.
                         </span>
                     </label>
                 <?php endif; ?>
