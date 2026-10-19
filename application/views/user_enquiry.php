@@ -23,87 +23,22 @@
 		</div>
 
 		<div class="table-responsive">
-			<!-- Subscription Details -->
 			<?php
-			// Entity-specific subscription view logic for enquiries
-			$entity = 'enquiry';
-			$label = 'Enquiries';
-
-			// Safe defaults so the view doesn't break if controller doesn't pass subscription vars
-			$has_subscription = isset($has_subscription) ? (bool)$has_subscription : false;
-			$subscription_limits = isset($subscription_limits) && is_array($subscription_limits) ? $subscription_limits : [];
-			$plan_name = isset($subscription_limits['plan_name']) ? $subscription_limits['plan_name'] : 'Free';
-			$limit = isset($subscription_limits[$entity]) ? (int)$subscription_limits[$entity] : -1; // -1 means Unlimited
-
-			// Source list from controller (fallback to empty array)
-			$sourceList = (isset($allEnquiries) && is_array($allEnquiries)) ? $allEnquiries : [];
-
-			// Determine what to display: non-subscribed users see no data; subscribed users use pagination data
-			$displayList = $has_subscription ? $sourceList : [];
-
-			// Pagination + usage: use total_rows from pagination for accurate count
-			$per_page = isset($per_page) ? (int)$per_page : 10;
-
-			// Get total count from pagination config (not paginated display list)
-			$total_available = $has_subscription ? (isset($total_rows) ? (int)$total_rows : count($displayList)) : 0;
-			$used_count = $has_subscription ? $total_available : 0;
-
-			// For premium/unlimited plans: limit = 0 or -1 means unlimited
-			$is_unlimited = ($limit === -1 || $limit === 0);
-
-			// Gating: non-subscribed OR reached limit (for limited plans only)
-			$limit_reached = (!$has_subscription) || (!$is_unlimited && $used_count >= $limit);
-			$percent = (!$is_unlimited && $limit > 0) ? min(100, round(($used_count / max(1, $limit)) * 100)) : 0;
+			// Every lead the member may see is shown — no plan required. This used
+			// to show nothing at all, and "Premium subscription required to view
+			// enquiries", to anyone without a paid plan: so the owner of a CLAIMED
+			// (free) listing never saw the quote requests for their own business,
+			// and they reached only the admin team (tracker: "all the inquiries
+			// that they have should be on their dashboards not our admin
+			// dashboard"). No plan has ever had an enquiry limit to enforce.
+			$displayList = (isset($allEnquiries) && is_array($allEnquiries)) ? $allEnquiries : [];
+			$per_page    = isset($per_page) ? (int) $per_page : 10;
+			$used_count  = isset($total_rows) ? (int) $total_rows : count($displayList);
 			?>
-
-			<div class="subscription-info-card" style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:10px;padding:16px;margin:16px 0;">
-				<?php if (!$has_subscription): ?>
-					<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-						<div style="width:36px;height:36px;border-radius:50%;background:#e3f2fd;display:flex;align-items:center;justify-content:center;color:#1976d2;">
-							<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" focusable="false">
-								<path d="M12 .587l3.668 7.431 8.199 1.192-5.933 5.787 1.401 8.163L12 18.896 4.665 23.16l1.401-8.163L.133 9.21l8.199-1.192z" />
-							</svg>
-						</div>
-						<div style="flex:1;min-width:220px;">
-							<div style="font-weight:600;color:#2c3e50;">Premium access required</div>
-							<div style="font-size:13px;color:#6c757d;">Subscribe to unlock <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?> limits and more features.</div>
-						</div>
-						<a href="<?= site_url('pricing-plan') ?>" class="btn btn-primary btn-sm">View plans</a>
-					</div>
-				<?php else: ?>
-					<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-						<div style="flex:1;min-width:240px;">
-							<div style="font-weight:600;color:#2c3e50;">Your plan: <span style="color:#0d6efd;"><?= htmlspecialchars($plan_name, ENT_QUOTES, 'UTF-8') ?></span></div>
-							<div style="font-size:13px;color:#6c757d;">
-								<?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?>:
-								<?php if (!$is_unlimited): ?>
-									<span class="<?= $limit_reached ? 'text-danger' : 'text-success' ?>">
-										<?= (int)$used_count ?> / <?= (int)$limit ?>
-									</span>
-								<?php else: ?>
-									<span class="badge badge-success">∞ Unlimited</span>
-								<?php endif; ?>
-							</div>
-							<?php if (!$is_unlimited && $limit > 0): ?>
-								<div class="progress" style="height:8px;margin-top:8px;">
-									<div class="progress-bar <?= $limit_reached ? 'bg-danger' : 'bg-success' ?>" role="progressbar" style="width: <?= $percent ?>%;" aria-valuenow="<?= $percent ?>" aria-valuemin="0" aria-valuemax="100"></div>
-								</div>
-							<?php endif; ?>
-						</div>
-						<?php if ($limit_reached): ?>
-							<button type="button" class="btn btn-warning btn-sm" data-toggle="modal" data-target="#upgradeModal">
-								Upgrade to add more
-							</button>
-						<?php endif; ?>
-					</div>
-				<?php endif; ?>
-			</div>
-
-			<!-- Upgrade / choose-a-plan modal (shown only when the add button is gated).
-			     Shared partial so every dashboard tells the same story — see
-			     views/partials/plan_limit_modal.php. -->
-			<?php include APPPATH . 'views/partials/plan_limit_modal.php'; ?>
-			<!-- End Subscription Details -->
+			<p style="margin:12px 0 16px;color:#5A6072;font-size:14px;">
+				Quote requests and messages about your businesses. Each one is also emailed to you when it arrives;
+				reply to the customer straight from that email or using the details here.
+			</p>
 
 			<table data-admin-table class="responsive-table bordered">
 				<thead>
@@ -112,73 +47,47 @@
 						<th>Enquiry Number</th>
 						<th>Name</th>
 						<th>Email</th>
+						<th>About</th>
 						<th>Action</th>
 					</tr>
 				</thead>
 				<tbody id="enquiriesTableBody">
-					<?php if ($has_subscription): ?>
-						<?php if (!empty($displayList)): ?>
-							<?php
-							$counter = isset($start_number) ? (int)$start_number : 1;
-							$rendered = 0;
-							foreach ($displayList as $enquiry):
-								// Enforce plan limit across pagination using global index (skip for unlimited plans)
-								if (!$is_unlimited && $limit > 0 && $counter > $limit) {
-									$counter++;
-									continue;
-								}
-							?>
-								<tr>
-									<td><?php echo $counter; ?></td>
-									<td><?php echo isset($enquiry->enquiry_id) ? 'ENQ-' . str_pad($enquiry->enquiry_id, 4, '0', STR_PAD_LEFT) : 'N/A'; ?></td>
-									<td><?php echo htmlspecialchars((string) $enquiry->enquiry_name); ?> <span><?php echo e(us_date($enquiry->enquiry_created_at)); ?></span></td>
-									<td><?php echo htmlspecialchars($enquiry->enquiry_email); ?></td>
-									<td>
-										<button type="button" class="enq-view-btn" onclick="openEnquiryModal(<?php echo $enquiry->enquiry_id; ?>)"
-											data-id="<?php echo $enquiry->enquiry_id; ?>"
-											data-name="<?php echo htmlspecialchars($enquiry->enquiry_name); ?>"
-											data-email="<?php echo htmlspecialchars($enquiry->enquiry_email); ?>"
-											data-phone="<?php echo htmlspecialchars($enquiry->enquiry_mobile); ?>"
-											data-message="<?php echo htmlspecialchars($enquiry->enquiry_message); ?>"
-											data-source="<?php echo htmlspecialchars($enquiry->enquiry_source); ?>"
-											data-type="<?php echo htmlspecialchars($enquiry->enquiry_type); ?>"
-											data-url="<?php if (!empty($enquiry->listing_id)): ?>listing-details?src=<?php echo urlencode((string) $enquiry->enquiry_source); ?>&amp;code=<?php echo (int) $enquiry->listing_id; ?><?php else: ?>-<?php endif; ?>"
-											data-date="<?php echo e_attr(us_date($enquiry->enquiry_created_at)); ?>">
-											View
-										</button>
-										<form method="post" action="<?= e_attr(base_url('user/delete-enquiry/' . (int) $enquiry->enquiry_id)) ?>" style="display:inline;"
-											  onsubmit="return confirm('Are you sure you want to delete this enquiry?');">
-											<button type="submit" class="enq-delete-btn" style="border:0;cursor:pointer;">Delete</button>
-										</form>
-									</td>
-								</tr>
-								<?php
-								$counter++;
-								$rendered++;
-
-								// Stop showing more enquiries if we hit the plan limit (skip for unlimited plans)
-								if (!$is_unlimited && $limit > 0 && $rendered >= $limit) {
-									break;
-								}
-								?>
-							<?php endforeach; ?>
-							<?php if ($rendered === 0): ?>
-								<tr>
-									<td colspan="5" style="text-align: center; padding: 20px;">No enquiries available!</td>
-								</tr>
-							<?php endif; ?>
-						<?php else: ?>
+					<?php if (!empty($displayList)): ?>
+						<?php
+						$counter = isset($start_number) ? (int)$start_number : 1;
+						foreach ($displayList as $enquiry):
+						?>
 							<tr>
-								<td colspan="5" style="text-align: center; padding: 20px;">No enquiries available!</td>
+								<td><?php echo $counter; ?></td>
+								<td><?php echo isset($enquiry->enquiry_id) ? 'ENQ-' . str_pad($enquiry->enquiry_id, 4, '0', STR_PAD_LEFT) : 'N/A'; ?></td>
+								<td><?php echo htmlspecialchars((string) $enquiry->enquiry_name); ?> <span><?php echo e(us_date($enquiry->enquiry_created_at ?? '')); ?></span></td>
+								<td><?php echo htmlspecialchars((string) $enquiry->enquiry_email); ?></td>
+								<td><?= e($enquiry->enquiry_source ?? '') ?></td>
+								<td>
+									<button type="button" class="enq-view-btn" onclick="openEnquiryModal(<?php echo $enquiry->enquiry_id; ?>)"
+										data-id="<?php echo $enquiry->enquiry_id; ?>"
+										data-name="<?php echo htmlspecialchars((string) $enquiry->enquiry_name); ?>"
+										data-email="<?php echo htmlspecialchars((string) $enquiry->enquiry_email); ?>"
+										data-phone="<?php echo htmlspecialchars((string) $enquiry->enquiry_mobile); ?>"
+										data-message="<?php echo htmlspecialchars((string) $enquiry->enquiry_message); ?>"
+										data-source="<?php echo htmlspecialchars((string) $enquiry->enquiry_source); ?>"
+										data-type="<?php echo htmlspecialchars((string) $enquiry->enquiry_type); ?>"
+										data-url="<?php if (!empty($enquiry->listing_id)): ?>listing-details?src=<?php echo urlencode((string) $enquiry->enquiry_source); ?>&amp;code=<?php echo (int) $enquiry->listing_id; ?><?php else: ?>-<?php endif; ?>"
+										data-date="<?php echo e_attr(us_date($enquiry->enquiry_created_at ?? '')); ?>">
+										View
+									</button>
+									<form method="post" action="<?= e_attr(base_url('user/delete-enquiry/' . (int) $enquiry->enquiry_id)) ?>" style="display:inline;"
+										  onsubmit="return confirm('Are you sure you want to delete this enquiry?');">
+										<button type="submit" class="enq-delete-btn" style="border:0;cursor:pointer;">Delete</button>
+									</form>
+								</td>
 							</tr>
-						<?php endif; ?>
+							<?php $counter++; ?>
+						<?php endforeach; ?>
 					<?php else: ?>
 						<tr>
-							<td colspan="5" style="text-align: center; padding: 20px;">
-								<div style="color:#6c757d;font-size:14px;">
-									<i class="fas fa-lock" style="margin-right:8px;"></i>
-									Premium subscription required to view enquiries
-								</div>
+							<td colspan="6" style="text-align: center; padding: 20px;">
+								No enquiries yet. When a customer presses <strong>Get a quote</strong> on one of your listings it appears here.
 							</td>
 						</tr>
 					<?php endif; ?>
@@ -186,13 +95,11 @@
 			</table>
 
 			<!-- Pagination -->
-			<?php if ($has_subscription): ?>
-				<div class="float-right mt-3">
-					<?php if ($used_count > $per_page && !empty($link)): ?>
-						<?php echo $link; ?>
-					<?php endif; ?>
-				</div>
-			<?php endif; ?>
+			<div class="float-right mt-3">
+				<?php if ($used_count > $per_page && !empty($link)): ?>
+					<?php echo $link; ?>
+				<?php endif; ?>
+			</div>
 		</div>
 	</div>
 </div>
@@ -471,8 +378,9 @@
 					return;
 				}
 
-				const nameCell = row.querySelector('td:nth-child(2)'); // Name column
-				const emailCell = row.querySelector('td:nth-child(3)'); // Email column
+				// Column 2 is the enquiry number; name and email are 3 and 4.
+				const nameCell = row.querySelector('td:nth-child(3)'); // Name column
+				const emailCell = row.querySelector('td:nth-child(4)'); // Email column
 
 				if (nameCell && emailCell) {
 					const nameText = nameCell.textContent.toLowerCase();

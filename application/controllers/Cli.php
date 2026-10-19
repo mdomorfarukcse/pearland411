@@ -167,6 +167,12 @@ class Cli extends CI_Controller
             return;
         }
 
+        // Warn first, then charge: a customer whose card is about to be taken
+        // hears about it a few days ahead (tracker: "the owner will be
+        // notified that the charges will be deducted").
+        $reminded = $this->send_renewal_reminders();
+        echo 'reminders sent: ' . $reminded . "\n";
+
         $subs = $this->usermodel->getRenewableSubscriptions();
         echo 'due: ' . count($subs) . "\n";
         $ok = 0; $retry = 0; $expired = 0; $skipped = 0;
@@ -200,6 +206,7 @@ class Cli extends CI_Controller
 
             if (!empty($res['success'])) {
                 $this->usermodel->recordRenewalSuccess($sub, $amount, $currency, $res['transactionId'], $res['approvalCode']);
+                $this->notify_renewal_receipt($sub, $amount, $currency, $res['transactionId']);
                 $this->notify_admins_renewal($sub, 'renewed', array(
                     'amount'   => $amount,
                     'currency' => $currency,
@@ -333,6 +340,91 @@ class Cli extends CI_Controller
     }
 
     /** Best-effort dunning / expiry email. Never aborts the cron. */
+    /**
+     * Email every customer whose auto-renewal falls due within
+     * `renewal_reminder_days` (default 3, /admin/setting): what will be
+     * charged, to which card, when, and how to stop it. Once per charge —
+     * Usermodel::markRenewalReminded() records which billing date it covered.
+     *
+     * Before this, the only email a customer ever got about a renewal was the
+     * one saying it had FAILED; a successful charge arrived unannounced.
+     *
+     * @return int reminders sent
+     */
+    private function send_renewal_reminders()
+    {
+        $days = max(1, (int) site_setting('renewal_reminder_days', 3));
+        $sent = 0;
+
+        foreach ($this->usermodel->getSubscriptionsDueForReminder($days) as $sub) {
+            try {
+                $u = $this->db->select('email_id, name')->from('user')->where('user_id', (int) $sub->user_id)->get()->row();
+                $amount = $this->usermodel->renewalAmountFor($sub);
+                if (!$u || empty($u->email_id) || $amount <= 0) {
+                    // Nothing to tell, and nothing will be charged — mark it so
+                    // the same row is not re-read every night until it falls due.
+                    $this->usermodel->markRenewalReminded($sub);
+                    continue;
+                }
+
+                $plan     = $this->usermodel->getPlanById(!empty($sub->pending_plan_id) ? (int) $sub->pending_plan_id : (int) $sub->plan_id);
+                $currency = !empty($sub->currency) ? $sub->currency : 'USD';
+                $card     = $this->usermodel->vaultedCardLabel((int) $sub->user_id);
+                $when     = date('F j, Y', strtotime($sub->next_billing_date));
+                $esc      = function ($v) { return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'); };
+
+                $body = '<p>Hi ' . $esc($u->name) . ',</p>'
+                    . '<p>Your Pearland411 <strong>' . $esc($plan ? $plan->name : 'subscription') . '</strong> renews automatically on <strong>'
+                    . $esc($when) . '</strong>. On that day we will charge <strong>' . $esc($currency . ' ' . number_format($amount, 2)) . '</strong> to '
+                    . ($card !== '' ? 'your ' . $esc($card) : 'the card on file') . '.</p>'
+                    . '<p>Nothing to do if you want to keep it. To stop the renewal, turn off auto-renew from '
+                    . '<a href="' . base_url('user/my_account') . '">your account</a> before then — your plan stays active until the end of the term you have paid for.</p>'
+                    . '<p>Questions about this charge? Reply to this email or <a href="' . base_url('contact-us') . '">contact us</a>. '
+                    . 'Our <a href="' . base_url('terms-of-use') . '#refunds">refund &amp; cancellation policy</a> is on the website.</p>';
+
+                $html = $this->mailer->render('Your renewal is coming up', $body, array(
+                    'preheader' => 'We will charge ' . $currency . ' ' . number_format($amount, 2) . ' on ' . $when . '.',
+                ));
+                if ($this->mailer->send($u->email_id, 'Upcoming Pearland411 renewal on ' . $when, $html, null, array('log_type' => 'renewal_reminder'))) {
+                    $sent++;
+                }
+                // Marked whether or not the send worked: a dead mailbox must
+                // not be retried every night. email_log has the failure.
+                $this->usermodel->markRenewalReminded($sub);
+            } catch (Exception $e) {
+                log_message('error', 'Renewal reminder failed for subscription ' . $sub->id . ': ' . $e->getMessage());
+            }
+        }
+        return $sent;
+    }
+
+    /** The customer's receipt for a successful automatic renewal. */
+    private function notify_renewal_receipt($sub, $amount, $currency, $txn)
+    {
+        try {
+            $u = $this->db->select('email_id, name')->from('user')->where('user_id', (int) $sub->user_id)->get()->row();
+            if (!$u || empty($u->email_id)) return;
+
+            $fresh = $this->db->where('id', (int) $sub->id)->get('subscriptions')->row();
+            $plan  = $this->usermodel->getPlanById($fresh ? (int) $fresh->plan_id : (int) $sub->plan_id);
+            $card  = $this->usermodel->vaultedCardLabel((int) $sub->user_id);
+            $esc   = function ($v) { return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8'); };
+
+            $body = '<p>Hi ' . $esc($u->name) . ',</p>'
+                . '<p>Your Pearland411 <strong>' . $esc($plan ? $plan->name : 'subscription') . '</strong> has renewed. We charged <strong>'
+                . $esc($currency . ' ' . number_format((float) $amount, 2)) . '</strong> to ' . ($card !== '' ? 'your ' . $esc($card) : 'the card on file')
+                . ($txn ? ' (transaction ' . $esc($txn) . ')' : '') . '.</p>'
+                . ($fresh && !empty($fresh->end_date) ? '<p>Your plan now runs until <strong>' . $esc(date('F j, Y', strtotime($fresh->end_date))) . '</strong>.</p>' : '')
+                . '<p>To stop future renewals, turn off auto-renew from <a href="' . base_url('user/my_account') . '">your account</a>. '
+                . 'See our <a href="' . base_url('terms-of-use') . '#refunds">refund &amp; cancellation policy</a>.</p>';
+
+            $html = $this->mailer->render('Payment received — thank you', $body);
+            $this->mailer->send($u->email_id, 'Your Pearland411 renewal receipt', $html, null, array('log_type' => 'renewal_receipt'));
+        } catch (Exception $e) {
+            log_message('error', 'Renewal receipt failed: ' . $e->getMessage());
+        }
+    }
+
     private function notify_renewal_failure($user_id, $outcome)
     {
         try {

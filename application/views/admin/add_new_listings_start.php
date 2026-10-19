@@ -477,6 +477,18 @@
                       </div>
                       <!--FILED END-->
 
+                      <?php // The header banner (listings.cover_image) — the wide picture
+                            // behind the business name at the top of its page. ?>
+                      <div class="row">
+                        <div class="col-md-12">
+                          <div class="form-group">
+                            <label>Header banner (top of the listing page)</label>
+                            <input type="file" name="cover_image" class="form-control" accept="image/*">
+                            <small class="form-text text-muted">Optional. <?= image_guidance('cover') ?></small>
+                          </div>
+                        </div>
+                      </div>
+
                       <!--GALLERY IMAGES START-->
                       <div class="row">
                         <div class="col-md-12">

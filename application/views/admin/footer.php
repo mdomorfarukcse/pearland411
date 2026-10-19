@@ -16,11 +16,11 @@
 
 <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js" integrity="sha256-VazP97ZCwtekAsvgPBSUwPFKdrwD3unUfSGVYrahUqU=" crossorigin="anonymous"></script>
 
-<script src="<?= base_url() ?>/assets/admin/js/admin-custom.js"></script>
+<script src="<?= base_url('assets/admin/js/admin-custom.js') ?>?v=<?= @filemtime(FCPATH . 'assets/admin/js/admin-custom.js') ?: 1 ?>"></script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chosen/1.8.7/chosen.jquery.min.js"></script>
 
-<script src="<?= base_url('assets/js/customCode2.js'); ?>"></script>
+<script src="<?= base_url('assets/js/customCode2.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/customCode2.js') ?: 1 ?>"></script>
 <!-- Select2 JS CDN -->
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>

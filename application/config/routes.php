@@ -189,3 +189,11 @@ $route['blog_details/(:any)']  = 'user/blog_details/$1';
 $route['rental-details/(:any)'] = 'user/rental-details/$1';
 // House 
 $route['house-details/(:any)'] = 'user/house-details/$1';
+
+// /user/coupons is where the old "Post a deal" buttons — and the links already
+// in testers' bookmarks and the tracker — pointed. It resolved to User::coupons,
+// the PUBLIC deals page, so a member asking to post a deal was shown the list of
+// everybody else's. It is the member's own deals screen now; the public page is
+// /coupons. Logged-out visitors are sent to sign in and come back here.
+$route['user/coupons'] = 'User/my_coupons';
+$route['user/coupons/(:any)'] = 'User/my_coupons';

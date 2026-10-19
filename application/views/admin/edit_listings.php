@@ -148,6 +148,10 @@
     <div class="ad-dash leftpadd">
       <div class="login-reg">
         <div class="container">
+          <?php // A failed save redirects back here with a reason; nothing printed it. ?>
+          <?php if ($this->session->flashdata('error')): ?>
+            <div class="alert alert-danger" style="margin:0 0 16px;"><?= e($this->session->flashdata('error')) ?></div>
+          <?php endif; ?>
           <!-- Multi-step progress bar -->
           <div class="multistep-progress-bar">
             <div class="multistep-progress-line" style="width: 33.33%;"></div>
@@ -427,6 +431,21 @@
                         </div>
                         <div class="col-md-12">
                           <?php
+                          // The header banner: the wide picture behind the business
+                          // name at the top of its page (listings.cover_image). Neither
+                          // admin form could set it, so every listing the team entered
+                          // showed the stock background.
+                          $mf_name    = 'cover_image';
+                          $mf_label   = 'Header banner (top of the listing page)';
+                          $mf_hint    = 'Optional. Leave empty to keep the current one. ' . image_guidance('cover');
+                          $mf_current = $listing->cover_image ?? '';
+                          $mf_remove  = 'remove_cover_image';
+                          $mf_empty   = 'No header banner &mdash; the page uses the standard background.';
+                          include APPPATH . 'views/admin/partials/media_field.php';
+                          ?>
+                        </div>
+                        <div class="col-md-12">
+                          <?php
                           $mf_name     = 'listing_image_gallery[]';
                           $mf_id       = 'listing_image_gallery';
                           $mf_label    = 'Upload Gallery Images (Multiple Images)';
@@ -516,6 +535,110 @@
             </div>
 
           </form>
+
+          <?php
+          /* Category-specific banners sold to THIS business (Admin::listing_banner_add).
+             Its own form — forms cannot nest, and booking a banner must not
+             depend on the listing form validating. */
+          $lb_zones    = isset($banner_zones) ? $banner_zones : array();
+          $lb_booked   = isset($listing_banners) ? $listing_banners : array();
+          $lb_can_book = !empty($can_book_banners);
+          ?>
+          <div id="banners" class="card" style="margin:28px 0 10px;padding:22px;border:1px solid #e4e6ec;border-radius:12px;background:#fff;">
+            <h4 style="margin:0 0 6px;">Category banners for this business</h4>
+            <?php if ($this->session->flashdata('banner_message')): ?>
+              <div class="alert alert-success" style="margin:8px 0 12px;"><?= e($this->session->flashdata('banner_message')) ?></div>
+            <?php endif; ?>
+            <?php if ($this->session->flashdata('banner_error')): ?>
+              <div class="alert alert-danger" style="margin:8px 0 12px;"><?= e($this->session->flashdata('banner_error')) ?></div>
+            <?php endif; ?>
+            <p class="text-muted" style="margin:0 0 16px;">
+              The <a href="<?= base_url('pricing-plan') ?>#pp-category-banners" target="_blank">Category Specific Banners</a>
+              this business has bought &mdash; header, middle, bottom and right-hand banners that run only on one
+              category&rsquo;s directory pages. The <em>header banner</em> in the form above is different: it is the
+              picture at the top of this business&rsquo;s own page.
+            </p>
+
+            <?php if (!empty($lb_booked)): ?>
+              <table class="table table-sm" style="margin-bottom:18px;">
+                <thead><tr><th>Banner</th><th>Position</th><th>Category</th><th>Runs</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                <?php foreach ($lb_booked as $lb): ?>
+                  <?php $lb_live = (int) $lb->ad_status === 1 && strtotime($lb->ad_start_date) <= time() && strtotime($lb->ad_end_date) >= time(); ?>
+                  <tr>
+                    <td><?php if (!empty($lb->ad_photo)): ?><img src="<?= e_url(base_url($lb->ad_photo)) ?>" alt="" style="max-width:160px;max-height:60px;border-radius:4px;" data-lightbox><?php endif; ?></td>
+                    <td><?= e($lb->zone_name ?? '') ?><?= !empty($lb->size) ? ' <small class="text-muted">(' . e($lb->size) . ')</small>' : '' ?></td>
+                    <td><?= e($lb->category_name ?? '') ?></td>
+                    <td><?= e(us_date($lb->ad_start_date)) ?> &ndash; <?= e(us_date($lb->ad_end_date)) ?></td>
+                    <td><?= $lb_live ? '<span style="color:#2e7d32;font-weight:600;">Live</span>' : (strtotime($lb->ad_end_date) < time() ? 'Ended' : 'Scheduled') ?></td>
+                    <td>
+                      <?php if ($lb_can_book): ?>
+                        <form method="post" action="<?= base_url('admin/listing_banner_remove/' . (int) $lb->id) ?>" onsubmit="return confirm('Remove this banner? It stops showing immediately.');" style="display:inline;">
+                          <input type="hidden" name="<?= e_attr($this->security->get_csrf_token_name()) ?>" value="<?= e_attr($this->security->get_csrf_hash()) ?>">
+                          <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                        </form>
+                      <?php endif; ?>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+                </tbody>
+              </table>
+            <?php else: ?>
+              <p style="margin:0 0 16px;">No category banners booked for this business yet.</p>
+            <?php endif; ?>
+
+            <?php if (!$lb_can_book): ?>
+              <p class="text-muted" style="margin:0;">Booking a paid banner is a super-admin task (ad sales). Ask a super-admin to add it here.</p>
+            <?php elseif (empty($banner_tracking)): ?>
+              <p class="alert alert-warning" style="margin:0;">Run <code>database/migrations/0036_tracker_round3.sql</code> to book banners from this screen.</p>
+            <?php elseif (empty($lb_zones)): ?>
+              <p class="alert alert-warning" style="margin:0;">No category banner positions are set up. Check the Category Specific Banners packages at <a href="<?= base_url('admin/pricing-plan') ?>">Pricing Plans</a>.</p>
+            <?php else: ?>
+              <form method="post" enctype="multipart/form-data" action="<?= base_url('admin/listing_banner_add/' . (int) $listing->listing_id) ?>">
+                <input type="hidden" name="<?= e_attr($this->security->get_csrf_token_name()) ?>" value="<?= e_attr($this->security->get_csrf_hash()) ?>">
+                <div class="row">
+                  <div class="col-md-6 form-group">
+                    <label for="lb_zone">Banner position</label>
+                    <select id="lb_zone" name="ads_price_id" class="form-control no-select2" required>
+                      <option value="">Choose…</option>
+                      <?php foreach ($lb_zones as $z): ?>
+                        <option value="<?= (int) $z->id ?>"><?= e($z->plan_name ?: $z->name) ?><?= $z->size ? ' — ' . e($z->size) . ' px' : '' ?> — $<?= e(number_format((float) $z->price, 2)) ?> / <?= (int) ($z->duration_days ?: 30) ?> days</option>
+                      <?php endforeach; ?>
+                    </select>
+                  </div>
+                  <div class="col-md-6 form-group">
+                    <label for="lb_cat">Runs in category</label>
+                    <select id="lb_cat" name="category_id" class="form-control no-select2" required>
+                      <?php foreach ((array) $categories as $c): ?>
+                        <option value="<?= (int) $c->category_id ?>" <?= (int) $c->category_id === (int) $listing->category_id ? 'selected' : '' ?>><?= e($c->category_name) ?></option>
+                      <?php endforeach; ?>
+                    </select>
+                  </div>
+                  <div class="col-md-6 form-group">
+                    <label for="lb_photo">Banner artwork</label>
+                    <input type="file" id="lb_photo" name="ad_photo" class="form-control" accept="image/*" required>
+                    <small class="form-text text-muted">Match the position&rsquo;s size shown in the list. JPG, PNG, GIF or WebP.</small>
+                  </div>
+                  <div class="col-md-6 form-group">
+                    <label for="lb_link">Clicks go to</label>
+                    <input type="text" id="lb_link" name="ad_link" class="form-control" placeholder="<?= e_attr(base_url('listing-details/' . $listing->listing_slug)) ?>">
+                    <small class="form-text text-muted">Leave empty to link to this business&rsquo;s page.</small>
+                  </div>
+                  <div class="col-md-3 form-group">
+                    <label for="lb_start">Start</label>
+                    <input type="date" id="lb_start" name="ad_start_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                  </div>
+                  <div class="col-md-3 form-group">
+                    <label for="lb_end">End</label>
+                    <input type="date" id="lb_end" name="ad_end_date" class="form-control" value="<?= date('Y-m-d', strtotime('+29 days')) ?>" required>
+                  </div>
+                  <div class="col-md-6 form-group" style="display:flex;align-items:flex-end;">
+                    <button type="submit" class="btn btn-primary">Book category banner</button>
+                  </div>
+                </div>
+              </form>
+            <?php endif; ?>
+          </div>
         </div>
       </div>
     </div>

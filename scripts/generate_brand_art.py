@@ -337,7 +337,7 @@ FAMILIES = {
             "one":   "Your ad here — reach Pearland",
             "big":   ["Advertise where", "Pearland searches"],
             "small": "Banner positions across the site.",
-            "price": "from $20/mo",
+            "price": "",  # no figure baked into artwork: prices change at /admin/pricing
             "cta":   "See packages",
         },
         "alt": "Advertise your business on Pearland411",
@@ -353,7 +353,7 @@ FAMILIES = {
             "one":   "Reach thousands of local customers",
             "big":   ["Reach thousands of", "Pearland customers"],
             "small": "Be where local customers already look.",
-            "price": "from $20/mo",
+            "price": "",  # no figure baked into artwork: prices change at /admin/pricing
             "cta":   "Advertise",
         },
         "alt": "Reach thousands of Pearland customers — advertise on Pearland411",
@@ -369,7 +369,7 @@ FAMILIES = {
             "one":   "Featured business placement",
             "big":   ["Featured business", "placement available"],
             "small": "Top of the homepage and your category.",
-            "price": "from $20/mo",
+            "price": "",  # no figure baked into artwork: prices change at /admin/pricing
             "cta":   "Get featured",
         },
         "alt": "Featured business placement available on Pearland411",
@@ -385,7 +385,7 @@ FAMILIES = {
             "one":   "Get in front of local customers",
             "big":   ["Get your business in", "front of local customers"],
             "small": "Homepage, directory and category banners.",
-            "price": "from $20/mo",
+            "price": "",  # no figure baked into artwork: prices change at /admin/pricing
             "cta":   "View packages",
         },
         "alt": "Get your business in front of local customers on Pearland411",

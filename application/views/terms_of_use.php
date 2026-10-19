@@ -203,18 +203,20 @@
                         While we strive to ensure accuracy, Pearland411 does not guarantee that all listings or information are current, complete, or error-free. Users are encouraged to verify details directly with businesses.</p>
 
                     <p><strong>7. Paid Plans & Services</strong><br>
-                        Pearland411 may offer premium plans or paid features. By purchasing a paid service, you agree to the related pricing, terms, and payment policies listed during checkout.</p>
+                        Pearland411 offers paid listing plans and advertising packages, priced on our <a href="<?= e_url(base_url('pricing-plan')) ?>">pricing page</a>. By purchasing a paid service, you agree to the price shown at checkout and to the Refund &amp; Cancellation Policy in section 8.</p>
 
-                    <p><strong>8. Limitation of Liability</strong><br>
+                    <?php $rp_number = '8.'; include APPPATH . 'views/partials/refund_policy.php'; unset($rp_number); ?>
+
+                    <p><strong>9. Limitation of Liability</strong><br>
                         Pearland411 and its team are not liable for any losses, damages, or issues arising from the use of our website or reliance on information provided by third parties.</p>
 
-                    <p><strong>9. Termination of Use</strong><br>
+                    <p><strong>10. Termination of Use</strong><br>
                         We reserve the right to suspend or remove any account or listing that violates our terms, causes harm, or misuses the platform in any way.</p>
 
-                    <p><strong>10. Changes to These Terms</strong><br>
+                    <p><strong>11. Changes to These Terms</strong><br>
                         We may update these Terms of Use periodically. Continued use of the website after updates means you accept the revised terms.</p>
 
-                    <p><strong>11. Contact Us</strong><br>
+                    <p><strong>12. Contact Us</strong><br>
                         If you have questions about these Terms of Use, please contact us at:</p>
 
                     <div class="contact-info">

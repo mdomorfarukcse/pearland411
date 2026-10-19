@@ -6,6 +6,186 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-10-19 — PEARLAND411 PROJECT TRACKER 2: all 17 rows
+
+Worked from the "Website error report sheet" PDF (Angel, Jana, anish, Monette). Every
+row was reproduced or traced against a local copy (MariaDB 10.11, PHP 8.3, a schema
+rebuilt from the code, Chromium driving the admin screens) before it was fixed, and
+re-tested afterwards. **Run migration 0036** (`database/migrations/0036_tracker_round3.sql`,
+also appended to `database/migrations_combined_phpmyadmin.sql`; idempotent, run twice
+on a fresh and on a populated schema).
+
+### Fixed — the "This page isn't working" errors (Monette: news, videos)
+
+- **Adding news or a video was an HTTP 500** whenever "Featured" was left unticked.
+  The checkbox posts nothing, the controller wrote that NULL into `featured_news` /
+  `featured_video`, the live columns are NOT NULL, and on PHP 8.1+ mysqli throws
+  instead of returning FALSE — so the error never reached the "could not save"
+  branch. Reproduced locally (`Column 'featured_news' cannot be null`), then fixed
+  twice over: the flags are written as 0/1, and the writes go through the new
+  **`db_safe_insert()` / `db_safe_update()`** (`application/helpers/db_safe_helper.php`,
+  autoloaded), which fit a row to the live table — unknown columns dropped, NULL or ''
+  for a NOT NULL column turned into its default / 0 / '' / now — and catch the
+  exception, so a refused row is a message, never a 500. Admin and member add/edit
+  for news and video use it; `Usermodel::addEnquiry()` (the first copy of the rule)
+  now calls it. The same unticked-checkbox NULL is fixed on listing featured/spotlight,
+  classifieds, marketplace and event `isenquiry` (which stored the string "on").
+- The member news edit deleted the old picture before the upload ran (the bug fixed
+  for videos last round) — fixed the same way.
+
+### Fixed — pricing (Angel: "Still can't edit the pricing"; outreach prices differ)
+
+- **The plan editor's Save button could not be clicked.** A stray `</div>` in
+  `views/admin/pricing.php` closed `.modal-content` before the footer, putting
+  "Save Plan" under `.modal-dialog`, which Bootstrap gives `pointer-events: none`.
+  The modal opened and filled in; no click ever reached Save. Verified in Chromium
+  before and after: price and base term now save together.
+- **Prices typed into nine pages.** "from $20 a month" was hard-coded on the homepage,
+  About, Events, Videos, News, Directory, Classifieds, Categories and Contact — two of
+  them wrong already (no top or category banner costs $20). They now read the live
+  lowest monthly price from `plans` (`ad_price_from()` in `view_helper.php`). The
+  generated house-ad artwork no longer bakes a price in (`scripts/generate_brand_art.py`,
+  re-run; 39 SVGs changed text only).
+- `admin-custom.js` fetched a non-existent `city_search.html` on every admin page and
+  threw; it now runs only where its search box exists.
+
+### Fixed / added — pricing page copy (anish: add-ons one-time or recurring; skyscraper vs right banner)
+
+- Every card now says what happens to the **card**: one-time ("your card is charged
+  once … it never renews") or recurring only with auto-renew ("charged every month
+  until you cancel, and we email you before each charge"). A line under the hero says
+  the same for the whole catalogue and links the refund policy. Checkout's auto-renew
+  box says the same.
+- **Customers are now told before an automatic renewal charge**, and get a receipt
+  after it: `Cli::renew_subscriptions` emails each auto-renewing customer
+  `renewal_reminder_days` (default 3, `/admin/setting`) before the charge — once per
+  charge, via `subscriptions.renewal_reminded_for` (0036) — and a receipt on success.
+  Before, the only renewal email a customer ever got was the failure notice.
+- Banner and video cards state the zone's **real size** from `ads_prices.size`
+  ("295 × 600 px tall skyscraper", "300 × 250 px box banner"), not the free-text
+  description that used to say 900x100. The prices themselves are the client's call —
+  now editable at `/admin/pricing-plan` (above).
+- Listing-tier cards list what the listing may carry (logo + N photos, N videos, map,
+  services) from the same flags the forms enforce.
+
+### Added — category banners and header banner in Business Listings (Angel)
+
+- **Header banner**: the admin add and edit listing forms upload `listings.cover_image`,
+  the picture at the top of `/listing-details` (no admin form could set it).
+- **Category banners for this business**: a section at the foot of
+  `/admin/edit-listing/<slug>` (and a "Banners" link on every row of `/admin/all_listings`)
+  books a Category Specific Banner — Category Header Banner, middle, bottom, right
+  #1/#2 — for that business: position, category (its own by default), artwork, link
+  (its page by default), dates; priced from the package; listed with Live/Scheduled/Ended
+  and a Remove button. `Admin::listing_banner_add` / `listing_banner_remove` (POST,
+  super-admin, like the rest of ad sales); `ads.listing_id` (0036) records the business.
+- **`primeAdSlots()` leaked category bookings onto every page.** The cached ad lookup
+  never filtered `category_id`, so a banner sold for one category would also have run
+  on the homepage and every primed page. Untargeted bookings only now, as
+  `getAdForSlot()` always did. Verified: a Medical & Dental header banner shows on that
+  category only.
+- `/admin/create-ads` and `ads_edit` stored dates with 12-hour `h`, so every booking
+  started and ended at noon; whole days now. `getAllAds()` LEFT-joins the advertiser so a
+  booking for an unclaimed business still lists.
+
+### Fixed — Get a quote (Jana)
+
+- The button scrolled to a card in the sidebar — far down the page on a phone, which
+  read as "redirects to the quote form". It now **opens the quote form for that business
+  in a dialog** (the sidebar card itself, moved in and back — still one form), showing
+  the business's logo, name and category, and sends it over XHR with an inline
+  confirmation ("sent to <business> …"); the no-JS post still works and reopens the
+  dialog on return.
+- **`customCode.js` replaced `window.fetch` on every public page** with a theme stub
+  (`function fetch(){…}` posting to `user/user_events_list`), so every `fetch()` returned
+  undefined — including the `/checkout` payment button, the review-moderation switch
+  and this form. Removed from `customCode.js` and `customCode2.js`; both script tags
+  (and `admin-custom.js`) are now cache-busted by mtime.
+
+### Fixed — Post a deal (Jana)
+
+- `/user/coupons` (the URL in the tracker and in old links) now routes to the member's
+  own deals screen; it showed the public deals page. Members without a published listing
+  get a guide: what is missing (nothing yet / a listing not published / a claim under
+  review) and buttons to add or claim a business.
+
+### Fixed — Add listing (anish: no confirmation, no email; returned to Step 1)
+
+- The wizard's slug had no uniqueness pass, so a business with an existing name failed
+  the insert where `listing_slug` is unique (`Usermodel::uniqueListingSlug()` now); a
+  failure redirected to an empty Step 1 with a flash nobody printed, while the page
+  printed "DEBUG: POST data received" and "SUCCESS: Form submission detected"; a member
+  with no plan was refused only after all three steps, with a message My Listings never
+  printed. Now: a refused submission re-renders the wizard with the reason and every
+  value kept; a member with no plan is started on the free Basic plan (shown up front);
+  success lands on **`/user/listing-submitted/<id>`** — status, link, plan, what next —
+  and **emails a confirmation** to the member and a heads-up to the office
+  (`form_recipient_email()`); the insert goes through `db_safe_insert()`.
+
+### Added — plan-based media limits (Angel: Basic gets no logo/photos/video; per-plan limits)
+
+- The add wizard and the member edit form enforce the plan: Basic (can_photos and
+  allow_video off) gets no logo, gallery or video — the fields are replaced by an
+  upgrade note, and the server refuses them too; paid plans are capped by `photo_limit`
+  and the new **`plans.listing_video_limit`** (0036; default 1, special package
+  unlimited; editable at `/admin/pricing` → "Listing Video Limit"). Anything over the
+  limit is now reported ("your plan includes 1 video; only the first link was kept")
+  instead of being dropped silently. Map, services and SEO fields are gated at
+  creation as they already were on edit. One parser for video links
+  (`listing_video_urls()`: commas or new lines — the listing page split on commas only).
+
+### Added — My Claims (anish)
+
+- **`/user/my-claims`** — every business the member asked to claim, with Pending
+  review / Approved / Not approved and what happens next (manage the listing and its
+  enquiries; or send a new claim with more proof). A **My listings | My claims** tab strip
+  heads both screens (`views/partials/listing_tabs.php`); sidebar link added.
+  A rejected claim no longer blocks a new one (it used to — and called it "pending").
+
+### Fixed — claimed listings' enquiries go to the owner (Angel)
+
+- **The member Leads page showed nothing without a paid plan** ("Premium subscription
+  required to view enquiries"), so the owner of a claimed (free) listing never saw its
+  quote requests — they reached only the admin team. Leads are shown to every owner now.
+- A listing's enquiries follow whoever owns it **now**
+  (`Usermodel::applyEnquiryReceiverScope()`); approving a claim also re-addresses them
+  (`moveListingEnquiries()`) and says so in the approval email; 0036 back-fills claims
+  approved before today.
+- The member dashboard shows the latest enquiries; the "Last week report" panel, which
+  was static HTML ("00" leads, "02" views for everyone), shows real figures.
+- **My Listings showed nothing without a paid plan** and hid owned listings past the
+  plan limit; it now lists every listing the member owns, with Live / Not published yet.
+
+### Added — refund & cancellation policy (anish: Terms, FAQ)
+
+- `views/partials/refund_policy.php`, section 8 of `/terms-of-use` (anchor `#refunds`)
+  and FAQ 11–12 (`/faq#refunds` opens it): what renews and what does not, **self-service
+  cancellation** (My Account → Cancel auto-renew; plan runs to the end of the paid term),
+  refunds by **contacting support** (charged in error / placement could not run), the
+  request window and support contacts. `refund_request_days` (default 30) and optional
+  `refund_policy_extra` wording are at `/admin/setting` — **the client should confirm the
+  refund terms**. FAQ 4 no longer promises a 24–48 hour approval for listings that go
+  live immediately.
+
+### Needs the operator / client
+
+- Run **0036** on live (and 0033–0035 if not yet run — the add-on copy and catalogue
+  corrections depend on 0033).
+- Set the prices quoted on calls at `/admin/pricing-plan` (now saves); decide the
+  skyscraper vs right-banner prices (tracker: "there should be a price change").
+- Confirm the refund policy wording and window at `/admin/setting`.
+- Outgoing mail must work for the new confirmation, reminder and receipt emails
+  (`/admin/email-diagnostics`).
+
+Key files: `application/helpers/db_safe_helper.php` (new), `application/controllers/{User,Admin,Cli}.php`,
+`application/models/{Usermodel,Adminmodel}.php`, `application/helpers/view_helper.php`,
+`application/views/{add_new_listing_start,listing_submitted,user_claims,user_listing,user_enquiry,user_dashboard,user_coupons,listing_details,pricing_plan,terms_of_use,faq}.php`,
+`application/views/partials/{listing_tabs,refund_policy}.php`, `application/views/admin/{pricing,edit_listings,add_new_listings_start,all_listings,admin_setting}.php`,
+`assets/js/customCode{,2}.js`, `assets/css/directory.css`, `application/config/{routes,autoload}.php`,
+`database/migrations/0036_tracker_round3.sql`.
+
+---
+
 ## 2026-10-10 — Tracker remaining work: 26 open rows, the contradictory six, five new bugs
 
 Worked from `PEARLAND411_REMAINING_WORK.md` (the 105-row tracker audit). Every row

@@ -4,7 +4,7 @@
 // works. cap_lock_note() renders the inline "upgrade to unlock" hint.
 $caps = isset($caps) && is_array($caps) ? $caps : array(
 	'can_photos' => true, 'photo_limit' => -1, 'can_map' => true,
-	'can_services' => true, 'can_video' => true, 'can_extra_details' => true,
+	'can_services' => true, 'can_video' => true, 'video_limit' => -1, 'can_extra_details' => true,
 );
 if (!function_exists('cap_lock_note')) {
 	function cap_lock_note($allowed)
@@ -465,8 +465,11 @@ if (!function_exists('cap_lock_note')) {
 											<div class="row">
 												<div class="col-md-12">
 													<div class="form-group">
-														<textarea id="listing_video" name="listing_video" class="form-control" placeholder="Paste Your Youtube Url here" <?= $caps['can_video'] ? '' : 'disabled' ?>><?= $listing->listing_video ?></textarea>
-														<?= cap_lock_note($caps['can_video']) ?>
+														<textarea id="listing_video" name="listing_video" class="form-control" placeholder="Paste Your Youtube Url here" <?= $caps['can_video'] ? '' : 'disabled' ?>><?= e($listing->listing_video) ?></textarea>
+														<?php if ($caps['can_video'] && isset($caps['video_limit']) && (int) $caps['video_limit'] >= 0): ?>
+															<small class="form-text text-muted">Your package includes <?= (int) $caps['video_limit'] ?> YouTube video<?= (int) $caps['video_limit'] === 1 ? '' : 's' ?> &mdash; one link per line.</small>
+														<?php endif; ?>
+														<?= cap_lock_note($caps['can_video'], 'Videos') ?>
 													</div>
 												</div>
 											</div>

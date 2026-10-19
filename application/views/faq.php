@@ -160,6 +160,35 @@
             margin: 0;
         }
 
+        /* The refund & cancellation answer is the whole policy: longer than the
+           500px every other answer fits in, and it has lists the theme strips
+           of their bullets. */
+        .p411-faq-page .p411-faq-answer.show:has(.p411-refund-policy) {
+            max-height: 3000px;
+        }
+        .p411-faq-page .p411-faq-answer ul {
+            list-style: disc;
+            margin: 4px 0 12px 22px;
+            padding: 0;
+            color: #555;
+            font-size: 1.05rem;
+            line-height: 1.7;
+        }
+        .p411-faq-page .p411-faq-answer ul ul {
+            list-style: circle;
+            margin-bottom: 4px;
+        }
+        .p411-faq-page .p411-faq-answer li {
+            margin-bottom: 6px;
+        }
+        .p411-faq-page .p411-faq-answer .p411-refund-policy p em {
+            display: block;
+            margin-top: 10px;
+            font-style: normal;
+            font-weight: 600;
+            color: #180f5e;
+        }
+
         .p411-faq-page .p411-faq-answer a {
             color: #7bb73f;
             font-weight: 600;
@@ -333,7 +362,7 @@
                             </span>
                         </div>
                         <div class="p411-faq-answer">
-                            <p>Most listings are reviewed and approved within 24–48 hours. You'll receive an email notification once your business is live on the site.</p>
+                            <p>A business you add yourself goes live as soon as you submit it, and we email you a confirmation with a link to it. If you are <strong>claiming</strong> a business that is already listed, we check that it is yours first &mdash; usually within 1&ndash;2 business days &mdash; and you can follow the claim under My Listings &rarr; <a href="<?= e_url(base_url('user/my-claims')) ?>">My claims</a>.</p>
                         </div>
                     </div>
 
@@ -457,6 +486,45 @@
                         </div>
                     </div>
 
+                    <!-- FAQ Item 11 -->
+                    <div class="p411-faq-item">
+                        <div class="p411-faq-question" onclick="toggleFAQ(this)">
+                            <div class="p411-faq-question-text">
+                                <div class="p411-faq-number">11</div>
+                                <h3>Can I cancel my plan, and how?</h3>
+                            </div>
+                            <span class="p411-faq-icon">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="12" cy="12" r="11" fill="white" />
+                                    <path d="M8 10l4 4 4-4" stroke="#7bb73f" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="p411-faq-answer">
+                            <p>Yes, any time, yourself: sign in, open <a href="<?= e_url(base_url('user/my_account')) ?>">My Account</a> and press <strong>Cancel auto-renew</strong>. You are not charged again, and your plan stays active until the end of the term you have already paid for. Banners, videos and add-ons are one-time purchases that end on their own, so there is nothing to cancel. Rather not do it online? Contact support and we will do it for you.</p>
+                        </div>
+                    </div>
+
+                    <!-- FAQ Item 12 -->
+                    <div class="p411-faq-item" id="faq-refunds">
+                        <div class="p411-faq-question" onclick="toggleFAQ(this)">
+                            <div class="p411-faq-question-text">
+                                <div class="p411-faq-number">12</div>
+                                <h3>What is your refund and cancellation policy?</h3>
+                            </div>
+                            <span class="p411-faq-icon">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="12" cy="12" r="11" fill="white" />
+                                    <path d="M8 10l4 4 4-4" stroke="#7bb73f" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="p411-faq-answer">
+                            <?php // The same text as section 8 of /terms-of-use (partials/refund_policy.php). ?>
+                            <?php $rp_hide_title = TRUE; include APPPATH . 'views/partials/refund_policy.php'; unset($rp_hide_title); ?>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </section>
@@ -491,6 +559,16 @@
             element.classList.toggle('active');
             answer.classList.toggle('show');
         }
+
+        // /faq#refunds (linked from checkout and the pricing page) opens the
+        // refund & cancellation answer instead of landing on a closed list.
+        document.addEventListener('DOMContentLoaded', function () {
+            if (location.hash !== '#refunds' && location.hash !== '#faq-refunds') return;
+            var item = document.getElementById('faq-refunds');
+            if (!item) return;
+            toggleFAQ(item.querySelector('.p411-faq-question'));
+            item.scrollIntoView({ block: 'start' });
+        });
     </script>
 
 <?php $cta_variant = "banner"; include APPPATH . "views/partials/web_dev_cta.php"; ?>

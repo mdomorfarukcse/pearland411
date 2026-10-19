@@ -150,7 +150,7 @@
 	<script src="https://cdn.ckeditor.com/4.16.1/standard/ckeditor.js"></script>
 	<!--DataTable-->
 	<script src="//cdn.datatables.net/1.10.24/js/jquery.dataTables.min.js"></script>
-	<script src="<?= base_url('assets/js/customCode.js'); ?>"></script>
+	<script src="<?= base_url('assets/js/customCode.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/customCode.js') ?: 1 ?>"></script>
 	<?php // Live validation for any <form data-validate>. See the file header. ?>
 	<script src="<?= base_url('assets/js/form-validate.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/form-validate.js') ?: 1 ?>"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/owl.carousel.min.js"></script>

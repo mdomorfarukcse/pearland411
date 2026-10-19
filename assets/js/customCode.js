@@ -57,16 +57,12 @@ $(document).ready(function () {
 });
 
 
-function fetch(){
-    $.ajax({
-       url: "user/user_events_list" ,
-       type: "post",
-       dataType: "json",
-       success: function(data){
-           console.log(data);
-       }
-    });
-}
+// A global `function fetch()` stub used to live here — a theme leftover that
+// posted to user/user_events_list, called only from the commented-out line
+// above. Declared at the top level of a classic script it REPLACED
+// window.fetch on every page that loads this file, so every native fetch()
+// returned undefined: the /checkout payment button, the review moderation
+// switch and the listing page's quote form all threw "cannot read 'then'".
 
 function deleteConfirm(url)
 {

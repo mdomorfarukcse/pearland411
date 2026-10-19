@@ -399,7 +399,7 @@ $ab_categories = $ab_stat('categories');
 				<div>
 					<i><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h10M7 11h6"/></svg></i>
 					<h3>Advertise with us</h3>
-					<p>Banner positions across the site, from $20 a month.</p>
+					<p>Banner positions across the site<?php $p411_from = ad_price_from(); echo $p411_from !== '' ? ', from ' . e($p411_from) . ' a month' : ''; ?>.</p>
 				</div>
 			</div>
 			<div class="p411-owner__cta">

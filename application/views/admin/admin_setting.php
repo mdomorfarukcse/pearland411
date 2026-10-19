@@ -301,6 +301,24 @@ $s = isset($settings) ? $settings : array();
 				Sent when a card goes on file, a payment is taken, a recurring schedule changes,
 				and when an automatic renewal succeeds or fails.
 			</p>
+
+			<?php // Customer-facing billing terms. Read by the refund & cancellation
+			      // policy on /terms-of-use and /faq (views/partials/refund_policy.php)
+			      // and by the renewal reminder (Cli::send_renewal_reminders). ?>
+			<div class="setting-row">
+				<label for="renewal_reminder_days">Renewal reminder<small>Days before an auto-renewal charge that the customer is emailed. Default 3.</small></label>
+				<input type="number" id="renewal_reminder_days" name="renewal_reminder_days" min="1" max="30" step="1"
+					   value="<?= e_attr(($s['renewal_reminder_days'] ?? '') !== '' ? $s['renewal_reminder_days'] : '3') ?>">
+			</div>
+			<div class="setting-row">
+				<label for="refund_request_days">Refund request window<small>Days after a charge in which a customer may ask for a refund. Default 30. Shown in the refund policy.</small></label>
+				<input type="number" id="refund_request_days" name="refund_request_days" min="0" max="365" step="1"
+					   value="<?= e_attr(($s['refund_request_days'] ?? '') !== '' ? $s['refund_request_days'] : '30') ?>">
+			</div>
+			<div class="setting-row">
+				<label for="refund_policy_extra">Extra refund terms<small>Optional. Added at the end of the refund &amp; cancellation policy on the Terms and FAQ pages. Plain text.</small></label>
+				<textarea id="refund_policy_extra" name="refund_policy_extra" rows="3"><?= e($s['refund_policy_extra'] ?? '') ?></textarea>
+			</div>
 		</section>
 
 		<!-- Top menu ------------------------------------------------------ -->

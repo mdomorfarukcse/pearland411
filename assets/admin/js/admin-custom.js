@@ -577,6 +577,11 @@ jQuery(document).ready(function ($) {
 
     $(function () {
 
+        // Only where the box exists. This ran on every admin page, fetched a
+        // city_search.html that has never existed here (the login page came
+        // back instead) and threw a JSON parse error into the console.
+        if (!$('#select-city.autocomplete').length) return;
+
         $.ajax({
 
             url: '../city_search.html',

@@ -1967,4 +1967,67 @@ SET @s := IF(@t = 1 AND @c = 0,
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 
+-- ============================================================
+-- 0036_tracker_round3.sql
+-- ============================================================
+-- plans.listing_video_limit: YouTube links a listing on the plan may
+-- show (default 1; the special package -1 = unlimited, set only when
+-- the column is first created). ads.listing_id: the business a
+-- category banner was booked for from Business Listings.
+-- listings.cover_image: the listing page header banner (only where
+-- missing). subscriptions.renewal_reminded_for: renewal reminder
+-- sent once per charge. Backfill: enquiries for a listing whose
+-- owner's claim was approved are re-addressed to that owner.
+-- ============================================================
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plans');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plans' AND COLUMN_NAME = 'listing_video_limit');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `plans` ADD COLUMN `listing_video_limit` INT NOT NULL DEFAULT 1 COMMENT ''YouTube videos a listing on this plan may show when allow_video = 1; -1 = unlimited''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@t = 1 AND @c = 0,
+  'UPDATE `plans` SET `listing_video_limit` = -1 WHERE `slug` = ''pearland411-special-package''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ads');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ads' AND COLUMN_NAME = 'listing_id');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `ads` ADD COLUMN `listing_id` INT NULL DEFAULT NULL COMMENT ''Business this booking was sold to (booked from Business Listings); NULL = not recorded'', ADD KEY `ads_listing_id_idx` (`listing_id`)',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings' AND COLUMN_NAME = 'cover_image');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `listings` ADD COLUMN `cover_image` VARCHAR(255) NULL DEFAULT NULL COMMENT ''Header banner at the top of the listing page''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions' AND COLUMN_NAME = 'renewal_reminded_for');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `subscriptions` ADD COLUMN `renewal_reminded_for` DATETIME NULL DEFAULT NULL COMMENT ''next_billing_date the renewal reminder email was sent for''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND ((TABLE_NAME = 'enquiries' AND COLUMN_NAME IN ('listing_id', 'receiving_user_id'))
+               OR (TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_status')));
+SET @s := IF(@c = 3,
+  'UPDATE `enquiries` e JOIN `listings` l ON l.`listing_id` = e.`listing_id` SET e.`receiving_user_id` = l.`user_id` WHERE l.`user_id` > 0 AND (e.`receiving_user_id` IS NULL OR e.`receiving_user_id` <> l.`user_id`) AND EXISTS (SELECT 1 FROM `claim_listings` c WHERE c.`listing_id` = l.`listing_id` AND c.`enquiry_sender_id` = l.`user_id` AND c.`claim_status` = 1)',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+
 SET FOREIGN_KEY_CHECKS = 1;

@@ -114,7 +114,8 @@ if (!empty($listing->listing_image_gallery)) {
 
 $ld_videos = array();
 if (!empty($listing->listing_video)) {
-	foreach (array_filter(array_map('trim', explode(',', (string) $listing->listing_video)), 'strlen') as $video_url) {
+	// listing_video_urls(): commas OR new lines, as the forms ask for.
+	foreach (listing_video_urls($listing->listing_video) as $video_url) {
 		$embed = $video_url;
 		if (strpos($video_url, 'youtube.com/watch?v=') !== false) {
 			parse_str((string) parse_url($video_url, PHP_URL_QUERY), $qs);
@@ -239,13 +240,14 @@ $ld_stars = function ($value) {
 						<?php if ($show_wa): ?>
 							<a class="p411-btn p411-btn--wa" href="https://wa.me/<?= e_attr($wa_number) ?>" target="_blank" rel="noopener nofollow">WhatsApp</a>
 						<?php endif; ?>
-						<?php // Scrolls to the enquiry card in the sidebar. It points at the
-						      // CARD, not at the form: #detail_enquiry_form only existed for a
-						      // signed-in visitor, so for everybody else this button was an
-						      // anchor to an id that was not on the page and clicking it did
-						      // nothing at all. Before that it opened a modal holding a second,
-						      // identical copy of the same form. ?>
-						<a class="p411-btn p411-btn--ghost" href="#get-a-quote">Get a quote</a>
+						<?php // Opens the quote form for THIS business in a dialog (script at the
+						      // foot of the page). It is the sidebar card itself, moved into the
+						      // dialog and back — never a second copy of the form, which is what
+						      // the old modal was ("double entry"). Scrolling to the sidebar
+						      // instead read on a phone as being sent somewhere else (tracker:
+						      // "redirects to the quote enquiry form"). Without JS the anchor
+						      // still scrolls to the card. ?>
+						<a class="p411-btn p411-btn--ghost" href="#get-a-quote" data-quote-open>Get a quote</a>
 						<?php if (!empty($listing->listing_lat) && !empty($listing->listing_lng)): ?>
 							<a class="p411-btn p411-btn--ghost" target="_blank" rel="noopener"
 							   href="https://www.google.com/maps/dir/?api=1&amp;destination=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>">Directions</a>
@@ -650,8 +652,26 @@ $ld_stars = function ($value) {
 				?>
 				<div class="p411-card p411-form" id="get-a-quote">
 					<div class="p411-card__head">
-						<h2>Get a quote</h2>
+						<h2 id="p411-quote-title">Get a quote</h2>
+						<button type="button" class="p411-quote-close" data-quote-close aria-label="Close" hidden>&times;</button>
 					</div>
+
+					<?php // Which business this goes to — the request is filed against this
+					      // listing and emailed to it, so say so where the visitor types. ?>
+					<div class="p411-quote-for">
+						<img class="p411-quote-for__logo" src="<?= e_url($ld_logo) ?>" alt="" loading="lazy">
+						<div class="p411-quote-for__text">
+							<strong><?= e($ld_name) ?></strong>
+							<?php if (!empty($listing_category->category_name)): ?>
+								<span><?= e($listing_category->category_name) ?></span>
+							<?php endif; ?>
+							<?php if ($show_addr): ?>
+								<span><?= e($listing->listing_address) ?></span>
+							<?php endif; ?>
+						</div>
+					</div>
+
+					<div class="p411-quote-status" aria-live="polite"></div>
 
 					<?php $__enq_msg = $this->session->flashdata('message'); ?>
 					<?php if (!empty($__enq_msg)): ?>
@@ -915,11 +935,14 @@ $ld_stars = function ($value) {
 	</div>
 </section>
 
-<?php // The "Get a quote" modal used to live here: a second copy of the
-      // sidebar enquiry form, same action, same five hidden inputs, same
-      // four visible fields, same heading. Two identical forms on one page
-      // is the reported "double entry"; the hero button scrolls to the one
-      // in the sidebar instead. ?>
+<?php // The "Get a quote" dialog. It starts empty: the script moves the sidebar
+      // card (#get-a-quote) in on open and puts it back on close, so there is
+      // only ever ONE quote form on the page. The old modal here held a second,
+      // identical copy of it — the reported "double entry". Inside .p411-ld so
+      // the kit's tokens and form styles still apply. ?>
+<div class="p411-ld p411-ld-modal" id="p411-quote-modal" role="dialog" aria-modal="true" aria-labelledby="p411-quote-title" hidden>
+	<div class="p411-ld-modal__box"></div>
+</div>
 
 <script>
 	(function () {
@@ -936,14 +959,130 @@ $ld_stars = function ($value) {
 		});
 
 		// Smooth-scroll the sub-nav and the hero's own anchors without losing
-		// the sticky offset. The hero selector covers "be the first" and
-		// "Get a quote", which both jump past the fold.
+		// the sticky offset. The hero selector covers "be the first", which
+		// jumps past the fold. "Get a quote" opens the dialog below instead.
 		Array.prototype.forEach.call(document.querySelectorAll('.p411-ld__nav a[href^="#"], .p411-ld__hero a[href^="#"], .p411-ld a[href="#write-review"]'), function (link) {
+			if (link.hasAttribute('data-quote-open')) return;
 			link.addEventListener('click', function (e) {
 				var target = document.getElementById(this.getAttribute('href').slice(1));
 				if (!target) return;
 				e.preventDefault();
 				target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			});
+		});
+	})();
+
+	/*
+	 * "Get a quote": open the quote card for this business in a dialog and send
+	 * it without leaving the page.
+	 *
+	 * The card is MOVED into the dialog and back (a placeholder marks its place
+	 * in the sidebar), so there is one form, one set of ids and one CSRF token.
+	 * The form still posts normally if this script fails; with it, the request
+	 * goes over XHR — add_enquiry() already answers JSON for that — and the
+	 * confirmation appears where the visitor typed.
+	 */
+	(function () {
+		'use strict';
+		var modal = document.getElementById('p411-quote-modal');
+		var card  = document.getElementById('get-a-quote');
+		if (!modal || !card) return;
+		var box    = modal.querySelector('.p411-ld-modal__box');
+		var close  = card.querySelector('[data-quote-close]');
+		var form   = card.querySelector('form');
+		var status = card.querySelector('.p411-quote-status');
+		var home   = document.createComment('get-a-quote');
+		var opener = null;
+
+		function open(e) {
+			if (e) e.preventDefault();
+			opener = document.activeElement;
+			card.parentNode.insertBefore(home, card);
+			box.appendChild(card);
+			modal.hidden = false;
+			if (close) close.hidden = false;
+			document.body.classList.add('p411-modal-open');
+			var first = card.querySelector('input:not([type=hidden]), textarea');
+			if (first) first.focus();
+		}
+		function shut() {
+			if (modal.hidden) return;
+			if (home.parentNode) home.parentNode.replaceChild(card, home);
+			modal.hidden = true;
+			if (close) close.hidden = true;
+			document.body.classList.remove('p411-modal-open');
+			if (opener && opener.focus) opener.focus();
+		}
+
+		Array.prototype.forEach.call(document.querySelectorAll('[data-quote-open]'), function (a) {
+			a.addEventListener('click', open);
+		});
+		if (close) close.addEventListener('click', shut);
+		modal.addEventListener('click', function (e) { if (e.target === modal) shut(); });
+		document.addEventListener('keydown', function (e) { if (e.key === 'Escape') shut(); });
+
+		// Back from a no-JS submission (or a refused one) with a result to show:
+		// open the dialog so it is in view, not a long scroll down on a phone.
+		if (location.hash === '#get-a-quote' && card.querySelector('.p411-note')) open();
+
+		function say(kind, text) {
+			status.innerHTML = '';
+			var n = document.createElement('div');
+			n.className = 'p411-note p411-note--' + kind;
+			n.textContent = text;
+			status.appendChild(n);
+		}
+
+		if (!form || !window.fetch || !window.FormData) return;
+		form.addEventListener('submit', function (e) {
+			// form-validate.js marks an invalid form in the capture phase.
+			if (e.defaultPrevented) return;
+			e.preventDefault();
+			var btn = form.querySelector('[type=submit]');
+			if (btn) { btn.disabled = true; btn.dataset.label = btn.textContent; btn.textContent = 'Sending…'; }
+			Array.prototype.forEach.call(form.querySelectorAll('.p411-form__err[data-ajax]'), function (el) { el.remove(); });
+
+			fetch(form.action, {
+				method: 'POST',
+				body: new FormData(form),
+				credentials: 'same-origin',
+				headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+			}).then(function (r) {
+				return r.text().then(function (t) {
+					try { return JSON.parse(t); } catch (err) {
+						return { success: false, message: r.status === 429
+							? 'Too many requests from this connection. Please try again later or call the business.'
+							: 'We could not send that just now. Please try again.' };
+					}
+				});
+			}).then(function (res) {
+				if (res && res.success) {
+					say('ok', 'Thanks — your request was sent to ' + <?= json_encode($ld_name) ?> + '. They will reply to the email address you gave.');
+					form.reset();
+					form.hidden = true;
+					var again = document.createElement('button');
+					again.type = 'button';
+					again.className = 'p411-btn p411-btn--ghost p411-btn--block';
+					again.textContent = 'Send another request';
+					again.addEventListener('click', function () { form.hidden = false; status.innerHTML = ''; again.remove(); });
+					status.appendChild(again);
+				} else {
+					say('err', (res && res.message) || 'Something went wrong. Please try again.');
+					var errs = (res && res.errors) || {};
+					Object.keys(errs).forEach(function (name) {
+						var f = form.querySelector('[name="' + name + '"]');
+						if (!f) return;
+						var m = document.createElement('small');
+						m.className = 'p411-form__err';
+						m.setAttribute('data-ajax', '');
+						m.textContent = errs[name];
+						f.parentNode.appendChild(m);
+					});
+				}
+			}).catch(function () {
+				say('err', 'We could not send that just now. Please check your connection and try again.');
+			}).then(function () {
+				if (btn) { btn.disabled = false; btn.textContent = btn.dataset.label || 'Send enquiry'; }
 			});
 		});
 	})();

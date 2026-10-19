@@ -118,6 +118,12 @@ if (!function_exists('admin_actions')) {
             $out .= '<a href="' . e_url($links['edit']) . '"'
                  . ' class="db-list-edit" title="Edit">Edit</a>';
         }
+        // 'extra' => ['Label' => url, …] — row-specific shortcuts.
+        if (!empty($links['extra']) && is_array($links['extra'])) {
+            foreach ($links['extra'] as $text => $url) {
+                $out .= '<a href="' . e_url($url) . '" class="db-list-edit" title="' . e_attr($text) . '">' . e($text) . '</a>';
+            }
+        }
         if (!empty($links['delete'])) {
             $confirm = isset($links['delete_confirm'])
                 ? $links['delete_confirm']
@@ -968,10 +974,17 @@ if (!function_exists('plan_term_copy')) {
         $interval = isset($plan->billing_interval) ? (string) $plan->billing_interval : '';
         $days     = isset($plan->duration_days) ? (int) $plan->duration_days : 0;
 
+        // Tracker: "mention is it one time only or it will be a recurring
+        // charge on card every month, or the owner will be notified". So each
+        // note says what happens to the CARD, not just to the package — and
+        // the recurring one promises only what Cli::renew_subscriptions()
+        // does: a reminder email before the charge, a receipt after it.
         if ($cat === 'business-listing' && !billing_interval_is_one_time($interval)) {
+            $noun = billing_interval_noun($interval);
             return array(
-                'per ' . billing_interval_noun($interval),
-                'Recurring: choose auto-renew at checkout to keep it running until you cancel.',
+                'per ' . $noun,
+                'Recurring only if you turn on auto-renew at checkout: then your card is charged every '
+                    . $noun . ' until you cancel, and we email you before each charge. Otherwise it ends after one ' . $noun . '.',
             );
         }
 
@@ -981,8 +994,89 @@ if (!function_exists('plan_term_copy')) {
 
         return array(
             $span !== '' ? 'for ' . $span : 'one-time',
-            'One-time: runs for the term you buy, then ends. It does not renew.',
+            'One-time charge: your card is charged once. It runs for the term you buy, then ends; it never renews or charges again.',
         );
+    }
+}
+
+if (!function_exists('listing_video_urls')) {
+    /**
+     * The video links in `listings.listing_video`, one entry each.
+     *
+     * The forms say "one per line, or separated by commas" (and the admin
+     * preview splits that way), but the listing page split on commas only, so
+     * two links on two lines became one broken embed. One parser for the page,
+     * the forms and the per-plan video limit.
+     *
+     * @return string[]
+     */
+    function listing_video_urls($text)
+    {
+        $parts = preg_split('/[\s,]+/', trim((string) $text));
+        return array_values(array_filter((array) $parts, 'strlen'));
+    }
+}
+
+if (!function_exists('cap_lock_note')) {
+    /**
+     * The "locked on your package" hint under a listing field the member's
+     * plan does not include (member add + edit forms). '' when allowed.
+     */
+    function cap_lock_note($allowed, $what = '')
+    {
+        if ($allowed) return '';
+        return '<small class="form-text text-warning" style="display:block;margin-top:4px;">'
+            . '&#128274; ' . ($what !== '' ? e($what) . ' are not' : 'Not') . ' included in your current package. '
+            . '<a href="' . base_url('pricing-plan') . '">Upgrade to unlock</a>.</small>';
+    }
+}
+
+if (!function_exists('ad_price_from')) {
+    /**
+     * The lowest monthly price on sale for a group of ad packages — "$20" —
+     * read from `plans`, for the "from $X a month" lines in the promo bands.
+     *
+     * Those lines were typed into nine views as "$20", so the first price
+     * change at /admin/pricing made the site quote one figure on the page and
+     * another on /pricing-plan and on the phone (tracker: "the pricing that I
+     * am providing is different from calls"). Two of them were wrong already:
+     * no category banner and no top banner has ever cost $20.
+     *
+     * @param  string|array $scope 'ads' (every banner and video package),
+     *                             a plans.category, or a list of plans.slug
+     * @return string '$20' / '$19.50', or '' when nothing in scope is on sale
+     *                (callers then drop the price from the sentence)
+     */
+    function ad_price_from($scope = 'ads')
+    {
+        static $cache = array();
+        $key = is_array($scope) ? 'slugs:' . implode(',', $scope) : (string) $scope;
+        if (isset($cache[$key])) return $cache[$key];
+
+        $CI =& get_instance();
+        $price = NULL;
+        try {
+            $CI->db->select_min('price', 'p')->from('plans')
+                ->where('is_active', 1)
+                ->where('price >', 0)
+                // "a month": only packages sold by the month, so a one-week
+                // add-on can't make the sentence quote a weekly price.
+                ->where('duration_days', 30);
+            if (is_array($scope)) {
+                $CI->db->where_in('slug', $scope);
+            } elseif ($scope === 'ads') {
+                $CI->db->where_in('category', array('site-wide-banners', 'category-banners', 'site-wide-videos', 'category-videos'));
+            } else {
+                $CI->db->where('category', $scope);
+            }
+            $row = $CI->db->get()->row();
+            $price = $row && $row->p !== NULL ? (float) $row->p : NULL;
+        } catch (Exception $e) {
+            $price = NULL;   // PHP 8.1+ throws on a missing column; the copy degrades
+        }
+
+        if ($price === NULL || $price <= 0) return $cache[$key] = '';
+        return $cache[$key] = '$' . (floor($price) == $price ? number_format($price, 0) : number_format($price, 2));
     }
 }
 

@@ -570,7 +570,7 @@ unset($__ext, $__rel);
                       // paid placement look worthless. ?>
                 <div class="p411-empty p411-empty--bu">
                   <h3>Featured placement is available</h3>
-                  <p>The top of the homepage, the top of the directory and the top of a category page &mdash; from $20 a month.</p>
+                  <p>The top of the homepage, the top of the directory and the top of a category page<?php $p411_from = ad_price_from(array('top-banner-site-wide', 'top-banner-category')); echo $p411_from !== '' ? ' &mdash; from ' . e($p411_from) . ' a month' : ''; ?>.</p>
                   <a class="p411-btn p411-btn--bu" href="<?= base_url('pricing-plan') ?>">See featured packages</a>
                 </div>
               <?php endif; ?>
@@ -983,7 +983,7 @@ unset($__ext, $__rel);
             <i><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h10M7 11h6"/></svg></i>
             <div>
               <h3>Advertise on Pearland411</h3>
-              <p>Banner positions across the site, starting at $20 a month.</p>
+              <p>Banner positions across the site<?php $p411_from = ad_price_from(); echo $p411_from !== '' ? ', starting at ' . e($p411_from) . ' a month' : ''; ?>.</p>
               <a href="<?= base_url('pricing-plan#pp-site-wide-banners') ?>">View Advertising Packages &rarr;</a>
             </div>
           </div>
