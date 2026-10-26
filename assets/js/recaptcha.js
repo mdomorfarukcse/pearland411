@@ -3,10 +3,12 @@
  *
  * spam_form_fields() (application/helpers/spam_helper.php) prints an empty
  * `.p411-recaptcha` box in each protected form and this file once per page.
- * Google's script is fetched only when someone starts on one of those forms —
- * focus or a tap anywhere inside it — and the checkbox is drawn then. The
- * Help & Support slide-out is on every page; loading Google's script up front
- * would have added it to every page view for a form most visitors never open.
+ * Google's script is fetched, and the checkbox drawn, as soon as one of those
+ * forms comes on screen (within 200px), so a visible form shows it without a
+ * click. Waiting for a click looked like a missing checkbox. The Help & Support
+ * slide-out is parked off the right edge of every page until opened, so it
+ * does not count as on screen, and pages where nobody opens it never fetch
+ * Google's script for it.
  *
  * A submit with the box unticked is stopped here, before the post, so nobody
  * loses what they typed to a round trip the server would refuse anyway. This
@@ -50,7 +52,6 @@
 			callback: function () { note(box, ''); }
 		});
 		box.setAttribute('data-widget', String(id));
-		box.parentNode.style.margin = '4px 0 14px';
 	}
 
 	function load(box) {
@@ -100,10 +101,41 @@
 		var fresh = document.createElement('div');
 		fresh.className = box.className;
 		fresh.setAttribute('data-sitekey', box.getAttribute('data-sitekey'));
+		fresh.style.minHeight = box.style.minHeight;
 		box.parentNode.replaceChild(fresh, box);
 		draw(fresh);
 	}
 
+	// Draw each box once its form is on screen — the form, not the box: the
+	// box sits at the foot of the form, below the fold while the fields are
+	// already in view. Vertical margin only: the slide-out sits off to the
+	// right and must not count until it slides in.
+	function watch() {
+		var boxes = document.querySelectorAll('.p411-recaptcha');
+		if (!('IntersectionObserver' in window)) {
+			Array.prototype.forEach.call(boxes, load);
+			return;
+		}
+		var seen = new IntersectionObserver(function (entries) {
+			entries.forEach(function (en) {
+				if (!en.isIntersecting) return;
+				seen.unobserve(en.target);
+				var box = boxIn(en.target) || en.target;
+				load(box);
+			});
+		}, { rootMargin: '200px 0px' });
+		Array.prototype.forEach.call(boxes, function (box) {
+			seen.observe(box.closest ? (box.closest('form') || box) : box);
+		});
+	}
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', watch);
+	} else {
+		watch();
+	}
+
+	// And on first use, should the observer not have fired (a form shown
+	// some other way).
 	function wake(e) {
 		var form = e.target && e.target.closest ? e.target.closest('form') : null;
 		var box = boxIn(form);

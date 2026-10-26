@@ -28,9 +28,10 @@ defined('BASEPATH') or exit('No direct script access allowed');
 if (!function_exists('spam_form_fields')) {
 	/**
 	 * The honeypot, plus the reCAPTCHA box when this visitor needs one. The
-	 * box stays empty until someone starts on the form; assets/js/recaptcha.js
-	 * then loads Google's script and draws the checkbox in it, so the
-	 * Help & Support slide-out on every page costs no download until used.
+	 * box is drawn by assets/js/recaptcha.js once the form is on screen, so
+	 * the Help & Support slide-out on every page costs no download until it
+	 * is opened. The box keeps the checkbox's height (78px) from the start,
+	 * so the button below does not jump when it arrives.
 	 */
 	function spam_form_fields()
 	{
@@ -49,8 +50,8 @@ if (!function_exists('spam_form_fields')) {
 
 		// clear:both — the theme floats .form-group, and without it the box
 		// rides up beside the fields instead of sitting above the button.
-		$html .= '<div class="p411-captcha" style="clear:both;">'
-			. '<div class="p411-recaptcha" data-sitekey="' . e_attr($CI->recaptcha->site_key()) . '"></div>'
+		$html .= '<div class="p411-captcha" style="clear:both;margin:4px 0 14px;">'
+			. '<div class="p411-recaptcha" data-sitekey="' . e_attr($CI->recaptcha->site_key()) . '" style="min-height:78px;"></div>'
 			. '<p class="p411-captcha__note" role="alert" hidden style="margin:6px 0 0;color:#c0392b;font-size:13px;"></p>'
 			. '<noscript><p style="margin:6px 0 0;font-size:13px;">Please turn on JavaScript to send this form, or call us.</p></noscript>'
 			. '</div>';

@@ -469,8 +469,9 @@ $s = isset($settings) ? $settings : array();
 			<p class="hint">Checks on the public forms anyone can send without signing in: contact, Help &amp; Support, quote requests, service requests, registration, password reset and the newsletter. A hidden trap field catches simple bots on all of them, always.</p>
 
 			<?php
-			$this->load->library('recaptcha');
-			$rc_keys = $this->recaptcha->site_key() !== '' && trim((string) env('RECAPTCHA_SECRET_KEY', '')) !== '';
+			// From Admin::admin_setting(). Never load a library in a view: it
+			// is not on the view's $this.
+			$rc_keys = !empty($recaptcha_has_keys);
 			$spam_toggles = array(
 				'recaptcha_enabled' => array(
 					'Google reCAPTCHA (“I’m not a robot”)',

@@ -42,12 +42,16 @@ class Recaptcha
         return trim((string) env('RECAPTCHA_SECRET_KEY', ''));
     }
 
+    /** Both keys are in .env (the admin switch aside). */
+    public function has_keys()
+    {
+        return $this->site_key() !== '' && $this->secret_key() !== '';
+    }
+
     /** Both keys present and not switched off at /admin/setting. */
     public function enabled()
     {
-        return $this->site_key() !== ''
-            && $this->secret_key() !== ''
-            && site_setting('recaptcha_enabled', '1') !== '0';
+        return $this->has_keys() && site_setting('recaptcha_enabled', '1') !== '0';
     }
 
     /**

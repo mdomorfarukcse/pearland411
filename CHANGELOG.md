@@ -6,6 +6,47 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-10-26 — Follow-up: admin settings sidebar; reCAPTCHA shown without a click
+
+Two problems reported after the spam-protection change below. No migration.
+
+### Fixed
+
+- **`/admin/setting` lost its header and sidebar** and returned HTTP 500. The new Spam protection
+  card loaded the reCAPTCHA library *inside the view* and called `$this->recaptcha->site_key()`. A
+  view's `$this` is the `CI_Loader`, which copies the controller's properties only when the view
+  starts, so the library wasn't there and the call was a fatal error. CodeIgniter was still holding
+  the already-rendered admin header in its output buffer, so only the partial settings form
+  reached the browser. Reproduced on the previous commit (500, no sidebar). The controller now
+  looks it up (`Recaptcha::has_keys()`, new) and passes `recaptcha_has_keys` to the view. The rule
+  is in `docs/PROJECT_OVERVIEW.md`.
+- **The "I'm not a robot" box appeared only after a click** into the form or on Send. That was the
+  lazy load, and it read as a missing checkbox. `assets/js/recaptcha.js` now draws it as soon as
+  its **form** is on screen (`IntersectionObserver`, 200px ahead; the form rather than the box,
+  since the box sits at the foot of the form, below the fold). The contact form, registration and
+  a listing's quote card show it on page load; the homepage newsletter shows it when scrolled to.
+  The Help & Support slide-out is parked off the right edge until opened, so it still doesn't
+  pull Google's script into every page. The box keeps the checkbox's height (78px) and margin from
+  the start (`spam_helper.php`), so the Send button doesn't jump when it arrives. Clicking into a form
+  is still a fallback trigger, and a browser without `IntersectionObserver` draws every box on load.
+
+### Verified
+
+Local copy in production mode (HTTPS faked for the Secure cookies): `/admin/setting` 200 with sidebar,
+admin footer and the card; the "Not active yet" note only without keys; the two switches save and
+reload (9 checks, with and without keys). Chromium (Google's script stubbed): checkbox drawn with no
+interaction on `/contact-us`, `/register` and the listing quote card; slide-out not drawn until
+opened, then drawn with Google fetched once per page; homepage fetches nothing until the newsletter
+is scrolled to; Send button position unchanged when the checkbox draws (API held back 1.5s);
+plus the earlier dialog, XHR, blocking and 390px checks (33 in all). The form-post suites (with and
+without keys) and the `verify()` unit test were rerun and still pass.
+
+Key files: `application/views/admin/admin_setting.php`, `application/controllers/Admin.php`,
+`application/libraries/Recaptcha.php`, `assets/js/recaptcha.js`, `application/helpers/spam_helper.php`,
+`docs/PROJECT_OVERVIEW.md`.
+
+---
+
 ## 2026-10-26 — Contact-form spam: reCAPTCHA, honeypot and a name filter on every public form
 
 The client was getting **700+ spam emails a day**: "[Pearland411] Contact-Us message for … from
