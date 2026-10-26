@@ -727,6 +727,13 @@ class Admin extends CI_Controller
 			? $this->helcim_lib->health_check()
 			: null;
 
+		// Whether the Spam protection card can say reCAPTCHA is live. Looked
+		// up here, not in the view: a library loaded inside a view is not on
+		// the view's $this, and the fatal that caused cut the page off before
+		// the admin header and sidebar were ever sent.
+		$this->load->library('recaptcha');
+		$data['recaptcha_has_keys'] = $this->recaptcha->has_keys();
+
 		$this->load->view('admin/header');
 		$this->load->view('admin/admin_setting', $data);
 		$this->load->view('admin/footer');

@@ -126,13 +126,19 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   the visitor is signed out) and call `$this->spamRefusal(['field' => $name])` in the handler after
   its rate limit — honeypot, then the name filter (a link or Cyrillic/CJK script in a name), then
   `Recaptcha::verify()`. A tripped honeypot must answer **as if it worked** and save/send nothing.
-  `assets/js/recaptcha.js` loads Google's script only once someone starts on a form, and stops an
-  unticked submit before it posts; a form that is **moved in the DOM** must call
+  `assets/js/recaptcha.js` draws the checkbox as soon as its form is on screen (the closed Help &
+  Support slide-out, parked off the right edge, does not count, so pages nobody uses it on never
+  fetch Google's script), and stops an unticked submit before it posts. A form that is **moved in the DOM** must call
   `p411Recaptcha.remount(form)` (moving the iframe breaks it), and one that sends over XHR
   `p411Recaptcha.reset(form)` afterwards. Never echo visitor-typed text into an email sent to the
   address they typed — that is what made the contact form a spam relay. Helper:
   `helpers/spam_helper.php`; switches `recaptcha_enabled` / `spam_name_filter_enabled` at
   `/admin/setting`.
+- **Never load a library inside a view.** A view's `$this` is the `CI_Loader`, which copies the
+  controller's properties only when the view starts, so `$this->load->library('x')` followed by
+  `$this->x` in a view is a fatal error. CI is still holding the earlier views (the admin header
+  and sidebar) in its output buffer and never sends them: the page arrives as a bare fragment.
+  Look it up in the controller and pass it in `$data`. A helper may use `get_instance()`.
 - **Advertising:** **28 public pages, 156 placements**; the full
   table, with sizes and prices, is **[`docs/AD_INVENTORY.md`](./AD_INVENTORY.md)**, generated
   from the source by `python3 scripts/ad_inventory.py` (re-run it after moving a zone). A page
