@@ -2029,5 +2029,355 @@ SET @s := IF(@c = 3,
   'DO 0');
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- ============================================================
+-- 0037_claim_onboarding_tracking.sql
+-- ============================================================
+-- Website Update Checklist (before the 100-business campaign).
+-- listings.is_claimed / claimed_at: "claimed" was user_id > 0, and every
+-- listing has an owner (the imported directory sits under data-entry
+-- logins), so the Claim button never showed. One-time backfill when the
+-- column is first created: claimed when the current owner had a claim
+-- approved, staff billing has a subscription for the business, or the
+-- owner holds 3 live listings or fewer. claim_listings: business name,
+-- role, verification method, admin note, review / reply dates (status 3 =
+-- more information needed). listings: business_hours + five social links.
+-- plans: can_hours / can_social_links (seeded from can_photos once).
+-- activity_daily: per-day counters for the analytics pages.
+-- ============================================================
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings' AND COLUMN_NAME = 'is_claimed');
+SET @new_claimed := (@t = 1 AND @c = 0);
+SET @s := IF(@new_claimed,
+  'ALTER TABLE `listings` ADD COLUMN `is_claimed` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''1 = the business owner has this listing (approved claim, own listing, or set by an admin)'', ADD COLUMN `claimed_at` DATETIME NULL DEFAULT NULL COMMENT ''When the listing became claimed''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_status');
+SET @s := IF(@new_claimed AND @c = 1,
+  'UPDATE `listings` l SET l.`is_claimed` = 1 WHERE l.`user_id` > 0 AND EXISTS (SELECT 1 FROM `claim_listings` c WHERE c.`listing_id` = l.`listing_id` AND c.`enquiry_sender_id` = l.`user_id` AND c.`claim_status` = 1)',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions' AND COLUMN_NAME = 'listing_id');
+SET @s := IF(@new_claimed AND @c = 1,
+  'UPDATE `listings` l SET l.`is_claimed` = 1 WHERE EXISTS (SELECT 1 FROM `subscriptions` s WHERE s.`listing_id` = l.`listing_id`)',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := IF(@new_claimed,
+  'UPDATE `listings` l JOIN (SELECT `user_id`, COUNT(*) AS n FROM `listings` WHERE `user_id` > 0 AND (`is_deleted` IS NULL OR `is_deleted` = 0) GROUP BY `user_id`) o ON o.`user_id` = l.`user_id` SET l.`is_claimed` = 1 WHERE o.n <= 3',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := IF(@new_claimed,
+  'UPDATE `listings` SET `claimed_at` = COALESCE(`updated_at`, `created_at`, NOW()) WHERE `is_claimed` = 1',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_business_name');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `claim_listings` ADD COLUMN `claim_business_name` VARCHAR(255) NULL DEFAULT NULL COMMENT ''Business name as the claimant typed it''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_role');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `claim_listings` ADD COLUMN `claim_role` VARCHAR(50) NULL DEFAULT NULL COMMENT ''Claimant relationship to the business (owner, manager, ...)''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_verification');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `claim_listings` ADD COLUMN `claim_verification` VARCHAR(50) NULL DEFAULT NULL COMMENT ''How the claimant asked to be verified (phone, email, document, ...)''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_admin_note');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `claim_listings` ADD COLUMN `claim_admin_note` TEXT NULL COMMENT ''Rejection reason or the information the admin asked for; shown to the claimant''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_reviewed_at');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `claim_listings` ADD COLUMN `claim_reviewed_at` DATETIME NULL DEFAULT NULL COMMENT ''When an admin last approved / rejected / asked for more''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_updated_at');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `claim_listings` ADD COLUMN `claim_updated_at` DATETIME NULL DEFAULT NULL COMMENT ''When the claimant last sent information''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings' AND COLUMN_NAME = 'business_hours');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `listings` ADD COLUMN `business_hours` TEXT NULL COMMENT ''Opening hours as the owner writes them, one line per day or range''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings' AND COLUMN_NAME = 'listing_facebook');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `listings` ADD COLUMN `listing_facebook` VARCHAR(255) NULL DEFAULT NULL, ADD COLUMN `listing_instagram` VARCHAR(255) NULL DEFAULT NULL, ADD COLUMN `listing_twitter` VARCHAR(255) NULL DEFAULT NULL, ADD COLUMN `listing_youtube` VARCHAR(255) NULL DEFAULT NULL, ADD COLUMN `listing_linkedin` VARCHAR(255) NULL DEFAULT NULL',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plans');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plans' AND COLUMN_NAME = 'can_hours');
+SET @p := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plans' AND COLUMN_NAME = 'can_photos');
+SET @new_hours := (@t = 1 AND @c = 0);
+SET @s := IF(@new_hours,
+  'ALTER TABLE `plans` ADD COLUMN `can_hours` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''Listing may show opening hours'', ADD COLUMN `can_social_links` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''Listing may show its social media links''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@new_hours AND @p = 1,
+  'UPDATE `plans` SET `can_hours` = `can_photos`, `can_social_links` = `can_photos`',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+CREATE TABLE IF NOT EXISTS `activity_daily` (
+    `subject_type` VARCHAR(16) NOT NULL COMMENT 'listing | coupon | ad',
+    `subject_id`   INT(11)     NOT NULL,
+    `event_type`   VARCHAR(24) NOT NULL COMMENT 'view, website, phone, email, map, impression, click, ...',
+    `event_date`   DATE        NOT NULL,
+    `hits`         INT(11)     NOT NULL DEFAULT 0,
+    PRIMARY KEY (`subject_type`, `subject_id`, `event_type`, `event_date`),
+    KEY `activity_daily_date_idx` (`event_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- 0038_listing_packages.sql
+-- ============================================================
+-- The listing packages: Free Community $0, Pearland Starter $29/mo,
+-- Pearland Business $79/mo, Pearland Premier $149/mo. New plan columns
+-- can_email / can_coupons / verified_badge / extra_features (existing plans
+-- keep email + deals; paid listing tiers keep the badge). On the run that
+-- creates the packages: free members move to Free Community, the other
+-- listing tiers and the Special Package go off sale, and old plans nobody
+-- ever bought are deleted. Paying customers keep their plan and price.
+-- services.price_from + the a-la-carte marketing services at the document's
+-- prices.
+-- ============================================================
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plans');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plans' AND COLUMN_NAME = 'can_email');
+SET @new_cols := (@t = 1 AND @c = 0);
+SET @s := IF(@new_cols,
+  'ALTER TABLE `plans` ADD COLUMN `can_email` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''Listing may show an email address'', ADD COLUMN `can_coupons` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''Owner may post deals / coupons'', ADD COLUMN `verified_badge` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''Listing shows the Verified badge (when claimed)'', ADD COLUMN `extra_features` TEXT NULL COMMENT ''One per line: features delivered by staff, shown on the pricing card''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@new_cols,
+  'UPDATE `plans` SET `can_email` = 1, `can_coupons` = 1',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@new_cols,
+  'UPDATE `plans` SET `verified_badge` = 1 WHERE `price` > 0 AND `category` IN (''business-listing'', ''special'')',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @first := ((SELECT COUNT(*) FROM `plans` WHERE `slug` = 'free-community') = 0);
+INSERT INTO `plans`
+    (`name`, `slug`, `price`, `currency`, `billing_interval`, `duration_days`, `description`,
+     `listing_limit`, `product_limit`, `event_limit`, `classified_limit`, `blog_limit`, `news_limit`,
+     `video_limit`, `rental_limit`, `house_limit`, `ad_limit`, `ad_boost_limit`, `placeholder_images_limit`,
+     `featured_listing`, `priority_support`, `analytics_access`,
+     `can_photos`, `photo_limit`, `can_map`, `can_services`, `can_extra_details`, `allow_video`,
+     `listing_video_limit`, `can_hours`, `can_social_links`,
+     `can_email`, `can_coupons`, `verified_badge`, `extra_features`,
+     `is_active`, `sort_order`, `category`, `created_at`, `updated_at`)
+SELECT 'Free Community', 'free-community', 0.00, 'USD', 'monthly', 30,
+       'Get found in the Pearland directory: business name, category, address, phone, website, Google Maps and a short description.',
+       1,0,0,0,0,0,0,0,0,0,0,0,
+       0,0,0,
+       0,0,1,0,0,0,
+       0,0,0,
+       0,0,0, 'Customer lead form',
+       1, 1, 'business-listing', NOW(), NOW()
+  FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `plans` WHERE `slug` = 'free-community');
+INSERT INTO `plans`
+    (`name`, `slug`, `price`, `currency`, `billing_interval`, `duration_days`, `description`,
+     `listing_limit`, `product_limit`, `event_limit`, `classified_limit`, `blog_limit`, `news_limit`,
+     `video_limit`, `rental_limit`, `house_limit`, `ad_limit`, `ad_boost_limit`, `placeholder_images_limit`,
+     `featured_listing`, `priority_support`, `analytics_access`,
+     `can_photos`, `photo_limit`, `can_map`, `can_services`, `can_extra_details`, `allow_video`,
+     `listing_video_limit`, `can_hours`, `can_social_links`,
+     `can_email`, `can_coupons`, `verified_badge`, `extra_features`,
+     `is_active`, `sort_order`, `category`, `created_at`, `updated_at`)
+SELECT 'Pearland Starter', 'pearland-starter', 29.00, 'USD', 'monthly', 30,
+       'Everything in Free Community, plus your logo, email, hours, 5 photos, social media links, deals and a Verified badge.',
+       1,0,0,0,0,0,0,0,0,0,0,0,
+       0,0,0,
+       1,5,1,1,1,0,
+       0,1,1,
+       1,1,1, 'Customer lead form',
+       1, 2, 'business-listing', NOW(), NOW()
+  FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `plans` WHERE `slug` = 'pearland-starter');
+INSERT INTO `plans`
+    (`name`, `slug`, `price`, `currency`, `billing_interval`, `duration_days`, `description`,
+     `listing_limit`, `product_limit`, `event_limit`, `classified_limit`, `blog_limit`, `news_limit`,
+     `video_limit`, `rental_limit`, `house_limit`, `ad_limit`, `ad_boost_limit`, `placeholder_images_limit`,
+     `featured_listing`, `priority_support`, `analytics_access`,
+     `can_photos`, `photo_limit`, `can_map`, `can_services`, `can_extra_details`, `allow_video`,
+     `listing_video_limit`, `can_hours`, `can_social_links`,
+     `can_email`, `can_coupons`, `verified_badge`, `extra_features`,
+     `is_active`, `sort_order`, `category`, `created_at`, `updated_at`)
+SELECT 'Pearland Business', 'pearland-business', 79.00, 'USD', 'monthly', 30,
+       'Everything in Starter, plus 15 photos, a featured spot in your category, priority in search, a monthly homepage feature, a small banner and analytics.',
+       1,0,0,0,0,0,0,0,0,0,0,0,
+       1,0,1,
+       1,15,1,1,1,0,
+       0,1,1,
+       1,1,1, 'Customer lead form\nPriority in search results\nHomepage feature, monthly\nSmall banner advertising\nNewsletter feature, quarterly\nSocial media spotlight, quarterly',
+       1, 3, 'business-listing', NOW(), NOW()
+  FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `plans` WHERE `slug` = 'pearland-business');
+INSERT INTO `plans`
+    (`name`, `slug`, `price`, `currency`, `billing_interval`, `duration_days`, `description`,
+     `listing_limit`, `product_limit`, `event_limit`, `classified_limit`, `blog_limit`, `news_limit`,
+     `video_limit`, `rental_limit`, `house_limit`, `ad_limit`, `ad_boost_limit`, `placeholder_images_limit`,
+     `featured_listing`, `priority_support`, `analytics_access`,
+     `can_photos`, `photo_limit`, `can_map`, `can_services`, `can_extra_details`, `allow_video`,
+     `listing_video_limit`, `can_hours`, `can_social_links`,
+     `can_email`, `can_coupons`, `verified_badge`, `extra_features`,
+     `is_active`, `sort_order`, `category`, `created_at`, `updated_at`)
+SELECT 'Pearland Premier', 'pearland-premier', 149.00, 'USD', 'monthly', 30,
+       'Everything in Business, plus unlimited photos, a promotional video, a premium banner, priority homepage placement, and monthly newsletter and social media features.',
+       1,0,0,0,0,0,0,0,0,0,0,0,
+       1,1,1,
+       1,-1,1,1,1,1,
+       1,1,1,
+       1,1,1, 'Customer lead form\nPriority in search results\nPriority homepage feature\nPremium banner advertising\nNewsletter feature, monthly\nSocial media spotlight, monthly',
+       1, 4, 'business-listing', NOW(), NOW()
+  FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `plans` WHERE `slug` = 'pearland-premier');
+
+INSERT INTO `plan_durations` (`plan_id`, `duration_months`, `duration_days`, `price`, `currency`, `is_active`, `created_at`, `updated_at`)
+SELECT p.`id`, 1, 30, p.`price`, p.`currency`, 1, NOW(), NOW()
+  FROM `plans` p
+ WHERE p.`slug` IN ('free-community', 'pearland-starter', 'pearland-business', 'pearland-premier')
+   AND NOT EXISTS (SELECT 1 FROM `plan_durations` d WHERE d.`plan_id` = p.`id` AND d.`duration_days` = 30);
+
+SET @free := (SELECT `id` FROM `plans` WHERE `slug` = 'free-community' LIMIT 1);
+SET @pend := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions' AND COLUMN_NAME = 'pending_plan_id');
+SET @s := IF(@first,
+  'UPDATE `subscriptions` s JOIN `plans` p ON p.`id` = s.`plan_id` SET s.`plan_id` = @free WHERE s.`status` = ''active'' AND p.`category` = ''business-listing'' AND COALESCE(p.`price`, 0) = 0 AND p.`id` <> @free',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@first AND @pend = 1,
+  'UPDATE `subscriptions` s JOIN `plans` p ON p.`id` = s.`pending_plan_id` SET s.`pending_plan_id` = @free WHERE p.`category` = ''business-listing'' AND COALESCE(p.`price`, 0) = 0 AND p.`id` <> @free',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@first,
+  'UPDATE `plans` SET `is_active` = 0, `updated_at` = NOW() WHERE `category` IN (''business-listing'', ''special'') AND `slug` NOT IN (''free-community'', ''pearland-starter'', ''pearland-business'', ''pearland-premier'')',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+DROP TABLE IF EXISTS `p411_retired_plans`;
+CREATE TABLE `p411_retired_plans` (`id` INT(11) NOT NULL PRIMARY KEY) ENGINE=InnoDB;
+SET @s := IF(@first,
+  'INSERT INTO `p411_retired_plans` (`id`) SELECT p.`id` FROM `plans` p WHERE p.`category` IN (''business-listing'', ''special'') AND p.`slug` NOT IN (''free-community'', ''pearland-starter'', ''pearland-business'', ''pearland-premier'')',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+DELETE r FROM `p411_retired_plans` r WHERE EXISTS (SELECT 1 FROM `subscriptions` s WHERE s.`plan_id` = r.`id`);
+SET @s := IF(@pend = 1,
+  'DELETE r FROM `p411_retired_plans` r WHERE EXISTS (SELECT 1 FROM `subscriptions` s WHERE s.`pending_plan_id` = r.`id`)',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+DELETE r FROM `p411_retired_plans` r WHERE EXISTS (SELECT 1 FROM `transactions` t WHERE t.`plan_id` = r.`id`);
+DELETE d FROM `plan_durations` d JOIN `p411_retired_plans` r ON r.`id` = d.`plan_id`;
+DELETE p FROM `plans` p JOIN `p411_retired_plans` r ON r.`id` = p.`id`;
+DROP TABLE IF EXISTS `p411_retired_plans`;
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'services');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'services' AND COLUMN_NAME = 'price_from');
+SET @new_svc := (@t = 1 AND @c = 0);
+SET @s := IF(@new_svc,
+  'ALTER TABLE `services` ADD COLUMN `price_from` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''1 = base_price is a starting price ("From $X")''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@new_svc,
+  'UPDATE `services` SET `base_price` = 995.00, `price_unit` = ''project'', `price_from` = 1 WHERE `slug` = ''website-design-development''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@new_svc,
+  'UPDATE `services` SET `base_price` = 39.00, `price_unit` = ''monthly'', `price_from` = 0 WHERE `slug` = ''website-hosting''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@new_svc,
+  'UPDATE `services` SET `base_price` = 295.00, `price_unit` = ''project'', `price_from` = 0 WHERE `slug` = ''logo-brand-identity''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@new_svc,
+  'UPDATE `services` SET `base_price` = 299.00, `price_unit` = ''monthly'', `price_from` = 1 WHERE `slug` = ''social-media-management''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@new_svc,
+  'UPDATE `services` SET `base_price` = 495.00, `price_unit` = ''monthly'', `price_from` = 1 WHERE `slug` = ''search-engine-optimization''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@new_svc,
+  'UPDATE `services` SET `is_active` = 0 WHERE `slug` = ''paid-ads-google-meta''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+INSERT INTO `services` (`slug`, `name`, `short_description`, `body`, `icon`, `category`, `base_price`, `price_unit`, `price_from`, `sort_order`, `is_active`, `created_at`, `updated_at`)
+SELECT * FROM (
+    SELECT 'banner-ad-design' AS slug, 'Banner Ad Design' AS name,
+           'Professional banner artwork sized for your Pearland411 placement, ready to run.' AS short_description,
+           '<p>We design your banner at the exact size of the placement you bought, in your colours, with one round of changes.</p>' AS body,
+           'brush' AS icon, 'Design & Branding' AS category, 125.00 AS base_price, 'one_time' AS price_unit, 0 AS price_from, 55 AS sort_order, 1 AS is_active, NOW() AS created_at, NOW() AS updated_at
+    UNION ALL SELECT 'facebook-instagram-ads', 'Facebook & Instagram Ads',
+           'Targeted Facebook and Instagram campaigns for Pearland customers, managed monthly.',
+           '<p>Strategy, ad copy, creative, audience targeting and weekly optimisation. You pay the ad spend to Meta directly; this is the management fee.</p>',
+           'campaign', 'Marketing', 399.00, 'monthly', 1, 91, 1, NOW(), NOW()
+    UNION ALL SELECT 'google-ads-management', 'Google Ads Management',
+           'Google search and maps ads that put your business in front of people looking for it, managed monthly.',
+           '<p>Keyword research, ad copy, landing-page review and weekly optimisation. You pay the ad spend to Google directly; this is the management fee.</p>',
+           'google_ads', 'Marketing', 399.00, 'monthly', 1, 92, 1, NOW(), NOW()
+    UNION ALL SELECT 'email-marketing-campaign', 'Email Marketing Campaign',
+           'A designed, written and sent email campaign to your customer list.',
+           '<p>Copywriting, design and sending, with a report on opens and clicks.</p>',
+           'mail', 'Marketing', 149.00, 'project', 1, 93, 1, NOW(), NOW()
+    UNION ALL SELECT 'featured-email-blast', 'Featured Email Blast',
+           'Your business as the featured story in a Pearland411 email to our subscribers.',
+           '<p>One campaign featuring your business, offer or event to the Pearland411 mailing list.</p>',
+           'email_blast', 'Marketing', 99.00, 'one_time', 0, 94, 1, NOW(), NOW()
+    UNION ALL SELECT 'sponsored-article', 'Sponsored Article',
+           'A story about your business published on Pearland411 and shared with our readers.',
+           '<p>We interview you, write the article and publish it on Pearland411, clearly marked as sponsored.</p>',
+           'article', 'Marketing', 150.00, 'one_time', 0, 95, 1, NOW(), NOW()
+    UNION ALL SELECT 'business-spotlight-video', 'Business Spotlight Video',
+           'A short professional video that shows customers who you are and what you do.',
+           '<p>Filmed at your business and edited for your website, social media and your Pearland411 listing.</p>',
+           'video', 'Design & Branding', 395.00, 'project', 1, 96, 1, NOW(), NOW()
+    UNION ALL SELECT 'professional-photography', 'Professional Photography',
+           'Photos of your business, team and products that make your listing and website stand out.',
+           '<p>An on-site shoot with edited, web-ready photos you can use everywhere.</p>',
+           'photo', 'Design & Branding', 250.00, 'project', 1, 97, 1, NOW(), NOW()
+    UNION ALL SELECT 'reputation-management', 'Reputation Management',
+           'Get more good reviews, answer the bad ones, and keep an eye on what people say about you online.',
+           '<p>Review requests, monitoring and responses across Google, Facebook and Pearland411, with a monthly report.</p>',
+           'reviews', 'Marketing', 99.00, 'monthly', 1, 98, 1, NOW(), NOW()
+    UNION ALL SELECT 'event-promotion', 'Event Promotion',
+           'Get the word out about your event on Pearland411 and beyond.',
+           '<p>A featured event listing, social posts and newsletter mention, put together for your event.</p>',
+           'event', 'Marketing', 150.00, 'project', 1, 99, 1, NOW(), NOW()
+) AS seed
+WHERE NOT EXISTS (SELECT 1 FROM `services` s WHERE s.`slug` = seed.`slug`);
+
 
 SET FOREIGN_KEY_CHECKS = 1;

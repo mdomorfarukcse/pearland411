@@ -77,6 +77,39 @@ if (!function_exists('createSafeSlug')) {
 
 	</div>
 
+	<?php // Onboarding (checklist §4): what is still missing from the listing,
+	      // each item a link into the editor. Hidden once everything is done. ?>
+	<?php if (!empty($onboarding) && $onboarding['done'] < $onboarding['total']):
+		$__ob   = $onboarding;
+		$__edit = base_url('user/edit-listing/' . rawurlencode((string) $__ob['listing']->listing_slug));
+		$__pct  = $__ob['total'] ? (int) round(100 * $__ob['done'] / $__ob['total']) : 100; ?>
+		<div class="ud-cen-s2" style="border:1px solid #CFE0AE;background:#F6FBEF;border-radius:10px;padding:18px 20px;margin-bottom:18px;">
+			<h2 style="margin-top:0;">Finish your listing &mdash; <?= e($__ob['listing']->listing_name) ?></h2>
+			<p style="margin:4px 0 10px;color:#5A6072;font-size:14px;">
+				<?= (int) $__ob['done'] ?> of <?= (int) $__ob['total'] ?> done. Complete listings get more calls and enquiries.
+			</p>
+			<div style="height:8px;background:#E4E6EC;border-radius:99px;overflow:hidden;margin-bottom:12px;" aria-hidden="true">
+				<div style="height:8px;width:<?= $__pct ?>%;background:#79B82A;"></div>
+			</div>
+			<ul style="list-style:none;margin:0 0 12px;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 16px;">
+				<?php foreach ($__ob['items'] as $__it): ?>
+					<li style="font-size:14px;background:none;padding:0;margin:0;">
+						<?php if ($__it[2]): ?>
+							<span style="color:#9AA1AE;">&#128274; <?= e($__it[0]) ?></span>
+							<a href="<?= base_url('pricing-plan') ?>" style="font-size:12.5px;">upgrade</a>
+						<?php elseif ($__it[1]): ?>
+							<span style="color:#3E6B15;">&#10003; <?= e($__it[0]) ?></span>
+						<?php else: ?>
+							<a href="<?= e_url($__edit) ?>" style="color:#6D263D;font-weight:600;">&#9675; <?= e($__it[0]) ?></a>
+						<?php endif; ?>
+					</li>
+				<?php endforeach; ?>
+			</ul>
+			<a href="<?= e_url($__edit) ?>" class="btn btn-primary btn-sm">Edit my listing</a>
+			<a href="<?= e_url(base_url('listing-details/' . rawurlencode((string) $__ob['listing']->listing_slug))) ?>" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">View it live</a>
+		</div>
+	<?php endif; ?>
+
 	<div class="ud-cen-s1">
 
 		<ul>

@@ -45,7 +45,7 @@ $sd_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 						<?php endif; ?>
 						<span class="p411-tag p411-tag--green">
 							<?= $has_price
-								? '$' . number_format((float) $service->base_price, 0) . ' ' . e(str_replace('_', ' ', (string) $service->price_unit))
+								? e(implode(' ', service_price_label($service)))
 								: 'Custom quote' ?>
 						</span>
 					</div>
@@ -101,9 +101,9 @@ $sd_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 					</div>
 
 					<div class="p411-price">
-						<?php if ($has_price): ?>
-							<b>$<?= number_format((float) $service->base_price, 0) ?></b>
-							<span><?= e(str_replace('_', ' ', (string) $service->price_unit)) ?></span>
+						<?php if ($has_price): $__pl = service_price_label($service); ?>
+							<b><?= e($__pl[0]) ?></b>
+							<span><?= e($__pl[1]) ?></span>
 							<p>Final pricing depends on the scope of the job. Send us the details and we'll come back with an exact figure &mdash; there is no charge for the quote.</p>
 						<?php else: ?>
 							<b>Custom quote</b>

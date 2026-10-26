@@ -114,6 +114,14 @@ $route['request-service/(:any)']      = 'user/request_service/$1';
 
 // Listing claim
 $route['claim-listing/(:any)']        = 'user/claim_listing/$1';
+// The claimant answers an admin's "we need more information" (POST).
+$route['user/claim-reply/(:num)']     = 'user/claim_reply/$1';
+
+// Analytics (migration 0037): click beacons from public pages, the ad
+// click-through redirect, and the member's own report.
+$route['track']                       = 'user/track';
+$route['ad-click/(:num)']             = 'user/ad_click/$1';
+$route['user/analytics']              = 'user/analytics';
 
 // Public coupons / deals
 $route['coupons']                     = 'user/coupons';
@@ -143,7 +151,22 @@ $route['admin-setting']                     = 'admin/admin_setting';
 // Listing claims
 $route['admin/claim-approve/(:num)']        = 'admin/claim_approve/$1';
 $route['admin/claim-reject/(:num)']         = 'admin/claim_reject/$1';
+$route['admin/claim-more-info/(:num)']      = 'admin/claim_more_info/$1';
+// The proof document on a claim — admins only (application/storage/claims/).
+$route['admin/claim-document/(:num)']       = 'admin/claim_document/$1';
 $route['admin/claimed-listings']            = 'admin/claimed_listings';
+// Mark one listing claimed / claimable, or release every listing a
+// data-entry login owns (POST; migration 0037).
+$route['admin/listing-claim-status/(:num)'] = 'admin/listing_claim_status/$1';
+$route['admin/release-account-listings/(:num)'] = 'admin/release_account_listings/$1';
+
+// Homepage placements (Business Hotspot, Business of the Week, Featured)
+$route['admin/homepage-placements']         = 'admin/homepage_placements';
+$route['admin/homepage-placement-save']     = 'admin/homepage_placement_save';
+$route['admin/homepage-placement-remove/(:num)'] = 'admin/homepage_placement_remove/$1';
+
+// Analytics — listing / coupon / ad activity (migration 0037)
+$route['admin/analytics']                   = 'admin/analytics';
 
 // Sub-admin / role management (super_admin only)
 $route['admin/sub-admins']                  = 'admin/sub_admin_all';

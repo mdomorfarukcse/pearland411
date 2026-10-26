@@ -2418,7 +2418,9 @@
 		 */
 		public function getAllListings($limit = NULL, $offset = NULL, $q = NULL)
 		{
-			$this->db->select('listings.listing_id,listings.listing_name, listings.postal_code,listings.listing_status,listings.listing_id,listings.listing_slug, listings.created_at,listings.listing_image, user.user_id,user.name,categories.category_name,sub_categories.sub_category_name')->from('listings')
+			$this->db->select('listings.listing_id,listings.listing_name, listings.postal_code,listings.listing_status,listings.listing_id,listings.listing_slug, listings.created_at,listings.listing_image, user.user_id,user.name,categories.category_name,sub_categories.sub_category_name'
+					// Claim status for the Claimed column (migration 0037).
+					. ($this->db->field_exists('is_claimed', 'listings') ? ', listings.is_claimed' : ''))->from('listings')
 				->join('user', 'listings.user_id = user.user_id', 'left')
 				->where('is_deleted', 0)
 				->join('listing_categories as categories', 'categories.category_id = listings.category_id', 'LEFT')
@@ -2985,6 +2987,98 @@
 			} else {
 				return false;
 			}
+		}
+
+		/**
+		 * Claims for /admin/claimed-listings, with the listing they are for, who
+		 * owns it now, and the claimant's account — so the reviewer can see at a
+		 * glance whether approving would take the listing away from an owner.
+		 * Pending first (the queue), then newest.
+		 *
+		 * @param int[] $statuses claim_status values to include; [] = all
+		 */
+		public function getClaimsForReview(array $statuses = array())
+		{
+			$has_claimed = $this->db->field_exists('is_claimed', 'listings');
+			$this->db->select('c.*, l.listing_name, l.listing_slug, l.user_id AS owner_id, l.is_deleted AS listing_deleted,'
+					. ($has_claimed ? ' l.is_claimed,' : ' 1 AS is_claimed,')
+					. ' o.name AS owner_name, o.email_id AS owner_email,'
+					. ' u.name AS account_name, u.email_id AS account_email', FALSE)
+				->from('claim_listings c')
+				->join('listings l', 'l.listing_id = c.listing_id', 'left')
+				->join('user o', 'o.user_id = l.user_id', 'left')
+				->join('user u', 'u.user_id = c.enquiry_sender_id', 'left');
+			if ($statuses) {
+				$this->db->where_in('c.claim_status', array_map('intval', $statuses));
+			}
+			return $this->db
+				->order_by('(c.claim_status = 0) DESC', '', FALSE)
+				->order_by('c.claim_listing_id', 'DESC')
+				->get()->result();
+		}
+
+		/**
+		 * The three homepage placements for /admin/homepage-placements: Business
+		 * Hotspot and Business of the Week (dated, migration 0018 — shown up to
+		 * 30 days after they ended, so a lapsed customer can be renewed) and
+		 * Featured / Spotlight (a flag, no date).
+		 *
+		 * @return array ['hotspot' => rows, 'week' => rows, 'featured' => rows]
+		 */
+		public function getHomepagePlacements()
+		{
+			$out = array('hotspot' => array(), 'week' => array(), 'featured' => array());
+			$since = date('Y-m-d', strtotime('-30 days'));
+			$base = function () {
+				$this->db->select('l.listing_id, l.listing_name, l.listing_slug, l.listing_status, u.name AS owner_name', FALSE)
+					->from('listings l')
+					->join('user u', 'u.user_id = l.user_id', 'left')
+					->where('l.is_deleted', 0);
+			};
+			foreach (array('hotspot' => 'hotspot_until', 'week' => 'week_until') as $key => $col) {
+				if (!$this->db->field_exists($col, 'listings')) continue;
+				$base();
+				$out[$key] = $this->db->select('l.' . $col . ' AS until', FALSE)
+					->where('l.' . $col . ' >=', $since)
+					->order_by('l.' . $col, 'DESC')
+					->get()->result();
+			}
+			$base();
+			$out['featured'] = $this->db
+				->group_start()->where('l.featured_listing', 1)->or_where('l.spotlight_listing', 1)->group_end()
+				->order_by('l.listing_name', 'ASC')
+				->limit(500)
+				->get()->result();
+			return $out;
+		}
+
+		/** Listings matching a name (or an id), for adding a placement. */
+		public function searchListingsForPlacement($q, $limit = 20)
+		{
+			$q = trim((string) $q);
+			if ($q === '') return array();
+			$this->db->select('l.listing_id, l.listing_name, l.listing_slug, l.listing_address, u.name AS owner_name', FALSE)
+				->from('listings l')
+				->join('user u', 'u.user_id = l.user_id', 'left')
+				->where('l.is_deleted', 0);
+			if (ctype_digit($q)) {
+				$this->db->where('l.listing_id', (int) $q);
+			} else {
+				$this->db->like('l.listing_name', $q);
+			}
+			return $this->db->order_by('l.listing_name', 'ASC')->limit((int) $limit)->get()->result();
+		}
+
+		/** claim_status => how many, for the tabs on /admin/claimed-listings. */
+		public function countClaimsByStatus()
+		{
+			$out = array(0 => 0, 1 => 0, 2 => 0, 3 => 0);
+			$rows = $this->db->select('claim_status, COUNT(*) AS n', FALSE)
+				->from('claim_listings')->group_by('claim_status')->get()->result();
+			foreach ($rows as $row) {
+				$out[(int) $row->claim_status] = (int) $row->n;
+			}
+			return $out;
 		}
 
 		/*==================

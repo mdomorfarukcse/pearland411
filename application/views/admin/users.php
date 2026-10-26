@@ -116,6 +116,14 @@
                                                         <button type="submit" class="btn btn-sm btn-outline-warning">Suspend</button>
                                                     </form>
                                                 <?php } ?>
+                                                <?php if ((int) $m->listing_count > 0) { ?>
+                                                    <?php // A data-entry login: every business it holds becomes claimable
+                                                          // (Claim This Business shows on each). Migration 0037. ?>
+                                                    <form method="post" action="<?= base_url('admin/release-account-listings/' . (int) $m->user_id) ?>" style="display:inline;"
+                                                          onsubmit="return confirm(<?= e_attr(json_encode('Make all ' . (int) $m->listing_count . ' listing(s) held by ' . $m->name . ' claimable? Use this for a data-entry account, not a business owner — the Claim This Business button will show on every one.')) ?>);">
+                                                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="For a data-entry account: show Claim This Business on every listing it holds">Make listings claimable</button>
+                                                    </form>
+                                                <?php } ?>
                                                 <?php if ((int) $m->listing_count === 0) { ?>
                                                     <form method="post" action="<?= base_url('admin/user_delete/' . (int) $m->user_id) ?>" style="display:inline;"
                                                           onsubmit="return confirm(<?= e_attr(json_encode('Delete the account ' . $m->name . '? Only possible if it owns nothing at all. This cannot be undone.')) ?>);">

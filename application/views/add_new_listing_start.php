@@ -361,7 +361,8 @@ $has_media = $caps['can_photos'] || $caps['can_video'];
 							<div class="row">
 								<div class="col-md-12">
 									<div class="form-group">
-										<input type="email" name="listing_email" class="form-control" placeholder="Email id" value="<?= e_attr($ov('listing_email')) ?>">
+										<input type="email" name="listing_email" class="form-control" placeholder="Email id" value="<?= e_attr($ov('listing_email')) ?>" <?= !isset($caps['can_email']) || $caps['can_email'] ? '' : 'disabled' ?>>
+										<?= cap_lock_note(!isset($caps['can_email']) || $caps['can_email'], 'An email address on your listing') ?>
 									</div>
 								</div>
 							</div>
@@ -426,7 +427,7 @@ $has_media = $caps['can_photos'] || $caps['can_video'];
 									<h4 class="pt30">Logo &amp; photos</h4>
 									<?php if (!$caps['can_photos']): ?>
 										<div class="alert alert-light" style="border:1px dashed #cfd4e0;">
-											<p style="margin:0;">&#128274; A logo and gallery photos are not included in the <?= e($plan_label ?: 'Basic') ?> listing.
+											<p style="margin:0;">&#128274; A logo and gallery photos are not included in the <?= e($plan_label ?: 'Free Community') ?> listing.
 												<a href="<?= e_url(base_url('pricing-plan')) ?>">Upgrade to Advanced or Featured</a> to add them &mdash; you can add them later from My Listings.</p>
 										</div>
 									<?php else: ?>
@@ -458,7 +459,7 @@ $has_media = $caps['can_photos'] || $caps['can_video'];
 									<h4>Video</h4>
 									<?php if (!$caps['can_video']): ?>
 										<div class="alert alert-light" style="border:1px dashed #cfd4e0;">
-											<p style="margin:0;">&#128274; Video is not included in the <?= e($plan_label ?: 'Basic') ?> listing.
+											<p style="margin:0;">&#128274; Video is not included in the <?= e($plan_label ?: 'Free Community') ?> listing.
 												<a href="<?= e_url(base_url('pricing-plan')) ?>">See which packages include video</a>.</p>
 										</div>
 									<?php else: ?>

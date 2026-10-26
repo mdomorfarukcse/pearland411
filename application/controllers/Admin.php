@@ -364,6 +364,8 @@ class Admin extends CI_Controller
 			'email_diagnostics',
 			// Member moderation: suspending or deleting an account.
 			'user_suspend', 'user_restore', 'user_delete',
+			// Releases every listing an account owns for claiming.
+			'release_account_listings',
 		);
 
 		if (!in_array($page, $public_actions, true)) {
@@ -2275,7 +2277,16 @@ class Admin extends CI_Controller
 			$this->load->view('admin/edit_listings');
 			$this->load->view('admin/footer');
 		} else {
-			$listing_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('listing_name'));
+			// The page address stays put unless the business is renamed — every
+			// save used to rebuild it from the name (so "central-texas-bbq" became
+			// "Central-Texas-BBQ"), breaking emailed links, and a name another
+			// listing already used failed the save on the unique index.
+			$listing_slug = (string) $data['listing']->listing_slug;
+			$new_name     = (string) $this->input->post('listing_name');
+			if (trim($new_name) !== trim((string) $data['listing']->listing_name)
+				&& strcasecmp(trim(preg_replace('/[^A-Za-z0-9-]+/', '-', $new_name), '-'), $listing_slug) !== 0) {
+				$listing_slug = $this->makeUniqueListingSlug($new_name);
+			}
 			$info = array(
 				'user_id' => $this->input->post('user_id'),
 				'listing_name' => $this->input->post('listing_name'),
@@ -2306,6 +2317,7 @@ class Admin extends CI_Controller
 				'listing_seo_description' => $this->input->post('listing_seo_description'),
 				'listing_slug' => $listing_slug
 			);
+			$info = array_merge($info, $this->listingClaimAndPlacementFields($data['listing']));
 
 			// Auto-generate Google Map embed URL from lat/lng
 			$lat = $this->input->post('listing_lat');
@@ -2400,6 +2412,50 @@ class Admin extends CI_Controller
 				redirect('admin/edit-listing/' . rawurlencode((string) $slug));
 			}
 		}
+	}
+
+	/**
+	 * The listing editor's claim switch, homepage placement dates, hours and
+	 * social links — each only when its column exists (0018 / 0037), so the
+	 * form never writes a column the install does not have.
+	 *
+	 * @param  object $listing the row as it is now
+	 * @return array columns to write
+	 */
+	private function listingClaimAndPlacementFields($listing)
+	{
+		$out = array();
+
+		if (property_exists($listing, 'is_claimed')) {
+			$claimed = $this->input->post('is_claimed') ? 1 : 0;
+			$out['is_claimed'] = $claimed;
+			if ($claimed !== (int) $listing->is_claimed) {
+				$out['claimed_at'] = $claimed ? date('Y-m-d H:i:s') : NULL;
+			}
+		}
+
+		// A date or nothing: '' clears the placement, anything unreadable is
+		// left as it was rather than silently ending a paid placement.
+		foreach (array('hotspot_until', 'week_until') as $col) {
+			if (!property_exists($listing, $col)) continue;
+			$raw = trim((string) $this->input->post($col));
+			if ($raw === '') {
+				$out[$col] = NULL;
+			} elseif (($ts = strtotime($raw)) !== FALSE) {
+				$out[$col] = date('Y-m-d', $ts);
+			}
+		}
+
+		if (property_exists($listing, 'business_hours')) {
+			$out['business_hours'] = mb_substr(trim((string) $this->input->post('business_hours')), 0, 1000);
+		}
+		foreach (array('facebook', 'instagram', 'twitter', 'youtube', 'linkedin') as $net) {
+			if (property_exists($listing, 'listing_' . $net)) {
+				$out['listing_' . $net] = mb_substr(trim((string) $this->input->post('listing_' . $net)), 0, 255);
+			}
+		}
+
+		return $out;
 	}
 
 	/*====================
@@ -6021,9 +6077,25 @@ class Admin extends CI_Controller
 			return;
 		}
 
+		// A listing going live is news to its owner (checklist §11, "listing
+		// approved/published"). Read the row before the switch so only a real
+		// off → on change sends it, and only to a business owner — never to
+		// the data-entry login that holds an unclaimed listing.
+		$before = ($tableName === 'listings' && (int) $value === 1)
+			? $this->db->where('listing_id', (int) $id)->limit(1)->get('listings')->row()
+			: NULL;
+
 		$ok = $this->db
 			->where($tableID, (int) $id)
 			->update($tableName, array($fieldName => (int) $value));
+
+		if ($ok && $before && (int) $before->listing_status !== 1 && listing_is_claimed($before)) {
+			$owner = $this->db->where('user_id', (int) $before->user_id)->limit(1)->get('user')->row();
+			if ($owner) {
+				$this->load->library('notifications');
+				$this->notifications->listing_published($before, $owner);
+			}
+		}
 
 		if ($ok) {
 			$this->session->set_flashdata('message', 'Status Updated Successfully!');
@@ -6040,59 +6112,84 @@ class Admin extends CI_Controller
 		$session 		   = $this->session->userdata('logged_admin');
 		$data['logged_id'] = $session['logged_id'];
 
-		$data['listing_requests'] = $this->usermodel->getAllValues('claim_listings');
+		// Waiting on us (pending), waiting on them (more information), and
+		// the decided ones. Pending first: that is the queue.
+		$filters = array('open' => array(0, 3), 'pending' => array(0), 'more_info' => array(3),
+			'approved' => array(1), 'rejected' => array(2), 'all' => array());
+		$filter = (string) $this->input->get('status');
+		if (!isset($filters[$filter])) $filter = 'open';
+
+		$data['filter']           = $filter;
+		$data['claim_counts']     = $this->adminmodel->countClaimsByStatus();
+		$data['listing_requests'] = $this->adminmodel->getClaimsForReview($filters[$filter]);
 
 		$this->load->view('admin/header');
-		// $this->load->view('admin/inc/left_sidebar');
 		$this->load->view('admin/claim_listing', $data);
-		// $this->load->view('user_right_sidebar');
 		$this->load->view('admin/footer');
 	}
 
 	/**
-	 * Approve a pending listing claim.
-	 *
-	 * Old behavior tried to overwrite the listing row with the claim's
-	 * full-row data but malformed the array (`$getSingleListing[0]`
-	 * was never populated), so listing.user_id was never actually
-	 * updated and the claim flow silently no-op'd on the data side.
-	 * This rewrite:
-	 *   1) Marks the claim row approved.
-	 *   2) Updates ONLY listings.user_id to the claimant's user_id.
-	 *   3) Emails the claimant their approval notice.
-	 * All steps run inside a transaction.
+	 * The claim, its listing and the claimant's account, for the three
+	 * decisions below. Redirects (and returns NULL) when any is missing or the
+	 * request is not a POST — the decisions used to be GET links.
 	 */
-	public function claim_approve($id)
+	private function claimForDecision($id)
 	{
-		$claim = $this->db
-			->where('claim_listing_id', (int) $id)
-			->limit(1)
-			->get('claim_listings')
-			->row();
+		if ($this->input->method() !== 'post') {
+			$this->session->set_flashdata('message', 'Use the buttons on the claims screen.');
+			redirect('admin/claimed-listings');
+			return NULL;
+		}
+		$claim = $this->usermodel->getClaimById((int) $id);
 		if (!$claim) {
 			$this->session->set_flashdata('message', 'Claim not found.');
 			redirect('admin/claimed-listings');
-			return;
+			return NULL;
 		}
-
-		$listing = $this->db
-			->where('listing_id', (int) $claim->listing_id)
-			->limit(1)
-			->get('listings')
-			->row();
+		$listing = $this->db->where('listing_id', (int) $claim->listing_id)->limit(1)->get('listings')->row();
 		if (!$listing) {
 			$this->session->set_flashdata('message', 'Underlying listing no longer exists.');
+			redirect('admin/claimed-listings');
+			return NULL;
+		}
+		$user = $this->db->where('user_id', (int) $claim->enquiry_sender_id)->limit(1)->get('user')->row();
+		return array($claim, $listing, $user);
+	}
+
+	/**
+	 * Approve a claim: the listing moves to the claimant's account and is
+	 * marked claimed (listings.is_claimed, migration 0037), its enquiries go
+	 * with it, and the claimant is emailed a link straight to the editor.
+	 *
+	 * A listing an owner has already claimed is not handed to somebody else
+	 * by a stray click: that needs the "transfer anyway" box ticked.
+	 */
+	public function claim_approve($id)
+	{
+		$found = $this->claimForDecision($id);
+		if (!$found) return;
+		list($claim, $listing, $user) = $found;
+
+		$claimant = (int) $claim->enquiry_sender_id;
+		if (listing_is_claimed($listing) && (int) $listing->user_id !== $claimant
+			&& !$this->input->post('confirm_transfer')) {
+			$this->session->set_flashdata('message', $listing->listing_name . ' is already claimed by another account. '
+				. 'Tick "transfer anyway" on the claim if this claimant should have it instead.');
 			redirect('admin/claimed-listings');
 			return;
 		}
 
+		$now = date('Y-m-d H:i:s');
 		$this->db->trans_start();
-		$this->db
-			->where('claim_listing_id', (int) $id)
-			->update('claim_listings', array('claim_status' => 1));
-		$this->db
-			->where('listing_id', (int) $listing->listing_id)
-			->update('listings', array('user_id' => (int) $claim->enquiry_sender_id));
+		db_safe_update('claim_listings', array(
+			'claim_status'      => 1,
+			'claim_reviewed_at' => $now,
+		), array('claim_listing_id' => (int) $claim->claim_listing_id));
+		db_safe_update('listings', array(
+			'user_id'    => $claimant,
+			'is_claimed' => 1,
+			'claimed_at' => $now,
+		), array('listing_id' => (int) $listing->listing_id));
 		$this->db->trans_complete();
 
 		if (!$this->db->trans_status()) {
@@ -6106,68 +6203,330 @@ class Admin extends CI_Controller
 		// stayed on the admin side only.
 		$moved = $this->usermodel->moveListingEnquiries(
 			(int) $listing->listing_id,
-			(int) $claim->enquiry_sender_id,
+			$claimant,
 			(int) $listing->user_id,
 			(string) $listing->listing_name
 		);
 
-		// Notify the claimant.
-		if (!empty($claim->enquiry_email)) {
-			$this->load->library('mailer');
-			$listing_url = base_url('listing-details/' . rawurlencode((string) $listing->listing_slug));
-			$body = '<p>Good news &mdash; your claim for <strong>'
-				. html_escape($listing->listing_name) . '</strong> has been approved.</p>'
-				. '<p>The listing is now linked to your account. Sign in and visit '
-				. '<a href="' . base_url('user/dashboard') . '">your dashboard</a> '
-				. 'to edit photos, hours, and contact information.</p>'
-				. '<p>Enquiries and quote requests for this business now come to you: they are on your dashboard and at '
-				. '<a href="' . base_url('user/enquiries') . '">Lead enquiry</a>'
-				. ($moved > 0 ? ', including the ' . (int) $moved . ' sent before your claim was approved' : '')
-				. ', and new ones are emailed to you.</p>'
-				. '<p>Public page: <a href="' . $listing_url . '">' . $listing_url . '</a></p>';
-			$this->mailer->send($claim->enquiry_email, 'Your listing claim was approved', $body);
-		}
+		$this->load->library('notifications');
+		$sent = $this->notifications->claim_approved($claim, $listing, $user, $moved);
 
 		$this->session->set_flashdata('message', 'Claim approved and listing transferred.'
-			. ($moved > 0 ? ' ' . (int) $moved . ' earlier enquir' . ($moved === 1 ? 'y' : 'ies') . ' moved to the new owner.' : ''));
+			. ($moved > 0 ? ' ' . (int) $moved . ' earlier enquir' . ($moved === 1 ? 'y' : 'ies') . ' moved to the new owner.' : '')
+			. ($sent ? ' The owner was emailed.' : ' The approval email could not be sent — check /admin/email-diagnostics.'));
 		redirect('admin/claimed-listings');
 	}
 
 	/**
-	 * Reject a pending claim without deleting the row (so the audit
-	 * trail survives). Stores claim_status = 2 to distinguish from
-	 * pending (0) and approved (1).
+	 * Reject a claim without deleting the row (so the audit trail survives):
+	 * claim_status = 2, with the reviewer's reason, which the claimant sees in
+	 * the email and on My claims.
 	 */
 	public function claim_reject($id)
 	{
-		$claim = $this->db
-			->where('claim_listing_id', (int) $id)
-			->limit(1)
-			->get('claim_listings')
-			->row();
-		if (!$claim) {
-			$this->session->set_flashdata('message', 'Claim not found.');
+		$found = $this->claimForDecision($id);
+		if (!$found) return;
+		list($claim, $listing, $user) = $found;
+
+		$reason = trim((string) $this->input->post('admin_note'));
+		db_safe_update('claim_listings', array(
+			'claim_status'      => 2,
+			'claim_admin_note'  => mb_substr($reason, 0, 2000),
+			'claim_reviewed_at' => date('Y-m-d H:i:s'),
+		), array('claim_listing_id' => (int) $claim->claim_listing_id));
+
+		$this->load->library('notifications');
+		$sent = $this->notifications->claim_rejected($claim, $listing, $user, $reason);
+
+		$this->session->set_flashdata('message', 'Claim rejected.' . ($sent ? ' The claimant was emailed.' : ' The email could not be sent.'));
+		redirect('admin/claimed-listings');
+	}
+
+	/**
+	 * Ask the claimant for more before deciding (claim_status 3). They answer
+	 * from /user/my-claims (User::claim_reply), which puts the claim back in
+	 * the queue as pending.
+	 */
+	public function claim_more_info($id)
+	{
+		$found = $this->claimForDecision($id);
+		if (!$found) return;
+		list($claim, $listing, $user) = $found;
+
+		$question = trim((string) $this->input->post('admin_note'));
+		if ($question === '') {
+			$this->session->set_flashdata('message', 'Write what you need from the claimant, then press "Ask for more information".');
 			redirect('admin/claimed-listings');
 			return;
 		}
 
-		$this->db
-			->where('claim_listing_id', (int) $id)
-			->update('claim_listings', array('claim_status' => 2));
+		db_safe_update('claim_listings', array(
+			'claim_status'      => 3,
+			'claim_admin_note'  => mb_substr($question, 0, 2000),
+			'claim_reviewed_at' => date('Y-m-d H:i:s'),
+		), array('claim_listing_id' => (int) $claim->claim_listing_id));
 
-		if (!empty($claim->enquiry_email)) {
-			$this->load->library('mailer');
-			$body = '<p>We reviewed your claim for <strong>'
-				. html_escape($claim->enquiry_source) . '</strong> and were '
-				. 'unable to verify it at this time.</p>'
-				. '<p>If you believe this was an error, reply to this email with '
-				. 'additional proof of ownership (current website, license, etc.) '
-				. 'and we will take another look.</p>';
-			$this->mailer->send($claim->enquiry_email, 'Update on your listing claim', $body);
+		$this->load->library('notifications');
+		$sent = $this->notifications->claim_more_info($claim, $listing, $user, $question);
+
+		$this->session->set_flashdata('message', 'Asked the claimant for more information.'
+			. ($sent ? ' They were emailed.' : ' The email could not be sent — check /admin/email-diagnostics.'));
+		redirect('admin/claimed-listings');
+	}
+
+	/**
+	 * Mark one listing claimed or claimable (POST, from the listing editor and
+	 * the Business Listings table). "Claimable" puts the Claim This Business
+	 * button back on it; the owner account is not changed.
+	 */
+	public function listing_claim_status($listing_id)
+	{
+		$listing = $this->db->where('listing_id', (int) $listing_id)->limit(1)->get('listings')->row();
+		if (!$listing || $this->input->method() !== 'post') {
+			redirect('admin/all-listings');
+			return;
+		}
+		if (!$this->db->field_exists('is_claimed', 'listings')) {
+			$this->session->set_flashdata('error', 'Run database migration 0037 first.');
+			redirect('admin/all-listings');
+			return;
 		}
 
-		$this->session->set_flashdata('message', 'Claim rejected and claimant notified.');
-		redirect('admin/claimed-listings');
+		$claimed = $this->input->post('is_claimed') === '1';
+		$this->db->where('listing_id', (int) $listing->listing_id)->update('listings', array(
+			'is_claimed' => $claimed ? 1 : 0,
+			'claimed_at' => $claimed ? date('Y-m-d H:i:s') : NULL,
+		));
+		$this->session->set_flashdata('message', $listing->listing_name . ($claimed
+			? ' is marked as claimed: the Claim button is hidden.'
+			: ' is now claimable: the Claim This Business button shows on it.'));
+
+		$back = (string) $this->input->post('back');
+		redirect($back === 'edit' ? 'admin/edit-listing/' . rawurlencode((string) $listing->listing_slug) : 'admin/all-listings');
+	}
+
+	/**
+	 * Make every listing an account owns claimable (POST, super-admin, from
+	 * /admin/users). For a data-entry login the 0037 backfill counted as a
+	 * business owner because it owned three listings or fewer.
+	 */
+	public function release_account_listings($user_id)
+	{
+		if ($this->input->method() !== 'post' || !$this->db->field_exists('is_claimed', 'listings')) {
+			redirect('admin/users');
+			return;
+		}
+		$this->db->where('user_id', (int) $user_id)->where('is_deleted', 0)
+			->update('listings', array('is_claimed' => 0, 'claimed_at' => NULL));
+		$n = $this->db->affected_rows();
+		$this->session->set_flashdata('message', $n . ' listing' . ($n === 1 ? '' : 's') . ' made claimable.');
+		redirect('admin/users');
+	}
+
+	/*====================
+		Analytics (checklist §10)
+	=====================*/
+	/**
+	 * Site-wide activity for a period: listing views, website / phone / email
+	 * / map clicks, leads, coupon activity and ad impressions / clicks, with
+	 * the businesses, deals and banners behind them. Counters come from
+	 * activity_daily (libraries/Activity.php); leads are the enquiries rows.
+	 */
+	public function analytics()
+	{
+		$days = (int) $this->input->get('days');
+		if (!in_array($days, array(7, 30, 90), TRUE)) $days = 30;
+		$since = date('Y-m-d', strtotime('-' . ($days - 1) . ' days'));
+
+		$this->load->library('activity');
+		$listing_stats = $this->activity->totals('listing', array(), $since);
+		$coupon_stats  = $this->activity->totals('coupon', array(), $since);
+		$ad_stats      = $this->activity->totals('ad', array(), $since);
+		$leads         = $this->usermodel->countListingLeads(array(), $since);
+
+		$sum = function (array $stats, $event) {
+			$t = 0;
+			foreach ($stats as $row) $t += (int) ($row[$event] ?? 0);
+			return $t;
+		};
+
+		// The 25 busiest listings by views, plus any with leads.
+		$top_ids = array_keys($this->activity->top('listing', 'view', $since, 25));
+		$top_ids = array_values(array_unique(array_merge($top_ids, array_slice(array_keys($leads), 0, 25))));
+		$top = $top_ids
+			? $this->db->select('listing_id, listing_name, listing_slug')->where_in('listing_id', $top_ids)->get('listings')->result()
+			: array();
+		usort($top, function ($a, $b) use ($listing_stats) {
+			return ($listing_stats[(int) $b->listing_id]['view'] ?? 0) <=> ($listing_stats[(int) $a->listing_id]['view'] ?? 0);
+		});
+
+		$ads = array();
+		if ($ad_stats && $this->db->table_exists('ads')) {
+			$ads = $this->db->select('a.id, a.ad_link, a.ad_start_date, a.ad_end_date, ap.name AS zone_name, u.name AS advertiser', FALSE)
+				->from('ads a')
+				->join('ads_prices ap', 'ap.id = a.ads_price_id', 'left')
+				->join('user u', 'u.user_id = a.u_id', 'left')
+				->where_in('a.id', array_keys($ad_stats))
+				->get()->result();
+		}
+		$coupons = $coupon_stats
+			? $this->db->select('coupon_id, coupon_name, coupon_end_date')->where_in('coupon_id', array_keys($coupon_stats))->get('coupons')->result()
+			: array();
+
+		$data = array(
+			'days'    => $days,
+			'since'   => $since,
+			'ready'   => $this->activity->ready(),
+			'totals'  => array(
+				'Listing views'  => $sum($listing_stats, 'view'),
+				'Leads'          => array_sum($leads),
+				'Website clicks' => $sum($listing_stats, 'website'),
+				'Phone / WhatsApp clicks' => $sum($listing_stats, 'phone') + $sum($listing_stats, 'whatsapp'),
+				'Email clicks'   => $sum($listing_stats, 'email'),
+				'Map / directions clicks' => $sum($listing_stats, 'map'),
+				'Coupon views'   => $sum($coupon_stats, 'view'),
+				'Coupon clicks'  => $sum($coupon_stats, 'click'),
+				'Banner impressions' => $sum($ad_stats, 'impression'),
+				'Banner clicks'  => $sum($ad_stats, 'click'),
+			),
+			'top'           => $top,
+			'listing_stats' => $listing_stats,
+			'leads'         => $leads,
+			'ads'           => $ads,
+			'ad_stats'      => $ad_stats,
+			'coupons'       => $coupons,
+			'coupon_stats'  => $coupon_stats,
+		);
+		$this->load->view('admin/header', $data);
+		$this->load->view('admin/analytics', $data);
+		$this->load->view('admin/footer');
+	}
+
+	/*====================
+		Homepage placements — Business Hotspot, Business of the Week, Featured
+	=====================*/
+	/**
+	 * Checklist §7: featured businesses can be added and removed, and expired
+	 * promotions come off. The Hotspot and Business of the Week are sold on
+	 * /pricing-plan and stored as dates (listings.hotspot_until / week_until,
+	 * migration 0018), but nothing in admin could set them, so a placement
+	 * bought online never appeared. They drop off the homepage by themselves
+	 * the day after the date; this screen adds, extends and removes them.
+	 */
+	public function homepage_placements()
+	{
+		$q = trim((string) $this->input->get('q'));
+		$data = array(
+			'placements' => $this->adminmodel->getHomepagePlacements(),
+			'q'          => $q,
+			'results'    => $this->adminmodel->searchListingsForPlacement($q),
+			'has_dates'  => $this->db->field_exists('hotspot_until', 'listings') && $this->db->field_exists('week_until', 'listings'),
+		);
+		$this->load->view('admin/header', $data);
+		$this->load->view('admin/homepage_placements', $data);
+		$this->load->view('admin/footer');
+	}
+
+	/** POST: put a listing in a placement (or move its end date). */
+	public function homepage_placement_save()
+	{
+		$back = 'admin/homepage-placements';
+		if ($this->input->method() !== 'post') { redirect($back); return; }
+
+		$listing = $this->db->where('listing_id', (int) $this->input->post('listing_id'))->where('is_deleted', 0)->limit(1)->get('listings')->row();
+		$type    = (string) $this->input->post('type');
+		$cols    = array('hotspot' => 'hotspot_until', 'week' => 'week_until');
+		if (!$listing || !in_array($type, array('hotspot', 'week', 'featured'), TRUE)) {
+			$this->session->set_flashdata('error', 'Choose a listing and a placement.');
+			redirect($back);
+			return;
+		}
+
+		if ($type === 'featured') {
+			$this->db->where('listing_id', (int) $listing->listing_id)->update('listings', array('featured_listing' => 1));
+			$this->session->set_flashdata('message', $listing->listing_name . ' is now Featured.');
+			redirect($back);
+			return;
+		}
+
+		$ts = strtotime((string) $this->input->post('until'));
+		if (!$this->db->field_exists($cols[$type], 'listings') || $ts === FALSE || date('Y-m-d', $ts) < date('Y-m-d')) {
+			$this->session->set_flashdata('error', 'Give an end date from today on (run migration 0018 first if this keeps failing).');
+			redirect($back);
+			return;
+		}
+		$this->db->where('listing_id', (int) $listing->listing_id)->update('listings', array($cols[$type] => date('Y-m-d', $ts)));
+		$this->session->set_flashdata('message', $listing->listing_name . ' is in '
+			. ($type === 'hotspot' ? 'the Business Hotspot' : 'Business of the Week') . ' until ' . us_date(date('Y-m-d', $ts)) . '.');
+		redirect($back);
+	}
+
+	/** POST: take a listing out of a placement now. */
+	public function homepage_placement_remove($listing_id)
+	{
+		$back = 'admin/homepage-placements';
+		$type = (string) $this->input->post('type');
+		$set  = array(
+			'hotspot'  => array('hotspot_until' => NULL),
+			'week'     => array('week_until' => NULL),
+			'featured' => array('featured_listing' => 0, 'spotlight_listing' => 0),
+		);
+		if ($this->input->method() === 'post' && isset($set[$type])) {
+			db_safe_update('listings', $set[$type], array('listing_id' => (int) $listing_id));
+			$this->session->set_flashdata('message', 'Removed from the homepage placement.');
+		}
+		redirect($back);
+	}
+
+	/**
+	 * GET /admin/claim-document/<claim id> — the proof document sent with a
+	 * claim, streamed to a signed-in admin only (the admin constructor
+	 * refuses anyone else). New documents live under application/storage/
+	 * ("storage:claims/<file>", User::uploadClaimDocument), which the web
+	 * server never serves; an older claim's image under uploads/ is served
+	 * from here too. The path is resolved and checked against those two
+	 * folders, so a stored value can never point anywhere else.
+	 */
+	public function claim_document($id)
+	{
+		$claim = $this->usermodel->getClaimById((int) $id);
+		$ref   = $claim ? (string) $claim->enquiry_image : '';
+		if ($ref === '') { show_404(); return; }
+
+		if (strpos($ref, 'storage:') === 0) {
+			$bases = array(realpath(APPPATH . 'storage'));
+			$path  = realpath(APPPATH . 'storage/' . substr($ref, 8));
+		} else {
+			// An older claim's picture, wherever the theme put it.
+			$bases = array(realpath(FCPATH . 'uploads'), realpath(FCPATH . 'assets/images'));
+			$path  = realpath(FCPATH . ltrim($ref, '/'));
+		}
+		$inside = FALSE;
+		foreach ($bases as $base) {
+			if ($base && $path && strpos($path, $base . DIRECTORY_SEPARATOR) === 0) $inside = TRUE;
+		}
+		if (!$inside || !is_file($path)) {
+			show_404();
+			return;
+		}
+
+		$types = array('pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
+			'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif');
+		$ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+		if (!isset($types[$ext])) { show_404(); return; }
+
+		// Sent with header(), not $this->output->set_header(): the CSRF
+		// display_override hook (hooks/Csrf_inject.php) replaces CI's own
+		// output step, so headers queued on the Output class are never sent —
+		// the file would go out as text/html and the hook would run its HTML
+		// rewriting over it. A real Content-Type makes the hook pass it through.
+		$name = 'claim-' . (int) $claim->claim_listing_id . '-document.' . $ext;
+		header('Content-Type: ' . $types[$ext]);
+		header('Content-Disposition: inline; filename="' . $name . '"');
+		header('Content-Length: ' . filesize($path));
+		header('X-Content-Type-Options: nosniff');
+		header('Cache-Control: private, no-store');
+		$this->output->set_output(file_get_contents($path));
 	}
 
 	public function delete_claim($id)
@@ -6724,6 +7083,19 @@ class Admin extends CI_Controller
 		$sort = $this->input->post('sort_order');
 		if ($sort !== NULL && $sort !== '' && is_numeric($sort)) {
 			$row['sort_order'] = (int) $sort;
+		}
+
+		// Hours and social links (migration 0037) and the listing-package
+		// flags (0038), the same way.
+		foreach (array('can_hours', 'can_social_links', 'can_email', 'can_coupons', 'verified_badge') as $__col) {
+			if ($this->db->field_exists($__col, 'plans')) {
+				$row[$__col] = $this->input->post($__col) ? 1 : 0;
+			}
+		}
+		if ($this->db->field_exists('extra_features', 'plans')) {
+			$__lines = preg_split('/\r\n|\r|\n/', (string) $this->input->post('extra_features'));
+			$__lines = array_values(array_filter(array_map(function ($l) { return mb_substr(trim($l), 0, 120); }, $__lines), 'strlen'));
+			$row['extra_features'] = implode("\n", array_slice($__lines, 0, 15));
 		}
 
 		// Videos a listing on this plan may show (migration 0036). Only

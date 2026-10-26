@@ -269,7 +269,8 @@ $showing_to   = $current_offset + count($allListings);
 								</div>
 
 								<div class="p411-biz__body">
-									<h3><a href="<?= e_url($detail_url) ?>"><?= e($name) ?></a></h3>
+									<h3><a href="<?= e_url($detail_url) ?>"><?= e($name) ?></a><?php if (property_exists($value, 'is_claimed') && listing_is_verified($value)): ?>
+										<span class="p411-biz__verified" title="Verified business"><i class="material-icons" aria-hidden="true">check_circle</i> Verified</span><?php endif; ?></h3>
 
 									<?php if ($reviews_n > 0 && $rating > 0): ?>
 										<div class="p411-biz__rate">
@@ -305,6 +306,13 @@ $showing_to   = $current_offset + count($allListings);
 											   href="https://wa.me/<?= e_attr(preg_replace('/[^0-9]/', '', (string) $value->listing_whatsapp)) ?>">WhatsApp</a>
 										<?php endif; ?>
 									</div>
+									<?php // The business owner browsing the directory is who the 100-business
+									      // campaign is after: say it on the card, not only on the listing page. ?>
+									<?php if (property_exists($value, 'is_claimed') && !listing_is_claimed($value) && !empty($value->listing_slug)): ?>
+										<a class="p411-biz__claim" href="<?= e_url(base_url('claim-listing/' . rawurlencode((string) $value->listing_slug))) ?>">
+											Is this your business? <b>Claim it</b>
+										</a>
+									<?php endif; ?>
 								</div>
 							</article>
 

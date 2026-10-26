@@ -179,6 +179,19 @@ if ($current_subscription) {
     if (isset($current_subscription->analytics_access) && $current_subscription->analytics_access) {
         $features[] = 'Analytics Access';
     }
+    // The listing packages (migrations 0037 / 0038) — the same flags the
+    // pricing cards and the listing forms use.
+    if (!empty($current_subscription->can_photos)) {
+        $__pl = (int) ($current_subscription->photo_limit ?? 0);
+        $features[] = 'Logo' . ($__pl < 0 ? ' + unlimited photos' : ($__pl > 0 ? ' + ' . $__pl . ' photos' : ''));
+    }
+    foreach (array('can_email' => 'Email on your listing', 'can_hours' => 'Opening hours', 'can_social_links' => 'Social media links',
+                   'can_coupons' => 'Deals & coupons', 'verified_badge' => 'Verified badge') as $__col => $__label) {
+        if (!empty($current_subscription->$__col)) $features[] = $__label;
+    }
+    foreach (preg_split('/\r\n|\r|\n/', (string) ($current_subscription->extra_features ?? '')) as $__x) {
+        if (trim($__x) !== '') $features[] = trim($__x);
+    }
 
     $plan_features = $features;
 }

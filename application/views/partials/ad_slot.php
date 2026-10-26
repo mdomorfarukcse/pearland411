@@ -308,6 +308,18 @@ if ($__need_css) define('PEARLAND411_AD_SLOT_CSS', 1);
 	// A banner whose link is unusable still renders — the advertiser paid for
 	// the impression — just without an anchor, rather than with a dead one.
 	$__ad_href = ($__ad && !empty($__ad->ad_photo)) ? external_url($__ad->ad_link ?? '') : '';
+
+	// Analytics (checklist §10, "promotional placement activity"): count the
+	// impression, and send the click through /ad-click/<id>, which counts it
+	// and redirects to the same external_url() — so the figure an advertiser
+	// is shown does not depend on JavaScript. House ads are not counted.
+	if ($__ad && !empty($__ad->ad_photo)) {
+		activity_record('ad', (int) $__ad->id, 'impression');
+		// Web links only: a mailto:/tel: banner keeps its own href.
+		if (preg_match('#^https?://#i', $__ad_href)) {
+			$__ad_href = base_url('ad-click/' . (int) $__ad->id);
+		}
+	}
 	?>
 	<?php if ($__ad && !empty($__ad->ad_photo)): ?>
 		<?php if ($__ad_href !== ''): ?>

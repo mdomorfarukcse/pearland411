@@ -106,7 +106,7 @@
 						<div style="flex:1;min-width:220px;">
 							<?php if ($free_plan_available): ?>
 								<div style="font-weight:600;color:#2c3e50;">You are not on a plan yet</div>
-								<div style="font-size:13px;color:#6c757d;">Your next listing starts on the free Basic plan. Upgrade for a logo, photos, video and a map.</div>
+								<div style="font-size:13px;color:#6c757d;">Your next listing starts on the Free Community plan. Upgrade for a logo, photos, hours, social links and more.</div>
 							<?php else: ?>
 								<div style="font-weight:600;color:#2c3e50;">Choose a plan to add a listing</div>
 								<div style="font-size:13px;color:#6c757d;">Pick a plan to add your business, or claim an existing listing for free.</div>

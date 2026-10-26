@@ -2762,10 +2762,10 @@ class Usermodel extends CI_Model
 	public function claimBusiness($data)
 	{
 		$data['claim_created_at'] = date('Y-m-d H:i:s');
-		if ($this->db->insert('claim_listings', $data)) {
-			return (int) $this->db->insert_id();
-		}
-		return false;
+		// Schema-fitted: the role / verification / business-name columns
+		// arrive with migration 0037 and are dropped on an install without it.
+		$id = db_safe_insert('claim_listings', $data);
+		return $id ? (int) $id : false;
 	}
 
 	/**
@@ -2793,6 +2793,50 @@ class Usermodel extends CI_Model
 			$this->db->where('c.claim_status', $map[$only]);
 		}
 		return $this->db->get()->result();
+	}
+
+	/**
+	 * Does this account's current plan include the Verified badge? (The
+	 * listing packages, migration 0038: Starter and up.) Before 0038 there is
+	 * no such flag and a claimed listing was "verified", so this says yes.
+	 */
+	public function ownerHasVerifiedBadge($user_id)
+	{
+		$user_id = (int) $user_id;
+		if ($user_id <= 0) return FALSE;
+		if (!$this->db->field_exists('verified_badge', 'plans')) return TRUE;
+		return $this->db->from('subscriptions s')
+			->join('plans p', 'p.id = s.plan_id')
+			->where('s.user_id', $user_id)
+			->where('s.status', 'active')
+			->where('s.end_date >=', date('Y-m-d'))
+			->where('p.verified_badge', 1)
+			->count_all_results() > 0;
+	}
+
+	/**
+	 * Leads (enquiries) per listing since a date — the "Leads" column of the
+	 * analytics pages. A lead is the enquiries row itself; nothing is counted
+	 * twice in activity_daily.
+	 *
+	 * @param  int[]  $listing_ids [] = every listing
+	 * @param  string $since       Y-m-d
+	 * @return array<int,int> listing_id => leads
+	 */
+	public function countListingLeads(array $listing_ids, $since)
+	{
+		if (!$this->db->field_exists('listing_id', 'enquiries')) return array();
+		$this->db->select('listing_id, COUNT(*) AS n', FALSE)
+			->from('enquiries')
+			->where('listing_id >', 0)
+			->where('enquiry_created_at >=', $since . ' 00:00:00');
+		$listing_ids = array_values(array_filter(array_map('intval', $listing_ids)));
+		if ($listing_ids) $this->db->where_in('listing_id', $listing_ids);
+		$out = array();
+		foreach ($this->db->group_by('listing_id')->get()->result() as $row) {
+			$out[(int) $row->listing_id] = (int) $row->n;
+		}
+		return $out;
 	}
 
 	public function getClaimById($claim_id)
@@ -3782,7 +3826,12 @@ class Usermodel extends CI_Model
 	// Get user's current subscription plan
 	public function getUserSubscription($user_id)
 	{
-		$query = $this->db->select('s.*, p.*')
+		// `s.*, p.*` alone let the PLAN's id overwrite the subscription's, and
+		// every caller that writes back by `$sub->id` — cancel auto-renew,
+		// upgrade, scheduled downgrade, usage tracking — then wrote to the
+		// subscription whose id happened to equal the plan id: someone else's,
+		// or none. The plan's id is `plan_id` on the subscription row.
+		$query = $this->db->select('s.*, p.*, s.id AS id', FALSE)
 			->from('subscriptions s')
 			->join('plans p', 's.plan_id = p.id')
 			->where('s.user_id', $user_id)
@@ -6300,7 +6349,11 @@ class Usermodel extends CI_Model
 			$plan_id = !empty($subscription->pending_plan_id)
 				? (int) $subscription->pending_plan_id
 				: (int) $subscription->plan_id;
-			$plan = $this->getPlanByIdForPricing($plan_id);
+			// A plan taken off sale (0038 retired the old listing tiers) still
+			// renews at the price the customer signed up at; looking it up
+			// among active plans only priced the renewal at 0, which the cron
+			// treats as a failure and expires the subscription after three.
+			$plan = $this->getPlanByIdForPricing($plan_id) ?: $this->getPlanById($plan_id);
 			if ($plan) {
 				$amount = (float) $plan->price;
 			}
@@ -7161,7 +7214,7 @@ class Usermodel extends CI_Model
 	{
 		if (!$this->db->field_exists('hotspot_until', 'listings')) return array();
 
-		return $this->db
+		$rows = $this->db
 			->select('listings.listing_id, listings.listing_name, listings.listing_slug,
 			          listings.listing_image, listings.hotspot_until, listing_categories.category_name', false)
 			->from('listings')
@@ -7170,9 +7223,12 @@ class Usermodel extends CI_Model
 			->where('listings.is_deleted', 0)
 			->where('listings.hotspot_until >=', date('Y-m-d'))
 			->order_by('listings.hotspot_until', 'ASC')
-			->limit((int) $limit)
+			->limit(60)
 			->get()
 			->result();
+		// More live Hotspots than places on the rail: rotate, as the Featured
+		// row does, rather than always showing the ones that expire first.
+		return array_slice($this->rotate($rows), 0, (int) $limit);
 	}
 
 	/**
@@ -7449,13 +7505,30 @@ class Usermodel extends CI_Model
 			->or_where('listings.spotlight_listing', 1)
 			->group_end();
 
-		$this->db->order_by('p411_no_image', 'ASC');
-		if ($this->db->field_exists('created_at', 'listings')) {
-			$this->db->order_by('listings.created_at', 'DESC');
-		}
-		$this->db->order_by('listings.listing_id', 'DESC');
+		// Rotation (checklist §7, "homepage rotation works"). This returned
+		// the newest featured listings every time, so with more paid
+		// placements than slots the same ones always showed and the rest never
+		// did. Fetch the pool, keep the ones with a picture in front, and
+		// shuffle within each group, so every featured business gets its turn.
+		$rows = $this->db->limit(60)->get()->result();
+		return array_slice($this->rotate($rows), 0, (int) $limit);
+	}
 
-		return $this->db->limit((int) $limit)->get()->result();
+	/**
+	 * Shuffle homepage rows, keeping the ones with a picture ahead of the
+	 * ones without (p411_no_image, or an empty listing_image).
+	 */
+	private function rotate(array $rows)
+	{
+		$with = array();
+		$without = array();
+		foreach ($rows as $row) {
+			$no_image = isset($row->p411_no_image) ? (int) $row->p411_no_image === 1 : empty($row->listing_image);
+			if ($no_image) $without[] = $row; else $with[] = $row;
+		}
+		shuffle($with);
+		shuffle($without);
+		return array_merge($with, $without);
 	}
 
 	/**

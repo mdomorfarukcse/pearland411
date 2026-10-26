@@ -28,6 +28,15 @@ $svc_icon_map = array(
 	'mail'          => 'mail',
 	'campaign'      => 'campaign',
 	'share'         => 'share',
+	// The à la carte marketing services added by migration 0038.
+	'brush'         => 'brush',
+	'google_ads'    => 'trending_up',
+	'email_blast'   => 'mail_outline',
+	'article'       => 'description',
+	'video'         => 'videocam',
+	'photo'         => 'photo_camera',
+	'reviews'       => 'star',
+	'event'         => 'event',
 );
 
 $svc_ok  = $this->session->flashdata('service_request_success');
@@ -162,9 +171,9 @@ $svc_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 
 							<div class="p411-svc__foot">
 								<span class="p411-svc__price">
-									<?php if ($has_price): ?>
-										<b>$<?= number_format((float) $svc->base_price, 0) ?></b>
-										<small><?= e(str_replace('_', ' ', (string) $svc->price_unit)) ?></small>
+									<?php if ($has_price): $__pl = service_price_label($svc); ?>
+										<b><?= e($__pl[0]) ?></b>
+										<small><?= e($__pl[1]) ?></small>
 									<?php else: ?>
 										<b>Custom quote</b>
 										<small>priced to your job</small>

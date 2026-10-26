@@ -1,0 +1,11 @@
+# Proof documents sent with Claim This Business requests (business licenses,
+# utility bills). Only admins may see them, through /admin/claim-document/<id>
+# (Admin::claim_document), which checks the admin session and streams the file.
+# Nothing in here is ever served directly.
+Require all denied
+
+# Apache 2.2 fallback, for hosts still running it.
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

@@ -22,6 +22,12 @@ application/logs/*
 !application/logs/index.html
 !application/logs/.htaccess
 
+# Private uploads (claim proof documents): keep the directory and its guards,
+# never the files. Served only to admins by Admin::claim_document.
+application/storage/claims/*
+!application/storage/claims/index.html
+!application/storage/claims/.htaccess
+
 # CodeIgniter cache (keep the directory + index.html)
 application/cache/*
 !application/cache/index.html

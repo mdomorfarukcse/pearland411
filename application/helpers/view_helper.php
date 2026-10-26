@@ -983,8 +983,10 @@ if (!function_exists('plan_term_copy')) {
             $noun = billing_interval_noun($interval);
             return array(
                 'per ' . $noun,
-                'Recurring only if you turn on auto-renew at checkout: then your card is charged every '
-                    . $noun . ' until you cancel, and we email you before each charge. Otherwise it ends after one ' . $noun . '.',
+                // Auto-renew starts ticked at checkout (client decision,
+                // 2026-10); the customer can untick it for a single term.
+                'Renews every ' . $noun . ': your card is charged each ' . $noun . ' until you cancel, and we email you '
+                    . 'before each charge. Prefer one ' . $noun . ' only? Untick auto-renew at checkout.',
             );
         }
 
@@ -1026,7 +1028,7 @@ if (!function_exists('cap_lock_note')) {
     {
         if ($allowed) return '';
         return '<small class="form-text text-warning" style="display:block;margin-top:4px;">'
-            . '&#128274; ' . ($what !== '' ? e($what) . ' are not' : 'Not') . ' included in your current package. '
+            . '&#128274; ' . ($what !== '' ? e($what) . (preg_match('/^(An?|The) /', $what) ? ' is not' : ' are not') : 'Not') . ' included in your current package. '
             . '<a href="' . base_url('pricing-plan') . '">Upgrade to unlock</a>.</small>';
     }
 }
@@ -1437,5 +1439,186 @@ if (!function_exists('user_option_label')) {
         }
 
         return $label;
+    }
+}
+
+if (!function_exists('listing_is_claimed')) {
+    /**
+     * Has the business owner got this listing?
+     *
+     * Not `!empty($listing->user_id)`. Every listing has an owner — the CSV
+     * import and the admin form both require one — and the imported directory
+     * belongs to a handful of data-entry logins, so that test called every
+     * listing claimed and the "Claim This Business" button never showed.
+     * `listings.is_claimed` (migration 0037) is set by an approved claim, by a
+     * member adding their own business, or by an admin. Before 0037 has run,
+     * the old rule applies so nothing changes.
+     *
+     * @param  object|array|null $listing a listings row
+     * @return bool
+     */
+    function listing_is_claimed($listing)
+    {
+        $listing = (object) $listing;
+        if (property_exists($listing, 'is_claimed')) {
+            return (int) $listing->is_claimed === 1;
+        }
+        return !empty($listing->user_id);
+    }
+}
+
+if (!function_exists('claim_roles')) {
+    /**
+     * "Your role at the business" on the claim form, key => label. The key is
+     * what claim_listings.claim_role stores.
+     *
+     * @return array<string,string>
+     */
+    function claim_roles()
+    {
+        return array(
+            'owner'    => 'Owner',
+            'co_owner' => 'Co-owner / partner',
+            'manager'  => 'Manager',
+            'employee' => 'Employee (authorised by the owner)',
+            'agency'   => 'Marketing agency / representative',
+            'other'    => 'Other',
+        );
+    }
+}
+
+if (!function_exists('claim_verification_methods')) {
+    /**
+     * "How can we verify you?" on the claim form, key => label. The key is
+     * what claim_listings.claim_verification stores.
+     *
+     * @return array<string,string>
+     */
+    function claim_verification_methods()
+    {
+        return array(
+            'phone'    => 'Call me on the business phone number on the listing',
+            'email'    => 'Email me at an address on the business’s own domain',
+            'document' => 'I’ll upload a document (business license, utility bill, EIN letter)',
+            'website'  => 'I can add a note to the business website or social page',
+            'other'    => 'Something else — I’ll explain below',
+        );
+    }
+}
+
+if (!function_exists('claim_status_label')) {
+    /**
+     * What claim_listings.claim_status means, for people. 3 is "more
+     * information requested" (migration 0037).
+     */
+    function claim_status_label($status)
+    {
+        switch ((int) $status) {
+            case 1:  return 'Approved';
+            case 2:  return 'Not approved';
+            case 3:  return 'More information needed';
+            default: return 'Pending review';
+        }
+    }
+}
+
+if (!function_exists('listing_social_links')) {
+    /**
+     * The business's own social links, keyed facebook / instagram / twitter /
+     * youtube / linkedin, each made safe by external_url() ('' when unset).
+     *
+     * The listing columns come from migration 0037. Before them the listing
+     * page used the OWNER'S profile links, which put a data-entry login's
+     * Facebook page on every business it owned. $profile (the owner's
+     * user_facebook / user_twitter / user_youtube) is only used for a listing
+     * the owner has actually claimed, and only where the listing has nothing.
+     *
+     * @param  object      $listing
+     * @param  object|null $profile owner's `user` row, or NULL
+     * @return array<string,string>
+     */
+    function listing_social_links($listing, $profile = NULL)
+    {
+        $out = array();
+        foreach (array('facebook', 'instagram', 'twitter', 'youtube', 'linkedin') as $net) {
+            $value = isset($listing->{'listing_' . $net}) ? (string) $listing->{'listing_' . $net} : '';
+            if ($value === '' && $profile && listing_is_claimed($listing) && isset($profile->{'user_' . $net})) {
+                $value = (string) $profile->{'user_' . $net};
+            }
+            $out[$net] = external_url($value);
+        }
+        return $out;
+    }
+}
+
+if (!function_exists('activity_record')) {
+    /**
+     * Count one analytics event from a view or partial (see
+     * libraries/Activity.php). Views may not load libraries themselves — their
+     * $this is the CI_Loader — so this goes through get_instance().
+     *
+     * @return bool
+     */
+    function activity_record($type, $id, $event)
+    {
+        $CI =& get_instance();
+        if (!isset($CI->activity)) {
+            $CI->load->library('activity');
+        }
+        return $CI->activity->record($type, $id, $event);
+    }
+}
+
+if (!function_exists('service_price_label')) {
+    /**
+     * How a services-catalog price reads: array(amount, unit), plain text —
+     * e.g. ('From $995', 'per project') or ('$39', 'a month'). NULL when the
+     * service has no list price ("Custom quote"). `price_from` (migration 0038)
+     * marks a starting price, as the packages document lists most of them.
+     *
+     * @param  object $service a services row
+     * @return array|null
+     */
+    function service_price_label($service)
+    {
+        if (!isset($service->base_price) || $service->base_price === NULL || ($service->price_unit ?? 'custom') === 'custom') {
+            return NULL;
+        }
+        $units = array(
+            'monthly'  => 'a month',
+            'annual'   => 'a year',
+            'hourly'   => 'an hour',
+            'project'  => 'per project',
+            'one_time' => 'one-time',
+        );
+        $amount = '$' . number_format((float) $service->base_price, 0);
+        if (!empty($service->price_from)) {
+            $amount = 'From ' . $amount;
+        }
+        $unit = $units[(string) $service->price_unit] ?? str_replace('_', ' ', (string) $service->price_unit);
+        return array($amount, $unit);
+    }
+}
+
+if (!function_exists('listing_is_verified')) {
+    /**
+     * Does the listing show the Verified badge? Claimed by its owner AND the
+     * owner's plan includes the badge (the listing packages, migration 0038:
+     * Starter and up). Before 0038 a claimed listing was verified.
+     * Cached per owner for the request, so a page of cards costs one query
+     * per distinct owner.
+     *
+     * @param  object $listing a listings row (needs user_id + is_claimed)
+     * @return bool
+     */
+    function listing_is_verified($listing)
+    {
+        static $owners = array();
+        if (!listing_is_claimed($listing)) return FALSE;
+        $uid = (int) ($listing->user_id ?? 0);
+        if (!isset($owners[$uid])) {
+            $owners[$uid] = (bool) get_instance()->usermodel->ownerHasVerifiedBadge($uid);
+        }
+        return $owners[$uid];
     }
 }

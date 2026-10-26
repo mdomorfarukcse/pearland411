@@ -216,6 +216,43 @@
                         </div>
                       </div>
                       <!--FILED END-->
+                      <?php // Claim status and the two dated homepage placements
+                            // (migrations 0037 / 0018). Nothing could set the
+                            // placement dates before: a Business Hotspot or
+                            // Business of the Week sold online never appeared. ?>
+                      <?php if (property_exists($listing, 'is_claimed') || property_exists($listing, 'hotspot_until')): ?>
+                      <div class="row mb-2" style="background:#F7F5F0;border-radius:10px;padding:12px 6px 4px;margin:6px 0 14px;">
+                        <?php if (property_exists($listing, 'is_claimed')): ?>
+                        <div class="col-md-12">
+                          <div class="chbox">
+                            <input type="checkbox" id="is_claimed" name="is_claimed" value="1" <?= (int) $listing->is_claimed === 1 ? 'CHECKED' : '' ?>>
+                            <label for="is_claimed">Claimed by the business owner
+                              <small class="text-muted">(untick to show the &ldquo;Claim This Business&rdquo; button on this listing)</small></label>
+                          </div>
+                        </div>
+                        <?php endif; ?>
+                        <?php if (property_exists($listing, 'hotspot_until')): ?>
+                        <div class="col-md-6">
+                          <div class="form-group">
+                            <label for="hotspot_until">Business Hotspot on the homepage until</label>
+                            <input type="date" id="hotspot_until" name="hotspot_until" class="form-control"
+                                   value="<?= e_attr(!empty($listing->hotspot_until) ? date('Y-m-d', strtotime($listing->hotspot_until)) : '') ?>">
+                            <small class="text-muted">Empty = not in the Hotspot. Drops off by itself the day after.</small>
+                          </div>
+                        </div>
+                        <?php endif; ?>
+                        <?php if (property_exists($listing, 'week_until')): ?>
+                        <div class="col-md-6">
+                          <div class="form-group">
+                            <label for="week_until">Business of the Week until</label>
+                            <input type="date" id="week_until" name="week_until" class="form-control"
+                                   value="<?= e_attr(!empty($listing->week_until) ? date('Y-m-d', strtotime($listing->week_until)) : '') ?>">
+                            <small class="text-muted">Empty = not featured. All current placements: <a href="<?= base_url('admin/homepage-placements') ?>" target="_blank" rel="noopener">Homepage placements</a>.</small>
+                          </div>
+                        </div>
+                        <?php endif; ?>
+                      </div>
+                      <?php endif; ?>
                       <!--FILED START-->
                       <div class="row">
                         <div class="col-md-6">
@@ -349,6 +386,26 @@
                         </div>
                       </div>
                       <!--FILED END-->
+                      <?php // Hours and the business's own social links (0037). Staff fill
+                            // these for a customer who sends their details by email. ?>
+                      <?php if (property_exists($listing, 'listing_facebook')): ?>
+                      <div class="row">
+                        <div class="col-md-12">
+                          <div class="form-group">
+                            <label for="business_hours">Opening hours</label>
+                            <textarea class="form-control" id="business_hours" name="business_hours" rows="3" placeholder="Mon–Fri 9am–6pm&#10;Sat 10am–4pm&#10;Sun closed"><?= e((string) ($listing->business_hours ?? '')) ?></textarea>
+                          </div>
+                        </div>
+                        <?php foreach (array('facebook' => 'Facebook page', 'instagram' => 'Instagram', 'twitter' => 'X / Twitter', 'youtube' => 'YouTube channel', 'linkedin' => 'LinkedIn') as $__net => $__label): ?>
+                        <div class="col-md-6">
+                          <div class="form-group">
+                            <input type="text" name="listing_<?= $__net ?>" class="form-control" maxlength="255"
+                                   placeholder="<?= e_attr($__label) ?> link" value="<?= e_attr((string) ($listing->{'listing_' . $__net} ?? '')) ?>">
+                          </div>
+                        </div>
+                        <?php endforeach; ?>
+                      </div>
+                      <?php endif; ?>
                       <!--FILED START-->
                       <div class="row">
                         <div class="col-md-12">

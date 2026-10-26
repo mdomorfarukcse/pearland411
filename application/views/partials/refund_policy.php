@@ -36,13 +36,13 @@ $rp_num     = isset($rp_number) ? (string) $rp_number . ' ' : '';
 
 	<p><em>What renews, and what does not</em></p>
 	<ul>
-		<li><strong>Business listing plans</strong> (for example Advanced or Featured) are recurring <strong>only if you turn on
-			auto-renew at checkout</strong>. With auto-renew on, your card is charged again at the start of every term until you
-			cancel. We email you <?= (int) $rp_remind ?> day<?= $rp_remind === 1 ? '' : 's' ?> before each renewal charge, and send a
+		<li><strong>Business listing plans</strong> (Pearland Starter, Business and Premier) <strong>renew automatically</strong>:
+			auto-renew is ticked at checkout, and you can untick it to pay for a single term. With auto-renew on, your card is
+			charged again at the start of every term until you cancel. We email you <?= (int) $rp_remind ?> day<?= $rp_remind === 1 ? '' : 's' ?> before each renewal charge, and send a
 			receipt after it. Without auto-renew, the plan simply ends at the end of the term you bought.</li>
 		<li><strong>Banners, videos, add-ons and packages</strong> are <strong>one-time charges</strong>. You are charged once; the
 			placement runs for the term you bought and then ends. Nothing renews, so there is nothing to cancel.</li>
-		<li>The free Basic listing costs nothing and is never charged.</li>
+		<li>The Free Community listing costs nothing and is never charged.</li>
 	</ul>
 
 	<p><em>How to cancel</em></p>

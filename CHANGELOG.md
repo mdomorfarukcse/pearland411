@@ -6,6 +6,223 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-10-26 — Listing packages (Free Community / Starter / Business / Premier) and the client's answers
+
+Follow-up to the checklist entry below, from the client's answers to the open questions and the
+"Pearland411 Business Listing & Advertising Packages" document. **Run migration 0038**
+(`database/migrations/0038_listing_packages.sql`, also in `migrations_combined_phpmyadmin.sql`)
+after 0037. The code works before it is run (re-checked against a copy without 0037 or 0038).
+
+### Added — the listing packages (0038)
+
+- **Free Community $0, Pearland Starter $29/mo, Pearland Business $79/mo, Pearland Premier
+  $149/mo**, from the document's table, each with its 30-day term:
+
+  | | Free | Starter | Business | Premier |
+  |---|---|---|---|---|
+  | Name, category, address, phone, website, Google Maps, description | ✓ | ✓ | ✓ | ✓ |
+  | Logo, email, hours, social links, deals & coupons, Verified badge, services, SEO details | | ✓ | ✓ | ✓ |
+  | Gallery photos | | 5 | 15 | unlimited |
+  | Featured in category, analytics | | | ✓ | ✓ |
+  | YouTube video, priority support | | | | ✓ |
+  | By staff (listed on the card): priority search, homepage feature, banner, newsletter, social spotlight | | | monthly / small / quarterly | priority / premium / monthly |
+
+- **The old listing plans** (Basic, Advanced $15, Featured $25, the $230 Special Package, and any
+  other listing tier — the $299 / $499 ones the checklist names are not in the code, so they are
+  live-database rows) go off sale. Members on an old *free* plan move to Free Community. A paying
+  customer keeps their plan, its features and its price: renewals now fall back to an inactive
+  plan's price (`Usermodel::renewalAmountFor()`), where before a retired plan priced at 0 and the
+  cron would have expired the customer after three attempts. **Old plans nobody ever bought are
+  deleted** (client: "delete existing plan"); ones a customer bought are kept, off sale, because
+  their subscriptions and transactions point at them. Banner, video and add-on packages unchanged.
+- New plan flags `can_email`, `can_coupons`, `verified_badge` and an `extra_features` list, all at
+  `/admin/pricing` (plan editor), on the pricing cards and on My Account.
+- **Services catalog at the document's à la carte prices** — Website Design from $995, Hosting $39/mo,
+  Banner Ad Design $125, Logo Design $295, Social Media Management from $299/mo, Facebook &
+  Instagram Ads from $399/mo, Google Ads from $399/mo, Email Marketing from $149, Featured Email Blast
+  $99, Sponsored Article $150, Business Spotlight Video from $395, Photography from $250, SEO from
+  $495/mo, Reputation Management from $99/mo, Event Promotion from $150. "From" prices via
+  `services.price_from` and `service_price_label()`. Existing services keep their wording.
+
+### Changed — per the client's answers
+
+- **Owners with no active plan are on Free Community** (`User::listingCapabilities()` falls back to
+  the free plan), so a claimed listing now gets Google Maps; before, "no plan" meant nothing at all.
+- **Email on a listing** is Starter and up: the member forms lock the field (an existing address is
+  kept) and the server ignores it. Admins can still set it.
+- **Deals & coupons** are Starter and up: `/user/my-coupons` says so, `/user/add-coupon` refuses.
+  Deals already posted stay up until they end.
+- **Verified badge** is a paid feature: shown when the listing is claimed *and* the owner's plan has
+  `verified_badge` (`listing_is_verified()`), on the listing page, the homepage cards and — new — the
+  directory cards. It used to be every claimed listing.
+- **The quote / lead form stays on every listing**, including free ones (client decision; the
+  document lists it from Starter up).
+- **Auto-renew is ticked by default** on both checkouts; the pricing cards, cart lines, pricing hero
+  and refund policy say "renews every month — untick at checkout for one month only".
+- **Claim proof documents are admin-only**: stored in `application/storage/claims/` (no web access),
+  opened through `/admin/claim-document/<id>` for signed-in admins only, path-checked. They were
+  under `uploads/claims/`, readable by anyone with the link.
+- "Most popular" goes on one card (the cheapest tier with a featured spot — Pearland Business); it
+  was keyed on the featured flag and would have marked two.
+- "Basic" wording updated to "Free Community" (refund policy, My Listings, the add wizard).
+
+### Verified
+
+Local copy: 25 new checks (pricing page tiers, prices and features; free-tier email lock with maps
+open; deal gating both ways; Verified badge on the listing, homepage and directory by plan; services
+prices; admin-only document download — admin gets the PDF, the claimant and a visitor do not, a
+`../` path is refused; plan editor saves the new flags and extras) plus every earlier suite (109,
+updated for the new plan ids and private storage), the pre-migration smoke test (20), 0038 and the
+combined bundle run twice on a populated and on a fresh database with the old catalog (free member
+moved, bought plan kept off sale, unbought ones deleted, banners untouched, re-run changes nothing),
+and the renewal cron reaching the charge step for a customer on a retired plan. Pricing cards
+checked in Chromium at 1280px and 390px.
+
+### Needs the operator
+
+- Run **0038** (after 0037). Then look over `/admin/pricing`: the four packages are there with the
+  document's features; adjust wording or extras there.
+- Deliver the staff features (priority search, homepage feature, banners, newsletter, social
+  spotlight) by hand for Business and Premier customers — `/admin/homepage-placements` for the
+  homepage, Business Listings → Banners for category banners.
+- Customers on retired plans (e.g. Advanced $15) keep renewing at their old price until they change
+  plan or cancel. Move them by hand at `/admin/billing` if the client wants otherwise.
+
+Key files: `database/migrations/0038_listing_packages.sql`, `application/controllers/{User,Admin}.php`,
+`application/models/Usermodel.php`, `application/helpers/view_helper.php`, `application/libraries/Notifications.php`,
+`application/views/{pricing_plan,cart_checkout,checkout,edit_listings,add_new_listing_start,user_coupons,user_account,user_listing,listing_details,all-listing,index,services_index,service_details}.php`,
+`application/views/partials/refund_policy.php`, `application/views/admin/{pricing,claim_listing}.php`, `application/storage/claims/` (new),
+`assets/css/directory.css`, `application/config/routes.php`, `.gitignore`.
+
+---
+
+## 2026-10-26 — Website Update Checklist (before the 100-business acquisition campaign)
+
+Worked from "PEARLAND 411 — WEBSITE UPDATE CHECKLIST (Draft)". Section 2 (new pricing) is struck
+through in the document and was left alone: prices live in `plans` and are set at `/admin/pricing`.
+Everything was reproduced or traced on a local copy (MariaDB 10.11, PHP 8.3, schema rebuilt from the
+code + every migration, Chromium) before it was changed, then re-tested end to end. **Run migration
+0037** (`database/migrations/0037_claim_onboarding_tracking.sql`, also appended to
+`database/migrations_combined_phpmyadmin.sql`). The code works before it is run (checked against a
+copy without it), but the Claim button only appears once it has.
+
+### Fixed — §1 Claim This Business: the button never showed
+
+- **Every listing looked claimed.** The site decided "claimed" from `listings.user_id`, but every
+  listing has an owner — the CSV import and the admin form require one, and the imported directory
+  sits under a few data-entry logins. So no listing ever showed the Claim button, the "Unclaimed"
+  tag, or the "Is this your business?" card, and the homepage called every business "Verified".
+  New `listings.is_claimed` (0037), read through `listing_is_claimed()`. Backfill: claimed when the
+  owner had a claim approved, staff billing has a subscription for it, or the owner holds 3 live
+  listings or fewer; everything else is claimable. Admins can flip a listing (editor checkbox, a
+  Claimed/Claimable button on Business Listings) or a whole data-entry account (`/admin/users` →
+  *Make listings claimable*). A member's own new listing is claimed on creation.
+- The button is now **"Claim This Business"** in the listing header (with an icon, burgundy on the
+  navy hero), in the empty-description panel and the sidebar card, and a *"Is this your business?
+  Claim it"* line on unclaimed directory cards. The owner sees *Edit your listing* instead.
+- **Claim form** rebuilt on the shared kit: business name, owner/contact name, business email, phone,
+  role, verification method (phone / domain email / document / website note / other), optional proof
+  document (photo or PDF), notes, and an "I'm authorised" box. Values are kept on a refused post.
+  A guest is sent to sign in *with a message saying why*. The 3-per-hour limit counted refused posts,
+  so two typos locked an owner out for an hour — now 10 attempts.
+- **Admin review** (`/admin/claimed-listings`): tabs (needs action / pending / waiting on claimant /
+  approved / rejected), each claim with role, verification method, document, the claimant's account
+  and who holds the listing now. **Approve / Reject with a reason / Ask for more information** — all
+  POST (they were GET links). Approving a listing another owner already has needs "transfer anyway".
+- **More information** (`claim_status` 3): the claimant is emailed the question and answers on
+  `/user/my-claims` with a note and/or a document, which puts the claim back in the queue and alerts
+  the office. Rejection reasons and questions show on My claims.
+- Claim emails (received, approved with a link straight to the editor, rejected with the reason,
+  more information) go through the new `Notifications` library, to the **account** address.
+
+### Fixed — §4 Listing editing: the address of the page changed on every save
+
+- Member and admin edits rebuilt the slug from the name on **every** save — `central-texas-bbq`
+  became `Central-Texas-BBQ`, breaking the links in the claim and welcome emails — and a name another
+  listing already used failed the save on the unique index ("Failed to update listing"). The slug now
+  stays unless the business is renamed, and a rename gets a unique one.
+- The required-fields error was set and never printed; it is now. Saving returns to the form with
+  *Saved — your changes are live* and a **View your live listing** link (it used to drop the owner on
+  My Listings). Description, services and SEO fields are escaped (a quote broke the input; a
+  `</textarea>` broke the form). Debug flash/log lines removed.
+- **Opening hours and the business's own social links** (Facebook, Instagram, X, YouTube, LinkedIn)
+  on the member and admin forms and the listing page. The page used to show the *owner account's*
+  profile links — a data-entry login's Facebook page on every business it held. Hours and social
+  links are plan features (`plans.can_hours` / `can_social_links`, seeded from `can_photos`, editable
+  at `/admin/pricing`, listed on the pricing cards); locked fields show an upgrade note and are
+  ignored server-side.
+
+### Fixed — §3 Checkout & payment, §4 onboarding, §11 emails
+
+- **No email followed an online payment**, while the success page said "We've emailed a receipt".
+  Every checkout path (single plan, cart, upgrade) now sends `User::afterPurchase()`: the customer's
+  **receipt** (lines, terms, renews or one-time, next charge date), a **welcome / next-steps** email
+  (finish the listing — or find/claim/add it — and send artwork for banner/video/homepage items),
+  and an **office order alert** saying what still needs doing by hand (homepage dates, banner booking).
+- **Success page** rebuilt: the real items, the total, whether and when the card is charged again
+  (it showed "Next billing" a month out for one-time purchases), who the receipt went to (or that it
+  could not be sent), and a Next steps panel linking to the listing editor. The 30-second `confirm()`
+  pop-up is gone.
+- **"Cancel auto-renew" cancelled the wrong subscription.** `Usermodel::getUserSubscription()`
+  selected `s.*, p.*`, so the plan's `id` overwrote the subscription's, and cancel, upgrade, scheduled
+  downgrade and usage tracking all wrote to the subscription whose id equalled the plan id. Fixed in
+  the query. Cancelling now also emails a confirmation.
+- **Helcim webhooks were refused** with a 403: `helcim-webhook` was not exempt from CSRF, which a
+  server-to-server post can never pass. Exempted; the signature check still guards it (unsigned →
+  401).
+- **Listing published**: switching a claimed listing from inactive to active in admin emails the
+  owner.
+- **Dashboard onboarding card** ("Finish your listing"): business info, website, description, logo,
+  photos, hours, social links, services, with progress and links into the editor; items the plan
+  lacks show as upgrades.
+
+### Fixed — §5 Lead form
+
+- Leads for an **unclaimed** listing with no business email went to the data-entry login that holds
+  it, where nobody at the business would see them. They go to the office inbox now. A lead to an
+  unclaimed business's own email carries a line inviting it to claim the listing.
+- Deals on a listing page come only from a claimed listing's owner.
+
+### Added — §7 Homepage & featured, §10 analytics
+
+- **`/admin/homepage-placements`**: Business Hotspot and Business of the Week (sold on
+  `/pricing-plan`, stored as dates since 0018 — but nothing in admin could set them, so a placement
+  bought online never appeared) and Featured: find a business, add with an end date, extend, renew,
+  remove; ended ones listed for 30 days. The dates are also on the admin listing editor. The Featured
+  row and Hotspot rail **rotate** when more are live than fit (they always showed the same ones).
+- **Analytics**: `activity_daily` counters (0037) via `libraries/Activity.php` — listing views (once
+  per visitor per day, bots skipped), website / phone / email / map / WhatsApp clicks (`track.js` →
+  `POST /track`), coupon views and code copies / link opens, banner impressions and clicks
+  (`/ad-click/<id>` counts and redirects). **`/user/analytics`** (views + leads for everyone; clicks,
+  deals and banners with the plan's Analytics feature) and **`/admin/analytics`** (site totals,
+  busiest businesses, banner click rates, coupons). Sidebar links in both.
+
+### Verified
+
+Local copy: 104 end-to-end checks through the real controllers (claim 33, owner editing 15, leads 8,
+checkout/emails/cancel 19 incl. the upgrade receipt, homepage placements 9, analytics 15, admin editor
+and toggles 7); the same pages and the claim → approve → edit path against a database **without**
+0037 (20); 0037 and the combined bundle run twice on a fresh and on a populated schema, backfill as
+described, re-runs keep an admin's choice; Chromium at 390px — no horizontal overflow on 12 customer
+pages, the empty claim form stopped in the browser, the quote dialog fits (the theme's floated
+`.form-group` pushed two claim fields off-screen on a phone; fixed).
+
+### Needs the operator / client
+
+- Run **0037**. Then check `/admin/all-listings` → Claimed column: the backfill treats an account with
+  3 listings or fewer as the business itself. Use *Make listings claimable* on `/admin/users` for any
+  data-entry account it got wrong.
+- Decide which plans include hours, social links and Analytics (`/admin/pricing`). See the open
+  questions sent with this change for the rest.
+
+Key files: `database/migrations/0037_claim_onboarding_tracking.sql`, `application/libraries/{Activity,Notifications}.php` (new),
+`application/controllers/{User,Admin}.php`, `application/models/{Usermodel,Adminmodel}.php`, `application/helpers/view_helper.php`,
+`application/views/{claim_listing,listing_details,all-listing,index,edit_listings,checkout_success_view,user_claims,user_dashboard,user_analytics,user_left_sidebar,coupon_details,pricing_plan,footer}.php`,
+`application/views/partials/ad_slot.php`, `application/views/admin/{claim_listing,homepage_placements,analytics,edit_listings,all_listings,users,pricing,header}.php`,
+`assets/js/track.js` (new), `assets/css/{content,directory}.css`, `application/config/{routes,config}.php`.
+
+---
+
 ## 2026-10-26 — reCAPTCHA fitted to narrow forms (directory sidebar card)
 
 No migration.
