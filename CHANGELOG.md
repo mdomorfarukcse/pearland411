@@ -6,6 +6,37 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-10-26 — reCAPTCHA fitted to narrow forms (directory sidebar card)
+
+No migration.
+
+### Fixed
+
+- **The "What service do you need?" card on `/all-listing` showed a tall, square checkbox** that
+  didn't line up with anything. The card is 282px wide, under the widget's fixed 304px, so
+  `assets/js/recaptcha.js` switched to Google's 164×144 "compact" widget. Narrow forms now get the
+  normal widget **scaled to the form's width** (`fit()`: `transform: scale`, with the saved height
+  given back), so it is exactly as wide as the fields and button. It refits on resize or rotation.
+  The compact widget is kept only for a form under ~213px, too narrow to scale legibly. The
+  Help & Support slide-out on a phone gets the same treatment.
+- **That card sends over XHR and never reset the checkbox**, so a second enquiry from the same page
+  would have reused a spent answer and been refused. It now resets after each send, as the quote
+  dialog and newsletter already did. The event, video and news enquiry forms got the same line;
+  they are members-only today, so no checkbox shows there yet.
+
+### Verified
+
+Chromium, Google's script stubbed: in the directory card at 1280px the widget is 282px wide, exactly
+the fields' width and left edge, 72px tall, with 14px above the button; it refits at 1024px; at 390px
+the card is wide enough for the full widget with no overflow; the phone slide-out's widget is
+scaled to its 293px fields; a 200px form falls back to compact. The directory card's XHR is blocked
+while unticked, then sends, thanks and resets. The earlier 33 browser checks still pass.
+
+Key files: `assets/js/recaptcha.js`, `application/views/all-listing.php`, `event_details.php`,
+`video_details.php`, `news_details.php`.
+
+---
+
 ## 2026-10-26 — Follow-up: admin settings sidebar; reCAPTCHA shown without a click
 
 Two problems reported after the spam-protection change below. No migration.

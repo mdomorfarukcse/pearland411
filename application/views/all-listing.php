@@ -692,6 +692,8 @@ $showing_to   = $current_offset + count($allListings);
 			xhr.onreadystatechange = function () {
 				if (xhr.readyState !== 4) return;
 				btn.disabled = false;
+				// A reCAPTCHA answer is good for one send; untick for the next.
+				if (window.p411Recaptcha) window.p411Recaptcha.reset(form);
 
 				var payload = null;
 				if (xhr.status === 200) {
