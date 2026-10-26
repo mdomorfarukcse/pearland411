@@ -52,6 +52,7 @@ $error = isset($error) ? (string) $error : '';
 						<div class="formError"><?= form_error('email_id') ?></div>
 					</div>
 
+					<?= spam_form_fields() ?>
 					<button type="submit" name="forgot_submit" class="p411-btn p411-btn--block p411-btn--lg">
 						Email me a reset link
 					</button>

@@ -121,6 +121,18 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `pattern`, plus `data-match` for confirm fields). It binds in the **capture** phase, so a form
   that also posts over AJAX cannot send an invalid payload. The server validates independently —
   this is the courtesy layer, not the guard.
+- **Spam protection (every anonymous public form):** put `<?= spam_form_fields() ?>` just above
+  the submit button (a honeypot `website_url` field, plus the reCAPTCHA box when keys are set and
+  the visitor is signed out) and call `$this->spamRefusal(['field' => $name])` in the handler after
+  its rate limit — honeypot, then the name filter (a link or Cyrillic/CJK script in a name), then
+  `Recaptcha::verify()`. A tripped honeypot must answer **as if it worked** and save/send nothing.
+  `assets/js/recaptcha.js` loads Google's script only once someone starts on a form, and stops an
+  unticked submit before it posts; a form that is **moved in the DOM** must call
+  `p411Recaptcha.remount(form)` (moving the iframe breaks it), and one that sends over XHR
+  `p411Recaptcha.reset(form)` afterwards. Never echo visitor-typed text into an email sent to the
+  address they typed — that is what made the contact form a spam relay. Helper:
+  `helpers/spam_helper.php`; switches `recaptcha_enabled` / `spam_name_filter_enabled` at
+  `/admin/setting`.
 - **Advertising:** **28 public pages, 156 placements**; the full
   table, with sizes and prices, is **[`docs/AD_INVENTORY.md`](./AD_INVENTORY.md)**, generated
   from the source by `python3 scripts/ad_inventory.py` (re-run it after moving a zone). A page
@@ -193,7 +205,8 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   a card can never read "$15 per" with nothing after it), `youtube_id()` / `youtube_thumb_url()` /
   `youtube_embed_url()`, and `embed_src()` (pull the `src` out of a pasted map iframe instead of
   echoing admin markup).
-- **Libraries:** `Helcim_lib` (payments), `Mailer` (outgoing email), `Rate_limit`.
+- **Libraries:** `Helcim_lib` (payments), `Mailer` (outgoing email), `Rate_limit`, `Recaptcha`
+  (Google reCAPTCHA v2; keys in `.env`, off while either is missing).
 - **Email:** everything goes through `Mailer`. `render()` wraps the body in the standard layout at
   `views/emails/layout.php`; `send()` derives a plain-text alternative (keeping link URLs), records
   the attempt in `email_log`, and returns a **meaningful bool** — callers that ignore it tell users

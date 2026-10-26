@@ -313,6 +313,7 @@ $nw_url = function ($row) {
 								<textarea id="nw_enq_msg" name="enquiry_message" class="form-control" rows="3"
 										  placeholder="What would you like to tell us?"></textarea>
 							</div>
+							<?= spam_form_fields() ?>
 							<button type="submit" id="nw_enquiry_submit" name="enquiry_submit" class="p411-btn p411-btn--block">Send message</button>
 						</form>
 					<?php endif; ?>

@@ -39,6 +39,7 @@
 					<textarea id="hs_msg" class="form-control" rows="3" name="message" required
 							  placeholder="Enter your query or message"></textarea>
 				</div>
+				<?= spam_form_fields() ?>
 				<button type="submit" id="home_slide_enquiry_submit" class="btn btn-primary">
 					Submit Requirements
 				</button>

@@ -724,6 +724,7 @@ $ld_stars = function ($value) {
 								<small class="p411-form__err"><?= e($__enq_bad['enquiry_message']) ?></small>
 							<?php endif; ?>
 						</div>
+						<?= spam_form_fields() ?>
 						<button type="submit" id="detail_enquiry_submit" name="enquiry_submit" class="p411-btn p411-btn--block">Send enquiry</button>
 					</form>
 
@@ -999,6 +1000,8 @@ $ld_stars = function ($value) {
 			opener = document.activeElement;
 			card.parentNode.insertBefore(home, card);
 			box.appendChild(card);
+			// Moving the card reloads the reCAPTCHA iframe; draw it afresh.
+			if (window.p411Recaptcha) window.p411Recaptcha.remount(form);
 			modal.hidden = false;
 			if (close) close.hidden = false;
 			document.body.classList.add('p411-modal-open');
@@ -1008,6 +1011,7 @@ $ld_stars = function ($value) {
 		function shut() {
 			if (modal.hidden) return;
 			if (home.parentNode) home.parentNode.replaceChild(card, home);
+			if (window.p411Recaptcha) window.p411Recaptcha.remount(form);
 			modal.hidden = true;
 			if (close) close.hidden = true;
 			document.body.classList.remove('p411-modal-open');
@@ -1082,6 +1086,8 @@ $ld_stars = function ($value) {
 			}).catch(function () {
 				say('err', 'We could not send that just now. Please check your connection and try again.');
 			}).then(function () {
+				// A reCAPTCHA answer is good for one send; untick for the next.
+				if (window.p411Recaptcha) window.p411Recaptcha.reset(form);
 				if (btn) { btn.disabled = false; btn.textContent = btn.dataset.label || 'Send enquiry'; }
 			});
 		});

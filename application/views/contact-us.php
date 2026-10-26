@@ -112,6 +112,7 @@ $c_err = $this->session->flashdata('contact_error');
 									  minlength="10" required></textarea>
 						</div>
 
+						<?= spam_form_fields() ?>
 						<button type="submit" class="p411-btn p411-btn--lg">Send message</button>
 					</form>
 				</div>

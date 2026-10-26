@@ -300,6 +300,7 @@ $bd_url = function ($row) {
 								<textarea id="enq_message" name="enquiry_message" class="form-control" rows="4" <?= $disabled ?>></textarea>
 							</div>
 
+							<?= spam_form_fields() ?>
 							<button type="submit" class="p411-btn p411-btn--block" <?= $disabled ?>>
 								<?= empty($logged_id) ? 'Please log in first' : 'Send message' ?>
 							</button>

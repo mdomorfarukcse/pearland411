@@ -58,6 +58,7 @@ if ($prefill !== '' && !filter_var($prefill, FILTER_VALIDATE_EMAIL)) {
 						<div class="formError"><?= form_error('email_id') ?></div>
 					</div>
 
+					<?= spam_form_fields() ?>
 					<button type="submit" name="resend_submit" class="p411-btn p411-btn--block p411-btn--lg">
 						Send me a new link
 					</button>

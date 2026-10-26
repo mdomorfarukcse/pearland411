@@ -220,6 +220,7 @@ function cc_cat_label($c)
                     <div class="cco-field"><label>Mobile</label><input type="text" name="mobile_number"></div>
                     <div class="cco-field"><label>Zip code</label><input type="text" name="zip_code"></div>
                     <div class="cco-field"><label>Password</label><input type="password" name="password" required></div>
+                    <?= spam_form_fields() ?>
                     <button type="submit" name="register_submit" value="submit" class="cco-btn">Create account &amp; continue</button>
                 </form>
                 <p class="cco-muted">Your cart is saved — you'll return here after signing up.</p>

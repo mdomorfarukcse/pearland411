@@ -449,6 +449,7 @@
 
 							</div>
 
+							<?= spam_form_fields() ?>
 							<button type="submit" class="btn btn-primary">Submit</button>
 
 						</form>

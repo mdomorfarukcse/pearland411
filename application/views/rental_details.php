@@ -351,6 +351,7 @@
                                 <textarea class="form-control" rows="3" name="enquiry_message" placeholder="Enter your query or message"></textarea>
                                 <span class="text-danger"><?= form_error("enquiry_message") ? form_error("enquiry_message") : ''; ?></span>
                             </div>
+                            <?= spam_form_fields() ?>
                             <button type="submit" id="detail_enquiry_submit" name="enquiry_submit" class="btn btn-primary">Submit</button>
                             <?php if (empty($logged_id)): ?>
                                 <p style="margin:10px 0 0;font-size:13px;color:#6b7280;"><a href="<?= base_url('login'); ?>">Sign in</a> first and the reply is kept with your account.</p>

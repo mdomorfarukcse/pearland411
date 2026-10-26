@@ -409,6 +409,7 @@ if ($related_events)                      $ev_nav['related']  = 'More events';
 								<textarea id="ev_enq_msg" name="enquiry_message" class="form-control" rows="3"
 										  placeholder="What would you like to know?"></textarea>
 							</div>
+							<?= spam_form_fields() ?>
 							<button type="submit" id="ev_enquiry_submit" name="enquiry_submit" class="p411-btn p411-btn--block">Send message</button>
 						</form>
 					<?php endif; ?>

@@ -334,6 +334,7 @@ if ($help_css) define('PEARLAND411_SALES_HELP_CSS', 1);
 						  required minlength="10">I would like help adding my business to Pearland411.</textarea>
 			</div>
 
+			<?= spam_form_fields() ?>
 			<button type="submit" class="p411-help__send">Request a call back</button>
 			<p class="p411-help__small">We only use your details to answer you. Nothing is charged until you say yes.</p>
 		</form>

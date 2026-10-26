@@ -463,6 +463,41 @@ $s = isset($settings) ? $settings : array();
 			</div>
 		</section>
 
+		<!-- Spam protection ---------------------------------------------- -->
+		<section class="setting-card">
+			<h2>Spam protection</h2>
+			<p class="hint">Checks on the public forms anyone can send without signing in: contact, Help &amp; Support, quote requests, service requests, registration, password reset and the newsletter. A hidden trap field catches simple bots on all of them, always.</p>
+
+			<?php
+			$this->load->library('recaptcha');
+			$rc_keys = $this->recaptcha->site_key() !== '' && trim((string) env('RECAPTCHA_SECRET_KEY', '')) !== '';
+			$spam_toggles = array(
+				'recaptcha_enabled' => array(
+					'Google reCAPTCHA (“I’m not a robot”)',
+					$rc_keys
+						? 'Visitors who are not signed in tick the box before a form sends.'
+						: 'Not active yet: add RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_KEY (a v2 checkbox key from google.com/recaptcha/admin) to the server’s .env file.',
+				),
+				'spam_name_filter_enabled' => array(
+					'Name filter',
+					'Refuses a name with a web address in it, or written in Cyrillic or Chinese/Japanese/Korean characters — what the contact-form spam puts there.',
+				),
+			);
+			foreach ($spam_toggles as $skey => $sinfo):
+				$son = (($s[$skey] ?? '') !== '0'); ?>
+				<div class="setting-row">
+					<label for="<?= $skey ?>">
+						<?= $sinfo[0] ?>
+						<span class="hint" style="display:block;font-weight:400;"><?= $sinfo[1] ?></span>
+					</label>
+					<span>
+						<input type="hidden" name="<?= $skey ?>" value="0">
+						<input type="checkbox" id="<?= $skey ?>" name="<?= $skey ?>" value="1" <?= $son ? 'checked' : '' ?>>
+					</span>
+				</div>
+			<?php endforeach; ?>
+		</section>
+
 		<div class="setting-actions">
 			<button type="submit" class="btn-save">Save settings</button>
 		</div>

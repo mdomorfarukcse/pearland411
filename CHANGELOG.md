@@ -6,6 +6,98 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-10-26 — Contact-form spam: reCAPTCHA, honeypot and a name filter on every public form
+
+The client was getting **700+ spam emails a day**: "[Pearland411] Contact-Us message for … from
+Новый перевод 52012 руб. …" (Russian: "new transfer of 52,012 rubles", a payment scam). No
+migration (the two new switches are `site_settings` keys). **To turn the captcha on, add
+`RECAPTCHA_SITE_KEY` / `RECAPTCHA_SECRET_KEY` to `.env`**: a v2 "I'm not a robot" checkbox key from
+https://www.google.com/recaptcha/admin; README → "Turn on reCAPTCHA". Until then the honeypot and
+the name filter already apply.
+
+### Security — what was wrong
+
+- `/contact-submit` (the contact page, the Help & Support slide-out on **every** page, the pricing
+  callback panel, Advertise with us) had CSRF, which a bot passes by loading the page first, and
+  6 posts per IP per hour, which a botnet passes by rotating IPs. Nothing else.
+- **The site was relaying the spam.** Every submission also emailed "We received your message"
+  **to the address the visitor typed, quoting their message**. A bot typed its victim's address and
+  its scam text, and pearland411.com delivered it, hurting the domain's sending reputation along
+  with the client's inbox. The registration verification email did the same with the typed name
+  ("Welcome to Pearland411, {name}.").
+
+### Added
+
+- **One spam gate for every anonymous form that saves a row or sends an email**:
+  `User::spamRefusal()`, called after each handler's rate limit, with the fields printed by
+  `spam_form_fields()` (`application/helpers/spam_helper.php`, autoloaded):
+  1. **Honeypot**: the off-screen `website_url` field registration already had, now on every
+     form. A filled-in one is answered **as if it worked**: the usual thanks, but nothing saved
+     and nothing sent, so the bot learns nothing.
+  2. **Name filter**: a name containing a web address (`http`, `www.`, `bit.ly`, `t.me`, …) or
+     Cyrillic / Chinese / Japanese / Korean characters is refused with a plain message. That is
+     where this spam puts its payload. Accented Latin names (José Núñez) pass. Switch:
+     `spam_name_filter_enabled`.
+  3. **Google reCAPTCHA v2** (`application/libraries/Recaptcha.php`): required when both keys are
+     set and the visitor is signed out (a member was captcha-checked at registration and verified
+     their email). It **fails open**: if Google can't be reached, or the secret is wrong, the post
+     goes through and the reason goes to `application/logs/`, so an outage or a typo never costs
+     a lead. Switch: `recaptcha_enabled`.
+- Forms covered: contact (`contact-us`, footer slide-out, `partials/sales_help`, `post_your_ads`,
+  the slide-out copies in `all-listing2` / `all-products`); every "Get a quote" / enquiry form
+  (`listing_details`, `all-listing`, event / video / news / blog / product / classifieds / rental /
+  house details, `all-products`); `/request-service` (`service_details`, `request_quote`);
+  `/register` (and the cart's sign-up form); `/forgot-password`; `/resend-verification`; the
+  homepage newsletter. Not covered, deliberately: login (sends no mail; already rate limited),
+  and reviews, claims and deals, which all require signing in.
+- `assets/js/recaptcha.js`: Google's script loads **only once someone clicks into a protected
+  form**, so the slide-out on every page adds no download until used. The compact widget is used
+  where the form is narrower than 304px (the slide-out on a phone). An unticked submit is stopped
+  before it posts ("Please tick the 'I'm not a robot' box"), after form-validate.js has reported any
+  bad fields. The quote dialog redraws the widget when the form moves in and out of the dialog,
+  and both XHR forms untick it after each send.
+- `/admin/setting` → **Spam protection**: the two switches, and a note when the keys are missing.
+
+### Changed
+
+- The contact auto-reply no longer quotes the message. It says it was received and who it went to.
+  `contact_submit` also caps the message at 5,000 characters, as the enquiry form already did.
+- Registration's own honeypot check (`Usermodel::registerUser`) moved into the shared gate.
+
+### Fixed
+
+- **The homepage newsletter signup never worked.** The form had no `method`, so the CSRF hook gave
+  it no token, and the homepage doesn't load `csrf.js`. Every signup got "The action you have
+  requested is not allowed" (reproduced on the code before this change). It now posts the whole
+  form (`method="post"`, `new FormData(form)`).
+
+### Verified
+
+Local copy (MariaDB 10.11, PHP 8.3, Chromium). Google is unreachable from the test box, so its
+script and its verify endpoint were replaced by local stand-ins. **No keys**: 32 end-to-end posts
+through the real controllers. Each form works as before; the honeypot drops silently (no row, no
+mail); the scam names from the screenshot, `http://…` and `bit.ly` are refused, while O'Neil,
+José Núñez and Dr. J. R. Smith pass; the filter switch works; the auto-reply carries no visitor
+text. **With Google's test keys**: 43 checks. Every page with a form prints the box, includes the
+script once and does not fetch Google up front; a post with no token is refused on every handler
+with nothing saved or mailed; the admin switch turns it off; Google unreachable lets the post
+through and logs it. `verify()` was unit-tested against a stub for yes / no / wrong secret / non-JSON
+/ connection refused. **In Chromium**: lazy load, blocked unticked submit and the note, the
+theme's floated `.form-group` (the box needed `clear: both`), the quote dialog's move and XHR send,
+the newsletter's XHR, and no horizontal overflow at 390px, with the compact widget in the phone slide-out.
+
+### Key files
+
+`application/libraries/Recaptcha.php` (new), `application/helpers/spam_helper.php` (new),
+`assets/js/recaptcha.js` (new), `application/controllers/User.php` (`spamRefusal()`,
+`contact_submit`, `add_enquiry`, `request_service`, `register`, `forgot_password`,
+`resend_verification`, `subscribe_newsletter`), `application/models/Usermodel.php`,
+`application/controllers/Admin.php` + `views/admin/admin_setting.php`, `application/config/autoload.php`,
+the form views listed above, `assets/css/home-sections.css`, `.env.example`, `README.md`,
+`docs/PROJECT_OVERVIEW.md`.
+
+---
+
 ## 2026-10-19 — PEARLAND411 PROJECT TRACKER 2: all 17 rows
 
 Worked from the "Website error report sheet" PDF (Angel, Jana, anish, Monette). Every

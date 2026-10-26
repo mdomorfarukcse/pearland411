@@ -95,6 +95,7 @@ above-webroot file wins and the repo-root one only fills in missing keys.
 | `MAIL_PROTOCOL` | `smtp` / `mail` / `sendmail`. Blank = SMTP when host+user+pass are set, otherwise the host's own MTA. |
 | `HELCIM_API_TOKEN` | Helcim API token (Settings ▸ Integrations ▸ API). While empty, `/checkout` shows a "being set up" notice instead of the pay button — this is the live-payments gate, so no separate feature flag is needed. |
 | `HELCIM_WEBHOOK_VERIFIER_TOKEN` | Verifier token for signing inbound Helcim webhooks (`/helcim-webhook`). |
+| `RECAPTCHA_SITE_KEY`, `RECAPTCHA_SECRET_KEY` | Google reCAPTCHA **v2 "I'm not a robot" checkbox** key pair for the public forms — see [Turn on reCAPTCHA](#turn-on-recaptcha-spam-protection). While either is empty the captcha is off (the hidden trap field still works). |
 
 ## First sign-in
 
@@ -240,6 +241,25 @@ PROJECT_AUDIT_REPORT.md   the full audit with section-by-section findings
 2. **Approve** transfers ownership and emails the claimant.
 3. **Reject** marks the claim rejected (status = 2) and emails
    the claimant a polite explanation.
+
+### Turn on reCAPTCHA (spam protection)
+The public forms (contact, Help & Support, quote requests, service
+requests, registration, password reset, resend verification, newsletter)
+carry a hidden trap field always, and Google's "I'm not a robot" box once
+keys are set:
+1. Sign in at https://www.google.com/recaptcha/admin with the business's
+   Google account and create a key: type **reCAPTCHA v2 → "I'm not a
+   robot" Checkbox**, domain `pearland411.com` (add a staging domain too
+   if there is one).
+2. Put the two halves in `.env`: `RECAPTCHA_SITE_KEY=` and
+   `RECAPTCHA_SECRET_KEY=`.
+3. Open `/contact-us` signed out, click into the form: the checkbox
+   appears above the Send button.
+
+Signed-in members never see it. If Google cannot be reached, or the
+secret is wrong, posts are let through and the reason is written to
+`application/logs/` — so a typo never costs a lead. Both checks have an
+off switch at `/admin/setting` → Spam protection.
 
 ### Edit the services catalog
 The 10 seed services in `0002_services.sql` are placeholders. Edit

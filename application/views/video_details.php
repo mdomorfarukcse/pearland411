@@ -328,6 +328,7 @@ $vd_thumb = function ($row) {
 								<textarea id="vd_enq_msg" name="enquiry_message" class="form-control" rows="3"
 										  placeholder="Enter your query or message"></textarea>
 							</div>
+							<?= spam_form_fields() ?>
 							<button type="submit" id="vd_enquiry_submit" name="enquiry_submit" class="p411-btn p411-btn--block">Send message</button>
 						</form>
 					<?php endif; ?>
