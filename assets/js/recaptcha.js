@@ -41,18 +41,49 @@
 		n.hidden = !text;
 	}
 
+	// Google's widget is a fixed 304×78 and cannot be resized. A form narrower
+	// than that (the directory's sidebar card, the slide-out on a phone) gets
+	// the same widget scaled down to the form's width, so it lines up with the
+	// fields and the button. Google's "compact" widget — a tall 164×144 square
+	// — looked out of place beside full-width fields, so it is kept only for a
+	// form too narrow to scale to legibly.
+	var FULL_W = 304, FULL_H = 78, MIN_SCALE = 0.7;
+
+	function fit(box) {
+		var w = box.parentNode.clientWidth;
+		var s = (w > 0 && w < FULL_W) ? w / FULL_W : 1;
+		box.style.width = FULL_W + 'px';
+		box.style.transformOrigin = '0 0';
+		box.style.transform = s < 1 ? 'scale(' + s + ')' : '';
+		// A transform does not change the space the box takes up; give back
+		// the height the scaling saved.
+		box.style.marginBottom = s < 1 ? ((s - 1) * FULL_H) + 'px' : '';
+	}
+
 	function draw(box) {
 		if (box.getAttribute('data-widget') !== null || !document.body.contains(box)) return;
-		// The full widget is 304px wide; a narrower form (the slide-out on a
-		// phone) gets the compact one rather than a box spilling out of it.
-		var compact = box.parentNode.clientWidth > 0 && box.parentNode.clientWidth < 304;
+		var w = box.parentNode.clientWidth;
+		var compact = w > 0 && w < FULL_W * MIN_SCALE;
 		var id = window.grecaptcha.render(box, {
 			sitekey: box.getAttribute('data-sitekey'),
 			size: compact ? 'compact' : 'normal',
 			callback: function () { note(box, ''); }
 		});
 		box.setAttribute('data-widget', String(id));
+		if (!compact) {
+			box.setAttribute('data-fit', '');
+			fit(box);
+		}
 	}
+
+	// A phone turned on its side, or a window resized, changes the form width.
+	var refit = null;
+	window.addEventListener('resize', function () {
+		clearTimeout(refit);
+		refit = setTimeout(function () {
+			Array.prototype.forEach.call(document.querySelectorAll('.p411-recaptcha[data-fit]'), fit);
+		}, 100);
+	});
 
 	function load(box) {
 		if (state === 'ready') { draw(box); return; }

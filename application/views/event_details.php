@@ -529,6 +529,8 @@ if ($related_events)                      $ev_nav['related']  = 'More events';
 			xhr.onreadystatechange = function () {
 				if (xhr.readyState !== 4) return;
 				btn.disabled = false;
+				// A reCAPTCHA answer is good for one send; untick for the next.
+				if (window.p411Recaptcha) window.p411Recaptcha.reset(form);
 				var success = false;
 				if (xhr.status === 200) {
 					try { success = !!JSON.parse(xhr.responseText).success; } catch (err) { success = false; }
