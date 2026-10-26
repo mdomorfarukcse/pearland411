@@ -105,6 +105,10 @@
 					<li>
 						<a href="<?= base_url('user/enquiries'); ?>" class=""><img src="<?= base_url() ?>assets/images/icon/tick.png" alt="" />Lead enquiry</a>
 					</li>
+					<?php // Views, clicks and leads per listing (User::analytics). ?>
+					<li>
+						<a href="<?= base_url('user/analytics'); ?>" class=""><img src="<?= base_url() ?>assets/images/icon/tick.png" alt="" />Analytics</a>
+					</li>
 					<?php // /user/my-coupons, not /user/coupons — that URL is the public
 					      // deals page (User::coupons), which is where the old "Post a
 					      // deal" buttons were landing. ?>

@@ -208,6 +208,25 @@ if (!function_exists('cap_lock_note')) {
 			<div class="multistep-step-indicator" data-step="3">3</div>
 		</div>
 
+		<?php // Save results. The required-fields error was set by the controller
+		      // and never printed, and a successful save only said so on another
+		      // page — with no way to see the result. ?>
+		<?php $__saved = $this->session->flashdata('saved_listing'); ?>
+		<?php if ($this->session->flashdata('message')): ?>
+			<div class="alert alert-success" role="status" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;">
+				<span><?= e($this->session->flashdata('message')) ?></span>
+				<?php if (!empty($__saved)): ?>
+					<a class="btn btn-success btn-sm" href="<?= e_url(base_url('listing-details/' . rawurlencode($__saved))) ?>" target="_blank" rel="noopener">View your live listing &rarr;</a>
+				<?php endif; ?>
+			</div>
+		<?php endif; ?>
+		<?php if ($this->session->flashdata('error')): ?>
+			<div class="alert alert-warning" role="alert"><?= e($this->session->flashdata('error')) ?></div>
+		<?php endif; ?>
+		<?php if (!empty($error)): ?>
+			<div class="alert alert-danger" role="alert"><?= e($error) ?></div>
+		<?php endif; ?>
+
 		<!-- Error message area -->
 		<div id="multistep-error-container" class="multistep-error-message">
 			<strong>To continue, please complete the following:</strong>
@@ -336,7 +355,7 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-6">
 									<div class="form-group">
-										<input type="text" name="listing_lat" class="form-control" placeholder="Latitude i.e 40.730610" value="<?= e_attr($listing->listing_lat) ?>" <?= $caps['can_map'] ? '' : 'disabled' ?>>
+										<input type="text" name="listing_lat" class="form-control" placeholder="Latitude i.e 40.730610" value="<?= e_attr((string) $listing->listing_lat) ?>" <?= $caps['can_map'] ? '' : 'disabled' ?>>
 									</div>
 								</div>
 								<div class="col-md-6">
@@ -362,6 +381,36 @@ if (!function_exists('cap_lock_note')) {
 									</div>
 								</div>
 							</div>
+
+							<?php // Opening hours and the business's own social links (migration
+							      // 0037) — part of onboarding, and plan features: locked with an
+							      // upgrade note on a plan that does not include them. ?>
+							<?php if (property_exists($listing, 'business_hours')): ?>
+							<div class="row">
+								<div class="col-md-12">
+									<div class="form-group">
+										<label for="business_hours">Opening hours</label>
+										<textarea class="form-control" id="business_hours" name="business_hours" rows="3" maxlength="1000"
+												  placeholder="Mon–Fri 9am–6pm&#10;Sat 10am–4pm&#10;Sun closed" <?= $caps['can_hours'] ? '' : 'disabled' ?>><?= e((string) $listing->business_hours) ?></textarea>
+										<?= cap_lock_note($caps['can_hours'], 'Opening hours') ?>
+									</div>
+								</div>
+							</div>
+							<?php endif; ?>
+							<?php if (property_exists($listing, 'listing_facebook')): ?>
+							<div class="row">
+								<div class="col-md-12"><label>Social media links</label></div>
+								<?php foreach (array('facebook' => 'Facebook page link', 'instagram' => 'Instagram link', 'twitter' => 'X / Twitter link', 'youtube' => 'YouTube channel link', 'linkedin' => 'LinkedIn link') as $__net => $__ph): ?>
+								<div class="col-md-6">
+									<div class="form-group">
+										<input type="text" name="listing_<?= $__net ?>" class="form-control" maxlength="255" placeholder="<?= e_attr($__ph) ?>"
+											   value="<?= e_attr((string) $listing->{'listing_' . $__net}) ?>" <?= $caps['can_social_links'] ? '' : 'disabled' ?>>
+									</div>
+								</div>
+								<?php endforeach; ?>
+								<div class="col-md-12"><?= cap_lock_note($caps['can_social_links'], 'Social media links') ?></div>
+							</div>
+							<?php endif; ?>
 
 							<div class="row">
 								<div class="col-md-12">
@@ -390,7 +439,7 @@ if (!function_exists('cap_lock_note')) {
 								<div class="col-md-12">
 									<div class="form-group">
 										<label>Details about your listing</label>
-										<textarea class="form-control" id="listing_description" name="listing_description" placeholder="Details about your listing"><?= $listing->listing_description ?></textarea>
+										<textarea class="form-control" id="listing_description" name="listing_description" placeholder="Details about your listing"><?= e((string) $listing->listing_description) ?></textarea>
 									</div>
 								</div>
 							</div>
@@ -398,12 +447,12 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-12">
 									<div class="form-group">
-										<textarea class="form-control" id="service_locations" name="service_locations" placeholder="Enter your service locations... &#10;(i.e) Pearland,Arlington, Austin"><?= $listing->service_locations ?></textarea>
+										<textarea class="form-control" id="service_locations" name="service_locations" placeholder="Enter your service locations... &#10;(i.e) Pearland,Arlington, Austin"><?= e((string) $listing->service_locations) ?></textarea>
 									</div>
 								</div>
 								<div class="col-md-12">
 									<div class="form-group">
-										<textarea class="form-control" id="service_offered" name="service_offered" placeholder="Enter Offered Services ... &#10;(i.e) Car Wash, Car Service" <?= $caps['can_services'] ? '' : 'disabled' ?>><?= $listing->service_offered ?></textarea>
+										<textarea class="form-control" id="service_offered" name="service_offered" placeholder="Enter Offered Services ... &#10;(i.e) Car Wash, Car Service" <?= $caps['can_services'] ? '' : 'disabled' ?>><?= e((string) $listing->service_offered) ?></textarea>
 											<?= cap_lock_note($caps['can_services']) ?>
 									</div>
 								</div>
@@ -486,15 +535,15 @@ if (!function_exists('cap_lock_note')) {
 								<div class="login add-list-map">
 									<div class="form-group">
 										<label>Page title</label>
-										<input type="text" name="listing_seo_title" placeholder="" class="form-control" value="<?= $listing->listing_seo_title ?>" <?= $caps['can_extra_details'] ? '' : 'disabled' ?>>
+										<input type="text" name="listing_seo_title" placeholder="" class="form-control" value="<?= e_attr((string) $listing->listing_seo_title) ?>" <?= $caps['can_extra_details'] ? '' : 'disabled' ?>>
 									</div>
 									<div class="form-group">
 										<label>Page keywords</label>
-										<input type="text" name="listing_seo_keywords" class="form-control" placeholder="i.e:wedding hall, best wedding hall" value="<?= $listing->listing_seo_keywords ?>" <?= $caps['can_extra_details'] ? '' : 'disabled' ?>>
+										<input type="text" name="listing_seo_keywords" class="form-control" placeholder="i.e:wedding hall, best wedding hall" value="<?= e_attr((string) $listing->listing_seo_keywords) ?>" <?= $caps['can_extra_details'] ? '' : 'disabled' ?>>
 									</div>
 									<div class="form-group">
 										<label>Page descriptions</label>
-										<input type="text" name="listing_seo_description" class="form-control" value="<?= $listing->listing_seo_description ?>" <?= $caps['can_extra_details'] ? '' : 'disabled' ?>>
+										<input type="text" name="listing_seo_description" class="form-control" value="<?= e_attr((string) $listing->listing_seo_description) ?>" <?= $caps['can_extra_details'] ? '' : 'disabled' ?>>
 											<?= cap_lock_note($caps['can_extra_details']) ?>
 									</div>
 								</div>

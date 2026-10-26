@@ -72,6 +72,7 @@
                 <th>Postal Code</th>
                 <th>Views</th>
                 <th>Created by</th>
+                <th title="Claimed by the business owner? Claimable listings show the Claim This Business button.">Claimed</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -119,6 +120,20 @@
 
                     <td>
                       <?= e(author_name($value->name)) ?>
+                    </td>
+
+                    <td>
+                      <?php if (property_exists($value, 'is_claimed')): $__claimed = (int) $value->is_claimed === 1; ?>
+                        <form method="post" action="<?= base_url('admin/listing-claim-status/' . (int) $value->listing_id) ?>" style="margin:0;">
+                          <input type="hidden" name="is_claimed" value="<?= $__claimed ? '0' : '1' ?>">
+                          <button type="submit" class="db-list-ststus" style="<?= $__claimed ? '' : 'background:#FFF4DB;color:#7A5200;' ?>"
+                                  title="<?= $__claimed ? 'Make claimable (shows the Claim button)' : 'Mark as claimed (hides the Claim button)' ?>">
+                            <?= $__claimed ? 'Claimed' : 'Claimable' ?>
+                          </button>
+                        </form>
+                      <?php else: ?>
+                        <span class="db-list-rat">&mdash;</span>
+                      <?php endif; ?>
                     </td>
 
                     <td>

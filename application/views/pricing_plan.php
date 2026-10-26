@@ -80,6 +80,8 @@ function pp_features($plan, $cat, $size = '')
         }
         if (!empty($plan->can_map))      $f[] = 'Map on your listing';
         if (!empty($plan->can_services)) $f[] = 'Services offered';
+        if (!empty($plan->can_hours))        $f[] = 'Opening hours';
+        if (!empty($plan->can_social_links)) $f[] = 'Social media links';
         if (!empty($plan->featured_listing))  $f[] = 'Featured placement';
         if (!empty($plan->priority_support))  $f[] = 'Priority support';
         if (!empty($plan->analytics_access))  $f[] = 'Analytics dashboard';

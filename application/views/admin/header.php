@@ -126,6 +126,9 @@
 
                   </li>
 
+                  <?php // Business Hotspot, Business of the Week, Featured. ?>
+                  <li> <a href="<?= base_url('admin/homepage-placements') ?>">Homepage placements</a></li>
+
                   <li> <a href="<?= base_url() ?>admin/trash_listing">Trash listings</a>
 
                   </li>
@@ -180,6 +183,10 @@
             <?php // Deals members post at /user/my-coupons — see, switch off, delete. ?>
             <li class="ic-prod">
               <a href="<?= base_url('admin/coupons') ?>">Deals &amp; Coupons</a>
+            </li>
+            <?php // Views, clicks, leads, coupon and ad activity (migration 0037). ?>
+            <li class="ic-prod">
+              <a href="<?= base_url('admin/analytics') ?>">Analytics</a>
             </li>
             <?php // Contact-us messages, pricing-page callback requests and
                   // listing quote requests. The screen existed with no link

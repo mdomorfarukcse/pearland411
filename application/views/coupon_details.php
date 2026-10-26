@@ -39,7 +39,7 @@ $has_link = !empty($coupon->coupon_link);
 $has_code = trim((string) $coupon->coupon_code) !== '';
 ?>
 
-<section class="p411-ld p411-ld--coupon">
+<section class="p411-ld p411-ld--coupon" data-track-coupon="<?= (int) $coupon->coupon_id ?>">
 
 	<!-- ================================================================ HERO -->
 	<div class="p411-ld__hero">
@@ -134,13 +134,13 @@ $has_code = trim((string) $coupon->coupon_code) !== '';
 						<div class="p411-code p411-code--lg" data-coupon-code="<?= e_attr($coupon->coupon_code) ?>">
 							<span class="p411-code__label">Coupon code</span>
 							<b><?= e($coupon->coupon_code) ?></b>
-							<button type="button" class="p411-code__copy" hidden>Copy code</button>
+							<button type="button" class="p411-code__copy" data-track="click" hidden>Copy code</button>
 						</div>
 					<?php endif; ?>
 
 					<div class="p411-coupon-actions">
 						<?php if ($has_link): ?>
-							<a class="p411-btn p411-btn--lg" href="<?= e_url($coupon->coupon_link) ?>"
+							<a class="p411-btn p411-btn--lg" data-track="click" href="<?= e_url($coupon->coupon_link) ?>"
 							   target="_blank" rel="noopener noreferrer">Redeem this offer &rarr;</a>
 						<?php endif; ?>
 						<?php if ($biz_url !== ''): ?>

@@ -70,7 +70,13 @@ $ld_slug    = (string) ($listing->listing_slug ?? '');
 $ld_url     = base_url('listing-details/' . rawurlencode($ld_slug));
 $ld_logo    = !empty($listing->listing_image) ? base_url($listing->listing_image) : base_url('assets/images/placeholder-listing.svg');
 $ld_cover   = !empty($listing->cover_image)   ? base_url($listing->cover_image)   : base_url('assets/images/llisting_details_bg.jpg');
-$ld_claimed = !empty($listing->user_id);
+// listings.is_claimed, not user_id — every listing has an owner, so that
+// test hid the Claim button on the whole imported directory. See
+// listing_is_claimed().
+$ld_claimed = listing_is_claimed($listing);
+$ld_owner_view = !empty($viewer_owns_listing);
+$ld_claim_url  = base_url('claim-listing/' . rawurlencode((string) ($listing->listing_slug ?? '')));
+$ld_lid        = (int) ($listing->listing_id ?? 0);
 $ld_verified = !empty($listing->featured_listing) || !empty($listing->spotlight_listing);
 
 $show_addr  = ((int) ($listing->display_address ?? 0) === 1) && !empty($listing->listing_address);
@@ -157,7 +163,7 @@ $ld_stars = function ($value) {
 };
 ?>
 
-<section class="p411-ld">
+<section class="p411-ld" data-track-listing="<?= $ld_lid ?>">
 
 	<!-- ============================================================ HERO -->
 	<div class="p411-ld__hero">
@@ -221,24 +227,24 @@ $ld_stars = function ($value) {
 							<span><i class="material-icons" aria-hidden="true">place</i><?= e($listing->listing_address) ?></span>
 						<?php endif; ?>
 						<?php if ($show_phone): ?>
-							<a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) ?>"><i class="material-icons" aria-hidden="true">call</i><?= e($listing->listing_mobile) ?></a>
+							<a data-track="phone" href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) ?>"><i class="material-icons" aria-hidden="true">call</i><?= e($listing->listing_mobile) ?></a>
 						<?php endif; ?>
 						<?php if (!empty($listing->listing_email)): ?>
-							<a href="mailto:<?= e_attr($listing->listing_email) ?>"><i class="material-icons" aria-hidden="true">mail_outline</i><?= e($listing->listing_email) ?></a>
+							<a data-track="email" href="mailto:<?= e_attr($listing->listing_email) ?>"><i class="material-icons" aria-hidden="true">mail_outline</i><?= e($listing->listing_email) ?></a>
 						<?php endif; ?>
 						<?php if (!empty($listing->listing_website)): ?>
-							<a href="<?= e_url($listing->listing_website) ?>" target="_blank" rel="noopener nofollow"><i class="material-icons" aria-hidden="true">language</i><?= e($listing->listing_website) ?></a>
+							<a data-track="website" href="<?= e_url($listing->listing_website) ?>" target="_blank" rel="noopener nofollow"><i class="material-icons" aria-hidden="true">language</i><?= e($listing->listing_website) ?></a>
 						<?php endif; ?>
 					</div>
 
 					<div class="p411-ld__cta">
 						<?php if ($show_phone): ?>
-							<a class="p411-btn" href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) ?>">
+							<a class="p411-btn" data-track="phone" href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) ?>">
 								<i class="material-icons" style="font-size:17px;" aria-hidden="true">call</i> Call now
 							</a>
 						<?php endif; ?>
 						<?php if ($show_wa): ?>
-							<a class="p411-btn p411-btn--wa" href="https://wa.me/<?= e_attr($wa_number) ?>" target="_blank" rel="noopener nofollow">WhatsApp</a>
+							<a class="p411-btn p411-btn--wa" data-track="whatsapp" href="https://wa.me/<?= e_attr($wa_number) ?>" target="_blank" rel="noopener nofollow">WhatsApp</a>
 						<?php endif; ?>
 						<?php // Opens the quote form for THIS business in a dialog (script at the
 						      // foot of the page). It is the sidebar card itself, moved into the
@@ -249,12 +255,18 @@ $ld_stars = function ($value) {
 						      // still scrolls to the card. ?>
 						<a class="p411-btn p411-btn--ghost" href="#get-a-quote" data-quote-open>Get a quote</a>
 						<?php if (!empty($listing->listing_lat) && !empty($listing->listing_lng)): ?>
-							<a class="p411-btn p411-btn--ghost" target="_blank" rel="noopener"
+							<a class="p411-btn p411-btn--ghost" target="_blank" rel="noopener" data-track="map"
 							   href="https://www.google.com/maps/dir/?api=1&amp;destination=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>">Directions</a>
 						<?php endif; ?>
 						<?php if (!$ld_claimed): ?>
 							<?php // Burgundy, not navy: this row of buttons sits on the navy hero. ?>
-							<a class="p411-btn p411-btn--bu" href="<?= e_url(base_url('claim-listing/' . rawurlencode($ld_slug))) ?>">Claim this listing</a>
+							<a class="p411-btn p411-btn--bu" href="<?= e_url($ld_claim_url) ?>">
+								<i class="material-icons" style="font-size:17px;" aria-hidden="true">how_to_reg</i> Claim This Business
+							</a>
+						<?php elseif ($ld_owner_view): ?>
+							<a class="p411-btn p411-btn--bu" href="<?= e_url(base_url('user/edit-listing/' . rawurlencode($ld_slug))) ?>">
+								<i class="material-icons" style="font-size:17px;" aria-hidden="true">edit</i> Edit your listing
+							</a>
 						<?php endif; ?>
 					</div>
 				</div>
@@ -311,7 +323,7 @@ $ld_stars = function ($value) {
 								</p>
 								<?php if (!$ld_claimed): ?>
 									<div class="p411-empty__actions">
-										<a class="p411-btn p411-btn--sm" href="<?= e_url(base_url('claim-listing/' . rawurlencode($ld_slug))) ?>">Claim this listing</a>
+										<a class="p411-btn p411-btn--sm" href="<?= e_url($ld_claim_url) ?>">Claim This Business</a>
 									</div>
 								<?php endif; ?>
 							</div>
@@ -735,7 +747,7 @@ $ld_stars = function ($value) {
 						</p>
 					<?php endif; ?>
 					<?php if ($show_phone): ?>
-						<p class="p411-form__hint" style="margin:8px 0 0;">In a hurry? Call <a href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) ?>"><?= e($listing->listing_mobile) ?></a>.</p>
+						<p class="p411-form__hint" style="margin:8px 0 0;">In a hurry? Call <a data-track="phone" href="tel:<?= e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) ?>"><?= e($listing->listing_mobile) ?></a>.</p>
 					<?php endif; ?>
 				</div>
 
@@ -766,10 +778,10 @@ $ld_stars = function ($value) {
 					</div>
 					<?php
 					$info_rows = array();
-					if ($show_phone)                        $info_rows['Phone']     = '<a href="tel:' . e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) . '">' . e($listing->listing_mobile) . '</a>';
-					if ($show_wa)                           $info_rows['WhatsApp']  = '<a href="https://wa.me/' . e_attr($wa_number) . '" target="_blank" rel="noopener nofollow">Message on WhatsApp</a>';
-					if (!empty($listing->listing_email))    $info_rows['Email']     = '<a href="mailto:' . e_attr($listing->listing_email) . '">' . e($listing->listing_email) . '</a>';
-					if (!empty($listing->listing_website))  $info_rows['Website']   = '<a href="' . e_url($listing->listing_website) . '" target="_blank" rel="noopener nofollow">' . e($listing->listing_website) . '</a>';
+					if ($show_phone)                        $info_rows['Phone']     = '<a data-track="phone" href="tel:' . e_attr(preg_replace('/[^0-9+]/', '', (string) $listing->listing_mobile)) . '">' . e($listing->listing_mobile) . '</a>';
+					if ($show_wa)                           $info_rows['WhatsApp']  = '<a data-track="whatsapp" href="https://wa.me/' . e_attr($wa_number) . '" target="_blank" rel="noopener nofollow">Message on WhatsApp</a>';
+					if (!empty($listing->listing_email))    $info_rows['Email']     = '<a data-track="email" href="mailto:' . e_attr($listing->listing_email) . '">' . e($listing->listing_email) . '</a>';
+					if (!empty($listing->listing_website))  $info_rows['Website']   = '<a data-track="website" href="' . e_url($listing->listing_website) . '" target="_blank" rel="noopener nofollow">' . e($listing->listing_website) . '</a>';
 					if (!empty($listing->contact_person))   $info_rows['Contact']   = e($listing->contact_person);
 					if ($show_addr)                         $info_rows['Address']   = e($listing->listing_address);
 					if (!empty($listing->business_hours))   $info_rows['Hours']     = nl2br(e($ld_text($listing->business_hours)));
@@ -811,11 +823,14 @@ $ld_stars = function ($value) {
 							<?php if ($has_socials): ?>
 								<div class="p411-profile__soc">
 									<?php
+									// The business's own links (listing_social_links()). The
+									// theme ships no Instagram icon, so that one is lettered.
 									$soc_icons = array(
-										'facebook' => array('3.png', 'Facebook'),
-										'twitter'  => array('2.png', 'Twitter'),
-										'youtube'  => array('5.png', 'YouTube'),
-										'website'  => array('6.png', 'Website'),
+										'facebook'  => array('3.png', 'Facebook'),
+										'instagram' => array('', 'Instagram', 'IG'),
+										'twitter'   => array('2.png', 'X / Twitter'),
+										'youtube'   => array('5.png', 'YouTube'),
+										'linkedin'  => array('1.png', 'LinkedIn'),
 									);
 									foreach ($soc_icons as $key => $meta):
 										// external_url() is what the site footer's own icons use
@@ -828,8 +843,12 @@ $ld_stars = function ($value) {
 										$soc_href = external_url($owner_socials[$key] ?? '');
 										if ($soc_href === '') continue;
 									?>
-										<a href="<?= e_attr($soc_href) ?>" target="_blank" rel="noopener nofollow" aria-label="<?= e_attr($meta[1]) ?>">
-											<img src="<?= base_url('assets/images/social/' . $meta[0]) ?>" alt="<?= e_attr($meta[1]) ?>" loading="lazy">
+										<a href="<?= e_attr($soc_href) ?>" target="_blank" rel="noopener nofollow" aria-label="<?= e_attr($meta[1]) ?>" title="<?= e_attr($meta[1]) ?>">
+											<?php if ($meta[0] !== ''): ?>
+												<img src="<?= base_url('assets/images/social/' . $meta[0]) ?>" alt="<?= e_attr($meta[1]) ?>" loading="lazy">
+											<?php else: ?>
+												<b aria-hidden="true"><?= e($meta[2]) ?></b>
+											<?php endif; ?>
 										</a>
 									<?php endforeach; ?>
 								</div>
@@ -844,7 +863,7 @@ $ld_stars = function ($value) {
 						<p class="p411-form__hint">
 							This listing hasn&rsquo;t been claimed. Claim it to edit the details, add photos and reply to reviews.
 						</p>
-						<a class="p411-btn p411-btn--block" href="<?= e_url(base_url('claim-listing/' . rawurlencode($ld_slug))) ?>">Claim this listing</a>
+						<a class="p411-btn p411-btn--block" href="<?= e_url($ld_claim_url) ?>">Claim This Business</a>
 					</div>
 				<?php endif; ?>
 
@@ -875,7 +894,7 @@ $ld_stars = function ($value) {
 							</p>
 							<?php if ($show_addr): ?>
 								<div class="p411-empty__actions">
-									<a class="p411-btn p411-btn--sm p411-btn--ghost" target="_blank" rel="noopener"
+									<a class="p411-btn p411-btn--sm p411-btn--ghost" target="_blank" rel="noopener" data-track="map"
 									   href="https://www.google.com/maps/search/?api=1&amp;query=<?= rawurlencode((string) $listing->listing_address) ?>">Find on Google Maps</a>
 								</div>
 							<?php endif; ?>
@@ -884,9 +903,9 @@ $ld_stars = function ($value) {
 
 					<?php if (!empty($listing->listing_lat) && !empty($listing->listing_lng)): ?>
 						<div class="p411-map__actions">
-							<a class="p411-btn p411-btn--sm p411-btn--ghost" target="_blank" rel="noopener"
+							<a class="p411-btn p411-btn--sm p411-btn--ghost" target="_blank" rel="noopener" data-track="map"
 							   href="https://www.google.com/maps?q=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>">Open in Google Maps</a>
-							<a class="p411-btn p411-btn--sm" target="_blank" rel="noopener"
+							<a class="p411-btn p411-btn--sm" target="_blank" rel="noopener" data-track="map"
 							   href="https://www.google.com/maps/dir/?api=1&amp;destination=<?= (float) $listing->listing_lat ?>,<?= (float) $listing->listing_lng ?>">Get directions</a>
 						</div>
 					<?php endif; ?>

@@ -470,7 +470,10 @@ $config['csrf_regenerate']  = FALSE;
 // CI3 only enforces CSRF on POST requests; GET handlers (e.g. the
 // weather-API proxy in views/index.php that's keyed off
 // ?weather_api=proxy) do not need to be listed here.
-$config['csrf_exclude_uris'] = array();
+// helcim-webhook: Helcim's server posts here with no browser session, so it
+// can never carry our token — CSRF answered every delivery with a 403. The
+// endpoint is gated by Helcim's signature instead (User::helcim_webhook).
+$config['csrf_exclude_uris'] = array('helcim-webhook');
 
 /*
 |--------------------------------------------------------------------------

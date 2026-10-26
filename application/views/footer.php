@@ -154,6 +154,8 @@
 	<script src="<?= base_url('assets/js/customCode.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/customCode.js') ?: 1 ?>"></script>
 	<?php // Live validation for any <form data-validate>. See the file header. ?>
 	<script src="<?= base_url('assets/js/form-validate.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/form-validate.js') ?: 1 ?>"></script>
+	<?php // Click counters for the analytics pages ([data-track]). ?>
+	<script src="<?= base_url('assets/js/track.js') ?>?v=<?= @filemtime(FCPATH . 'assets/js/track.js') ?: 1 ?>"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/owl.carousel.min.js"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.3/js/select2.min.js"></script>
 

@@ -548,6 +548,19 @@
                                     <label class="custom-control-label" for="canExtraDetails">Extra Details</label>
                                 </div></div>
                             </div>
+                            <?php // Hours and social links on the listing (migration 0037). ?>
+                            <div class="col-md-4">
+                                <div class="form-group"><div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" name="can_hours" id="canHours" value="1">
+                                    <label class="custom-control-label" for="canHours">Opening Hours</label>
+                                </div></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group"><div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" name="can_social_links" id="canSocialLinks" value="1">
+                                    <label class="custom-control-label" for="canSocialLinks">Social Media Links</label>
+                                </div></div>
+                            </div>
                         </div>
 
                         <div class="form-group">
@@ -662,6 +675,8 @@ function ppAdminReady(fn) {
                         $('#canServices').prop('checked', response.can_services == 1);
                         $('#allowVideo').prop('checked', response.allow_video == 1);
                         $('#canExtraDetails').prop('checked', response.can_extra_details == 1);
+                        $('#canHours').prop('checked', response.can_hours == 1);
+                        $('#canSocialLinks').prop('checked', response.can_social_links == 1);
 
                         $('#planDescription').val(response.description || '');
 

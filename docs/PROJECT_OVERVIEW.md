@@ -203,6 +203,9 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   when it cannot be read), `ad_price_from()` (the live "from $X a month" figure for promo copy — never type a price into a view),
   `listing_video_urls()` (video links in `listings.listing_video`, commas or new lines),
   `cap_lock_note()` (the "not included in your package" hint on member listing forms),
+  `listing_is_claimed()`, `claim_roles()` / `claim_verification_methods()` / `claim_status_label()`,
+  `listing_social_links()` (the business's own links, safe for an href), `activity_record()` (count an
+  analytics event from a view),
   `plan_term_copy()` / `billing_interval_is_one_time()` (the "per month ·
   recurring" vs "for 1 month · one-time, does not renew" line under every package price — only a
   business-listing tier ever renews),
@@ -212,7 +215,26 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `youtube_embed_url()`, and `embed_src()` (pull the `src` out of a pasted map iframe instead of
   echoing admin markup).
 - **Libraries:** `Helcim_lib` (payments), `Mailer` (outgoing email), `Rate_limit`, `Recaptcha`
-  (Google reCAPTCHA v2; keys in `.env`, off while either is missing).
+  (Google reCAPTCHA v2; keys in `.env`, off while either is missing), `Notifications` (every
+  customer-lifecycle email: claim received / approved / rejected / more information needed, purchase
+  receipt, welcome & onboarding, office order alert, renewal cancelled, listing published — one file
+  so the list of what a customer is told can be read in one place; customer mail goes to the
+  **account** address, never echoes visitor text to a typed address), `Activity` (per-day counters in
+  `activity_daily` for the analytics pages — listing views / website / phone / email / map / WhatsApp
+  clicks, coupon views / clicks, ad impressions / clicks; skips bots, counts a view once per visitor
+  per day, never throws).
+- **"Claimed" is `listings.is_claimed`, never `user_id`.** Every listing has an owner — the CSV
+  import and the admin form require one, and the imported directory sits under a few data-entry
+  logins — so `!empty($listing->user_id)` called the whole directory claimed and the Claim This
+  Business button never showed. Use `listing_is_claimed($listing)` (view helper; falls back to the
+  old rule before migration 0037). It is set by an approved claim, a member adding their own
+  business, or an admin (listing editor, the Claimed column on Business Listings, or *Make listings
+  claimable* for a whole data-entry account at `/admin/users`).
+- **Analytics hooks:** an element inside `[data-track-listing="<id>"]` (or `[data-track-coupon]`)
+  with `data-track="phone|email|website|map|whatsapp|click"` is counted by `assets/js/track.js`
+  (loaded by `footer.php`) through `POST /track`. A sold banner's link goes through
+  `/ad-click/<id>`, which counts and redirects; `partials/ad_slot.php` counts the impression with
+  `activity_record()`. Leads are the `enquiries` rows (`Usermodel::countListingLeads()`), not counters.
 - **Email:** everything goes through `Mailer`. `render()` wraps the body in the standard layout at
   `views/emails/layout.php`; `send()` derives a plain-text alternative (keeping link URLs), records
   the attempt in `email_log`, and returns a **meaningful bool** — callers that ignore it tell users
@@ -229,12 +251,14 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
 `application/config/routes.php`. A catch-all `$route['(:any)'] = 'User/$1'` plus
 `translate_uri_dashes = TRUE` means most URLs resolve to the same-named `User` method
 (`/event` → `User::event`, `/checkout-success` → `User::checkout_success`). Explicit routes exist
-for auth, services, coupons, and **payments** (webhook + AJAX endpoints). `User::__construct` holds
+for auth, services, coupons, and **payments** (webhook + AJAX endpoints). `helcim-webhook` is the one
+entry in `csrf_exclude_uris` (Helcim's server can never carry our token; the endpoint checks Helcim's
+signature instead). `User::__construct` holds
 a `$public_actions` whitelist; anything not in it requires a logged-in user (`logged_user` session).
 
 ## Monetization model (the core of the recent redesign)
-1. **Free (claimed) tier:** anyone can *claim* an admin-added listing; after approval they edit
-   **name / phone / email** for free.
+1. **Free (claimed) tier:** anyone can *claim* an unclaimed listing (`listings.is_claimed = 0`);
+   after approval they edit **name / phone / email / address / website / description** for free.
 2. **Paid packages unlock capabilities:** photos, map, services, a YouTube video, SEO details —
    gated by per-plan flags on `plans` and enforced in `User::edit_listing` (server strips
    disallowed fields; the view locks them with an "Upgrade" hint).
@@ -253,10 +277,15 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Home | `/` | `User::index` → `index.php` | Self-contained (own header; footer via `partials/site_footer.php`). Hotspot → Business of the Week → Featured → Explore are filled in that order and de-duplicated by id **and** name; Featured and Explore only take listings with a real description (`Usermodel::getHomepageFeatured` / `getHomepageListings`). 7 ad zones, 4 of which render nothing when unsold. |
 | About | `/about-us` | `User::about_us` → `about.php` | Shared kit; the figures in "Pearland411 today" are counted live and each links to its page |
 | Directory / listing | `/all-listing`, `/all_listing/<cat>[/<offset>]`, `/listing-details/<slug>` | `User::all_listing`, `listing_details` | Homepage layout + 6 ad zones each; `?sort=featured\|newest\|name\|rating`. `?page=N` is an alternative to the positional offset and is what the "Go to page" box under the pager posts to — the numbered pager only shows ±2 pages, so page 20 of 47 was otherwise a long walk |
-| Claim a listing | `/claim-listing/<slug>` | `User::claim_listing`; admin `Admin::claim_approve` | transfers `listings.user_id` and the listing's enquiries (`Usermodel::moveListingEnquiries`); a rejected claim may be re-sent |
+| Claim a listing | `/claim-listing/<slug>`, `/user/claim-reply/<id>` (POST) | `User::claim_listing`, `claim_reply` | Shared kit. Login required (the login page says why). Asks business name, owner/contact name, business email, phone, role (`claim_roles()`), verification method (`claim_verification_methods()`), optional proof document (photo or PDF → `uploads/claims/`), notes, an "I'm authorised" box; 10 attempts / IP / hour. Emails the claimant (account address) and the office (`Notifications`). A rejected claim may be re-sent; one waiting on more information (status 3) is answered from My claims |
+| Claims review (admin) | `/admin/claimed-listings[?status=open\|pending\|more_info\|approved\|rejected\|all]`, `/admin/claim-approve/<id>`, `/admin/claim-reject/<id>`, `/admin/claim-more-info/<id>` (all POST) | `Admin::claimed_listings`, `claim_approve`, `claim_reject`, `claim_more_info` → `Adminmodel::getClaimsForReview` | Approve moves `listings.user_id`, sets `is_claimed`, moves the enquiries and emails a link to the editor; a listing already claimed by another account needs "transfer anyway". Reject stores a reason, more-info stores a question (`claim_admin_note`), both shown to the claimant. `/admin/listing-claim-status/<id>` and `/admin/release-account-listings/<user_id>` (POST) flip claim status by hand |
 | My claims (member) | `/user/my-claims` | `User::my_claims` → `Usermodel::getClaimsByUser` | Pending review / Approved / Not approved per business; shares the **My listings / My claims** tab strip (`partials/listing_tabs.php`) with `/user-listing`, which lists every listing the member owns (published or not) whatever their plan |
 | Add a listing (member) | `/user/add_new_listing_start` → POST `/user/add-listing-scratch` → `/user/listing-submitted/<id>` | `User::renderListingWizard`, `add_listing_scratch`, `listing_submitted`, `notifyListingSubmitted` | The wizard shows what the plan allows (`capabilitiesFromPlan()`); no plan = the free Basic plan, started on submit. Unique slug (`Usermodel::uniqueListingSlug`), refused submissions re-render with every value kept, success → confirmation page + emails to the member and the office. Logo/gallery/video gated by `can_photos`/`photo_limit`/`allow_video`/`listing_video_limit`, enforced server-side on add and edit |
-| Edit own listing | `/user/edit-listing/<slug>` | `User::edit_listing` | ownership + capability gated |
+| Edit own listing | `/user/edit-listing/<slug>` | `User::edit_listing` | ownership + capability gated. The slug stays put unless the business is renamed (then `uniqueListingSlug()`), so emailed links keep working; the admin editor does the same. Hours (`can_hours`) and the business's own social links (`can_social_links`) are plan features. Saving returns to the form with a *View your live listing* link |
+| Onboarding | `/user/dashboard`, `/checkout-success` | `User::listingOnboarding`, `afterPurchase` | Dashboard card "Finish your listing": business info, website, description, logo, photos, hours, social links, services — items the plan lacks show as upgrades. Every successful checkout sends the receipt, a welcome / next-steps email and the office order alert, and the success page shows the real order, whether the card is charged again, and the next steps |
+| Analytics (member) | `/user/analytics[?days=7\|30\|90]` | `User::analytics` | Views and leads per listing for everyone; website / phone / email / map clicks, deals and banners when the plan has `analytics_access` |
+| Analytics (admin) | `/admin/analytics[?days=]` | `Admin::analytics` | Site totals, busiest businesses, banner impressions / clicks / click rate, coupon activity |
+| Homepage placements (admin) | `/admin/homepage-placements[?q=]`, `/admin/homepage-placement-save`, `/admin/homepage-placement-remove/<id>` (POST) | `Admin::homepage_placements` → `Adminmodel::getHomepagePlacements` | Business Hotspot / Business of the Week end dates (`hotspot_until` / `week_until`, drop off by themselves) and the Featured flag: add, extend, remove; ended ones listed for 30 days. Also on the admin listing editor. The homepage Featured row and Hotspot rail rotate when there are more than fit |
 | Packages (customer) | `/pricing-plan` | `User::pricing_plan` → `pricing_plan.php` | lists all active `plans`; carries `partials/sales_help.php` (`#talk-to-us`) so a caller can buy by phone |
 | Start a free plan | `/start-free` (POST) | `User::start_free_plan` → `Usermodel::activateFreePlan` | free tiers are excluded from cart/checkout, so this is the only way to get one; login required, never downgrades an existing subscription |
 | Site search | `/search?q=`, `/search-suggestions` (AJAX) | `User::search` → `Usermodel::globalSearch` | Word-by-word: `searchTerms()` splits the query, `searchTermVariants()` folds each word to its stem (`restaurants` → `restaurant`; four-character minimum, or `news` folds to `new`), `searchColumnCondition()` requires a word boundary for a one- or two-letter word (`LIKE '%it%'` matched most of the directory), `applySearchTerms()` ANDs the words and ORs the columns and forms, and `searchRelevanceOrder()` ranks on the name plus caller-weighted columns — `searchListings()` weights the category above services offered above the description, so a passing mention stops outranking a filed-under match. Sections switched off at `/admin/setting` are not searched |
@@ -295,11 +324,17 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 ## Key DB tables
 `user`, `listings` (+ `listing_categories`, `listing_sub_categories`, `listing_other_info`),
 `claim_listings`, `plans`, `plan_durations`, `subscriptions`, `transactions`, `payment_cards`,
-`user_usage_tracking`, `site_settings`, content tables (`events`, `news`, `blogs`, `products`,
+`user_usage_tracking`, `site_settings`, `activity_daily` (0037: analytics counters, one row per
+subject / event / day), content tables (`events`, `news`, `blogs`, `products`,
 `classifieds`, `house`, `rental`, `video`, `coupons`), `ads` / `ads_prices`.
 `listing_sub_category_map` (0023) is the listing↔sub-category join — a listing may sit under
 several. `listings.sub_category_id` survives alongside it holding the **first** selection,
 because the admin table, the CSV export and several model joins still read it.
+`listings.is_claimed` / `claimed_at` (0037) — see "Claimed" above; `listings.business_hours` and
+`listing_facebook/instagram/twitter/youtube/linkedin` (0037) are the business's own (the listing page
+no longer borrows the owner account's profile links); `plans.can_hours` / `can_social_links` (0037);
+`claim_listings.claim_business_name/claim_role/claim_verification/claim_admin_note/claim_reviewed_at/claim_updated_at`
+(0037; `claim_status` 0 pending, 1 approved, 2 rejected, 3 more information needed).
 `plans.listing_video_limit` (0036) caps the YouTube links on a listing (beside `photo_limit`);
 `ads.listing_id` (0036) is the business a category banner was booked for from Business Listings;
 `subscriptions.renewal_reminded_for` (0036) is the billing date the renewal reminder covered.

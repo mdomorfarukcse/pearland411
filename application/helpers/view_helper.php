@@ -1439,3 +1439,130 @@ if (!function_exists('user_option_label')) {
         return $label;
     }
 }
+
+if (!function_exists('listing_is_claimed')) {
+    /**
+     * Has the business owner got this listing?
+     *
+     * Not `!empty($listing->user_id)`. Every listing has an owner — the CSV
+     * import and the admin form both require one — and the imported directory
+     * belongs to a handful of data-entry logins, so that test called every
+     * listing claimed and the "Claim This Business" button never showed.
+     * `listings.is_claimed` (migration 0037) is set by an approved claim, by a
+     * member adding their own business, or by an admin. Before 0037 has run,
+     * the old rule applies so nothing changes.
+     *
+     * @param  object|array|null $listing a listings row
+     * @return bool
+     */
+    function listing_is_claimed($listing)
+    {
+        $listing = (object) $listing;
+        if (property_exists($listing, 'is_claimed')) {
+            return (int) $listing->is_claimed === 1;
+        }
+        return !empty($listing->user_id);
+    }
+}
+
+if (!function_exists('claim_roles')) {
+    /**
+     * "Your role at the business" on the claim form, key => label. The key is
+     * what claim_listings.claim_role stores.
+     *
+     * @return array<string,string>
+     */
+    function claim_roles()
+    {
+        return array(
+            'owner'    => 'Owner',
+            'co_owner' => 'Co-owner / partner',
+            'manager'  => 'Manager',
+            'employee' => 'Employee (authorised by the owner)',
+            'agency'   => 'Marketing agency / representative',
+            'other'    => 'Other',
+        );
+    }
+}
+
+if (!function_exists('claim_verification_methods')) {
+    /**
+     * "How can we verify you?" on the claim form, key => label. The key is
+     * what claim_listings.claim_verification stores.
+     *
+     * @return array<string,string>
+     */
+    function claim_verification_methods()
+    {
+        return array(
+            'phone'    => 'Call me on the business phone number on the listing',
+            'email'    => 'Email me at an address on the business’s own domain',
+            'document' => 'I’ll upload a document (business license, utility bill, EIN letter)',
+            'website'  => 'I can add a note to the business website or social page',
+            'other'    => 'Something else — I’ll explain below',
+        );
+    }
+}
+
+if (!function_exists('claim_status_label')) {
+    /**
+     * What claim_listings.claim_status means, for people. 3 is "more
+     * information requested" (migration 0037).
+     */
+    function claim_status_label($status)
+    {
+        switch ((int) $status) {
+            case 1:  return 'Approved';
+            case 2:  return 'Not approved';
+            case 3:  return 'More information needed';
+            default: return 'Pending review';
+        }
+    }
+}
+
+if (!function_exists('listing_social_links')) {
+    /**
+     * The business's own social links, keyed facebook / instagram / twitter /
+     * youtube / linkedin, each made safe by external_url() ('' when unset).
+     *
+     * The listing columns come from migration 0037. Before them the listing
+     * page used the OWNER'S profile links, which put a data-entry login's
+     * Facebook page on every business it owned. $profile (the owner's
+     * user_facebook / user_twitter / user_youtube) is only used for a listing
+     * the owner has actually claimed, and only where the listing has nothing.
+     *
+     * @param  object      $listing
+     * @param  object|null $profile owner's `user` row, or NULL
+     * @return array<string,string>
+     */
+    function listing_social_links($listing, $profile = NULL)
+    {
+        $out = array();
+        foreach (array('facebook', 'instagram', 'twitter', 'youtube', 'linkedin') as $net) {
+            $value = isset($listing->{'listing_' . $net}) ? (string) $listing->{'listing_' . $net} : '';
+            if ($value === '' && $profile && listing_is_claimed($listing) && isset($profile->{'user_' . $net})) {
+                $value = (string) $profile->{'user_' . $net};
+            }
+            $out[$net] = external_url($value);
+        }
+        return $out;
+    }
+}
+
+if (!function_exists('activity_record')) {
+    /**
+     * Count one analytics event from a view or partial (see
+     * libraries/Activity.php). Views may not load libraries themselves — their
+     * $this is the CI_Loader — so this goes through get_instance().
+     *
+     * @return bool
+     */
+    function activity_record($type, $id, $event)
+    {
+        $CI =& get_instance();
+        if (!isset($CI->activity)) {
+            $CI->load->library('activity');
+        }
+        return $CI->activity->record($type, $id, $event);
+    }
+}

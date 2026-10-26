@@ -2029,5 +2029,135 @@ SET @s := IF(@c = 3,
   'DO 0');
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- ============================================================
+-- 0037_claim_onboarding_tracking.sql
+-- ============================================================
+-- Website Update Checklist (before the 100-business campaign).
+-- listings.is_claimed / claimed_at: "claimed" was user_id > 0, and every
+-- listing has an owner (the imported directory sits under data-entry
+-- logins), so the Claim button never showed. One-time backfill when the
+-- column is first created: claimed when the current owner had a claim
+-- approved, staff billing has a subscription for the business, or the
+-- owner holds 3 live listings or fewer. claim_listings: business name,
+-- role, verification method, admin note, review / reply dates (status 3 =
+-- more information needed). listings: business_hours + five social links.
+-- plans: can_hours / can_social_links (seeded from can_photos once).
+-- activity_daily: per-day counters for the analytics pages.
+-- ============================================================
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings' AND COLUMN_NAME = 'is_claimed');
+SET @new_claimed := (@t = 1 AND @c = 0);
+SET @s := IF(@new_claimed,
+  'ALTER TABLE `listings` ADD COLUMN `is_claimed` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''1 = the business owner has this listing (approved claim, own listing, or set by an admin)'', ADD COLUMN `claimed_at` DATETIME NULL DEFAULT NULL COMMENT ''When the listing became claimed''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_status');
+SET @s := IF(@new_claimed AND @c = 1,
+  'UPDATE `listings` l SET l.`is_claimed` = 1 WHERE l.`user_id` > 0 AND EXISTS (SELECT 1 FROM `claim_listings` c WHERE c.`listing_id` = l.`listing_id` AND c.`enquiry_sender_id` = l.`user_id` AND c.`claim_status` = 1)',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'subscriptions' AND COLUMN_NAME = 'listing_id');
+SET @s := IF(@new_claimed AND @c = 1,
+  'UPDATE `listings` l SET l.`is_claimed` = 1 WHERE EXISTS (SELECT 1 FROM `subscriptions` s WHERE s.`listing_id` = l.`listing_id`)',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := IF(@new_claimed,
+  'UPDATE `listings` l JOIN (SELECT `user_id`, COUNT(*) AS n FROM `listings` WHERE `user_id` > 0 AND (`is_deleted` IS NULL OR `is_deleted` = 0) GROUP BY `user_id`) o ON o.`user_id` = l.`user_id` SET l.`is_claimed` = 1 WHERE o.n <= 3',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @s := IF(@new_claimed,
+  'UPDATE `listings` SET `claimed_at` = COALESCE(`updated_at`, `created_at`, NOW()) WHERE `is_claimed` = 1',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_business_name');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `claim_listings` ADD COLUMN `claim_business_name` VARCHAR(255) NULL DEFAULT NULL COMMENT ''Business name as the claimant typed it''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_role');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `claim_listings` ADD COLUMN `claim_role` VARCHAR(50) NULL DEFAULT NULL COMMENT ''Claimant relationship to the business (owner, manager, ...)''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_verification');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `claim_listings` ADD COLUMN `claim_verification` VARCHAR(50) NULL DEFAULT NULL COMMENT ''How the claimant asked to be verified (phone, email, document, ...)''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_admin_note');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `claim_listings` ADD COLUMN `claim_admin_note` TEXT NULL COMMENT ''Rejection reason or the information the admin asked for; shown to the claimant''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_reviewed_at');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `claim_listings` ADD COLUMN `claim_reviewed_at` DATETIME NULL DEFAULT NULL COMMENT ''When an admin last approved / rejected / asked for more''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'claim_listings' AND COLUMN_NAME = 'claim_updated_at');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `claim_listings` ADD COLUMN `claim_updated_at` DATETIME NULL DEFAULT NULL COMMENT ''When the claimant last sent information''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings' AND COLUMN_NAME = 'business_hours');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `listings` ADD COLUMN `business_hours` TEXT NULL COMMENT ''Opening hours as the owner writes them, one line per day or range''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'listings' AND COLUMN_NAME = 'listing_facebook');
+SET @s := IF(@t = 1 AND @c = 0,
+  'ALTER TABLE `listings` ADD COLUMN `listing_facebook` VARCHAR(255) NULL DEFAULT NULL, ADD COLUMN `listing_instagram` VARCHAR(255) NULL DEFAULT NULL, ADD COLUMN `listing_twitter` VARCHAR(255) NULL DEFAULT NULL, ADD COLUMN `listing_youtube` VARCHAR(255) NULL DEFAULT NULL, ADD COLUMN `listing_linkedin` VARCHAR(255) NULL DEFAULT NULL',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @t := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plans');
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plans' AND COLUMN_NAME = 'can_hours');
+SET @p := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'plans' AND COLUMN_NAME = 'can_photos');
+SET @new_hours := (@t = 1 AND @c = 0);
+SET @s := IF(@new_hours,
+  'ALTER TABLE `plans` ADD COLUMN `can_hours` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''Listing may show opening hours'', ADD COLUMN `can_social_links` TINYINT(1) NOT NULL DEFAULT 0 COMMENT ''Listing may show its social media links''',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @s := IF(@new_hours AND @p = 1,
+  'UPDATE `plans` SET `can_hours` = `can_photos`, `can_social_links` = `can_photos`',
+  'DO 0');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+CREATE TABLE IF NOT EXISTS `activity_daily` (
+    `subject_type` VARCHAR(16) NOT NULL COMMENT 'listing | coupon | ad',
+    `subject_id`   INT(11)     NOT NULL,
+    `event_type`   VARCHAR(24) NOT NULL COMMENT 'view, website, phone, email, map, impression, click, ...',
+    `event_date`   DATE        NOT NULL,
+    `hits`         INT(11)     NOT NULL DEFAULT 0,
+    PRIMARY KEY (`subject_type`, `subject_id`, `event_type`, `event_date`),
+    KEY `activity_daily_date_idx` (`event_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 
 SET FOREIGN_KEY_CHECKS = 1;

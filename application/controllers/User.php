@@ -67,6 +67,8 @@ class User extends CI_Controller
 			'services', 'service_details', 'request_service', 'request_quote',
 			// Listing claim (form gates on session itself)
 			'claim_listing',
+			// Analytics beacons and the ad click-through (anonymous visitors)
+			'track', 'ad_click',
 			// Public coupons / deals
 			'coupons', 'coupon_details',
 			// Advertise landing page (form posts to /contact-submit)
@@ -338,6 +340,43 @@ class User extends CI_Controller
 	}
 
 	/**
+	 * The onboarding checklist for one listing (checklist §4: business
+	 * information, logo, photos, description, hours, social links, website,
+	 * services). An item the owner's plan does not include is shown as an
+	 * upgrade rather than as missing, and does not count against them.
+	 *
+	 * @return array ['listing', 'items' => [[label, done, locked]], 'done', 'total']
+	 */
+	private function listingOnboarding($listing, array $caps)
+	{
+		$has_social = FALSE;
+		foreach (array('facebook', 'instagram', 'twitter', 'youtube', 'linkedin') as $net) {
+			if (!empty($listing->{'listing_' . $net})) $has_social = TRUE;
+		}
+		$about = trim(strip_tags((string) ($listing->listing_description ?? '')));
+
+		$items = array(
+			array('Name, phone and address', !empty($listing->listing_name) && !empty($listing->listing_mobile) && !empty($listing->listing_address), FALSE),
+			array('Website', !empty($listing->listing_website), FALSE),
+			array('Description (a few sentences)', mb_strlen($about) >= 80, FALSE),
+			array('Logo', !empty($listing->listing_image), !$caps['can_photos']),
+			array('Photos', (bool) listing_gallery_paths($listing->listing_image_gallery ?? NULL), !$caps['can_photos']),
+			array('Opening hours', !empty($listing->business_hours), !$caps['can_hours'] || !property_exists($listing, 'business_hours')),
+			array('Social media links', $has_social, !$caps['can_social_links'] || !property_exists($listing, 'listing_facebook')),
+			array('Services offered', !empty($listing->service_offered), !$caps['can_services']),
+		);
+
+		$total = 0;
+		$done  = 0;
+		foreach ($items as $item) {
+			if ($item[2]) continue;
+			$total++;
+			if ($item[1]) $done++;
+		}
+		return array('listing' => $listing, 'items' => $items, 'done' => $done, 'total' => $total);
+	}
+
+	/**
 	 * What a listing on $plan may carry — a plans row, or a subscription row
 	 * joined to its plan (getUserSubscription). NULL = no plan: nothing beyond
 	 * the basics. Limits: -1 unlimited, 0 none, N up to N.
@@ -361,6 +400,10 @@ class User extends CI_Controller
 			// the column exists, rather than silently cutting videos down.
 			'video_limit'       => !$can_video ? 0 : (int) ($plan && isset($plan->listing_video_limit) ? $plan->listing_video_limit : -1),
 			'can_extra_details' => (bool) ($plan && !empty($plan->can_extra_details)),
+			// Hours and social links (migration 0037). Until the columns exist
+			// they follow can_photos, which is what 0037 seeds them from.
+			'can_hours'         => (bool) ($plan && (isset($plan->can_hours) ? !empty($plan->can_hours) : !empty($plan->can_photos))),
+			'can_social_links'  => (bool) ($plan && (isset($plan->can_social_links) ? !empty($plan->can_social_links) : !empty($plan->can_photos))),
 			'plan_name'         => $plan && !empty($plan->name) ? (string) $plan->name : '',
 		);
 	}
@@ -3099,6 +3142,16 @@ class User extends CI_Controller
 		// Owned listings, published or not — the member's own screen.
 		$data['AllListings'] = $this->usermodel->getOwnerListings($uid, 10, NULL);
 
+		// "Finish your listing" (checklist §4, customer onboarding): what the
+		// owner has and has not filled in yet, for their newest claimed listing.
+		$data['onboarding'] = NULL;
+		foreach ($data['AllListings'] as $__own) {
+			if (listing_is_claimed($__own)) {
+				$data['onboarding'] = $this->listingOnboarding($__own, $this->listingCapabilities($uid));
+				break;
+			}
+		}
+
 		// The member's leads, on the dashboard itself. Nothing here showed an
 		// enquiry: a claimed business's quote requests could only be found
 		// from the sidebar's "Lead enquiry" link, or by the admin team.
@@ -3326,9 +3379,12 @@ class User extends CI_Controller
 	{
 		// Get listing details by slug
 		$data['listing'] = $this->usermodel->getSingleValue($slug, 'listing_slug', 'listings');
-		// Increment views for this listing
+		// Increment views for this listing — the lifetime counter, and the
+		// per-day one the analytics pages read.
 		if ($data['listing']) {
 			$this->usermodel->incrementViews('listings', 'listing_id', $data['listing']->listing_id);
+			$this->load->library('activity');
+			$this->activity->record('listing', (int) $data['listing']->listing_id, 'view');
 		}
 
 		if (!$data['listing']) {
@@ -3369,7 +3425,9 @@ class User extends CI_Controller
 		// The owner's live deals. The post-a-deal screen promises the offer
 		// appears "on your listing"; until this card it appeared only on
 		// /coupons and the homepage.
-		$data['listing_coupons'] = !empty($data['listing']->user_id)
+		// Only on a claimed listing: an unclaimed one belongs to a data-entry
+		// login, whose deals are not this business's.
+		$data['listing_coupons'] = !empty($data['listing']->user_id) && listing_is_claimed($data['listing'])
 			? $this->usermodel->getActiveCouponsByUser((int) $data['listing']->user_id, 3)
 			: array();
 
@@ -3408,29 +3466,25 @@ class User extends CI_Controller
 				->row();
 		}
 
-		// Owner social-profile lookup so the "Company badge" block
-		// can render real per-listing social links instead of the
-		// placeholder facebook.com/twitter.com URLs that used to be
-		// hardcoded in the view.
-		$data['owner_socials'] = array(
-			'facebook' => '', 'twitter' => '', 'youtube' => '', 'website' => '',
-		);
-		if (!empty($data['listing']->user_id)) {
+		// The business's own social links (migration 0037). The owner's
+		// profile links fill a gap only on a listing the owner has claimed:
+		// used unconditionally, they put a data-entry login's Facebook page
+		// on every business it owned. See listing_social_links().
+		$owner = NULL;
+		if (!empty($data['listing']->user_id) && listing_is_claimed($data['listing'])) {
 			$owner = $this->db
-				->select('user_facebook, user_twitter, user_youtube, user_website')
+				->select('user_facebook, user_twitter, user_youtube')
 				->where('user_id', (int) $data['listing']->user_id)
 				->limit(1)
 				->get('user')
 				->row();
-			if ($owner) {
-				$data['owner_socials'] = array(
-					'facebook' => (string) ($owner->user_facebook ?? ''),
-					'twitter'  => (string) ($owner->user_twitter  ?? ''),
-					'youtube'  => (string) ($owner->user_youtube  ?? ''),
-					'website'  => (string) ($owner->user_website  ?? ''),
-				);
-			}
 		}
+		$data['owner_socials'] = listing_social_links($data['listing'], $owner);
+
+		// Is the person looking at this page the one who manages it? They get
+		// an "Edit this listing" bar instead of a Claim button.
+		$data['viewer_owns_listing'] = $logged_id && (int) $data['listing']->user_id === (int) $logged_id
+			&& listing_is_claimed($data['listing']);
 
 		// SEO: per-page meta + LocalBusiness JSON-LD.
 		// Prefer admin-curated listing_seo_* columns when present,
@@ -3507,6 +3561,64 @@ class User extends CI_Controller
 		$this->load->view('header', $data);
 		$this->load->view('listing_details', $data);
 		$this->load->view('footer');
+	}
+
+	/**
+	 * POST /track — one click from assets/js/track.js (phone, email, website,
+	 * map, WhatsApp on a listing; a coupon's link). Answers 204 whatever
+	 * happens: the visitor is already on their way to the call or the site,
+	 * and a counter must never show them an error.
+	 */
+	public function track()
+	{
+		$this->output->set_status_header(204);
+		if ($this->input->method() !== 'post') {
+			return;
+		}
+		// Generous — a real visitor clicks a handful of links — but a script
+		// replaying the beacon cannot inflate a business's figures without end.
+		$this->load->library('rate_limit');
+		if (!$this->rate_limit->check_ip('track', 120, 3600)) {
+			return;
+		}
+
+		$type  = (string) $this->input->post('type');
+		$id    = (int) $this->input->post('id');
+		$event = (string) $this->input->post('event');
+
+		$this->load->library('activity');
+		if (!$this->activity->is_valid($type, $event) || $id <= 0) {
+			return;
+		}
+		// Only real, live things: a listing or coupon that exists.
+		if ($type === 'listing' && !$this->usermodel->getSingleValue($id, 'listing_id', 'listings')) {
+			return;
+		}
+		if ($type === 'coupon' && !$this->db->where('coupon_id', $id)->count_all_results('coupons')) {
+			return;
+		}
+		$this->activity->record($type, $id, $event);
+	}
+
+	/**
+	 * GET /ad-click/<id> — a sold banner's click-through. Counts the click,
+	 * then redirects to the advertiser's link through external_url() — the
+	 * same normalisation partials/ad_slot.php always applied — so only a link
+	 * stored on that booking can ever be the destination.
+	 */
+	public function ad_click($ad_id = 0)
+	{
+		$ad = $this->db->select('id, ad_link')->where('id', (int) $ad_id)->limit(1)->get('ads')->row();
+		$to = $ad ? external_url($ad->ad_link ?? '') : '';
+		// A banner links to a web page. (external_url() also passes mailto:
+		// and tel:, which redirect() would prefix with the site's own URL.)
+		if (!preg_match('#^https?://#i', $to)) {
+			redirect(base_url());
+			return;
+		}
+		$this->load->library('activity');
+		$this->activity->record('ad', (int) $ad->id, 'click');
+		redirect($to);
 	}
 
 	/*===================
@@ -4413,6 +4525,11 @@ class User extends CI_Controller
 			'listing_status'      => 1,
 			'is_deleted'          => 0,
 			'created_at'          => date('Y-m-d H:i:s'),
+			// The member added their own business, so it is claimed: nobody
+			// else gets a Claim button on it (migration 0037; dropped by
+			// db_safe_insert() on an install without the column).
+			'is_claimed'          => 1,
+			'claimed_at'          => date('Y-m-d H:i:s'),
 		);
 
 		// Plan gating — the same rules as User::edit_listing, so a Basic
@@ -4687,14 +4804,28 @@ class User extends CI_Controller
 			$listing_mobile = $this->input->post('listing_mobile');
 
 			if (empty($listing_name) || empty($category_id) || empty($listing_mobile)) {
-				// Required fields missing, show form with error
+				// Required fields missing, show form with error (printed at
+				// the top of the form — it was set and never shown).
 				$data['error'] = 'Please fill in all required fields (Listing Name, Category, Phone)';
 				$this->load->view('header', $data);
 				$this->load->view('edit_listings', $data);
 				$this->load->view('footer');
 			} else {
-				// Validation passed, process the update
-				$listing_slug = preg_replace('/[^A-Za-z0-9-]+/', '-', $this->input->post('listing_name'));
+				// Validation passed, process the update.
+				//
+				// The address of the page stays put. Every save used to rebuild
+				// the slug from the name — "central-texas-bbq" became
+				// "Central-Texas-BBQ" on the first save, breaking the links in
+				// the claim and welcome emails — and a rename that collided with
+				// another listing's slug failed the whole save on the unique
+				// index. A real rename gets a fresh, unique slug.
+				$listing_slug = (string) $data['listing']->listing_slug;
+				if (trim((string) $listing_name) !== trim((string) $data['listing']->listing_name)) {
+					$renamed = trim(preg_replace('/[^A-Za-z0-9-]+/', '-', (string) $listing_name), '-');
+					if (strcasecmp($renamed, $listing_slug) !== 0) {
+						$listing_slug = $this->usermodel->uniqueListingSlug($listing_name);
+					}
+				}
 
 				$info = array(
 					'listing_name'		=> $this->input->post('listing_name'),
@@ -4727,6 +4858,19 @@ class User extends CI_Controller
 				if (!$caps['can_services'])      { unset($info['service_offered']); }
 				if (!$caps['can_video'])         { unset($info['listing_video']); }
 				if (!$caps['can_extra_details']) { unset($info['listing_seo_title'], $info['listing_seo_keywords'], $info['listing_seo_description']); }
+
+				// Hours and the business's own social links (migration 0037),
+				// when the plan includes them.
+				if ($caps['can_hours'] && property_exists($data['listing'], 'business_hours')) {
+					$info['business_hours'] = mb_substr(trim((string) $this->input->post('business_hours')), 0, 1000);
+				}
+				if ($caps['can_social_links']) {
+					foreach (array('facebook', 'instagram', 'twitter', 'youtube', 'linkedin') as $net) {
+						if (property_exists($data['listing'], 'listing_' . $net)) {
+							$info['listing_' . $net] = mb_substr(trim((string) $this->input->post('listing_' . $net)), 0, 255);
+						}
+					}
+				}
 
 				// The plan's video allowance (migration 0036). Links are stored
 				// comma-separated, whichever way they were typed.
@@ -4851,13 +4995,6 @@ class User extends CI_Controller
 					error_log("USER EDIT Gallery stored in DB: " . var_export($info['listing_image_gallery'], TRUE));
 				}
 
-				// Debug: Service fields check for edit
-				$service_locations_edit = $this->input->post('service_locations') ? 'Present: "' . $this->input->post('service_locations') . '"' : 'MISSING';
-				$service_offered_edit = $this->input->post('service_offered') ? 'Present: "' . $this->input->post('service_offered') . '"' : 'MISSING';
-
-				// Store debug info in session for display after redirect
-				$this->session->set_flashdata('debug_info', "EDIT DEBUG - service_locations: " . $service_locations_edit . " | service_offered: " . $service_offered_edit);
-
 				// Try to update the listing
 				$update_result = $this->usermodel->update($slug, $info, 'listing_slug', 'listings');
 
@@ -4866,8 +5003,12 @@ class User extends CI_Controller
 					if ($notes) {
 						$this->session->set_flashdata('error', 'Listing updated, but: ' . implode(' ', $notes));
 					}
-					$this->session->set_flashdata('message', 'Listing Updated Successfully.');
-					redirect('user/user-listing', 'refresh');
+					// Back to the form with a link to the live page (checklist:
+					// Edit → Save → View Live). My Listings said it saved and left
+					// the owner to find the page themselves.
+					$this->session->set_flashdata('message', 'Saved — your changes are live.');
+					$this->session->set_flashdata('saved_listing', $listing_slug);
+					redirect('user/edit-listing/' . rawurlencode($listing_slug));
 				} else {
 					$this->session->set_flashdata('error', 'Failed to update listing. Please try again.');
 					redirect('user/edit-listing/' . $slug);
@@ -7620,7 +7761,14 @@ class User extends CI_Controller
 		if ($listing && !empty($listing->listing_email) && filter_var(trim($listing->listing_email), FILTER_VALIDATE_EMAIL)) {
 			$to[] = trim($listing->listing_email);
 		}
-		if (!$to && !empty($row['receiving_user_id'])) {
+		// The owner's account address only for a listing the owner has
+		// actually claimed. An unclaimed listing is held by a data-entry login,
+		// and its leads went to that login's inbox, where nobody at the
+		// business would ever see them; with no business email on file they now
+		// go to the office instead (checklist §5: the correct business
+		// receives the lead).
+		$unclaimed = $listing && !listing_is_claimed($listing);
+		if (!$to && !$unclaimed && !empty($row['receiving_user_id'])) {
 			$owner = $this->db->select('email_id')
 				->where('user_id', (int) $row['receiving_user_id'])
 				->limit(1)->get('user')->row();
@@ -7645,8 +7793,17 @@ class User extends CI_Controller
 			. '<li>Phone: ' . html_escape((string) ($row['enquiry_mobile'] ?? '')) . '</li>'
 			. '</ul>'
 			. '<p>Message:</p><blockquote>' . nl2br(html_escape((string) ($row['enquiry_message'] ?? ''))) . '</blockquote>'
-			. '<p>Reply to this email to answer them directly. Your enquiries are also listed at '
-			. '<a href="' . html_escape(base_url('user/enquiries')) . '">' . html_escape(base_url('user/enquiries')) . '</a>.</p>';
+			. '<p>Reply to this email to answer them directly.'
+			. ($unclaimed ? '' : ' Your enquiries are also listed at '
+				. '<a href="' . html_escape(base_url('user/enquiries')) . '">' . html_escape(base_url('user/enquiries')) . '</a>.')
+			. '</p>'
+			// To an unclaimed business this is the best moment to say the
+			// listing is theirs for the taking.
+			. ($unclaimed && !empty($listing->listing_slug)
+				? '<p style="padding:10px 12px;background:#F7F5F0;border-radius:6px;">This enquiry came through your free listing on Pearland411, '
+				  . 'which you have not claimed yet. <a href="' . html_escape(base_url('claim-listing/' . rawurlencode((string) $listing->listing_slug))) . '">'
+				  . 'Claim it</a> to keep your details up to date and see every enquiry in one place.</p>'
+				: '');
 
 		$this->load->library('mailer');
 		$html = $this->mailer->render('New enquiry', $body, array(
@@ -8244,13 +8401,13 @@ class User extends CI_Controller
 			$count = count($pending['cart_items']);
 			$this->session->unset_userdata('helcim_pending');
 			$this->session->unset_userdata('ad_cart');
-			$this->session->set_userdata('checkout_success_data', array(
+			$this->session->set_userdata('checkout_success_data', array_merge(array(
 				'plan_name'       => 'Your order (' . $count . ' item' . ($count === 1 ? '' : 's') . ')',
 				'amount'          => (float) $pending['amount'],
 				'currency'        => $pending['currency'],
 				'transaction_id'  => $helcim_txn_id,
 				'subscription_id' => null,
-			));
+			), $this->afterPurchase($pending, $pending['cart_items'], $helcim_txn_id, TRUE)));
 			return $this->output->set_output(json_encode(array('success' => true, 'redirect' => base_url('checkout-success'))));
 		}
 
@@ -8270,13 +8427,19 @@ class User extends CI_Controller
 			}
 			$plan = $this->usermodel->getPlanByIdForPricing((int) $pending['plan_id']);
 			$this->session->unset_userdata('helcim_pending');
-			$this->session->set_userdata('checkout_success_data', array(
+			$this->session->set_userdata('checkout_success_data', array_merge(array(
 				'plan_name'      => $plan ? $plan->name : 'Subscription',
 				'amount'         => (float) $pending['amount'],
 				'currency'       => $pending['currency'],
 				'transaction_id' => $helcim_txn_id,
 				'subscription_id' => null,
-			));
+			), $this->afterPurchase($pending, array(array(
+				'name'       => ($plan ? $plan->name : 'Plan') . ' (upgrade — difference for the rest of this term)',
+				'price'      => (float) $pending['amount'],
+				'category'   => 'business-listing',
+				'recurring'  => TRUE,
+				'term_label' => '',
+			)), $helcim_txn_id, FALSE)));
 			return $this->output->set_output(json_encode(array('success' => true, 'redirect' => base_url('checkout-success'))));
 		}
 
@@ -8300,18 +8463,86 @@ class User extends CI_Controller
 		// double-activate, and hand the receipt data to checkout_success().
 		$plan = $this->usermodel->getPlanByIdForPricing((int) $pending['plan_id']);
 		$this->session->unset_userdata('helcim_pending');
-		$this->session->set_userdata('checkout_success_data', array(
+		$duration = !empty($pending['duration_id']) ? $this->usermodel->getDurationById((int) $pending['duration_id']) : NULL;
+		$this->session->set_userdata('checkout_success_data', array_merge(array(
 			'plan_name'      => $plan ? $plan->name : 'Subscription',
 			'amount'         => (float) $pending['amount'],
 			'currency'       => $pending['currency'],
 			'transaction_id' => $helcim_txn_id,
 			'subscription_id' => $sub_id,
-		));
+		), $this->afterPurchase($pending, array(array(
+			'name'       => $plan ? $plan->name : 'Subscription',
+			'price'      => (float) $pending['amount'],
+			'category'   => $plan && isset($plan->category) ? $plan->category : 'business-listing',
+			'recurring'  => !$plan || !isset($plan->category) || $plan->category === 'business-listing',
+			'term_label' => $duration ? $this->termLabel((int) $duration->duration_days, (int) $duration->duration_months) : '',
+		)), $helcim_txn_id, TRUE)));
 
 		return $this->output->set_output(json_encode(array(
 			'success'  => true,
 			'redirect' => base_url('checkout-success'),
 		)));
+	}
+
+	/**
+	 * Everything that follows a successful payment, whichever checkout path
+	 * took it (checklist §3 / §4 / §11): the customer's receipt, the welcome
+	 * and onboarding email, and the office's order alert. None of them used to
+	 * be sent — the success page said "We've emailed a receipt" regardless.
+	 *
+	 * Returns what checkout_success() needs to show the same facts on screen:
+	 * the lines bought, whether and when the card is charged again, who was
+	 * emailed, and where to go next.
+	 *
+	 * @param array $pending  the helcim_pending session payload
+	 * @param array $lines    [['name', 'price', 'category', 'recurring', 'term_label', 'target_category_name'?]]
+	 * @param bool  $welcome  send the onboarding email (not for an upgrade)
+	 * @return array merged into checkout_success_data
+	 */
+	private function afterPurchase(array $pending, array $lines, $txn_id, $welcome)
+	{
+		$user_id  = (int) $pending['user_id'];
+		$user     = $this->usermodel->getSingleValue($user_id, 'user_id', 'user');
+		$listings = $this->usermodel->getOwnerListings($user_id, 5);
+		$sub      = $this->usermodel->getUserSubscription($user_id);
+
+		// An upgrade keeps the subscription's own renewal setting; a new
+		// purchase renews only when the box was ticked and a line can renew.
+		$opted_in   = (($pending['mode'] ?? '') === 'upgrade')
+			? ($sub && !empty($sub->auto_renew))
+			: !empty($pending['auto_renew']);
+		$auto_renew = $opted_in
+			&& (bool) array_filter($lines, function ($l) { return !empty($l['recurring']); });
+		$next = $auto_renew && $sub && !empty($sub->next_billing_date) ? $sub->next_billing_date : NULL;
+
+		$emailed = FALSE;
+		try {
+			$this->load->library('notifications');
+			$emailed = $this->notifications->purchase_receipt($user, $lines, (float) $pending['amount'], $pending['currency'], array(
+				'auto_renew'   => $auto_renew,
+				'next_billing' => $next,
+				'txn'          => (string) $txn_id,
+			));
+			if ($welcome) {
+				$this->notifications->welcome_onboarding($user, $lines, $listings);
+			}
+			$this->notifications->purchase_admin_alert($user, $lines, (float) $pending['amount'], $pending['currency'], (string) $txn_id);
+		} catch (Throwable $e) {
+			// The payment went through. A mail problem must not turn that into
+			// an error on screen; Mailer has already logged the reason.
+			log_message('error', 'afterPurchase: ' . $e->getMessage());
+		}
+
+		return array(
+			'lines'          => $lines,
+			'auto_renew'     => $auto_renew,
+			'next_billing'   => $next,
+			'customer_name'  => $user ? (string) $user->name : '',
+			'customer_email' => $user ? (string) $user->email_id : '',
+			'emailed'        => (bool) $emailed,
+			'listing_slug'   => $listings ? (string) $listings[0]->listing_slug : '',
+			'listing_name'   => $listings ? (string) $listings[0]->listing_name : '',
+		);
 	}
 
 	/**
@@ -8422,8 +8653,19 @@ class User extends CI_Controller
 			return;
 		}
 		$user = $this->session->userdata('logged_user');
+		$sub  = $this->usermodel->getUserSubscription((int) $user['logged_id']);
 		if ($this->usermodel->cancelAutoRenew((int) $user['logged_id'])) {
-			$this->session->set_flashdata('message', 'Auto-renew cancelled. Your plan stays active until the end of the current term.');
+			// Confirm it in writing (checklist §11, "renewal/cancellation"):
+			// the card will not be charged again, and until when the plan runs.
+			if ($sub) {
+				$this->load->library('notifications');
+				$this->notifications->subscription_cancelled(
+					$this->usermodel->getSingleValue((int) $user['logged_id'], 'user_id', 'user'),
+					$sub,
+					(string) ($sub->name ?? 'your plan')
+				);
+			}
+			$this->session->set_flashdata('message', 'Auto-renew cancelled. Your plan stays active until the end of the current term. We have emailed you a confirmation.');
 		} else {
 			$this->session->set_flashdata('error', 'No active subscription to cancel.');
 		}
@@ -8875,6 +9117,7 @@ class User extends CI_Controller
 
 		// Page title
 		$data['title'] = 'Payment Successful - Thank You!';
+		$data['page_css'] = $this->contentPageCss();
 
 		// Load views
 		$this->load->view('header', $data);
@@ -9294,6 +9537,10 @@ class User extends CI_Controller
 			return;
 		}
 
+		// Coupon activity for the analytics pages (checklist §10).
+		$this->load->library('activity');
+		$this->activity->record('coupon', (int) $coupon->coupon_id, 'view');
+
 		$data = array();
 		$data['coupon']   = $coupon;
 		$data['page_css'] = $this->contentPageCss();
@@ -9313,6 +9560,63 @@ class User extends CI_Controller
 
 		$this->load->view('header', $data);
 		$this->load->view('coupon_details', $data);
+		$this->load->view('footer');
+	}
+
+	/**
+	 * /user/analytics — how each of the member's listings is doing
+	 * (checklist §10): views, website / phone / email / map clicks and leads,
+	 * plus their deals and any banner they bought.
+	 *
+	 * Views and leads are shown to every owner. The click breakdown, coupons
+	 * and ads are the plan's "Analytics" feature (plans.analytics_access, set
+	 * at /admin/pricing); without it they show as an upgrade.
+	 */
+	public function analytics()
+	{
+		$uid  = $this->currentUserId();
+		$days = (int) $this->input->get('days');
+		if (!in_array($days, array(7, 30, 90), TRUE)) $days = 30;
+		$since = date('Y-m-d', strtotime('-' . ($days - 1) . ' days'));
+
+		$this->load->library('activity');
+		$sub      = $this->usermodel->getUserSubscription($uid);
+		$listings = $this->usermodel->getOwnerListings($uid, 50);
+		$ids      = array_map(function ($l) { return (int) $l->listing_id; }, $listings);
+
+		$coupons = $this->usermodel->getCouponsByUser($uid);
+		$coupon_ids = array_map(function ($c) { return (int) $c->coupon_id; }, (array) $coupons);
+
+		$ads = array();
+		if ($this->db->table_exists('ads')) {
+			$this->db->select('a.id, a.ad_start_date, a.ad_end_date, ap.name AS zone_name', FALSE)
+				->from('ads a')
+				->join('ads_prices ap', 'ap.id = a.ads_price_id', 'left')
+				->group_start()->where('a.u_id', $uid);
+			if ($ids && $this->db->field_exists('listing_id', 'ads')) $this->db->or_where_in('a.listing_id', $ids);
+			$ads = $this->db->group_end()->order_by('a.id', 'DESC')->limit(20)->get()->result();
+		}
+		$ad_ids = array_map(function ($a) { return (int) $a->id; }, $ads);
+
+		$data = array(
+			'days'          => $days,
+			'since'         => $since,
+			'full'          => $sub && !empty($sub->analytics_access),
+			'listings'      => $listings,
+			'listing_stats' => $ids ? $this->activity->totals('listing', $ids, $since) : array(),
+			'leads'         => $ids ? $this->usermodel->countListingLeads($ids, $since) : array(),
+			'coupons'       => (array) $coupons,
+			'coupon_stats'  => $coupon_ids ? $this->activity->totals('coupon', $coupon_ids, $since) : array(),
+			'ads'           => $ads,
+			'ad_stats'      => $ad_ids ? $this->activity->totals('ad', $ad_ids, $since) : array(),
+			'tracking_on'   => $this->activity->ready(),
+			'title'         => 'Analytics',
+		);
+
+		$this->load->view('header', $data);
+		$this->load->view('user_left_sidebar', $data);
+		$this->load->view('user_analytics', $data);
+		$this->load->view('user_right_sidebar', $data);
 		$this->load->view('footer');
 	}
 
@@ -9670,25 +9974,35 @@ class User extends CI_Controller
 
 	public function claim_listing($slug = '')
 	{
-		// Visitors must be signed in so we can later transfer the
-		// listing to a real user_id on approval.
+		$listing = $this->usermodel->getSingleValue($slug, 'listing_slug', 'listings');
+		if (!$listing || (int) ($listing->is_deleted ?? 0) === 1) { show_404(); return; }
+
+		// Visitors must be signed in so the listing can be moved to a real
+		// account on approval. Say why, rather than dropping them on a bare
+		// sign-in form with no idea what happened to the button they pressed.
 		if (!$this->session->userdata('logged_user')) {
 			$this->session->set_userdata('redirect_url', current_url());
+			$this->session->set_flashdata('login_message',
+				'Sign in to claim ' . $listing->listing_name . '. No account yet? Creating one is free — use "Create an account" below.');
 			redirect('login');
 			return;
 		}
 
-		$listing = $this->usermodel->getSingleValue($slug, 'listing_slug', 'listings');
-		if (!$listing) { show_404(); return; }
-
 		$session = $this->session->userdata('logged_user');
 		$user_id = (int) $session['logged_id'];
+		$listing_url = 'listing-details/' . rawurlencode($slug);
 
-		// One open claim per (listing, user) — don't let people spam a listing
-		// they already claimed. A claim that was NOT approved (status 2) does
-		// not block a new one: the rejection email asks for more proof, and
-		// this check used to refuse it forever while calling the rejected
-		// claim "pending review".
+		// Already theirs: straight to the editor.
+		if (listing_is_claimed($listing) && (int) $listing->user_id === $user_id) {
+			$this->session->set_flashdata('message', 'You already manage ' . $listing->listing_name . '.');
+			redirect('user/edit-listing/' . rawurlencode($slug));
+			return;
+		}
+
+		// One open claim per (listing, user). A claim that was NOT approved
+		// (status 2) does not block a new one: the rejection email asks for
+		// more proof. One waiting on more information (3) is answered from
+		// My claims, not by starting again.
 		$existing = $this->db
 			->where('listing_id',         (int) $listing->listing_id)
 			->where('enquiry_sender_id',  $user_id)
@@ -9697,117 +10011,225 @@ class User extends CI_Controller
 			->get('claim_listings')
 			->row();
 		if ($existing && (int) $existing->claim_status !== 2) {
-			$this->session->set_flashdata(
-				'claim_message',
-				'You have already submitted a claim for this listing — status: ' .
-				((int) $existing->claim_status === 1 ? 'approved' : 'pending review') . '. '
-				. 'You can follow it under My Listings → My claims.'
-			);
-			redirect('listing-details/' . rawurlencode($slug));
+			$st = (int) $existing->claim_status;
+			$this->session->set_flashdata('claim_message', $st === 3
+				? 'We asked for more information about your claim for this listing. Send it from My Listings → My claims.'
+				: 'You have already submitted a claim for this listing — status: ' . strtolower(claim_status_label($st)) . '. '
+				  . 'You can follow it under My Listings → My claims.');
+			redirect($st === 3 ? 'user/my-claims' : $listing_url);
 			return;
 		}
 
+		$data = array(
+			'listing'  => $listing,
+			'roles'    => claim_roles(),
+			'methods'  => claim_verification_methods(),
+			'prefill'  => array(
+				'claim_business_name' => $listing->listing_name,
+				'enquiry_name'        => $session['name']     ?? '',
+				'enquiry_email'       => $session['email_id'] ?? '',
+			),
+			'claimed_by_other' => listing_is_claimed($listing),
+		);
+
 		if ($this->input->method() === 'post') {
-			// Light rate-limit (3 claims per IP per hour).
-			if (!$this->rate_limit->check_ip('claim_listing', 3, 3600)) {
+			// 10 attempts per IP per hour. It was 3, and a refused post counts
+			// as one, so an owner who mistyped their phone number twice was
+			// locked out for an hour. Claims need a signed-in, verified
+			// account, and one open claim per listing is enforced above.
+			if (!$this->rate_limit->check_ip('claim_listing', 10, 3600)) {
 				$this->rate_limit->reject(3600);
 				return;
 			}
 
-			$this->form_validation->set_rules('enquiry_name',    'Your name',     'trim|required|min_length[2]');
-			$this->form_validation->set_rules('enquiry_email',   'Email',         'trim|required|valid_email');
-			$this->form_validation->set_rules('enquiry_message', 'Proof message', 'trim|required|min_length[20]');
+			$this->form_validation->set_rules('claim_business_name', 'Business name', 'trim|required|max_length[255]');
+			$this->form_validation->set_rules('enquiry_name',        'Owner / contact name', 'trim|required|min_length[2]|max_length[255]');
+			$this->form_validation->set_rules('enquiry_email',       'Business email', 'trim|required|valid_email|max_length[255]');
+			$this->form_validation->set_rules('enquiry_mobile',      'Phone', 'trim|required|min_length[7]|max_length[30]|regex_match[/^[0-9+().\s-]+$/]');
+			$this->form_validation->set_rules('claim_role',          'Your role', 'trim|required|in_list[' . implode(',', array_keys(claim_roles())) . ']');
+			$this->form_validation->set_rules('claim_verification',  'Verification method', 'trim|required|in_list[' . implode(',', array_keys(claim_verification_methods())) . ']');
+			$this->form_validation->set_rules('enquiry_message',     'Notes', 'trim|max_length[2000]');
+			$this->form_validation->set_rules('claim_confirm',       'Confirmation', 'required', array('required' => 'Please confirm you are authorised to manage this business.'));
 
+			$errors = array();
 			if (!$this->form_validation->run()) {
-				$data = array(
-					'listing'   => $listing,
-					'error'     => strip_tags(validation_errors()) ?: 'Please complete the required fields.',
-				);
-				$this->loadHeaderCategories($data);
-				$data['title'] = 'Claim ' . $listing->listing_name . ' — Pearland411';
-		// No advertising on this page. A business owner proving they own a listing. Short, high-intent, and not
-		// somewhere to sell a banner.
-
-				$this->load->view('header', $data);
-				$this->load->view('claim_listing', $data);
-				$this->load->view('footer');
-				return;
+				$errors[] = strip_tags(validation_errors()) ?: 'Please complete the required fields.';
+			}
+			$method  = (string) $this->input->post('claim_verification');
+			$message = trim((string) $this->input->post('enquiry_message'));
+			if ($method === 'other' && mb_strlen($message) < 10) {
+				$errors[] = 'You chose "something else" — tell us in the notes how we can verify you.';
 			}
 
-			$claim_id = $this->usermodel->claimBusiness(array(
-				'listing_id'        => (int) $listing->listing_id,
-				'enquiry_sender_id' => $user_id,
-				'enquiry_name'      => $this->input->post('enquiry_name'),
-				'enquiry_email'     => $this->input->post('enquiry_email'),
-				'enquiry_mobile'    => $this->input->post('enquiry_mobile'),
-				'enquiry_message'   => $this->input->post('enquiry_message'),
-				'enquiry_source'    => $listing->listing_name,
-				'claim_status'      => 0,
-			));
+			$document = NULL;
+			if (!$errors) {
+				$document = $this->uploadClaimDocument($errors);
+				if ($method === 'document' && $document === NULL && !$errors) {
+					$errors[] = 'You chose to verify with a document — please attach it (a photo, scan or PDF).';
+				}
+			}
+
+			if ($errors) {
+				$data['error'] = implode(' ', $errors);
+				$data['old']   = $this->input->post();
+				return $this->renderClaimForm($data);
+			}
+
+			$row = array(
+				'listing_id'          => (int) $listing->listing_id,
+				'enquiry_sender_id'   => $user_id,
+				'claim_business_name' => $this->input->post('claim_business_name'),
+				'enquiry_name'        => $this->input->post('enquiry_name'),
+				'enquiry_email'       => $this->input->post('enquiry_email'),
+				'enquiry_mobile'      => $this->input->post('enquiry_mobile'),
+				'claim_role'          => $this->input->post('claim_role'),
+				'claim_verification'  => $method,
+				'enquiry_message'     => $message,
+				'enquiry_source'      => $listing->listing_name,
+				'enquiry_image'       => $document,
+				'claim_status'        => 0,
+			);
+			$claim_id = $this->usermodel->claimBusiness($row);
 
 			if (!$claim_id) {
-				$this->session->set_flashdata('claim_message', 'Could not save your claim. Please try again.');
-				redirect('listing-details/' . rawurlencode($slug));
-				return;
+				$data['error'] = 'Could not save your claim. Please try again.';
+				$data['old']   = $this->input->post();
+				return $this->renderClaimForm($data);
 			}
 
-			// Notifications.
-			$this->load->library('mailer');
-			$listing_url = base_url('listing-details/' . rawurlencode($listing->listing_slug));
-
-			$ack = '<p>Thanks &mdash; we received your request to claim <strong>'
-				. html_escape($listing->listing_name) . '</strong>.</p>'
-				. '<p>An administrator will review the claim and email you when it is processed. '
-				. 'Approvals usually take 1&ndash;2 business days.</p>'
-				. '<p>Listing: <a href="' . $listing_url . '">' . $listing_url . '</a></p>';
-			$this->mailer->send(
-				$this->input->post('enquiry_email'),
-				'We received your listing claim request',
-				$ack
-			);
-
-			$admin_to = form_recipient_email();
-			if ($admin_to) {
-				$alert = '<p>New listing claim #' . $claim_id . '</p>'
-					. '<ul>'
-					. '<li>Listing: <a href="' . $listing_url . '">' . html_escape($listing->listing_name) . '</a></li>'
-					. '<li>Claimant: ' . html_escape($this->input->post('enquiry_name')) . '</li>'
-					. '<li>Email: '   . html_escape($this->input->post('enquiry_email')) . '</li>'
-					. '<li>Phone: '   . html_escape($this->input->post('enquiry_mobile')) . '</li>'
-					. '</ul>'
-					. '<p>Message:</p><blockquote>'
-					. nl2br(html_escape($this->input->post('enquiry_message')))
-					. '</blockquote>'
-					. '<p>Review &amp; approve at: '
-					. base_url('admin/claimed-listings')
-					. '</p>';
-				$this->mailer->send($admin_to, '[Pearland411] New listing claim — ' . $listing->listing_name, $alert);
-			}
+			$claim = $this->usermodel->getClaimById($claim_id);
+			$user  = $this->usermodel->getSingleValue($user_id, 'user_id', 'user');
+			$this->load->library('notifications');
+			$this->notifications->claim_received($claim, $listing, $user);
+			$this->notifications->claim_admin_alert($claim, $listing);
 
 			$this->session->set_flashdata('claim_message',
-				'Thanks! Your claim has been submitted. We will email you when an administrator reviews it — '
-				. 'you can follow its status under My Listings → My claims.');
-			redirect('listing-details/' . rawurlencode($slug));
+				'Thanks! Your claim has been submitted. We will email you when it has been reviewed — '
+				. 'you can follow it under My Listings → My claims.');
+			redirect($listing_url);
 			return;
 		}
 
-		// GET — render the form.
-		$data = array(
-			'listing' => $listing,
-			'prefill' => array(
-				'enquiry_name'  => $session['name']     ?? '',
-				'enquiry_email' => $session['email_id'] ?? '',
-			),
-		);
-		$this->loadHeaderCategories($data);
-		$data['title']         = 'Claim ' . $listing->listing_name . ' — Pearland411';
-		$data['canonical_url'] = base_url('claim-listing/' . rawurlencode($slug));
+		$this->renderClaimForm($data);
+	}
 
-		// No advertising on this page. A business owner proving they own a listing. Short, high-intent, and not
-		// somewhere to sell a banner.
+	/** The claim form page (GET, and a refused POST with the values kept). */
+	private function renderClaimForm(array $data)
+	{
+		$this->loadHeaderCategories($data);
+		$data['title']         = 'Claim ' . $data['listing']->listing_name . ' — Pearland411';
+		$data['canonical_url'] = base_url('claim-listing/' . rawurlencode($data['listing']->listing_slug));
+		$data['page_css']      = $this->contentPageCss();
+		// No advertising on this page. A business owner proving they own a
+		// listing. Short, high-intent, and not somewhere to sell a banner.
 
 		$this->load->view('header', $data);
 		$this->load->view('claim_listing', $data);
 		$this->load->view('footer');
+	}
+
+	/**
+	 * The claimant's answer to "we need more information" (claim_status 3):
+	 * a note and/or a document. Puts the claim back in the review queue and
+	 * tells the office. POST from /user/my-claims.
+	 */
+	public function claim_reply($claim_id = 0)
+	{
+		if ($this->input->method() !== 'post') { show_404(); return; }
+
+		$user_id = $this->currentUserId();
+		$claim   = $this->usermodel->getClaimById((int) $claim_id);
+		if (!$claim || (int) $claim->enquiry_sender_id !== $user_id || (int) $claim->claim_status !== 3) {
+			show_404();
+			return;
+		}
+
+		if (!$this->rate_limit->check_ip('claim_reply', 10, 3600)) {
+			$this->rate_limit->reject(3600);
+			return;
+		}
+
+		$errors = array();
+		$note   = trim((string) $this->input->post('reply_message'));
+		if (mb_strlen($note) > 2000) {
+			$errors[] = 'That note is too long (2000 characters maximum).';
+		}
+		$document = $errors ? NULL : $this->uploadClaimDocument($errors);
+		if (!$errors && $note === '' && $document === NULL) {
+			$errors[] = 'Write a note or attach a document, then send.';
+		}
+		if ($errors) {
+			$this->session->set_flashdata('claim_error', implode(' ', $errors));
+			redirect('user/my-claims');
+			return;
+		}
+
+		$message = trim((string) $claim->enquiry_message);
+		$message .= ($message !== '' ? "\n\n" : '') . '— Reply ' . date('M j, Y') . ' —' . ($note !== '' ? "\n" . $note : "\n(document attached)");
+		$update = array(
+			'enquiry_message'  => $message,
+			'claim_status'     => 0,
+			'claim_updated_at' => date('Y-m-d H:i:s'),
+		);
+		if ($document !== NULL) $update['enquiry_image'] = $document;
+		db_safe_update('claim_listings', $update, array('claim_listing_id' => (int) $claim->claim_listing_id));
+
+		$claim   = $this->usermodel->getClaimById((int) $claim->claim_listing_id);
+		$listing = $this->usermodel->getSingleValue((int) $claim->listing_id, 'listing_id', 'listings');
+		if ($listing) {
+			$this->load->library('notifications');
+			$this->notifications->claim_admin_alert($claim, $listing, TRUE);
+		}
+
+		$this->session->set_flashdata('claim_notice', 'Thanks — your information was sent. The claim is back with our team for review.');
+		redirect('user/my-claims');
+	}
+
+	/**
+	 * The optional proof document on a claim: a photo or scan (through
+	 * safe_upload_image()) or a PDF (checked by its magic bytes). Stored under
+	 * uploads/claims/ with a random name.
+	 *
+	 * @param  array $errors gains a message when a file was chosen but refused
+	 * @return string|null the stored path, or NULL when nothing was uploaded
+	 */
+	private function uploadClaimDocument(array &$errors)
+	{
+		$file = $_FILES['claim_document'] ?? NULL;
+		if (!$file || empty($file['name'])) {
+			return NULL;
+		}
+
+		$ext = strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION));
+		if ($ext !== 'pdf') {
+			$saved = safe_upload_image($file, 'uploads/claims/');
+			if ($saved === FALSE) {
+				$errors[] = 'The document was not accepted: ' . (upload_last_error() ?: 'the file could not be read.')
+					. ' A photo (JPG, PNG, WebP) or a PDF up to 5 MB works.';
+				return NULL;
+			}
+			return $saved;
+		}
+
+		$ok = ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK
+			&& is_uploaded_file($file['tmp_name'])
+			&& (int) $file['size'] > 0 && (int) $file['size'] <= 5 * 1024 * 1024;
+		$head = $ok ? (string) @file_get_contents($file['tmp_name'], FALSE, NULL, 0, 5) : '';
+		if (!$ok || $head !== '%PDF-') {
+			$errors[] = 'The document was not accepted: it is not a PDF this site can read, or it is larger than 5 MB.';
+			return NULL;
+		}
+
+		$dir = FCPATH . 'uploads/claims/';
+		if (!is_dir($dir) && !@mkdir($dir, 0755, TRUE)) {
+			$errors[] = 'The document could not be saved. Please try again.';
+			return NULL;
+		}
+		$name = bin2hex(random_bytes(16)) . '.pdf';
+		if (!@move_uploaded_file($file['tmp_name'], $dir . $name)) {
+			$errors[] = 'The document could not be saved. Please try again.';
+			return NULL;
+		}
+		return 'uploads/claims/' . $name;
 	}
 }
