@@ -435,7 +435,7 @@
                     <?php if (!empty($helcim_configured)): ?>
                     <div id="helcim-pay-error" style="display:none; background:#f8d7da; border:1px solid #f5c6cb; color:#721c24; padding:12px; border-radius:8px; margin-bottom:16px;"></div>
                     <label style="display:flex; align-items:center; gap:8px; margin-bottom:14px; font-size:14px;">
-                        <input type="checkbox" id="auto_renew" name="auto_renew" value="1">
+                        <input type="checkbox" id="auto_renew" name="auto_renew" value="1" checked>
                         Automatically renew my plan each term &mdash; your card is charged again at each renewal, we email you
                         <?= (int) site_setting('renewal_reminder_days', 3) ?> days before every charge, and you can cancel anytime from your account
                         (<a href="<?= base_url('terms-of-use') ?>#refunds">refund &amp; cancellation policy</a>)

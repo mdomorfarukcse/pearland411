@@ -6478,6 +6478,57 @@ class Admin extends CI_Controller
 		redirect($back);
 	}
 
+	/**
+	 * GET /admin/claim-document/<claim id> — the proof document sent with a
+	 * claim, streamed to a signed-in admin only (the admin constructor
+	 * refuses anyone else). New documents live under application/storage/
+	 * ("storage:claims/<file>", User::uploadClaimDocument), which the web
+	 * server never serves; an older claim's image under uploads/ is served
+	 * from here too. The path is resolved and checked against those two
+	 * folders, so a stored value can never point anywhere else.
+	 */
+	public function claim_document($id)
+	{
+		$claim = $this->usermodel->getClaimById((int) $id);
+		$ref   = $claim ? (string) $claim->enquiry_image : '';
+		if ($ref === '') { show_404(); return; }
+
+		if (strpos($ref, 'storage:') === 0) {
+			$bases = array(realpath(APPPATH . 'storage'));
+			$path  = realpath(APPPATH . 'storage/' . substr($ref, 8));
+		} else {
+			// An older claim's picture, wherever the theme put it.
+			$bases = array(realpath(FCPATH . 'uploads'), realpath(FCPATH . 'assets/images'));
+			$path  = realpath(FCPATH . ltrim($ref, '/'));
+		}
+		$inside = FALSE;
+		foreach ($bases as $base) {
+			if ($base && $path && strpos($path, $base . DIRECTORY_SEPARATOR) === 0) $inside = TRUE;
+		}
+		if (!$inside || !is_file($path)) {
+			show_404();
+			return;
+		}
+
+		$types = array('pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
+			'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif');
+		$ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+		if (!isset($types[$ext])) { show_404(); return; }
+
+		// Sent with header(), not $this->output->set_header(): the CSRF
+		// display_override hook (hooks/Csrf_inject.php) replaces CI's own
+		// output step, so headers queued on the Output class are never sent —
+		// the file would go out as text/html and the hook would run its HTML
+		// rewriting over it. A real Content-Type makes the hook pass it through.
+		$name = 'claim-' . (int) $claim->claim_listing_id . '-document.' . $ext;
+		header('Content-Type: ' . $types[$ext]);
+		header('Content-Disposition: inline; filename="' . $name . '"');
+		header('Content-Length: ' . filesize($path));
+		header('X-Content-Type-Options: nosniff');
+		header('Cache-Control: private, no-store');
+		$this->output->set_output(file_get_contents($path));
+	}
+
 	public function delete_claim($id)
 	{
 		if ($this->adminmodel->deleteClaim($id)) {
@@ -7034,11 +7085,17 @@ class Admin extends CI_Controller
 			$row['sort_order'] = (int) $sort;
 		}
 
-		// Hours and social links (migration 0037), the same way.
-		foreach (array('can_hours', 'can_social_links') as $__col) {
+		// Hours and social links (migration 0037) and the listing-package
+		// flags (0038), the same way.
+		foreach (array('can_hours', 'can_social_links', 'can_email', 'can_coupons', 'verified_badge') as $__col) {
 			if ($this->db->field_exists($__col, 'plans')) {
 				$row[$__col] = $this->input->post($__col) ? 1 : 0;
 			}
+		}
+		if ($this->db->field_exists('extra_features', 'plans')) {
+			$__lines = preg_split('/\r\n|\r|\n/', (string) $this->input->post('extra_features'));
+			$__lines = array_values(array_filter(array_map(function ($l) { return mb_substr(trim($l), 0, 120); }, $__lines), 'strlen'));
+			$row['extra_features'] = implode("\n", array_slice($__lines, 0, 15));
 		}
 
 		// Videos a listing on this plan may show (migration 0036). Only

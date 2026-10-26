@@ -78,13 +78,23 @@ function pp_features($plan, $cat, $size = '')
             $vl = isset($plan->listing_video_limit) ? (int) $plan->listing_video_limit : -1;
             $f[] = ($vl < 0 ? 'Unlimited videos' : $vl . ' video' . ($vl === 1 ? '' : 's')) . ' on your listing';
         }
-        if (!empty($plan->can_map))      $f[] = 'Map on your listing';
-        if (!empty($plan->can_services)) $f[] = 'Services offered';
+        if (!empty($plan->can_map))      $f[] = 'Google Maps on your listing';
+        if (!empty($plan->can_email))    $f[] = 'Email on your listing';
         if (!empty($plan->can_hours))        $f[] = 'Opening hours';
         if (!empty($plan->can_social_links)) $f[] = 'Social media links';
-        if (!empty($plan->featured_listing))  $f[] = 'Featured placement';
+        if (!empty($plan->can_services)) $f[] = 'Services offered';
+        if (!empty($plan->can_coupons))  $f[] = 'Deals & coupons';
+        if (!empty($plan->verified_badge)) $f[] = 'Verified badge';
+        if (!empty($plan->featured_listing))  $f[] = 'Featured in your category';
+        if (!empty($plan->analytics_access))  $f[] = 'Analytics: views, clicks and leads';
         if (!empty($plan->priority_support))  $f[] = 'Priority support';
-        if (!empty($plan->analytics_access))  $f[] = 'Analytics dashboard';
+        // What staff deliver for the tier (priority search, homepage feature,
+        // banner, newsletter, social spotlight) — plans.extra_features (0038),
+        // one per line, edited at /admin/pricing.
+        foreach (preg_split('/\r\n|\r|\n/', (string) ($plan->extra_features ?? '')) as $extra) {
+            $extra = trim($extra);
+            if ($extra !== '') $f[] = $extra;
+        }
     } elseif (!empty($plan->duration_days)) {
         $f[] = (int) $plan->duration_days . ' days placement';
     }
@@ -224,7 +234,7 @@ function pp_features($plan, $cat, $size = '')
               // on the card every month?"). ?>
         <p class="pp-callus" style="font-size:14px;">
             Banners, videos and add-ons are a <strong>one-time charge</strong> &mdash; they run for the term you buy and never renew.
-            Business listings renew only if you switch on auto-renew, and we email you before every renewal charge.
+            Business listings renew automatically each month (you can untick auto-renew at checkout), and we email you before every renewal charge.
             <a href="<?= e_url(base_url('terms-of-use')) ?>#refunds">Refund &amp; cancellation policy</a>
         </p>
     </div>
@@ -288,6 +298,22 @@ function pp_features($plan, $cat, $size = '')
                 </div>
                 <div class="pp-sec-rule"></div>
 
+                <?php
+                // "Most popular" goes on ONE card: the cheapest listing tier
+                // with a featured spot (Pearland Business). Keyed on the flag
+                // alone, every featured tier carried it.
+                $popularId = 0;
+                if ($catKey === 'business-listing') {
+                    $popularPrice = NULL;
+                    foreach ($grouped[$catKey] as $__p) {
+                        if (!empty($__p->featured_listing) && is_numeric($__p->price ?? NULL)
+                            && ($popularPrice === NULL || (float) $__p->price < $popularPrice)) {
+                            $popularPrice = (float) $__p->price;
+                            $popularId    = (int) $__p->id;
+                        }
+                    }
+                }
+                ?>
                 <div class="pp-grid">
                     <?php foreach ($grouped[$catKey] as $plan):
                         // A plan with no price set is half-configured, not
@@ -307,7 +333,7 @@ function pp_features($plan, $cat, $size = '')
                         <div class="pp-card <?= $inCart ? 'is-selected' : '' ?> <?= $isOwned ? 'owned' : '' ?>" data-card="<?= (int) $plan->id ?>">
                             <?php if ($isOwned): ?>
                                 <span class="pp-badge">Your plan</span>
-                            <?php elseif (!empty($plan->featured_listing) && $catKey === 'business-listing'): ?>
+                            <?php elseif ((int) $plan->id === $popularId): ?>
                                 <span class="pp-badge pop">Most popular</span>
                             <?php elseif ($catKey === 'special'): ?>
                                 <span class="pp-badge pop">Best value</span>

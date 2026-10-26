@@ -13,6 +13,8 @@ $coupons    = (isset($coupons)  && is_array($coupons))  ? $coupons  : array();
 $listings   = (isset($listings) && is_array($listings)) ? $listings : array();
 $live_count = isset($live_count) ? (int) $live_count : 0;
 $coupon_cap = isset($coupon_cap) ? (int) $coupon_cap : 10;
+// Deals are a Starter-and-up feature (0038); TRUE when the controller says nothing.
+$can_post   = !isset($can_post) || $can_post;
 $today      = date('Y-m-d');
 ?>
 <!--CENTER SECTION-->
@@ -29,13 +31,20 @@ $today      = date('Y-m-d');
 
 		<h2>My deals</h2>
 
-		<?php if (!empty($listings)): ?>
+		<?php if (!empty($listings) && $can_post): ?>
 			<a href="<?= e_url(base_url('user/add-coupon')) ?>" class="db-tit-btn">Post a deal</a>
+		<?php endif; ?>
+
+		<?php if (!$can_post): ?>
+			<div class="alert alert-warning" style="margin-top:12px;">
+				&#128274; Deals &amp; coupons are included from the <strong>Pearland Starter</strong> package up.
+				<a href="<?= e_url(base_url('pricing-plan')) ?>">See the packages</a>. Deals you already posted stay up until they end.
+			</div>
 		<?php endif; ?>
 
 		<p style="margin:12px 0 18px;color:#5A6072;font-size:14px;">
 			A deal shows on <a href="<?= e_url(base_url('coupons')) ?>">the public deals page</a>, on your
-			listing and on the homepage. It is free with any listing.
+			listing and on the homepage.
 			<?php if ($coupon_cap > 0): ?>
 				You have <strong><?= (int) $live_count ?></strong> live of <strong><?= (int) $coupon_cap ?></strong>.
 			<?php endif; ?>

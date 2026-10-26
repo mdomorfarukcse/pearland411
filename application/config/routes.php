@@ -152,6 +152,8 @@ $route['admin-setting']                     = 'admin/admin_setting';
 $route['admin/claim-approve/(:num)']        = 'admin/claim_approve/$1';
 $route['admin/claim-reject/(:num)']         = 'admin/claim_reject/$1';
 $route['admin/claim-more-info/(:num)']      = 'admin/claim_more_info/$1';
+// The proof document on a claim — admins only (application/storage/claims/).
+$route['admin/claim-document/(:num)']       = 'admin/claim_document/$1';
 $route['admin/claimed-listings']            = 'admin/claimed_listings';
 // Mark one listing claimed / claimable, or release every listing a
 // data-entry login owns (POST; migration 0037).

@@ -205,7 +205,8 @@ classifieds, real estate, coupons) and a paid **package/subscription** system.
   `cap_lock_note()` (the "not included in your package" hint on member listing forms),
   `listing_is_claimed()`, `claim_roles()` / `claim_verification_methods()` / `claim_status_label()`,
   `listing_social_links()` (the business's own links, safe for an href), `activity_record()` (count an
-  analytics event from a view),
+  analytics event from a view), `listing_is_verified()` (claimed + the owner's plan has the badge;
+  cached per owner), `service_price_label()`,
   `plan_term_copy()` / `billing_interval_is_one_time()` (the "per month ·
   recurring" vs "for 1 month · one-time, does not renew" line under every package price — only a
   business-listing tier ever renews),
@@ -257,14 +258,26 @@ signature instead). `User::__construct` holds
 a `$public_actions` whitelist; anything not in it requires a logged-in user (`logged_user` session).
 
 ## Monetization model (the core of the recent redesign)
-1. **Free (claimed) tier:** anyone can *claim* an unclaimed listing (`listings.is_claimed = 0`);
-   after approval they edit **name / phone / email / address / website / description** for free.
-2. **Paid packages unlock capabilities:** photos, map, services, a YouTube video, SEO details —
-   gated by per-plan flags on `plans` and enforced in `User::edit_listing` (server strips
-   disallowed fields; the view locks them with an "Upgrade" hint).
+1. **Listing packages (migration 0038):** Free Community $0 · Pearland Starter $29 · Pearland Business
+   $79 · Pearland Premier $149 a month. Anyone can *claim* an unclaimed listing (`listings.is_claimed =
+   0`); an owner with no active plan is on **Free Community** (`User::listingCapabilities()` falls
+   back to `freeListingPlan()`): name, category, address, phone, website, Google Maps, description,
+   and the quote form (kept on every listing by client decision). Starter adds logo, email, hours,
+   5 photos, social links, deals and the Verified badge; Business 15 photos + analytics; Premier
+   unlimited photos + a video. Featured category, priority search, homepage feature, banners,
+   newsletter and social spotlight are delivered **by staff** and listed on the cards from
+   `plans.extra_features`. The old tiers are off sale; their customers keep plan and price
+   (`Usermodel::renewalAmountFor()` falls back to an inactive plan's price).
+2. **Paid packages unlock capabilities:** photos, map, services, a YouTube video, SEO details, hours,
+   social links, email (`can_email`), deals (`can_coupons`), the Verified badge (`verified_badge`) —
+   per-plan flags on `plans`, edited at `/admin/pricing`, enforced in `User::edit_listing`, the add
+   wizard and `User::add_coupon` (server strips or refuses; the view locks with an "Upgrade" hint).
+   A 0038 flag reads TRUE until its column exists (`User::planFlag()`). The Verified badge needs a
+   claimed listing **and** the owner's plan (`listing_is_verified()`).
 3. **Content-type quotas:** `plans.*_limit` + `user_usage_tracking`; `Usermodel::canUserAddContent`
    gates every "add" with an "upgrade your plan" prompt.
-4. **Recurring subscriptions via Helcim:** checkout → `subscriptions`; auto-renew vaults the card;
+4. **Recurring subscriptions via Helcim:** checkout → `subscriptions`; auto-renew (ticked by default
+   at checkout) vaults the card;
    `Cli::renew_subscriptions` renews with dunning; upgrade/downgrade/cancel on the account page.
 5. **Staff-operated billing:** `/admin/billing` does the same three things for a customer who is
    being signed up by hand — put a card on file, take a one-off payment, set when recurring
@@ -278,7 +291,7 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | About | `/about-us` | `User::about_us` → `about.php` | Shared kit; the figures in "Pearland411 today" are counted live and each links to its page |
 | Directory / listing | `/all-listing`, `/all_listing/<cat>[/<offset>]`, `/listing-details/<slug>` | `User::all_listing`, `listing_details` | Homepage layout + 6 ad zones each; `?sort=featured\|newest\|name\|rating`. `?page=N` is an alternative to the positional offset and is what the "Go to page" box under the pager posts to — the numbered pager only shows ±2 pages, so page 20 of 47 was otherwise a long walk |
 | Claim a listing | `/claim-listing/<slug>`, `/user/claim-reply/<id>` (POST) | `User::claim_listing`, `claim_reply` | Shared kit. Login required (the login page says why). Asks business name, owner/contact name, business email, phone, role (`claim_roles()`), verification method (`claim_verification_methods()`), optional proof document (photo or PDF → `uploads/claims/`), notes, an "I'm authorised" box; 10 attempts / IP / hour. Emails the claimant (account address) and the office (`Notifications`). A rejected claim may be re-sent; one waiting on more information (status 3) is answered from My claims |
-| Claims review (admin) | `/admin/claimed-listings[?status=open\|pending\|more_info\|approved\|rejected\|all]`, `/admin/claim-approve/<id>`, `/admin/claim-reject/<id>`, `/admin/claim-more-info/<id>` (all POST) | `Admin::claimed_listings`, `claim_approve`, `claim_reject`, `claim_more_info` → `Adminmodel::getClaimsForReview` | Approve moves `listings.user_id`, sets `is_claimed`, moves the enquiries and emails a link to the editor; a listing already claimed by another account needs "transfer anyway". Reject stores a reason, more-info stores a question (`claim_admin_note`), both shown to the claimant. `/admin/listing-claim-status/<id>` and `/admin/release-account-listings/<user_id>` (POST) flip claim status by hand |
+| Claims review (admin) | `/admin/claimed-listings[?status=open\|pending\|more_info\|approved\|rejected\|all]`, `/admin/claim-approve/<id>`, `/admin/claim-reject/<id>`, `/admin/claim-more-info/<id>` (all POST) | `Admin::claimed_listings`, `claim_approve`, `claim_reject`, `claim_more_info` → `Adminmodel::getClaimsForReview` | Proof documents are **admin-only**: stored under `application/storage/claims/` (no web access — its `.htaccess` denies all), referenced as `storage:claims/<file>`, opened through `/admin/claim-document/<claim id>` (`Admin::claim_document`, path-checked, headers sent with `header()` because the CSRF display_override hook drops Output-class headers). Approve moves `listings.user_id`, sets `is_claimed`, moves the enquiries and emails a link to the editor; a listing already claimed by another account needs "transfer anyway". Reject stores a reason, more-info stores a question (`claim_admin_note`), both shown to the claimant. `/admin/listing-claim-status/<id>` and `/admin/release-account-listings/<user_id>` (POST) flip claim status by hand |
 | My claims (member) | `/user/my-claims` | `User::my_claims` → `Usermodel::getClaimsByUser` | Pending review / Approved / Not approved per business; shares the **My listings / My claims** tab strip (`partials/listing_tabs.php`) with `/user-listing`, which lists every listing the member owns (published or not) whatever their plan |
 | Add a listing (member) | `/user/add_new_listing_start` → POST `/user/add-listing-scratch` → `/user/listing-submitted/<id>` | `User::renderListingWizard`, `add_listing_scratch`, `listing_submitted`, `notifyListingSubmitted` | The wizard shows what the plan allows (`capabilitiesFromPlan()`); no plan = the free Basic plan, started on submit. Unique slug (`Usermodel::uniqueListingSlug`), refused submissions re-render with every value kept, success → confirmation page + emails to the member and the office. Logo/gallery/video gated by `can_photos`/`photo_limit`/`allow_video`/`listing_video_limit`, enforced server-side on add and edit |
 | Edit own listing | `/user/edit-listing/<slug>` | `User::edit_listing` | ownership + capability gated. The slug stays put unless the business is renamed (then `uniqueListingSlug()`), so emailed links keep working; the admin editor does the same. Hours (`can_hours`) and the business's own social links (`can_social_links`) are plan features. Saving returns to the form with a *View your live listing* link |
@@ -299,7 +312,7 @@ a `$public_actions` whitelist; anything not in it requires a logged-in user (`lo
 | Enquiries (member) | `/user/enquiries[/<offset>]`, `/user/delete-enquiry/<id>` (POST) | `User::enquiries`, `delete_enquiry` → `Usermodel::getEnquiriesForReceiver`, `getEnquiryForReceiver` | **Only the member's own leads**, and **no plan required**: a listing's enquiries belong to whoever owns the listing now (so a claim brings its earlier leads with it); anything else by `receiving_user_id`. The latest five are on `/user/dashboard`. `getAllEnquiries()` is admin-only. A quote request (`User::add_enquiry`) takes the sender from the session and the receiver from the listing — never from the form — is inserted through the schema-tolerant `Usermodel::addEnquiry()`, and is emailed to the business (`listing_email`, else the owner's account address; the forms inbox when neither exists, or always with `enquiry_copy_admin` = 1) with the visitor as Reply-To |
 | Deals & coupons | `/coupons`, `/coupons/<id>` | `User::coupons`, `coupon_details` | Shared kit + 5 ad zones on the index. The index calls `getDistinctActiveCoupons()`: the plain `getActiveCoupons()` joins through the owner's **listings**, so a business with four listings shows one offer four times |
 | Post a deal (member) | `/user/my-coupons` (also `/user/coupons`, routed), `/user/add-coupon`, `/user/edit-coupon/<id>`, `/user/delete-coupon/<id>` (POST) | `User::my_coupons`, `add_coupon`, `edit_coupon`, `delete_coupon` | `/user/coupons` used to resolve to `User::coupons`, the public page, which is where the old "Post a deal" buttons landed; it is routed to the member screen now (public deals: `/coupons`). Without a published listing the screen says what is missing and links to add or claim one. Requires a published listing the member owns; live deals capped by `coupon_max_per_member` at `/admin/setting`. Add and edit share `partials/coupon_form_fields.php` |
-| Services (web/IT) | `/services[?category=]`, `/services/<slug>` | `User::services`, `service_details` | Shared kit; each service page carries its own quote form |
+| Services (web/IT/marketing) | `/services[?category=]`, `/services/<slug>` | `User::services`, `service_details` | Shared kit; each service page carries its own quote form. Prices print through `service_price_label()` — "From $995 · per project" when `services.price_from` (0038) marks a starting price |
 | Custom quote | `/request-quote[?service=<slug>]` (GET form), `/request-service[/<slug>]` (POST) | `User::request_quote`, `request_service` | One POST handler for both forms — rate-limited 5/IP/hour, saved to `service_requests`, emailed to `site_setting('service_quote_email')` with the sender as Reply-To |
 | Checkout | `/checkout?plan_id=X`, `/cart-set-term`, `/cart-set-category` (POST) | `User::checkout` / `cart_set_term` / `cart_set_category` / `cart_pay_init` / `process_checkout` | HelcimPay.js. A category-specific banner or video must say which listing category it runs in (picker on the line; `cart_pay_init` refuses without one); stored as `transactions.target_category_id` (0033) and shown in the admin billing history. Only business-listing tiers are offered auto-renew |
 | Manage plan | `/user/my_account` | upgrade/downgrade/cancel | prorated upgrade |

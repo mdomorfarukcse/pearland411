@@ -760,6 +760,11 @@
 	margin-top: auto;
 	padding-top: 12px;
 }
+/* The Verified badge beside a business name (a paid-package feature, 0038). */
+.p411-biz__verified { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; vertical-align: middle;
+	font-size: 11.5px; font-weight: 700; color: var(--p411-green-d); white-space: nowrap; }
+.p411-biz__verified i { font-size: 15px; }
+
 /* "Is this your business? Claim it" under an unclaimed card's buttons. */
 .p411-biz__claim { display: block; margin-top: 10px; font-size: 12.5px; color: var(--p411-ink-2); }
 .p411-biz__claim b { color: var(--p411-bu); font-weight: 700; }

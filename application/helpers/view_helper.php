@@ -983,8 +983,10 @@ if (!function_exists('plan_term_copy')) {
             $noun = billing_interval_noun($interval);
             return array(
                 'per ' . $noun,
-                'Recurring only if you turn on auto-renew at checkout: then your card is charged every '
-                    . $noun . ' until you cancel, and we email you before each charge. Otherwise it ends after one ' . $noun . '.',
+                // Auto-renew starts ticked at checkout (client decision,
+                // 2026-10); the customer can untick it for a single term.
+                'Renews every ' . $noun . ': your card is charged each ' . $noun . ' until you cancel, and we email you '
+                    . 'before each charge. Prefer one ' . $noun . ' only? Untick auto-renew at checkout.',
             );
         }
 
@@ -1026,7 +1028,7 @@ if (!function_exists('cap_lock_note')) {
     {
         if ($allowed) return '';
         return '<small class="form-text text-warning" style="display:block;margin-top:4px;">'
-            . '&#128274; ' . ($what !== '' ? e($what) . ' are not' : 'Not') . ' included in your current package. '
+            . '&#128274; ' . ($what !== '' ? e($what) . (preg_match('/^(An?|The) /', $what) ? ' is not' : ' are not') : 'Not') . ' included in your current package. '
             . '<a href="' . base_url('pricing-plan') . '">Upgrade to unlock</a>.</small>';
     }
 }
@@ -1564,5 +1566,59 @@ if (!function_exists('activity_record')) {
             $CI->load->library('activity');
         }
         return $CI->activity->record($type, $id, $event);
+    }
+}
+
+if (!function_exists('service_price_label')) {
+    /**
+     * How a services-catalog price reads: array(amount, unit), plain text —
+     * e.g. ('From $995', 'per project') or ('$39', 'a month'). NULL when the
+     * service has no list price ("Custom quote"). `price_from` (migration 0038)
+     * marks a starting price, as the packages document lists most of them.
+     *
+     * @param  object $service a services row
+     * @return array|null
+     */
+    function service_price_label($service)
+    {
+        if (!isset($service->base_price) || $service->base_price === NULL || ($service->price_unit ?? 'custom') === 'custom') {
+            return NULL;
+        }
+        $units = array(
+            'monthly'  => 'a month',
+            'annual'   => 'a year',
+            'hourly'   => 'an hour',
+            'project'  => 'per project',
+            'one_time' => 'one-time',
+        );
+        $amount = '$' . number_format((float) $service->base_price, 0);
+        if (!empty($service->price_from)) {
+            $amount = 'From ' . $amount;
+        }
+        $unit = $units[(string) $service->price_unit] ?? str_replace('_', ' ', (string) $service->price_unit);
+        return array($amount, $unit);
+    }
+}
+
+if (!function_exists('listing_is_verified')) {
+    /**
+     * Does the listing show the Verified badge? Claimed by its owner AND the
+     * owner's plan includes the badge (the listing packages, migration 0038:
+     * Starter and up). Before 0038 a claimed listing was verified.
+     * Cached per owner for the request, so a page of cards costs one query
+     * per distinct owner.
+     *
+     * @param  object $listing a listings row (needs user_id + is_claimed)
+     * @return bool
+     */
+    function listing_is_verified($listing)
+    {
+        static $owners = array();
+        if (!listing_is_claimed($listing)) return FALSE;
+        $uid = (int) ($listing->user_id ?? 0);
+        if (!isset($owners[$uid])) {
+            $owners[$uid] = (bool) get_instance()->usermodel->ownerHasVerifiedBadge($uid);
+        }
+        return $owners[$uid];
     }
 }

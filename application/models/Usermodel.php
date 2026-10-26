@@ -2796,6 +2796,25 @@ class Usermodel extends CI_Model
 	}
 
 	/**
+	 * Does this account's current plan include the Verified badge? (The
+	 * listing packages, migration 0038: Starter and up.) Before 0038 there is
+	 * no such flag and a claimed listing was "verified", so this says yes.
+	 */
+	public function ownerHasVerifiedBadge($user_id)
+	{
+		$user_id = (int) $user_id;
+		if ($user_id <= 0) return FALSE;
+		if (!$this->db->field_exists('verified_badge', 'plans')) return TRUE;
+		return $this->db->from('subscriptions s')
+			->join('plans p', 'p.id = s.plan_id')
+			->where('s.user_id', $user_id)
+			->where('s.status', 'active')
+			->where('s.end_date >=', date('Y-m-d'))
+			->where('p.verified_badge', 1)
+			->count_all_results() > 0;
+	}
+
+	/**
 	 * Leads (enquiries) per listing since a date — the "Leads" column of the
 	 * analytics pages. A lead is the enquiries row itself; nothing is counted
 	 * twice in activity_daily.
@@ -6330,7 +6349,11 @@ class Usermodel extends CI_Model
 			$plan_id = !empty($subscription->pending_plan_id)
 				? (int) $subscription->pending_plan_id
 				: (int) $subscription->plan_id;
-			$plan = $this->getPlanByIdForPricing($plan_id);
+			// A plan taken off sale (0038 retired the old listing tiers) still
+			// renews at the price the customer signed up at; looking it up
+			// among active plans only priced the renewal at 0, which the cron
+			// treats as a failure and expires the subscription after three.
+			$plan = $this->getPlanByIdForPricing($plan_id) ?: $this->getPlanById($plan_id);
 			if ($plan) {
 				$amount = (float) $plan->price;
 			}

@@ -117,7 +117,7 @@ $status_style = array(
                     : 'unclaimed (held by ' . e($c->owner_name ?: 'no account') . ')' ?>
                 </div>
                 <?php if (!empty($c->enquiry_image)): ?>
-                  <div><span>Document:</span> <a href="<?= e_url(base_url($c->enquiry_image)) ?>" target="_blank" rel="noopener">open the upload</a></div>
+                  <div><span>Document:</span> <a href="<?= e_url(base_url('admin/claim-document/' . (int) $c->claim_listing_id)) ?>" target="_blank" rel="noopener">open the upload</a> <small>(admins only)</small></div>
                 <?php endif; ?>
               </div>
 

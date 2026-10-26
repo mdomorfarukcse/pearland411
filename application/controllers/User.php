@@ -336,7 +336,11 @@ class User extends CI_Controller
 	 */
 	private function listingCapabilities($owner_id)
 	{
-		return $this->capabilitiesFromPlan($this->usermodel->getUserSubscription((int) $owner_id));
+		// No active plan — a claimed listing, or a lapsed one — is on the free
+		// tier, so it gets what Free Community includes (Google Maps since
+		// 0038), not nothing at all.
+		$plan = $this->usermodel->getUserSubscription((int) $owner_id);
+		return $this->capabilitiesFromPlan($plan ?: $this->freeListingPlan());
 	}
 
 	/**
@@ -404,8 +408,27 @@ class User extends CI_Controller
 			// they follow can_photos, which is what 0037 seeds them from.
 			'can_hours'         => (bool) ($plan && (isset($plan->can_hours) ? !empty($plan->can_hours) : !empty($plan->can_photos))),
 			'can_social_links'  => (bool) ($plan && (isset($plan->can_social_links) ? !empty($plan->can_social_links) : !empty($plan->can_photos))),
+			// Migration 0038 (the listing packages). Before it there were no
+			// such flags and everyone had an email and could post deals.
+			'can_email'         => $this->planFlag($plan, 'can_email'),
+			'can_coupons'       => $this->planFlag($plan, 'can_coupons'),
 			'plan_name'         => $plan && !empty($plan->name) ? (string) $plan->name : '',
 		);
+	}
+
+	/**
+	 * A 0038 plan flag. TRUE when the install has no such column yet (the
+	 * behaviour before the packages existed); otherwise the plan's own value,
+	 * and FALSE for no plan at all.
+	 */
+	private function planFlag($plan, $column)
+	{
+		static $has = array();
+		if (!isset($has[$column])) {
+			$has[$column] = $this->db->field_exists($column, 'plans');
+		}
+		if (!$has[$column]) return TRUE;
+		return (bool) ($plan && !empty($plan->$column));
 	}
 
 	/**
@@ -4501,6 +4524,10 @@ class User extends CI_Controller
 		}
 		$caps  = $this->capabilitiesFromPlan($sub);
 		$notes = array();
+		if (!$caps['can_email'] && $listing_email !== '') {
+			$listing_email = '';
+			$notes[] = 'An email address on the listing is not part of your plan, so it was not added.';
+		}
 
 		$post = function ($k) { return trim((string) $this->input->post($k)); };
 		$sub_category_id = (int) $this->input->post('sub_category_id');
@@ -4858,6 +4885,9 @@ class User extends CI_Controller
 				if (!$caps['can_services'])      { unset($info['service_offered']); }
 				if (!$caps['can_video'])         { unset($info['listing_video']); }
 				if (!$caps['can_extra_details']) { unset($info['listing_seo_title'], $info['listing_seo_keywords'], $info['listing_seo_description']); }
+				// An email on the listing is a Starter-and-up feature (0038);
+				// whatever is already there is left alone.
+				if (!$caps['can_email'])         { unset($info['listing_email']); }
 
 				// Hours and the business's own social links (migration 0037),
 				// when the plan includes them.
@@ -9696,6 +9726,7 @@ class User extends CI_Controller
 		$data['pending_claims']   = $data['listings'] ? array() : $this->usermodel->getClaimsByUser($logged_id, 'pending');
 		$data['live_count'] = $this->usermodel->countCouponsByUser($logged_id, TRUE);
 		$data['coupon_cap'] = $this->couponCap();
+		$data['can_post']   = $this->listingCapabilities($logged_id)['can_coupons'];
 		$data['title']     = 'My deals & coupons';
 
 		$this->load->view('header', $data);
@@ -9740,6 +9771,14 @@ class User extends CI_Controller
 			$this->session->set_flashdata('coupon_error',
 				'You need a published business listing first: a deal is posted against a listing, so people can see whose it is. '
 				. 'If you have just added or claimed one, it may still be waiting for approval.');
+			redirect('user/my-coupons');
+			return;
+		}
+
+		// Deals are a Starter-and-up feature (the listing packages, 0038).
+		if (!$this->listingCapabilities($logged_id)['can_coupons']) {
+			$this->session->set_flashdata('coupon_error',
+				'Posting deals and coupons is included from the Pearland Starter package up. Upgrade at /pricing-plan to post one.');
 			redirect('user/my-coupons');
 			return;
 		}
@@ -10186,12 +10225,17 @@ class User extends CI_Controller
 	}
 
 	/**
-	 * The optional proof document on a claim: a photo or scan (through
-	 * safe_upload_image()) or a PDF (checked by its magic bytes). Stored under
-	 * uploads/claims/ with a random name.
+	 * The optional proof document on a claim — a photo, a scan or a PDF of a
+	 * business license or utility bill. These are private: they are stored
+	 * under application/storage/claims/ (no web access, see its .htaccess)
+	 * with a random name, and only an admin can open them, through
+	 * /admin/claim-document/<id>. The stored value is "storage:claims/<file>".
+	 *
+	 * Checked by content, not by name: a picture must decode as JPG/PNG/WebP,
+	 * a PDF must start with %PDF-. 5 MB at most.
 	 *
 	 * @param  array $errors gains a message when a file was chosen but refused
-	 * @return string|null the stored path, or NULL when nothing was uploaded
+	 * @return string|null the stored reference, or NULL when nothing was uploaded
 	 */
 	private function uploadClaimDocument(array &$errors)
 	{
@@ -10200,36 +10244,40 @@ class User extends CI_Controller
 			return NULL;
 		}
 
-		$ext = strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION));
-		if ($ext !== 'pdf') {
-			$saved = safe_upload_image($file, 'uploads/claims/');
-			if ($saved === FALSE) {
-				$errors[] = 'The document was not accepted: ' . (upload_last_error() ?: 'the file could not be read.')
-					. ' A photo (JPG, PNG, WebP) or a PDF up to 5 MB works.';
-				return NULL;
-			}
-			return $saved;
-		}
-
-		$ok = ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK
-			&& is_uploaded_file($file['tmp_name'])
-			&& (int) $file['size'] > 0 && (int) $file['size'] <= 5 * 1024 * 1024;
-		$head = $ok ? (string) @file_get_contents($file['tmp_name'], FALSE, NULL, 0, 5) : '';
-		if (!$ok || $head !== '%PDF-') {
-			$errors[] = 'The document was not accepted: it is not a PDF this site can read, or it is larger than 5 MB.';
+		$refuse = 'The document was not accepted: a photo (JPG, PNG, WebP) or a PDF up to 5 MB works.';
+		if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])
+			|| (int) $file['size'] <= 0 || (int) $file['size'] > 5 * 1024 * 1024) {
+			$errors[] = $refuse;
 			return NULL;
 		}
 
-		$dir = FCPATH . 'uploads/claims/';
-		if (!is_dir($dir) && !@mkdir($dir, 0755, TRUE)) {
+		$ext = strtolower(pathinfo((string) $file['name'], PATHINFO_EXTENSION));
+		if ($ext === 'pdf') {
+			if ((string) @file_get_contents($file['tmp_name'], FALSE, NULL, 0, 5) !== '%PDF-') {
+				$errors[] = $refuse;
+				return NULL;
+			}
+		} else {
+			$info  = @getimagesize($file['tmp_name']);
+			$types = array('image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp');
+			if (!$info || !isset($types[$info['mime']])) {
+				$errors[] = $refuse;
+				return NULL;
+			}
+			$ext = $types[$info['mime']];
+		}
+
+		$dir = APPPATH . 'storage/claims/';
+		if (!is_dir($dir) && !@mkdir($dir, 0750, TRUE)) {
 			$errors[] = 'The document could not be saved. Please try again.';
 			return NULL;
 		}
-		$name = bin2hex(random_bytes(16)) . '.pdf';
+		$name = bin2hex(random_bytes(16)) . '.' . $ext;
 		if (!@move_uploaded_file($file['tmp_name'], $dir . $name)) {
 			$errors[] = 'The document could not be saved. Please try again.';
 			return NULL;
 		}
-		return 'uploads/claims/' . $name;
+		@chmod($dir . $name, 0640);
+		return 'storage:claims/' . $name;
 	}
 }

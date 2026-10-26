@@ -6,6 +6,96 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-10-26 — Listing packages (Free Community / Starter / Business / Premier) and the client's answers
+
+Follow-up to the checklist entry below, from the client's answers to the open questions and the
+"Pearland411 Business Listing & Advertising Packages" document. **Run migration 0038**
+(`database/migrations/0038_listing_packages.sql`, also in `migrations_combined_phpmyadmin.sql`)
+after 0037. The code works before it is run (re-checked against a copy without 0037 or 0038).
+
+### Added — the listing packages (0038)
+
+- **Free Community $0, Pearland Starter $29/mo, Pearland Business $79/mo, Pearland Premier
+  $149/mo**, from the document's table, each with its 30-day term:
+
+  | | Free | Starter | Business | Premier |
+  |---|---|---|---|---|
+  | Name, category, address, phone, website, Google Maps, description | ✓ | ✓ | ✓ | ✓ |
+  | Logo, email, hours, social links, deals & coupons, Verified badge, services, SEO details | | ✓ | ✓ | ✓ |
+  | Gallery photos | | 5 | 15 | unlimited |
+  | Featured in category, analytics | | | ✓ | ✓ |
+  | YouTube video, priority support | | | | ✓ |
+  | By staff (listed on the card): priority search, homepage feature, banner, newsletter, social spotlight | | | monthly / small / quarterly | priority / premium / monthly |
+
+- **The old listing plans** (Basic, Advanced $15, Featured $25, the $230 Special Package, and any
+  other listing tier — the $299 / $499 ones the checklist names are not in the code, so they are
+  live-database rows) go off sale. Members on an old *free* plan move to Free Community. A paying
+  customer keeps their plan, its features and its price: renewals now fall back to an inactive
+  plan's price (`Usermodel::renewalAmountFor()`), where before a retired plan priced at 0 and the
+  cron would have expired the customer after three attempts. **Old plans nobody ever bought are
+  deleted** (client: "delete existing plan"); ones a customer bought are kept, off sale, because
+  their subscriptions and transactions point at them. Banner, video and add-on packages unchanged.
+- New plan flags `can_email`, `can_coupons`, `verified_badge` and an `extra_features` list, all at
+  `/admin/pricing` (plan editor), on the pricing cards and on My Account.
+- **Services catalog at the document's à la carte prices** — Website Design from $995, Hosting $39/mo,
+  Banner Ad Design $125, Logo Design $295, Social Media Management from $299/mo, Facebook &
+  Instagram Ads from $399/mo, Google Ads from $399/mo, Email Marketing from $149, Featured Email Blast
+  $99, Sponsored Article $150, Business Spotlight Video from $395, Photography from $250, SEO from
+  $495/mo, Reputation Management from $99/mo, Event Promotion from $150. "From" prices via
+  `services.price_from` and `service_price_label()`. Existing services keep their wording.
+
+### Changed — per the client's answers
+
+- **Owners with no active plan are on Free Community** (`User::listingCapabilities()` falls back to
+  the free plan), so a claimed listing now gets Google Maps; before, "no plan" meant nothing at all.
+- **Email on a listing** is Starter and up: the member forms lock the field (an existing address is
+  kept) and the server ignores it. Admins can still set it.
+- **Deals & coupons** are Starter and up: `/user/my-coupons` says so, `/user/add-coupon` refuses.
+  Deals already posted stay up until they end.
+- **Verified badge** is a paid feature: shown when the listing is claimed *and* the owner's plan has
+  `verified_badge` (`listing_is_verified()`), on the listing page, the homepage cards and — new — the
+  directory cards. It used to be every claimed listing.
+- **The quote / lead form stays on every listing**, including free ones (client decision; the
+  document lists it from Starter up).
+- **Auto-renew is ticked by default** on both checkouts; the pricing cards, cart lines, pricing hero
+  and refund policy say "renews every month — untick at checkout for one month only".
+- **Claim proof documents are admin-only**: stored in `application/storage/claims/` (no web access),
+  opened through `/admin/claim-document/<id>` for signed-in admins only, path-checked. They were
+  under `uploads/claims/`, readable by anyone with the link.
+- "Most popular" goes on one card (the cheapest tier with a featured spot — Pearland Business); it
+  was keyed on the featured flag and would have marked two.
+- "Basic" wording updated to "Free Community" (refund policy, My Listings, the add wizard).
+
+### Verified
+
+Local copy: 25 new checks (pricing page tiers, prices and features; free-tier email lock with maps
+open; deal gating both ways; Verified badge on the listing, homepage and directory by plan; services
+prices; admin-only document download — admin gets the PDF, the claimant and a visitor do not, a
+`../` path is refused; plan editor saves the new flags and extras) plus every earlier suite (109,
+updated for the new plan ids and private storage), the pre-migration smoke test (20), 0038 and the
+combined bundle run twice on a populated and on a fresh database with the old catalog (free member
+moved, bought plan kept off sale, unbought ones deleted, banners untouched, re-run changes nothing),
+and the renewal cron reaching the charge step for a customer on a retired plan. Pricing cards
+checked in Chromium at 1280px and 390px.
+
+### Needs the operator
+
+- Run **0038** (after 0037). Then look over `/admin/pricing`: the four packages are there with the
+  document's features; adjust wording or extras there.
+- Deliver the staff features (priority search, homepage feature, banners, newsletter, social
+  spotlight) by hand for Business and Premier customers — `/admin/homepage-placements` for the
+  homepage, Business Listings → Banners for category banners.
+- Customers on retired plans (e.g. Advanced $15) keep renewing at their old price until they change
+  plan or cancel. Move them by hand at `/admin/billing` if the client wants otherwise.
+
+Key files: `database/migrations/0038_listing_packages.sql`, `application/controllers/{User,Admin}.php`,
+`application/models/Usermodel.php`, `application/helpers/view_helper.php`, `application/libraries/Notifications.php`,
+`application/views/{pricing_plan,cart_checkout,checkout,edit_listings,add_new_listing_start,user_coupons,user_account,user_listing,listing_details,all-listing,index,services_index,service_details}.php`,
+`application/views/partials/refund_policy.php`, `application/views/admin/{pricing,claim_listing}.php`, `application/storage/claims/` (new),
+`assets/css/directory.css`, `application/config/routes.php`, `.gitignore`.
+
+---
+
 ## 2026-10-26 — Website Update Checklist (before the 100-business acquisition campaign)
 
 Worked from "PEARLAND 411 — WEBSITE UPDATE CHECKLIST (Draft)". Section 2 (new pricing) is struck

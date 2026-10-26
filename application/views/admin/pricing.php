@@ -561,6 +561,30 @@
                                     <label class="custom-control-label" for="canSocialLinks">Social Media Links</label>
                                 </div></div>
                             </div>
+                            <?php // The listing packages (migration 0038). ?>
+                            <div class="col-md-4">
+                                <div class="form-group"><div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" name="can_email" id="canEmail" value="1">
+                                    <label class="custom-control-label" for="canEmail">Email on Listing</label>
+                                </div></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group"><div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" name="can_coupons" id="canCoupons" value="1">
+                                    <label class="custom-control-label" for="canCoupons">Post Deals / Coupons</label>
+                                </div></div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group"><div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" name="verified_badge" id="verifiedBadge" value="1">
+                                    <label class="custom-control-label" for="verifiedBadge">Verified Badge</label>
+                                </div></div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="extraFeatures">Extra features shown on the pricing card <small class="text-muted">(one per line &mdash; things staff deliver, e.g. &ldquo;Homepage feature, monthly&rdquo;)</small></label>
+                            <textarea class="form-control" name="extra_features" id="extraFeatures" rows="4"></textarea>
                         </div>
 
                         <div class="form-group">
@@ -677,6 +701,10 @@ function ppAdminReady(fn) {
                         $('#canExtraDetails').prop('checked', response.can_extra_details == 1);
                         $('#canHours').prop('checked', response.can_hours == 1);
                         $('#canSocialLinks').prop('checked', response.can_social_links == 1);
+                        $('#canEmail').prop('checked', response.can_email == 1);
+                        $('#canCoupons').prop('checked', response.can_coupons == 1);
+                        $('#verifiedBadge').prop('checked', response.verified_badge == 1);
+                        $('#extraFeatures').val(response.extra_features || '');
 
                         $('#planDescription').val(response.description || '');
 

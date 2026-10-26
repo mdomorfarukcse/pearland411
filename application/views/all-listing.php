@@ -269,7 +269,8 @@ $showing_to   = $current_offset + count($allListings);
 								</div>
 
 								<div class="p411-biz__body">
-									<h3><a href="<?= e_url($detail_url) ?>"><?= e($name) ?></a></h3>
+									<h3><a href="<?= e_url($detail_url) ?>"><?= e($name) ?></a><?php if (property_exists($value, 'is_claimed') && listing_is_verified($value)): ?>
+										<span class="p411-biz__verified" title="Verified business"><i class="material-icons" aria-hidden="true">check_circle</i> Verified</span><?php endif; ?></h3>
 
 									<?php if ($reviews_n > 0 && $rating > 0): ?>
 										<div class="p411-biz__rate">

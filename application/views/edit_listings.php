@@ -369,7 +369,8 @@ if (!function_exists('cap_lock_note')) {
 							<div class="row">
 								<div class="col-md-12">
 									<div class="form-group">
-										<input type="email" name="listing_email" class="form-control" placeholder="Email id" value="<?= e_attr($listing->listing_email) ?>">
+										<input type="email" name="listing_email" class="form-control" placeholder="Email id" value="<?= e_attr($listing->listing_email) ?>" <?= !isset($caps['can_email']) || $caps['can_email'] ? '' : 'disabled' ?>>
+										<?= cap_lock_note(!isset($caps['can_email']) || $caps['can_email'], 'An email address on your listing') ?>
 									</div>
 								</div>
 							</div>

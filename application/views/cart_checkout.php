@@ -52,7 +52,7 @@ function cc_cat_label($c)
     .cco-exp{margin-top:6px;font-size:12.5px;color:var(--ink2);}
     .cco-exp strong{color:var(--ink);}
 
-    /* Auto-renew opt-in */
+    /* Auto-renew (ticked by default; the customer can untick it) */
     .cco-renew{display:flex;gap:10px;align-items:flex-start;background:#f7f8fc;border:1px solid var(--line);border-radius:10px;padding:13px 15px;margin-top:14px;font-size:13px;line-height:1.55;color:var(--ink2);cursor:pointer;}
     .cco-renew input{margin-top:2px;flex-shrink:0;width:16px;height:16px;accent-color:var(--go);}
     .cco-renew strong{color:var(--ink);}
@@ -147,7 +147,7 @@ function cc_cat_label($c)
                     <div class="cco-exp">
                         Runs until <strong><?= date('M j, Y', strtotime($it['expires_at'])) ?></strong>
                         &middot; <?= !empty($it['recurring'])
-                            ? 'renews only if you tick &ldquo;Renew automatically&rdquo;'
+                            ? 'renews while &ldquo;Renew automatically&rdquo; is ticked'
                             : 'one-time &mdash; does not renew' ?>
                     </div>
                 </div>
@@ -172,7 +172,7 @@ function cc_cat_label($c)
 
                 <?php if (!empty($cart['recurring'])): ?>
                     <label class="cco-renew" for="cco-auto-renew">
-                        <input type="checkbox" id="cco-auto-renew" name="auto_renew" value="1">
+                        <input type="checkbox" id="cco-auto-renew" name="auto_renew" value="1" checked>
                         <span>
                             <strong>Renew automatically</strong> at the end of each term so your listing
                             never lapses. We'll save your card securely with Helcim and charge it again at

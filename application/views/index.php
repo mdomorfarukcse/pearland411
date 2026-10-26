@@ -113,11 +113,11 @@ $p411_card = function ($row, $opts = array()) use ($p411_excerpt) {
 	$area  = ((int) ($row->display_address ?? 0) === 1 && !empty($row->listing_address))
 		? (string) $row->listing_address : 'Pearland, TX';
 	$is_new = !empty($row->created_at) && strtotime((string) $row->created_at) > strtotime('-30 days');
-	// "Verified" means the business owner has the listing: an approved claim,
-	// their own listing, or an admin's say-so (listings.is_claimed, 0037).
-	// It used to be any listing with a user_id — i.e. all of them, since the
+	// "Verified": the business owner has the listing (listings.is_claimed,
+	// 0037) and their package includes the badge (Starter and up, 0038). It
+	// used to be any listing with a user_id — i.e. all of them, since the
 	// imported directory belongs to data-entry logins.
-	$is_claimed = listing_is_claimed($row);
+	$is_claimed = listing_is_verified($row);
 	?>
 	<article class="p411-card<?= $compact ? ' p411-card--compact' : '' ?><?= $featured ? ' p411-card--featured' : '' ?>">
 		<a class="p411-card__media" href="<?= e_url($url) ?>" tabindex="-1" aria-hidden="true">

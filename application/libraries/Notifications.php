@@ -71,7 +71,9 @@ class Notifications
             'Email'        => e((string) $claim->enquiry_email),
             'Phone'        => e((string) $claim->enquiry_mobile),
             'Verify by'    => e($methods[$claim->claim_verification ?? ''] ?? (string) ($claim->claim_verification ?? '')),
-            'Document'     => !empty($claim->enquiry_image) ? '<a href="' . e_attr(base_url($claim->enquiry_image)) . '">View the upload</a>' : '—',
+            'Document'     => !empty($claim->enquiry_image)
+                ? '<a href="' . e_attr(base_url('admin/claim-document/' . (int) $claim->claim_listing_id)) . '">View the upload</a> (sign in to admin first)'
+                : '—',
             'Listing now'  => listing_is_claimed($listing) ? 'Already claimed by another account' : 'Unclaimed',
         );
 

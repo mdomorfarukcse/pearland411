@@ -200,6 +200,9 @@ $ld_stars = function ($value) {
 						<?php endif; ?>
 						<?php if (!$ld_claimed): ?>
 							<span class="p411-tag p411-tag--amber">Unclaimed</span>
+						<?php elseif (listing_is_verified($listing)): ?>
+							<?php // `check_circle`, not `verified` — see the note on `stars` above. ?>
+							<span class="p411-tag p411-tag--green"><i class="material-icons" aria-hidden="true">check_circle</i> Verified</span>
 						<?php endif; ?>
 						<?php if (!empty($listing->year_established)): ?>
 							<span class="p411-tag">Since <?= e($listing->year_established) ?></span>
