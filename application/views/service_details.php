@@ -174,6 +174,7 @@ $sd_phone = trim((string) site_setting('contact_phone', '281-482-2031'));
 							<textarea id="rs_message" name="message" class="form-control" rows="4" required></textarea>
 						</div>
 
+						<?= spam_form_fields() ?>
 						<button type="submit" class="p411-btn p411-btn--block p411-btn--lg">Send request</button>
 					</form>
 

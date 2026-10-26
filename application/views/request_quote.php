@@ -161,6 +161,7 @@ $budgets = array(
 									  required><?= e($prefill['message']) ?></textarea>
 						</div>
 
+						<?= spam_form_fields() ?>
 						<button type="submit" class="p411-btn p411-btn--lg">Send request</button>
 					</form>
 				</div>

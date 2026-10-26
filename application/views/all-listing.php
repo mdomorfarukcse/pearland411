@@ -555,6 +555,7 @@ $showing_to   = $current_offset + count($allListings);
 							<textarea id="dir_enq_msg" name="enquiry_message" class="form-control" rows="3"
 									  placeholder="What are you looking for?"></textarea>
 						</div>
+						<?= spam_form_fields() ?>
 						<button type="submit" id="dir_enquiry_submit" class="p411-btn p411-btn--block p411-btn--navy">Submit requirements</button>
 					</form>
 				</div>

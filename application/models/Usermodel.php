@@ -137,16 +137,8 @@ class Usermodel extends CI_Model
 			array('matches' => 'The two passwords do not match.')
 		);
 
-		// Honeypot: a field no human sees, hidden in CSS rather than with
-		// type="hidden" so a form-filling bot completes it. Anything that puts
-		// a value in it is not a person. This is the cheap half of "allows
-		// errors and troll attacks" — per-IP rate limiting is already applied
-		// in User::register(), but it does nothing against a rotating proxy.
-		if (trim((string) $this->input->post('website_url')) !== '') {
-			$this->form_validation->set_message('required', 'Registration could not be completed.');
-			return FALSE;
-		}
-
+		// The honeypot, name filter and reCAPTCHA are checked before this is
+		// called — User::register() → spamRefusal().
 		if ($this->form_validation->run()) {
 			// Generate a verification token (stored raw because we email
 			// it to the user; lookups are by indexed exact match).

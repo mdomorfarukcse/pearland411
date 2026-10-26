@@ -691,6 +691,9 @@ class Admin extends CI_Controller
 			// (Cli::send_renewal_reminders) and the refund policy's request
 			// window and optional extra wording (partials/refund_policy.php).
 			'renewal_reminder_days', 'refund_request_days', 'refund_policy_extra',
+			// Spam protection on the public forms (helpers/spam_helper.php).
+			// Both default ON; reCAPTCHA also needs its keys in .env.
+			'recaptcha_enabled', 'spam_name_filter_enabled',
 		);
 
 		if ($this->input->method() === 'post') {

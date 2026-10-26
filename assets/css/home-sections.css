@@ -1024,7 +1024,11 @@
 .p411-home .p411-signup__copy p { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
 .p411-home .p411-signup__copy span { display: block; font-size: 13px; font-weight: 400; opacity: .82; }
 
-.p411-home .p411-signup__form { display: flex; gap: 8px; flex: 0 1 460px; }
+.p411-home .p411-signup__form { display: flex; flex-wrap: wrap; gap: 8px; flex: 0 1 460px; }
+/* The reCAPTCHA checkbox (spam_form_fields()) takes a line of its own under
+   the field; it is empty until someone starts on the form. */
+.p411-home .p411-signup__form .p411-captcha { flex: 1 1 100%; }
+.p411-home .p411-signup__form .p411-captcha__note { color: #fff !important; }
 .p411-home .p411-signup__form input[type="email"] {
 	flex: 1 1 auto; min-width: 0; height: 44px; padding: 0 16px;
 	border: 1px solid rgba(255, 255, 255, .35); border-radius: 8px;

@@ -1007,10 +1007,14 @@ unset($__ext, $__rel);
               <span>Straight to your inbox &mdash; one email, no noise.</span>
             </p>
           </div>
-          <form id="newsletterForm" class="p411-signup__form">
+          <?php // method="post" so the CSRF hook adds its token, which new FormData(form)
+                // then carries: without it every signup was refused ("The action you
+                // have requested is not allowed") — the homepage has no csrf.js. ?>
+          <form id="newsletterForm" class="p411-signup__form" method="post" action="<?= base_url('user/subscribe_newsletter') ?>">
             <label class="sr-only" for="newsletterEmail">Email address</label>
             <input type="email" id="newsletterEmail" name="email" placeholder="Enter your email address" required>
             <button type="submit" id="newsletterSubmit">Subscribe</button>
+            <?= spam_form_fields() ?>
           </form>
         </div>
         <div class="p411-signup__msg" id="newsletterMessage" role="status"></div>
@@ -1188,8 +1192,8 @@ unset($__ext, $__rel);
       button.disabled = true;
       button.innerHTML = 'Sending&hellip;';
 
-      var body = new FormData();
-      body.append('email', email);
+      // The whole form, so the honeypot and the reCAPTCHA answer go too.
+      var body = new FormData(form);
 
       fetch('<?= base_url('user/subscribe_newsletter') ?>', { method: 'POST', body: body })
         .then(function (res) { return res.json(); })
@@ -1203,6 +1207,7 @@ unset($__ext, $__rel);
         })
         .catch(function () { say('Something went wrong. Please try again.'); })
         .finally(function () {
+          if (window.p411Recaptcha) window.p411Recaptcha.reset(form);
           button.disabled = false;
           button.innerHTML = label;
         });

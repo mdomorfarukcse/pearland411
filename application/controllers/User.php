@@ -759,11 +759,24 @@ class User extends CI_Controller
 		// rather be phoned than type an address. One of the two is enforced
 		// below instead.
 		$this->form_validation->set_rules('email',    'Email', 'trim|valid_email');
-		$this->form_validation->set_rules('message',  'Message', 'trim|required|min_length[10]');
+		$this->form_validation->set_rules('message',  'Message', 'trim|required|min_length[10]|max_length[5000]');
 
 		if (!$this->form_validation->run()) {
 			$this->session->set_flashdata('contact_error',
 				strip_tags(validation_errors()) ?: 'Please complete the required fields.');
+			redirect($back);
+			return;
+		}
+
+		// The 700-a-day spam came through here. A tripped honeypot is told
+		// "thanks" and nothing is saved or sent.
+		$spam = $this->spamRefusal(array('fullName' => $this->input->post('fullName')));
+		if ($spam !== NULL) {
+			if ($spam['silent']) {
+				$this->session->set_flashdata('contact_success', 'Thanks! We will be in touch soon.');
+			} else {
+				$this->session->set_flashdata('contact_error', $spam['message']);
+			}
 			redirect($back);
 			return;
 		}
@@ -860,11 +873,16 @@ class User extends CI_Controller
 		// Acknowledge to the sender — only when they left an address, and
 		// only once we know the message is somewhere: saved, or delivered to
 		// the team.
+		//
+		// Nothing the visitor typed goes in it. The address is unverified, so
+		// this goes to whoever the sender says they are: it used to quote the
+		// message back, which let a spammer type a victim's address and have
+		// pearland411.com deliver their text for them. $department is
+		// whitelisted against enquiry_departments().
 		if (trim($email) !== '' && ($saved || $admin_sent)) {
 			$ack = '<p>Thanks — we received your message and passed it to '
 				. html_escape($department) . '. Someone there will get back to you shortly.</p>'
-				. '<p>For reference, you sent:</p>'
-				. '<blockquote>' . nl2br(html_escape($message)) . '</blockquote>';
+				. '<p>If you did not send a message to Pearland411, you can ignore this email.</p>';
 			$this->mailer->send($email, 'We received your message',
 				$this->mailer->render('We received your message', $ack),
 				NULL, array('log_type' => 'contact'));
@@ -2728,9 +2746,17 @@ class User extends CI_Controller
 				return;
 			}
 
-			//Register User If data valid
-
-			$data['registrationSucess'] = $this->usermodel->registerUser();
+			// The verification email greets the new member by the name they
+			// typed, so a bot's "name" would be mailed to the address it
+			// typed. A tripped honeypot is shown the normal success screen.
+			$spam = $this->spamRefusal(array('name' => $this->input->post('name')));
+			if ($spam !== NULL) {
+				$data['registrationSucess'] = $spam['silent']
+					? array('status' => TRUE, 'email_sent' => TRUE)
+					: array('status' => FALSE, 'referror' => '', 'message' => $spam['message']);
+			} else {
+				$data['registrationSucess'] = $this->usermodel->registerUser();
+			}
 
 			if ($data['registrationSucess']['status']) {
 
@@ -2861,12 +2887,18 @@ class User extends CI_Controller
 
 			$this->form_validation->set_rules('email_id', 'Email', 'trim|required|valid_email');
 
-			if ($this->form_validation->run()) {
+			// A tripped honeypot gets the same answer and no email.
+			$spam = $this->spamRefusal();
+			if ($spam !== NULL && !$spam['silent']) {
+				$data['error'] = $spam['message'];
+			} elseif ($this->form_validation->run()) {
 				$email = $this->input->post('email_id');
-				$this->usermodel->requestPasswordReset(
-					$email,
-					$this->input->ip_address()
-				);
+				if ($spam === NULL) {
+					$this->usermodel->requestPasswordReset(
+						$email,
+						$this->input->ip_address()
+					);
+				}
 				$this->session->set_flashdata(
 					'forgot_message',
 					'If an account exists for that email, we have sent a password reset link. ' .
@@ -2874,8 +2906,9 @@ class User extends CI_Controller
 				);
 				redirect('forgot-password');
 				return;
+			} else {
+				$data['error'] = 'Please enter a valid email address.';
 			}
-			$data['error'] = 'Please enter a valid email address.';
 		}
 
 		$this->load->view('header', $data);
@@ -2958,8 +2991,14 @@ class User extends CI_Controller
 
 			$this->form_validation->set_rules('email_id', 'Email', 'trim|required|valid_email');
 
-			if ($this->form_validation->run()) {
-				$this->usermodel->resendVerification($this->input->post('email_id'));
+			// A tripped honeypot gets the same answer and no email.
+			$spam = $this->spamRefusal();
+			if ($spam !== NULL && !$spam['silent']) {
+				$data['error'] = $spam['message'];
+			} elseif ($this->form_validation->run()) {
+				if ($spam === NULL) {
+					$this->usermodel->resendVerification($this->input->post('email_id'));
+				}
 				$this->session->set_flashdata(
 					'resend_message',
 					'If that address has an unconfirmed Pearland411 account, we have just sent ' .
@@ -2968,8 +3007,9 @@ class User extends CI_Controller
 				);
 				redirect('resend-verification');
 				return;
+			} else {
+				$data['error'] = 'Please enter a valid email address.';
 			}
-			$data['error'] = 'Please enter a valid email address.';
 		}
 
 		$this->load->view('header', $data);
@@ -7321,6 +7361,25 @@ class User extends CI_Controller
 			$errors['enquiry_message'] = 'That message is too long (5000 characters maximum).';
 		}
 
+		// Spam checks once the fields are right, so a person sees what to fix
+		// first. A tripped honeypot is told it worked; nothing is saved or sent.
+		if (empty($errors)) {
+			$spam = $this->spamRefusal(array('enquiry_name' => $enquiry_name));
+			if ($spam !== NULL && $spam['silent']) {
+				$ok = 'Your enquiry has been submitted successfully! We will get back to you soon.';
+				if ($this->input->is_ajax_request()) {
+					echo json_encode(array('success' => true, 'message' => $ok));
+					return;
+				}
+				$this->session->set_flashdata('message', $ok);
+				redirect($this->withEnquiryAnchor($this->getDynamicRedirectUrl($source, $identifier), $source));
+				return;
+			}
+			if ($spam !== NULL) {
+				$errors[$spam['field'] ?: 'captcha'] = $spam['message'];
+			}
+		}
+
 		if (!empty($errors)) {
 			if ($this->input->is_ajax_request()) {
 				echo json_encode(array(
@@ -7483,6 +7542,43 @@ class User extends CI_Controller
 		// scroll below, and it looked as if nothing had happened.
 		$redirect_url = $this->getDynamicRedirectUrl($source, $identifier);
 		redirect($this->withEnquiryAnchor($redirect_url, $source));
+	}
+
+	/**
+	 * The spam gate every anonymous public form goes through, after its rate
+	 * limit: the honeypot, the name filter, then Google reCAPTCHA (see
+	 * helpers/spam_helper.php). Cheapest first — the captcha costs a call to
+	 * Google. Its form prints the matching fields with spam_form_fields().
+	 *
+	 * @param  array $names field => posted value, for each name field to screen
+	 * @return array|null NULL to carry on. Otherwise `silent` — TRUE for a
+	 *         tripped honeypot: answer as if it worked, but save and send
+	 *         nothing, so the bot learns nothing — `field` (the field to mark,
+	 *         or NULL) and `message`.
+	 */
+	private function spamRefusal(array $names = array())
+	{
+		if (spam_trap_tripped()) {
+			return array('silent' => TRUE, 'field' => NULL, 'message' => '');
+		}
+
+		foreach ($names as $field => $value) {
+			$why = spam_name_refusal($value);
+			if ($why !== NULL) {
+				return array('silent' => FALSE, 'field' => $field, 'message' => $why);
+			}
+		}
+
+		$this->load->library('recaptcha');
+		if ($this->recaptcha->required() && !$this->recaptcha->verify()) {
+			return array(
+				'silent'  => FALSE,
+				'field'   => NULL,
+				'message' => 'Please tick the “I’m not a robot” box and send it again.',
+			);
+		}
+
+		return NULL;
 	}
 
 	/**
@@ -8815,6 +8911,16 @@ class User extends CI_Controller
 		$email = $this->input->post('email', TRUE);
 		$name = $this->input->post('name', TRUE);
 
+		// The welcome email goes to the typed address, so this is screened
+		// like the other public forms. A tripped honeypot is told it worked.
+		$spam = $this->spamRefusal(array('name' => $name));
+		if ($spam !== NULL) {
+			echo json_encode($spam['silent']
+				? ['success' => true, 'message' => 'Thank you for subscribing! Please check your email to confirm your subscription.']
+				: ['success' => false, 'message' => $spam['message']]);
+			return;
+		}
+
 		// Prevent duplicate subscriptions
 		if ($this->usermodel->is_newsletter_email_subscribed($email)) {
 			echo json_encode(['success' => false, 'message' => 'This email is already subscribed to our newsletter.']);
@@ -9045,8 +9151,26 @@ class User extends CI_Controller
 
 		$service = $slug ? $this->usermodel->getServiceBySlug($slug) : null;
 
-		if (!$this->form_validation->run()) {
-			$this->session->set_flashdata('service_request_error', strip_tags(validation_errors()) ?: 'Please complete the required fields.');
+		$problem = $this->form_validation->run()
+			? NULL
+			: (strip_tags(validation_errors()) ?: 'Please complete the required fields.');
+
+		// Spam checks once the fields are right. A tripped honeypot is told it
+		// worked; nothing is saved or sent.
+		if ($problem === NULL) {
+			$spam = $this->spamRefusal(array('name' => $this->input->post('name')));
+			if ($spam !== NULL && $spam['silent']) {
+				$this->session->set_flashdata('service_request_success', 'Thanks! We received your request and will be in touch shortly.');
+				redirect($back);
+				return;
+			}
+			if ($spam !== NULL) {
+				$problem = $spam['message'];
+			}
+		}
+
+		if ($problem !== NULL) {
+			$this->session->set_flashdata('service_request_error', $problem);
 			$this->session->set_flashdata('service_request_old', array(
 				'name'         => (string) $this->input->post('name'),
 				'email'        => (string) $this->input->post('email'),

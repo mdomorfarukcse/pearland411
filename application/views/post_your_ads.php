@@ -77,6 +77,7 @@
 										  placeholder="Your business name, what you sell, which placements interest you (homepage banner, sidebar, category page, etc.) and the dates you want to run."></textarea>
 							</div>
 
+							<?= spam_form_fields() ?>
 							<button type="submit" class="btn btn-primary">
 								Send my advertising request
 							</button>

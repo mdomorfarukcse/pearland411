@@ -145,17 +145,6 @@ $reps      = function_exists('enquiry_departments') ? enquiry_departments() : ar
 							<div class="formError"><?= form_error('password_confirm') ?></div>
 						</div>
 
-						<?php
-						// Honeypot. Not type="hidden" — a bot skips those; it fills in
-						// anything that looks like a real field. Moved off-screen rather
-						// than display:none for the same reason. Never shown to a person,
-						// so a value in it means the submission is automated.
-						?>
-						<div aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;">
-							<label for="website_url">Leave this field empty</label>
-							<input type="text" name="website_url" id="website_url" tabindex="-1" autocomplete="off" value="">
-						</div>
-
 						<div class="form-group">
 							<label for="hear_us">How did you hear about us?</label>
 							<input type="text" autocomplete="off" value="<?= $rv('hear_us') ?>"
@@ -190,6 +179,7 @@ $reps      = function_exists('enquiry_departments') ? enquiry_departments() : ar
 							</div>
 						</div>
 
+						<?= spam_form_fields() ?>
 						<button type="submit" name="register_submit" class="p411-btn p411-btn--block p411-btn--lg">
 							Create my account
 						</button>
