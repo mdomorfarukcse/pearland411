@@ -156,7 +156,18 @@ if ($help_css) define('PEARLAND411_SALES_HELP_CSS', 1);
 	.p411-help__phone:hover svg,
 	.p411-help__phone:focus svg { color: #fff; }
 
-	.p411-help__hours { margin: 11px 0 0; font-size: 13px; color: rgba(255, 255, 255, .7); }
+	/* Scoped to .p411-help__call deliberately, to outrank `.p411-help__call p`
+	   above (0,1,1). A bare `.p411-help__hours` is 0,1,0 and loses that fight
+	   whatever order it sits in, so every margin ever set here was silently
+	   discarded and the line rendered hard against the pill with margin-top 0.
+	   The same rule was also giving it a 20px BOTTOM margin, which stacked with
+	   the email link's own 22px top margin in a flex column — 42px where 22 was
+	   intended. Setting all four sides here fixes both ends. */
+	.p411-help__call .p411-help__hours {
+		margin: 18px 0 0;
+		font-size: 13px;
+		color: rgba(255, 255, 255, .7);
+	}
 	.p411-help__hours b { color: #fff; font-weight: 600; }
 
 	.p411-help__mail {
