@@ -6,6 +6,26 @@ migrations and key files touched so the next session doesn't have to re-read the
 
 ---
 
+## 2026-10-30 — Admin "Add listing" no longer requires a logo
+
+### Fixed
+
+- **Admins can add Free Community / Basic listings without a logo.** Step 2 of the admin wizard
+  (`/admin/add_listing_scratch`) refused to continue ("Please add a photo or video…") unless a
+  logo or a YouTube link was given. Those plans don't include a logo, so staff couldn't add the
+  listing at all. Logo, banner, gallery and video are now all optional there, as in the member wizard.
+  The server never required one (`admin_listing_scratch` checks user and name only). The logo
+  field's hint now says "Optional".
+  File: `application/views/admin/add_new_listings_start.php` (`validateStep2()`). No migration.
+
+### Verified
+
+Rendered the admin view with stub data in Chromium: with no logo or video, Next on step 2 now
+moves to step 3 with no error. The same test on the previous version stays on step 2 and shows
+the error.
+
+---
+
 ## 2026-10-26 — Listing packages (Free Community / Starter / Business / Premier) and the client's answers
 
 Follow-up to the checklist entry below, from the client's answers to the open questions and the
