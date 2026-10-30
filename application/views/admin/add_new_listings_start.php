@@ -471,7 +471,7 @@
                           <div class="form-group">
                             <label>Upload Listing Logo</label>
                             <input type="file" name="listing_profile_image" class="form-control">
-                            <small class="form-text text-muted"><?= image_guidance('logo') ?></small>
+                            <small class="form-text text-muted">Optional &mdash; leave empty for Free Community / Basic listings. <?= image_guidance('logo') ?></small>
                           </div>
                         </div>
                       </div>
@@ -748,17 +748,10 @@
     }
 
     function validateStep2() {
-      // Check if at least listing logo is uploaded or video URL is provided
-      const logoInput = document.querySelector('[name="listing_profile_image"]');
-      const videoInput = document.querySelector('[name="listing_video"]');
-
-      const hasLogo = logoInput && logoInput.files && logoInput.files.length > 0;
-      const hasVideo = videoInput && videoInput.value.trim();
-
-      if (!hasLogo && !hasVideo) {
-        showErrors(['Please add a photo or video to make your listing more attractive to customers']);
-        return false;
-      }
+      // Logo, banner, gallery and video are all optional. This used to demand
+      // a logo or a video, which blocked adding Free Community / Basic
+      // listings — those plans don't include a logo at all. The server never
+      // required one either (admin_listing_scratch checks user and name only).
       hideErrors();
       return true;
     }
